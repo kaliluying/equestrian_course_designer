@@ -1040,13 +1040,13 @@ const pathSegments = computed(() => {
 const startStyle = computed(() => ({
   left: `${courseStore.startPoint.x}px`,
   top: `${courseStore.startPoint.y}px`,
-  transform: `rotate(${courseStore.startPoint.rotation}deg)`,
+  transform: `translate(-50%, -50%) rotate(${courseStore.startPoint.rotation}deg)`,
 }))
 
 const endStyle = computed(() => ({
   left: `${courseStore.endPoint.x}px`,
   top: `${courseStore.endPoint.y}px`,
-  transform: `rotate(${courseStore.endPoint.rotation}deg)`,
+  transform: `translate(-50%, -50%) rotate(${courseStore.endPoint.rotation}deg)`,
 }))
 
 // 修改清空画布的方法

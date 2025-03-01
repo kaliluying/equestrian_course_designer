@@ -73,7 +73,8 @@ export const useCourseStore = defineStore('course', () => {
       // 计算最后一个障碍物的中心点
       const lastCenter = getObstacleCenter(lastObstacle)
 
-      // 根据第一个障碍物设置起点
+      // 根据第一个障碍物设置起点，确保起点标记中心线与路径对齐
+      // 起点应位于障碍物前方，与障碍物保持一定距离
       const startAngle = (firstObstacle.rotation - 270) * (Math.PI / 180)
       const startDistance = 100 // 起点距离第一个障碍物的距离（像素）
       startPoint.value = {
@@ -82,7 +83,8 @@ export const useCourseStore = defineStore('course', () => {
         rotation: firstObstacle.rotation,
       }
 
-      // 根据最后一个障碍物设置终点
+      // 根据最后一个障碍物设置终点，确保终点标记中心线与路径对齐
+      // 终点应位于障碍物后方，与障碍物保持一定距离
       const endAngle = (lastObstacle.rotation - 270) * (Math.PI / 180)
       const endDistance = 100 // 终点距离最后一个障碍物的距离（像素）
       endPoint.value = {
@@ -95,7 +97,8 @@ export const useCourseStore = defineStore('course', () => {
     // 初始化路径点数组
     const points: PathPoint[] = []
 
-    // 添加起点
+    // 添加起点 - 直接使用起点的位置和旋转
+    // 由于在UI中，标记是围绕自身中心点旋转的，直接使用起点坐标即可
     points.push({
       x: startPoint.value.x,
       y: startPoint.value.y,
@@ -139,7 +142,8 @@ export const useCourseStore = defineStore('course', () => {
       })
     })
 
-    // 添加终点
+    // 添加终点 - 直接使用终点的位置和旋转
+    // 由于在UI中，标记是围绕自身中心点旋转的，直接使用终点坐标即可
     points.push({
       x: endPoint.value.x,
       y: endPoint.value.y,
@@ -151,32 +155,60 @@ export const useCourseStore = defineStore('course', () => {
       const prev = points[i - 1]
       const next = points[i + 1]
 
-      // 检查是否是障碍物的直线部分
-      // 每个障碍物产生5个点：
-      // 连接点、直线起点、中心点、直线终点、连接点
-      // 对于n个障碍物，点的索引为：
-      // 0: 起点
-      // 1,2,3,4,5: 第一个障碍物的五个点
-      // 6,7,8,9,10: 第二个障碍物的五个点
-      // ...
-      // 最后: 终点
-
       // 计算当前点在序列中的位置
       const isStartPoint = i === 0
       const isEndPoint = i === points.length - 1
 
-      // 如果不是起点或终点，检查是否是障碍物的直线部分
-      if (!isStartPoint && !isEndPoint) {
-        // 减去起点后，每5个点为一组，判断是否是直线部分
-        const pointInObstacle = (i - 1) % 5
-
-        // 如果是直线部分的点（直线起点、中心点、直线终点），跳过控制点生成
-        if (pointInObstacle === 1 || pointInObstacle === 2 || pointInObstacle === 3) {
-          continue
+      // 如果是起点或终点，可以生成控制点
+      if (isStartPoint || isEndPoint) {
+        // 生成相应的控制点
+        if (prev && !isStartPoint) {
+          // 生成前控制点
+          const angle = Math.atan2(prev.y - current.y, prev.x - current.x)
+          const distance =
+            Math.sqrt(Math.pow(prev.x - current.x, 2) + Math.pow(prev.y - current.y, 2)) / 3
+          current.controlPoint1 = {
+            x: current.x + Math.cos(angle) * distance,
+            y: current.y + Math.sin(angle) * distance,
+          }
         }
+
+        if (next && !isEndPoint) {
+          // 生成后控制点
+          const angle = Math.atan2(next.y - current.y, next.x - current.x)
+          const distance =
+            Math.sqrt(Math.pow(next.x - current.x, 2) + Math.pow(next.y - current.y, 2)) / 3
+          current.controlPoint2 = {
+            x: current.x + Math.cos(angle) * distance,
+            y: current.y + Math.sin(angle) * distance,
+          }
+        }
+        continue
       }
 
-      // 为非直线部分生成控制点
+      // 对于障碍物部分的点，检查是否是直线部分
+      // 障碍物点索引说明：
+      // 每个障碍物产生5个点：
+      // 连接点(0)、直线起点(1)、中心点(2)、直线终点(3)、连接点(4)
+      // 对于多个障碍物，索引形式为：
+      // 0: 起点
+      // 1,2,3,4,5: 第一个障碍物的五个点
+      // 6,7,8,9,10: 第二个障碍物的五个点...
+
+      // 计算当前点在障碍物序列中的位置
+      // 减去起点后，每5个点为一组
+      const pointInObstacle = (i - 1) % 5
+
+      // 如果是直线部分的点或直线起点和终点，跳过控制点生成
+      // 直线部分是：直线起点(1)、中心点(2)、直线终点(3)
+      if (pointInObstacle === 1 || pointInObstacle === 2 || pointInObstacle === 3) {
+        // 显式清除任何可能的控制点
+        current.controlPoint1 = undefined
+        current.controlPoint2 = undefined
+        continue
+      }
+
+      // 只为连接点(0和4)生成控制点
       if (prev) {
         // 生成前控制点
         const angle = Math.atan2(prev.y - current.y, prev.x - current.x)
@@ -218,38 +250,32 @@ export const useCourseStore = defineStore('course', () => {
    * @returns 返回障碍物的中心点坐标
    */
   const getObstacleCenter = (obstacle: Obstacle) => {
-    // 获取障碍物杆子的宽度，如果不存在则默认为0
-    const poleWidth = obstacle.poles[0]?.width ?? 0
+    // 障碍物在UI中是以它的左上角为position定位，然后通过transform: rotate进行旋转
+    // 旋转中心是障碍物的中心（由transform-origin: center center控制）
 
-    // 计算所有杆子的总高度，包括杆子的高度和间距
-    const totalHeight = obstacle.poles.reduce(
+    // 获取障碍物宽度（对应于横杆的宽度）
+    const width = obstacle.poles[0]?.width ?? 0
+
+    // 计算障碍物高度（所有杆子加上间距）
+    const height = obstacle.poles.reduce(
       (sum, pole) => sum + (pole.height ?? 0) + (pole.spacing ?? 0),
       0,
     )
 
-    // 计算障碍物的基础中心点
-    const baseX = obstacle.position.x + poleWidth / 2
-    const baseY = obstacle.position.y + totalHeight / 2
+    // 考虑到padding: 20px的影响
+    const padding = 20
 
-    // 根据障碍物类型调整中心点
-    if (obstacle.type === ObstacleType.LIVERPOOL) {
-      // 利物浦障碍的中心点应该在水池的中心
-      return {
-        x: baseX,
-        y: obstacle.position.y + (obstacle.liverpoolProperties?.height ?? 0) / 2,
-      }
-    } else if (obstacle.type === ObstacleType.WALL) {
-      // 墙障碍的中心点应该在墙的中心
-      return {
-        x: baseX,
-        y: obstacle.position.y + (obstacle.wallProperties?.height ?? 0) / 2,
-      }
-    }
+    // 计算障碍物的中心点（相对于障碍物position，未旋转前）
+    // 此处要考虑CSS中的padding为20px
+    const centerX = width / 2 + padding
+    const centerY = height / 2 + padding
 
-    // 其他类型障碍物使用基础中心点
+    // 障碍物的旋转是围绕自身中心的，所以在获取最终中心点时不需要再次应用旋转变换
+    // 因为position + 中心偏移量已经是旋转后的实际中心点
+
     return {
-      x: baseX,
-      y: baseY,
+      x: obstacle.position.x + centerX,
+      y: obstacle.position.y + centerY,
     }
   }
 
@@ -290,14 +316,134 @@ export const useCourseStore = defineStore('course', () => {
       ...obstacle,
       id: uuidv4(),
     }
+
+    // 添加新障碍物到数组
     currentCourse.value.obstacles.push(newObstacle)
 
-    // 如果路径可见，则重新生成路径
+    // 如果路径可见，则更新路径
     if (coursePath.value.visible) {
-      generatePath()
+      if (coursePath.value.points.length <= 2) {
+        // 如果路径点不足（只有起点和终点或更少），重新生成整个路径
+        generatePath()
+      } else {
+        // 否则，只为新障碍物添加路径点，保留现有控制点
+        appendObstacleToPath(newObstacle)
+      }
     }
 
     updateCourse()
+  }
+
+  // 为新添加的障碍物追加路径点
+  function appendObstacleToPath(obstacle: Obstacle) {
+    // 确保路径点存在
+    if (coursePath.value.points.length === 0) {
+      generatePath()
+      return
+    }
+
+    // 获取当前路径点数组
+    const points = [...coursePath.value.points]
+
+    // 获取终点（最后一个点）
+    const endPoint = points.pop()
+    if (!endPoint) {
+      generatePath()
+      return
+    }
+
+    // 获取障碍物中心点和角度
+    const center = getObstacleCenter(obstacle)
+    const angle = (obstacle.rotation - 270) * (Math.PI / 180)
+
+    // 计算米到像素的比例
+    const scale = meterScale.value
+    const approachDistance = 3 * scale // 3米的接近距离
+    const departDistance = 3 * scale // 3米的离开距离
+
+    // 创建障碍物的5个点
+
+    // 1. 障碍物前的连接点（可调节点）
+    const point1: PathPoint = {
+      x: center.x - Math.cos(angle) * (approachDistance + 50),
+      y: center.y - Math.sin(angle) * (approachDistance + 50),
+    }
+
+    // 2. 接近直线的起点
+    const point2: PathPoint = {
+      x: center.x - Math.cos(angle) * approachDistance,
+      y: center.y - Math.sin(angle) * approachDistance,
+    }
+
+    // 3. 障碍物中心点
+    const point3: PathPoint = {
+      x: center.x,
+      y: center.y,
+    }
+
+    // 4. 离开直线的终点
+    const point4: PathPoint = {
+      x: center.x + Math.cos(angle) * departDistance,
+      y: center.y + Math.sin(angle) * departDistance,
+    }
+
+    // 5. 障碍物后的连接点（可调节点）
+    const point5: PathPoint = {
+      x: center.x + Math.cos(angle) * (departDistance + 50),
+      y: center.y + Math.sin(angle) * (departDistance + 50),
+    }
+
+    // 为连接点添加控制点
+    // 获取前一个点（上一个障碍物的最后一个点）
+    const prevPoint = points[points.length - 1]
+    if (prevPoint) {
+      // 为前一个点添加后控制点（如果是连接点）
+      const prevPointIndex = points.length - 1
+      const isPrevConnectionPoint = prevPointIndex === 0 || (prevPointIndex - 1) % 5 === 4
+
+      if (isPrevConnectionPoint) {
+        const angleToNext = Math.atan2(point1.y - prevPoint.y, point1.x - prevPoint.x)
+        const distanceToNext =
+          Math.sqrt(Math.pow(point1.x - prevPoint.x, 2) + Math.pow(point1.y - prevPoint.y, 2)) / 3
+        prevPoint.controlPoint2 = {
+          x: prevPoint.x + Math.cos(angleToNext) * distanceToNext,
+          y: prevPoint.y + Math.sin(angleToNext) * distanceToNext,
+        }
+      }
+
+      // 为新障碍物的第一个连接点添加前控制点
+      const angleToPrev = Math.atan2(prevPoint.y - point1.y, prevPoint.x - point1.x)
+      const distanceToPrev =
+        Math.sqrt(Math.pow(prevPoint.x - point1.x, 2) + Math.pow(prevPoint.y - point1.y, 2)) / 3
+      point1.controlPoint1 = {
+        x: point1.x + Math.cos(angleToPrev) * distanceToPrev,
+        y: point1.y + Math.sin(angleToPrev) * distanceToPrev,
+      }
+    }
+
+    // 为新障碍物的最后一个连接点添加后控制点
+    const angleToEnd = Math.atan2(point5.y - endPoint.y, point5.x - endPoint.x)
+    const distanceToEnd =
+      Math.sqrt(Math.pow(endPoint.x - point5.x, 2) + Math.pow(endPoint.y - point5.y, 2)) / 3
+    point5.controlPoint2 = {
+      x: point5.x + Math.cos(angleToEnd) * distanceToEnd,
+      y: point5.y + Math.sin(angleToEnd) * distanceToEnd,
+    }
+
+    // 为终点添加前控制点
+    const endAngle = Math.atan2(point5.y - endPoint.y, point5.x - endPoint.x)
+    const endDistance =
+      Math.sqrt(Math.pow(point5.x - endPoint.x, 2) + Math.pow(point5.y - endPoint.y, 2)) / 3
+    endPoint.controlPoint1 = {
+      x: endPoint.x + Math.cos(endAngle) * endDistance,
+      y: endPoint.y + Math.sin(endAngle) * endDistance,
+    }
+
+    // 将新点添加到路径中
+    points.push(point1, point2, point3, point4, point5, endPoint)
+
+    // 更新路径点数组
+    coursePath.value.points = points
   }
 
   function updateObstacle(obstacleId: string, updates: Partial<Obstacle>) {
@@ -313,21 +459,115 @@ export const useCourseStore = defineStore('course', () => {
         selectedObstacle.value = currentCourse.value.obstacles[index]
       }
 
-      // 如果路径可见，则重新生成路径
-      if (coursePath.value.visible) {
-        generatePath()
+      // 如果路径可见，则更新受影响的路径点，而不是重新生成整个路径
+      if (coursePath.value.visible && coursePath.value.points.length > 0) {
+        // 只有当位置或旋转发生变化时才更新路径
+        if (updates.position || updates.rotation !== undefined) {
+          updatePathForObstacle(index, obstacle)
+        }
       }
 
       updateCourse()
     }
   }
 
+  // 为单个障碍物更新路径点，保留控制点
+  function updatePathForObstacle(obstacleIndex: number, obstacle: Obstacle) {
+    // 确保路径点存在
+    if (coursePath.value.points.length === 0) {
+      generatePath()
+      return
+    }
+
+    const points = [...coursePath.value.points]
+
+    // 计算障碍物在路径点数组中的起始索引
+    // 起点(1) + 障碍物索引 * 每个障碍物的点数(5)
+    const startIndex = 1 + obstacleIndex * 5
+
+    // 确保索引有效
+    if (startIndex >= points.length - 1) {
+      return
+    }
+
+    // 获取障碍物中心点和角度
+    const center = getObstacleCenter(obstacle)
+    const angle = (obstacle.rotation - 270) * (Math.PI / 180)
+
+    // 计算米到像素的比例
+    const scale = meterScale.value
+    const approachDistance = 3 * scale // 3米的接近距离
+    const departDistance = 3 * scale // 3米的离开距离
+
+    // 更新障碍物的5个点，但保留控制点
+
+    // 1. 障碍物前的连接点（可调节点）
+    const point1 = points[startIndex]
+    point1.x = center.x - Math.cos(angle) * (approachDistance + 50)
+    point1.y = center.y - Math.sin(angle) * (approachDistance + 50)
+
+    // 2. 接近直线的起点
+    const point2 = points[startIndex + 1]
+    point2.x = center.x - Math.cos(angle) * approachDistance
+    point2.y = center.y - Math.sin(angle) * approachDistance
+
+    // 3. 障碍物中心点
+    const point3 = points[startIndex + 2]
+    point3.x = center.x
+    point3.y = center.y
+
+    // 4. 离开直线的终点
+    const point4 = points[startIndex + 3]
+    point4.x = center.x + Math.cos(angle) * departDistance
+    point4.y = center.y + Math.sin(angle) * departDistance
+
+    // 5. 障碍物后的连接点（可调节点）
+    const point5 = points[startIndex + 4]
+    point5.x = center.x + Math.cos(angle) * (departDistance + 50)
+    point5.y = center.y + Math.sin(angle) * (departDistance + 50)
+
+    // 更新路径点数组
+    coursePath.value.points = points
+  }
+
   function removeObstacle(obstacleId: string) {
+    // 找到要删除的障碍物索引
+    const obstacleIndex = currentCourse.value.obstacles.findIndex((o) => o.id === obstacleId)
+
+    // 如果找不到障碍物，直接返回
+    if (obstacleIndex === -1) {
+      return
+    }
+
+    // 如果路径可见，需要更新路径点
+    if (coursePath.value.visible && coursePath.value.points.length > 0) {
+      // 计算障碍物在路径点数组中的起始索引
+      // 起点(1) + 障碍物索引 * 每个障碍物的点数(5)
+      const startIndex = 1 + obstacleIndex * 5
+
+      // 确保索引有效
+      if (startIndex < coursePath.value.points.length - 1) {
+        // 创建新的点数组，移除该障碍物的5个点
+        const newPoints = [...coursePath.value.points]
+        newPoints.splice(startIndex, 5)
+
+        // 更新路径点数组
+        coursePath.value.points = newPoints
+      }
+    }
+
+    // 从障碍物数组中移除该障碍物
     currentCourse.value.obstacles = currentCourse.value.obstacles.filter((o) => o.id !== obstacleId)
 
-    // 如果路径可见，则重新生成路径
-    if (coursePath.value.visible) {
-      generatePath()
+    // 如果路径可见但点数组为空，重新生成路径
+    if (coursePath.value.visible && coursePath.value.points.length <= 2) {
+      // 如果只剩下起点和终点，或者点数组为空，重新生成路径
+      if (currentCourse.value.obstacles.length > 0) {
+        generatePath()
+      } else {
+        // 如果没有障碍物了，清除路径
+        clearPath()
+      }
     }
 
     updateCourse()
