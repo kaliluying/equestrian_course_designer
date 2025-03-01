@@ -291,6 +291,12 @@ export const useCourseStore = defineStore('course', () => {
       id: uuidv4(),
     }
     currentCourse.value.obstacles.push(newObstacle)
+
+    // 如果路径可见，则重新生成路径
+    if (coursePath.value.visible) {
+      generatePath()
+    }
+
     updateCourse()
   }
 
@@ -307,12 +313,23 @@ export const useCourseStore = defineStore('course', () => {
         selectedObstacle.value = currentCourse.value.obstacles[index]
       }
 
+      // 如果路径可见，则重新生成路径
+      if (coursePath.value.visible) {
+        generatePath()
+      }
+
       updateCourse()
     }
   }
 
   function removeObstacle(obstacleId: string) {
     currentCourse.value.obstacles = currentCourse.value.obstacles.filter((o) => o.id !== obstacleId)
+
+    // 如果路径可见，则重新生成路径
+    if (coursePath.value.visible) {
+      generatePath()
+    }
+
     updateCourse()
   }
 

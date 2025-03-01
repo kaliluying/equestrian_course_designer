@@ -310,11 +310,22 @@ const exportImage = async () => {
       throw new Error('未找到画布元素')
     }
 
+    // 临时隐藏控制路线弧度的控制点
+    const controlPoints = canvas.querySelectorAll('.control-point, .control-line, .path-indicator .rotation-handle')
+    controlPoints.forEach((point) => {
+      ;(point as HTMLElement).style.display = 'none'
+    })
+
     // 使用 html2canvas 将画布转换为图片
     const imageCanvas = await html2canvas(canvas, {
       backgroundColor: '#ffffff',
       scale: 2, // 提高导出图片的清晰度
       useCORS: true, // 允许跨域图片
+    })
+
+    // 恢复控制点的显示
+    controlPoints.forEach((point) => {
+      ;(point as HTMLElement).style.display = ''
     })
 
     // 将 canvas 转换为图片 URL
