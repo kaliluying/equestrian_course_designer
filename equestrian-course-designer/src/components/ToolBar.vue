@@ -56,16 +56,26 @@
           </el-icon>
         </el-button>
 
-        <el-button @click="exportImage" type="primary" class="action-button"
-          :title="!userStore.currentUser ? '需要登录才能导出图片' : '导出图片'">
-          <el-icon>
-            <Picture />
-          </el-icon>
-          导出图片
-          <el-icon v-if="!userStore.currentUser" class="lock-icon">
-            <Lock />
-          </el-icon>
-        </el-button>
+        <el-dropdown @command="handleExport" trigger="click">
+          <el-button type="primary" class="action-button" :title="!userStore.currentUser ? '需要登录才能导出' : '导出设计'">
+            <el-icon>
+              <Picture />
+            </el-icon>
+            导出设计
+            <el-icon class="el-icon--right">
+              <ArrowDown />
+            </el-icon>
+            <el-icon v-if="!userStore.currentUser" class="lock-icon">
+              <Lock />
+            </el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="png">导出为PNG图片</el-dropdown-item>
+              <el-dropdown-item command="pdf">导出为PDF文档</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
 
         <el-button class="action-button" @click="triggerFileInput"
           :title="!userStore.currentUser ? '需要登录才能导入' : '导入设计'">
@@ -95,6 +105,43 @@
         </el-button>
       </div>
     </div>
+
+    <!-- 添加PDF导出选项对话框 -->
+    <el-dialog v-model="pdfExportOptions.visible" title="PDF导出选项" width="400px" :close-on-click-modal="false"
+      :close-on-press-escape="true">
+      <el-form label-position="top">
+        <el-form-item label="纸张大小">
+          <el-select v-model="pdfExportOptions.paperSize" style="width: 100%">
+            <el-option label="A3" value="a3" />
+            <el-option label="A4" value="a4" />
+            <el-option label="A5" value="a5" />
+            <el-option label="Letter" value="letter" />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="方向">
+          <el-select v-model="pdfExportOptions.orientation" style="width: 100%">
+            <el-option label="自动选择" value="auto" />
+            <el-option label="横向" value="landscape" />
+            <el-option label="纵向" value="portrait" />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="图像质量">
+          <el-slider v-model="pdfExportOptions.quality" :min="0.5" :max="1" :step="0.05"
+            :format-tooltip="(value: number) => `${Math.round(value * 100)}%`" />
+        </el-form-item>
+
+        <el-form-item>
+          <el-checkbox v-model="pdfExportOptions.includeFooter">包含页脚</el-checkbox>
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="pdfExportOptions.visible = false">取消</el-button>
+        <el-button type="primary" @click="exportPDF">导出PDF</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -103,12 +150,13 @@ import { ref, onMounted } from 'vue'
 import { ObstacleType } from '@/types/obstacle'
 import { useCourseStore } from '@/stores/course'
 import { useUserStore } from '@/stores/user'
-import { Download, Upload, Delete, Pointer, Edit, Lock, Picture } from '@element-plus/icons-vue'
+import { Download, Upload, Delete, Pointer, Edit, Lock, Picture, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import html2canvas from 'html2canvas'
 import { saveDesign } from '@/api/design'
 import type { SaveDesignRequest } from '@/types/design'
 import type { CourseDesign } from '@/types/obstacle'
+import { jsPDF } from 'jspdf'
 
 const courseStore = useCourseStore()
 const userStore = useUserStore()
@@ -131,6 +179,15 @@ const typeNames = {
 }
 
 const courseName = ref(courseStore.currentCourse.name)
+
+const pdfExportOptions = ref({
+  visible: false,
+  quality: 0.95,
+  includeObstacleNumbers: true,
+  includeFooter: true,
+  paperSize: 'a4',
+  orientation: 'auto'
+})
 
 const handleDragStart = (event: DragEvent, type: ObstacleType) => {
   event.dataTransfer?.setData('obstacleType', type)
@@ -381,16 +438,58 @@ const updateName = () => {
   courseStore.updateCourseName(courseName.value)
 }
 
-const exportImage = async () => {
+// 添加一个函数来清理画布中可能导致乱码的特殊字符
+const cleanupCanvasForExport = (canvas: HTMLElement) => {
+  // 查找所有文本节点
+  const textNodes: Node[] = []
+  const walker = document.createTreeWalker(
+    canvas,
+    NodeFilter.SHOW_TEXT,
+    null
+  )
+
+  let node
+  while (node = walker.nextNode()) {
+    textNodes.push(node)
+  }
+
+  // 保存原始文本内容
+  const originalTexts: { node: Node, text: string }[] = []
+
+  // 临时替换特殊字符
+  textNodes.forEach(node => {
+    if (node.textContent) {
+      originalTexts.push({ node, text: node.textContent })
+      // 替换非ASCII字符为空格
+      node.textContent = node.textContent.replace(/[^\x00-\x7F]/g, ' ')
+    }
+  })
+
+  return () => {
+    // 恢复原始文本
+    originalTexts.forEach(({ node, text }) => {
+      node.textContent = text
+    })
+  }
+}
+
+// 修改handleExport函数，使用新的清理函数
+const handleExport = async (command: string) => {
   // 检查用户是否已登录
   if (!userStore.currentUser) {
-    ElMessageBox.confirm('导出图片需要登录，是否立即登录？', '提示', {
+    ElMessageBox.confirm('导出设计需要登录，是否立即登录？', '提示', {
       confirmButtonText: '去登录',
       cancelButtonText: '取消',
       type: 'info',
     }).then(() => {
       emit('show-login')
     }).catch(() => { })
+    return
+  }
+
+  if (command === 'pdf') {
+    // 显示PDF导出选项对话框
+    pdfExportOptions.value.visible = true
     return
   }
 
@@ -407,11 +506,27 @@ const exportImage = async () => {
       ; (point as HTMLElement).style.display = 'none'
     })
 
-    // 使用 html2canvas 将画布转换为图片
+    // 临时隐藏可能导致乱码的元素
+    const textElements = canvas.querySelectorAll('.course-title, .course-info')
+    const originalDisplays: { el: HTMLElement, display: string }[] = []
+    textElements.forEach((el) => {
+      const htmlEl = el as HTMLElement
+      originalDisplays.push({ el: htmlEl, display: htmlEl.style.display })
+      htmlEl.style.display = 'none'
+    })
+
+    // 清理画布中的特殊字符
+    const restoreTexts = cleanupCanvasForExport(canvas)
+
+    // 使用 html2canvas 将画布转换为图片，添加更多配置以解决乱码问题
     const imageCanvas = await html2canvas(canvas, {
       backgroundColor: '#ffffff',
       scale: 2, // 提高导出图片的清晰度
       useCORS: true, // 允许跨域图片
+      logging: false, // 关闭日志
+      allowTaint: true, // 允许跨域图片
+      removeContainer: true, // 移除临时容器
+      foreignObjectRendering: false // 禁用foreignObject渲染，使用canvas渲染
     })
 
     // 恢复控制点的显示
@@ -419,23 +534,203 @@ const exportImage = async () => {
       ; (point as HTMLElement).style.display = ''
     })
 
-    // 将 canvas 转换为图片 URL
-    const imageUrl = imageCanvas.toDataURL('image/png')
+    // 恢复文本元素的显示
+    originalDisplays.forEach(({ el, display }) => {
+      el.style.display = display
+    })
 
-    // 创建下载链接
-    const link = document.createElement('a')
+    // 恢复原始文本
+    restoreTexts()
+
+    // 获取当前日期时间格式化字符串
     const date = new Date()
     const formattedDateTime = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`
-    link.download = `${courseStore.currentCourse.name}-${formattedDateTime}.png`
-    link.href = imageUrl
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    const fileName = `${courseStore.currentCourse.name}-${formattedDateTime}`
 
-    ElMessageBox.alert('导出成功！', '提示', {
+    if (command === 'png') {
+      // 导出为PNG图片
+      const imageUrl = imageCanvas.toDataURL('image/png')
+
+      // 创建下载链接
+      const link = document.createElement('a')
+      link.download = `${fileName}.png`
+      link.href = imageUrl
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      ElMessage.success('PNG图片导出成功！')
+    }
+  } catch (error) {
+    ElMessageBox.alert('导出失败：' + (error as Error).message, '错误', {
       confirmButtonText: '确定',
-      type: 'success',
+      type: 'error',
     })
+  }
+}
+
+// 同样修改exportPDF函数
+const exportPDF = async () => {
+  try {
+    // 获取画布元素
+    const canvas = document.querySelector('.course-canvas') as HTMLElement
+    if (!canvas) {
+      throw new Error('未找到画布元素')
+    }
+
+    // 临时隐藏控制路线弧度的控制点
+    const controlPoints = canvas.querySelectorAll('.control-point, .control-line, .path-indicator .rotation-handle')
+    controlPoints.forEach((point) => {
+      ; (point as HTMLElement).style.display = 'none'
+    })
+
+    // 临时隐藏可能导致乱码的元素
+    const textElements = canvas.querySelectorAll('.course-title, .course-info')
+    const originalDisplays: { el: HTMLElement, display: string }[] = []
+    textElements.forEach((el) => {
+      const htmlEl = el as HTMLElement
+      originalDisplays.push({ el: htmlEl, display: htmlEl.style.display })
+      htmlEl.style.display = 'none'
+    })
+
+    // 清理画布中的特殊字符
+    const restoreTexts = cleanupCanvasForExport(canvas)
+
+    // 使用 html2canvas 将画布转换为图片，添加更多配置以解决乱码问题
+    const imageCanvas = await html2canvas(canvas, {
+      backgroundColor: '#ffffff',
+      scale: 2, // 提高导出图片的清晰度
+      useCORS: true, // 允许跨域图片
+      logging: false, // 关闭日志
+      allowTaint: true, // 允许跨域图片
+      removeContainer: true, // 移除临时容器
+      foreignObjectRendering: false // 禁用foreignObject渲染，使用canvas渲染
+    })
+
+    // 恢复控制点的显示
+    controlPoints.forEach((point) => {
+      ; (point as HTMLElement).style.display = ''
+    })
+
+    // 恢复文本元素的显示
+    originalDisplays.forEach(({ el, display }) => {
+      el.style.display = display
+    })
+
+    // 恢复原始文本
+    restoreTexts()
+
+    // 获取当前日期时间格式化字符串
+    const date = new Date()
+    const formattedDateTime = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`
+    const fileName = `${courseStore.currentCourse.name}-${formattedDateTime}`
+
+    // 获取画布宽高
+    const canvasWidth = imageCanvas.width
+    const canvasHeight = imageCanvas.height
+
+    // 计算适合的PDF尺寸和方向
+    // 标准A4尺寸为 210mm x 297mm，转换为像素约为 595 x 842 (at 72 dpi)
+    let pdfWidth, pdfHeight
+
+    // 根据用户选择的纸张大小设置尺寸
+    switch (pdfExportOptions.value.paperSize) {
+      case 'a3':
+        pdfWidth = 842
+        pdfHeight = 1191
+        break
+      case 'a5':
+        pdfWidth = 420
+        pdfHeight = 595
+        break
+      case 'letter':
+        pdfWidth = 612
+        pdfHeight = 792
+        break
+      default: // a4
+        pdfWidth = 595
+        pdfHeight = 842
+    }
+
+    // 确定方向
+    let orientation: 'landscape' | 'portrait'
+    if (pdfExportOptions.value.orientation === 'auto') {
+      orientation = canvasWidth > canvasHeight ? 'landscape' : 'portrait'
+    } else {
+      orientation = pdfExportOptions.value.orientation as 'landscape' | 'portrait'
+    }
+
+    // 创建PDF文档
+    const pdf = new jsPDF({
+      orientation: orientation,
+      unit: 'pt',
+      format: pdfExportOptions.value.paperSize
+    })
+
+    // 设置PDF元数据 - 确保使用安全的字符串
+    const safeCourseName = (courseStore.currentCourse.name || '未命名设计').replace(/[^\x00-\x7F]/g, '?')
+    pdf.setProperties({
+      title: safeCourseName,
+      subject: '马术障碍赛路线设计',
+      author: userStore.currentUser?.username || '马术障碍赛路线设计工具',
+      keywords: '马术,障碍赛,路线设计',
+      creator: '马术障碍赛路线设计工具'
+    })
+
+    // 计算图像在PDF中的尺寸，保持宽高比
+    let imgWidth, imgHeight
+    if (orientation === 'landscape') {
+      // 横向
+      const availableWidth = pdfHeight - 40 // 留出边距
+      const availableHeight = pdfWidth - 80 // 留出标题和边距空间
+
+      const ratio = Math.min(availableWidth / canvasWidth, availableHeight / canvasHeight)
+      imgWidth = canvasWidth * ratio
+      imgHeight = canvasHeight * ratio
+    } else {
+      // 纵向
+      const availableWidth = pdfWidth - 40 // 留出边距
+      const availableHeight = pdfHeight - 80 // 留出标题和边距空间
+
+      const ratio = Math.min(availableWidth / canvasWidth, availableHeight / canvasHeight)
+      imgWidth = canvasWidth * ratio
+      imgHeight = canvasHeight * ratio
+    }
+
+    // 计算居中位置
+    const x = orientation === 'landscape'
+      ? (pdfHeight - imgWidth) / 2
+      : (pdfWidth - imgWidth) / 2
+    const y = 60 // 标题下方位置
+
+    // 添加标题 - 使用安全的字符串
+    // pdf.setFont('MicrosoftYaHei', 'bold')
+    // pdf.setFontSize(16)
+    // pdf.text(safeCourseName, orientation === 'landscape' ? 30 : 30, 30)
+
+    // 添加日期
+    // pdf.setFont('MicrosoftYaHei', 'normal')
+    // pdf.setFontSize(10)
+    // pdf.text(`创建日期: ${formattedDateTime}`, orientation === 'landscape' ? 30 : 30, 45)
+
+    // 添加图片到PDF
+    const imgData = imageCanvas.toDataURL('image/jpeg', pdfExportOptions.value.quality)
+    pdf.addImage(imgData, 'JPEG', x, y, imgWidth, imgHeight)
+
+    // 添加页脚
+    if (pdfExportOptions.value.includeFooter) {
+      const footerY = orientation === 'landscape' ? pdfWidth - 20 : pdfHeight - 20
+      pdf.setFontSize(8)
+      pdf.text('Generated by Equestrian Obstacle Route Design Tool', orientation === 'landscape' ? 30 : 30, footerY)
+    }
+
+    // 保存PDF
+    pdf.save(`${fileName}.pdf`)
+
+    // 关闭对话框
+    pdfExportOptions.value.visible = false
+
+    ElMessage.success('PDF文档导出成功！')
   } catch (error) {
     ElMessageBox.alert('导出失败：' + (error as Error).message, '错误', {
       confirmButtonText: '确定',
