@@ -197,6 +197,58 @@
           stroke-dasharray="5,5"
         />
 
+        <!-- 渲染距离标签 -->
+        <template v-if="showDistanceLabels">
+          <g v-for="(distance, index) in obstacleDistances" :key="`distance-${index}`">
+            <g :transform="`translate(${distance.position.x}, ${distance.position.y}) rotate(${adjustLabelAngle(distance.angle)})`">
+              <rect
+                x="-25"
+                y="-12"
+                width="50"
+                height="24"
+                rx="4"
+                ry="4"
+                class="distance-label-bg"
+              />
+              <text
+                x="0"
+                y="5"
+                class="distance-label-text"
+              >
+                {{ distance.distance }}m
+              </text>
+              <text
+                v-if="distance.fromNumber && distance.toNumber"
+                x="0"
+                y="-20"
+                class="obstacle-number-text"
+              >
+                {{ distance.fromNumber }} → {{ distance.toNumber }}
+              </text>
+            </g>
+          </g>
+        </template>
+
+        <!-- 显示总距离 -->
+        <g v-if="showDistanceLabels && Number(totalDistance) > 0" :transform="`translate(20, 20)`">
+          <rect
+            x="0"
+            y="0"
+            width="120"
+            height="30"
+            rx="5"
+            ry="5"
+            class="total-distance-bg"
+          />
+          <text
+            x="60"
+            y="20"
+            class="total-distance-text"
+          >
+            总长度: {{ totalDistance }}m
+          </text>
+        </g>
+
         <!-- 渲染控制点 -->
         <template
           v-for="(point, pointIndex) in courseStore.coursePath.points"
@@ -220,6 +272,27 @@
           />
         </template>
       </svg>
+
+      <!-- 添加总距离显示 -->
+      <div v-if="showDistanceLabels && Number(totalDistance) > 0" class="total-distance">
+        总距离: {{ totalDistance }}m
+      </div>
+    </div>
+
+    <!-- 添加距离标签显示控制按钮 -->
+    <div v-if="courseStore.coursePath.visible" class="distance-toggle">
+      <el-tooltip content="显示/隐藏距离标签" placement="left">
+        <el-button
+          type="primary"
+          circle
+          size="small"
+          :icon="showDistanceLabels ? 'Hide' : 'View'"
+          @click="toggleDistanceLabels"
+        >
+          <el-icon v-if="showDistanceLabels"><Hide /></el-icon>
+          <el-icon v-else><View /></el-icon>
+        </el-button>
+      </el-tooltip>
     </div>
   </div>
 
@@ -262,11 +335,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { Plus, Edit } from '@element-plus/icons-vue'
+import { Plus, Edit, Hide, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useCourseStore } from '@/stores/course'
 import type { Obstacle } from '@/types/obstacle'
-import { ObstacleType } from '@/types/obstacle'
+import { ObstacleType, type PathPoint } from '@/types/obstacle'
 
 // 组件状态管理
 const courseStore = useCourseStore()
@@ -297,6 +370,9 @@ const draggingControlPoint = ref<{ pointIndex: number; controlPointNumber: 1 | 2
 
 // 添加起终点状态
 const draggingPoint = ref<'start' | 'end' | 'start-rotate' | 'end-rotate' | null>(null)
+
+// 距离标签显示控制
+const showDistanceLabels = ref(true)
 
 // 选择障碍物
 const selectObstacle = (obstacle: Obstacle, multiSelect = false) => {
@@ -478,15 +554,14 @@ const handleMouseMove = (event: MouseEvent) => {
     if (!canvas) return
 
     const rect = canvas.getBoundingClientRect()
-    const x = Math.max(0, Math.min(event.clientX - rect.left - startMousePos.value.x, rect.width))
-    const y = Math.max(0, Math.min(event.clientY - rect.top - startMousePos.value.y, rect.height))
+    const x = Math.max(0, Math.min(event.clientX - rect.left, rect.width))
+    const y = Math.max(0, Math.min(event.clientY - rect.top, rect.height))
 
     if (draggingPoint.value === 'start') {
       courseStore.updateStartPoint({ x, y })
     } else {
       courseStore.updateEndPoint({ x, y })
     }
-    courseStore.generatePath() // 重新生成路径
   } else if (draggingPoint.value === 'start-rotate' || draggingPoint.value === 'end-rotate') {
     const canvas = document.querySelector('.course-canvas')
     if (!canvas) return
@@ -512,7 +587,6 @@ const handleMouseMove = (event: MouseEvent) => {
     } else {
       courseStore.updateEndRotation(Math.round(newRotation))
     }
-    courseStore.generatePath() // 重新生成路径
   }
 
   // 处理控制点拖拽
@@ -825,7 +899,6 @@ const handleGlobalMouseMove = (event: MouseEvent) => {
     } else {
       courseStore.updateEndPoint({ x, y })
     }
-    courseStore.generatePath() // 重新生成路径
   } else if (draggingPoint.value === 'start-rotate' || draggingPoint.value === 'end-rotate') {
     const canvas = document.querySelector('.course-canvas')
     if (!canvas) return
@@ -851,7 +924,6 @@ const handleGlobalMouseMove = (event: MouseEvent) => {
     } else {
       courseStore.updateEndRotation(Math.round(newRotation))
     }
-    courseStore.generatePath() // 重新生成路径
   }
 
   // 处理控制点拖拽
@@ -1076,6 +1148,256 @@ const handleGenerateCoursePath = () => {
   courseStore.generatePath()
   // 显示路径
   courseStore.togglePathVisibility(true)
+}
+
+// 调整标签角度，使其更易读
+const adjustLabelAngle = (angle: number) => {
+  // 标准化角度到 -180 到 180 度范围
+  let normalizedAngle = angle % 360
+  if (normalizedAngle > 180) normalizedAngle -= 360
+  if (normalizedAngle < -180) normalizedAngle += 360
+
+  // 如果角度接近垂直（上下），调整为水平方向
+  if (normalizedAngle > 70 && normalizedAngle < 110) {
+    return normalizedAngle - 90
+  }
+  if (normalizedAngle < -70 && normalizedAngle > -110) {
+    return normalizedAngle + 90
+  }
+
+  // 如果角度在右半边（文字会倒置），翻转180度
+  if (normalizedAngle > 90 || normalizedAngle < -90) {
+    return normalizedAngle + 180
+  }
+
+  return normalizedAngle
+}
+
+// 计算贝塞尔曲线长度的函数
+const calculateBezierLength = (
+  p0: { x: number; y: number },
+  p1: { x: number; y: number },
+  p2: { x: number; y: number },
+  p3: { x: number; y: number },
+  steps = 20
+) => {
+  let length = 0
+  let prevPoint = p0
+
+  // 使用参数方程计算贝塞尔曲线上的点
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps
+    const t1 = 1 - t
+
+    // 三次贝塞尔曲线的参数方程
+    const x = t1 * t1 * t1 * p0.x +
+              3 * t1 * t1 * t * p1.x +
+              3 * t1 * t * t * p2.x +
+              t * t * t * p3.x
+
+    const y = t1 * t1 * t1 * p0.y +
+              3 * t1 * t1 * t * p1.y +
+              3 * t1 * t * t * p2.y +
+              t * t * t * p3.y
+
+    const currentPoint = { x, y }
+
+    // 计算当前点与前一点之间的距离并累加
+    length += Math.sqrt(
+      Math.pow(currentPoint.x - prevPoint.x, 2) +
+      Math.pow(currentPoint.y - prevPoint.y, 2)
+    )
+
+    prevPoint = currentPoint
+  }
+
+  return length
+}
+
+// 计算路径段长度
+const calculatePathSegmentLength = (
+  startPoint: PathPoint,
+  endPoint: PathPoint
+) => {
+  // 如果有控制点，使用贝塞尔曲线计算
+  if (startPoint.controlPoint2 && endPoint.controlPoint1) {
+    return calculateBezierLength(
+      startPoint,
+      startPoint.controlPoint2,
+      endPoint.controlPoint1,
+      endPoint
+    )
+  } else {
+    // 否则使用直线距离
+    return Math.sqrt(
+      Math.pow(endPoint.x - startPoint.x, 2) +
+      Math.pow(endPoint.y - startPoint.y, 2)
+    )
+  }
+}
+
+// 计算障碍物之间的距离
+const obstacleDistances = computed(() => {
+  if (!courseStore.coursePath.visible || courseStore.coursePath.points.length <= 2) {
+    return []
+  }
+
+  const distances = []
+  const points = courseStore.coursePath.points
+  const scale = meterScale.value
+  const obstacles = courseStore.currentCourse.obstacles
+
+  // 计算起点到第一个障碍物的距离
+  if (points.length >= 3) {
+    const startPoint = points[0]
+    const firstObstaclePoint1 = points[1] // 第一个障碍物的前连接点
+    const firstObstacleCenter = points[3] // 第一个障碍物的中心点
+
+    // 计算起点到第一个障碍物的路径长度（像素）
+    let distanceInPixels = 0
+
+    // 计算起点到第一个连接点的长度
+    distanceInPixels += calculatePathSegmentLength(startPoint, firstObstaclePoint1)
+
+    // 计算第一个连接点到障碍物中心的长度
+    for (let i = 1; i < 3; i++) {
+      distanceInPixels += calculatePathSegmentLength(points[i], points[i + 1])
+    }
+
+    // 转换为米
+    const distanceInMeters = (distanceInPixels / scale).toFixed(1)
+
+    // 计算标签位置（起点和第一个障碍物中心点的中间位置）
+    const labelX = (startPoint.x + firstObstacleCenter.x) / 2
+    const labelY = (startPoint.y + firstObstacleCenter.y) / 2
+
+    // 计算角度，使标签沿着路径方向
+    const dx = firstObstacleCenter.x - startPoint.x
+    const dy = firstObstacleCenter.y - startPoint.y
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI)
+
+    // 获取第一个障碍物的编号
+    const firstObstacleNumber = obstacles[0]?.number || '1'
+
+    distances.push({
+      distance: distanceInMeters,
+      position: { x: labelX, y: labelY },
+      angle: angle,
+      fromNumber: 'S',
+      toNumber: firstObstacleNumber
+    })
+  }
+
+  // 每个障碍物在路径中占5个点，我们需要计算每个障碍物中心点之间的距离
+  // 障碍物中心点索引：3, 8, 13, ...
+  for (let i = 3; i < points.length - 5; i += 5) {
+    // 确保下一个障碍物存在
+    if (i + 5 < points.length) {
+      const currentCenter = points[i]
+      const nextCenter = points[i + 5]
+
+      // 计算两个障碍物之间的路径长度（像素）
+      let distanceInPixels = 0
+
+      // 计算当前障碍物中心到下一个障碍物中心的所有路径段长度
+      for (let j = i; j < i + 5; j++) {
+        if (j + 1 < points.length) {
+          distanceInPixels += calculatePathSegmentLength(points[j], points[j + 1])
+        }
+      }
+
+      // 转换为米
+      const distanceInMeters = (distanceInPixels / scale).toFixed(1)
+
+      // 计算标签位置（两个障碍物中心点的中间位置）
+      const labelX = (currentCenter.x + nextCenter.x) / 2
+      const labelY = (currentCenter.y + nextCenter.y) / 2
+
+      // 计算角度，使标签沿着路径方向
+      const dx = nextCenter.x - currentCenter.x
+      const dy = nextCenter.y - currentCenter.y
+      const angle = Math.atan2(dy, dx) * (180 / Math.PI)
+
+      // 计算当前障碍物和下一个障碍物的索引
+      const currentObstacleIndex = Math.floor((i - 3) / 5)
+      const nextObstacleIndex = currentObstacleIndex + 1
+
+      // 获取障碍物编号
+      const currentObstacleNumber = obstacles[currentObstacleIndex]?.number || (currentObstacleIndex + 1).toString()
+      const nextObstacleNumber = obstacles[nextObstacleIndex]?.number || (nextObstacleIndex + 1).toString()
+
+      distances.push({
+        distance: distanceInMeters,
+        position: { x: labelX, y: labelY },
+        angle: angle,
+        fromNumber: currentObstacleNumber,
+        toNumber: nextObstacleNumber
+      })
+    }
+  }
+
+  // 计算最后一个障碍物到终点的距离
+  if (points.length >= 6) { // 至少有一个障碍物和起终点
+    const lastObstacleIndex = Math.floor((points.length - 3) / 5) * 5 + 3 // 最后一个障碍物中心点索引
+    if (lastObstacleIndex < points.length) {
+      const lastObstacleCenter = points[lastObstacleIndex]
+      const endPoint = points[points.length - 1]
+
+      // 计算最后一个障碍物到终点的路径长度（像素）
+      let distanceInPixels = 0
+
+      // 计算最后障碍物中心到终点的所有路径段长度
+      for (let i = lastObstacleIndex; i < points.length - 1; i++) {
+        distanceInPixels += calculatePathSegmentLength(points[i], points[i + 1])
+      }
+
+      // 转换为米
+      const distanceInMeters = (distanceInPixels / scale).toFixed(1)
+
+      // 计算标签位置（最后一个障碍物中心点和终点的中间位置）
+      const labelX = (lastObstacleCenter.x + endPoint.x) / 2
+      const labelY = (lastObstacleCenter.y + endPoint.y) / 2
+
+      // 计算角度，使标签沿着路径方向
+      const dx = endPoint.x - lastObstacleCenter.x
+      const dy = endPoint.y - lastObstacleCenter.y
+      const angle = Math.atan2(dy, dx) * (180 / Math.PI)
+
+      // 计算最后一个障碍物的索引
+      const lastObstacleArrayIndex = Math.floor((lastObstacleIndex - 3) / 5)
+
+      // 获取最后一个障碍物的编号
+      const lastObstacleNumber = obstacles[lastObstacleArrayIndex]?.number || (lastObstacleArrayIndex + 1).toString()
+
+      distances.push({
+        distance: distanceInMeters,
+        position: { x: labelX, y: labelY },
+        angle: angle,
+        fromNumber: lastObstacleNumber,
+        toNumber: 'F'
+      })
+    }
+  }
+
+  return distances
+})
+
+// 计算总距离
+const totalDistance = computed(() => {
+  if (!obstacleDistances.value.length) return '0'
+
+  // 将所有距离相加
+  const total = obstacleDistances.value.reduce((sum, item) => {
+    return sum + parseFloat(item.distance)
+  }, 0)
+
+  // 保留一位小数
+  return total.toFixed(1)
+})
+
+// 距离标签显示控制
+const toggleDistanceLabels = () => {
+  showDistanceLabels.value = !showDistanceLabels.value
 }
 
 // 将方法暴露给父组件
@@ -1659,5 +1981,63 @@ defineExpose({
   stroke-dasharray: 4, 4;
   opacity: 0.3;
   pointer-events: none;
+}
+
+.distance-label-bg {
+  fill: white;
+  stroke: var(--primary-color);
+  stroke-width: 1;
+  opacity: 0.9;
+  filter: drop-shadow(0px 2px 3px rgba(0, 0, 0, 0.1));
+}
+
+.distance-label-text {
+  font-size: 12px;
+  text-anchor: middle;
+  fill: var(--primary-color);
+  font-weight: 500;
+}
+
+.distance-toggle {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  z-index: 10;
+}
+
+.total-distance {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background-color: white;
+  border: 1px solid var(--primary-color);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--primary-color);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+}
+
+.obstacle-number-text {
+  font-size: 11px;
+  text-anchor: middle;
+  fill: var(--primary-color);
+  font-weight: 500;
+}
+
+.total-distance-bg {
+  fill: rgba(0, 0, 0, 0.7);
+  stroke: var(--primary-color);
+  stroke-width: 1;
+}
+
+.total-distance-text {
+  fill: white;
+  font-size: 14px;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  font-weight: bold;
 }
 </style>

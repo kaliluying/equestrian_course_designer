@@ -69,6 +69,8 @@ export interface PathPoint {
   rotation?: number
   controlPoint1?: { x: number; y: number }
   controlPoint2?: { x: number; y: number }
+  isControlPoint1Moved?: boolean // 标记控制点1是否被手动移动过
+  isControlPoint2Moved?: boolean // 标记控制点2是否被手动移动过
 }
 
 export interface CoursePath {

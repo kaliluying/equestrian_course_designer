@@ -114,3 +114,18 @@ class DesignViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """保存时自动设置作者为当前用户"""
         serializer.save(author=self.request.user)
+
+    def perform_update(self, serializer):
+        """更新设计时保留原作者"""
+        # 获取原设计对象
+        instance = self.get_object()
+        print(
+            f"更新设计: ID={instance.id}, 标题={instance.title}, 作者={instance.author}")
+
+        # 确保更新时保留原作者
+        try:
+            serializer.save(author=instance.author)
+            print(f"设计更新成功: ID={instance.id}")
+        except Exception as e:
+            print(f"设计更新失败: ID={instance.id}, 错误={str(e)}")
+            raise

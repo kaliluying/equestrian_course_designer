@@ -13,13 +13,13 @@
     margin: 0;
     transition: .1s;
     font-weight: 500;
-    padding: 8px 15px;
-    font-size: 13px;
+    padding: 12px 20px;
+    font-size: 14px;
     border-radius: 4px;
 }
 
 .el-button--small {
-    padding: 6px 12px;
+    padding: 9px 15px;
     font-size: 12px;
     border-radius: 3px;
 }
@@ -48,6 +48,30 @@
     color: #fff;
 }
 
+.el-button--danger {
+    color: #fff;
+    background-color: #f56c6c;
+    border-color: #f56c6c;
+}
+
+.el-button--danger:hover {
+    background: #f78989;
+    border-color: #f78989;
+    color: #fff;
+}
+
+.el-button--warning {
+    color: #fff;
+    background-color: #e6a23c;
+    border-color: #e6a23c;
+}
+
+.el-button--warning:hover {
+    background: #ebb563;
+    border-color: #ebb563;
+    color: #fff;
+}
+
 /* 按钮间距 */
 .el-button+.el-button {
     margin-left: 10px;
@@ -61,4 +85,29 @@
     background-image: none;
     background-color: #fff;
     border-color: #ebeef5;
+}
+
+/* 图片预览容器样式 */
+.image-preview-container img {
+    transition: transform 0.2s ease;
+}
+
+.image-preview-container img:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+}
+
+/* 模态框样式 */
+.image-preview-modal {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }

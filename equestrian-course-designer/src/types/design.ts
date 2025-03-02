@@ -22,6 +22,7 @@ export interface DesignResponse {
 
 // 设计保存请求接口
 export interface SaveDesignRequest {
+  id?: number
   title: string
   image: File
   download: File

@@ -28,26 +28,181 @@ export const useCourseStore = defineStore('course', () => {
   // 更新起点旋转角度
   const updateStartRotation = (rotation: number) => {
     startPoint.value.rotation = rotation
+
+    // 如果路径存在且可见，更新起点附近的控制点
+    if (coursePath.value.visible && coursePath.value.points.length > 1) {
+      const points = [...coursePath.value.points]
+      const startPoint = points[0]
+      const nextPoint = points[1]
+
+      // 计算新的控制点位置，基于旋转角度
+      if (startPoint && nextPoint && startPoint.controlPoint2) {
+        const angle = (rotation - 270) * (Math.PI / 180)
+        const distance =
+          Math.sqrt(
+            Math.pow(nextPoint.x - startPoint.x, 2) + Math.pow(nextPoint.y - startPoint.y, 2),
+          ) / 3
+
+        // 更新起点的后控制点
+        startPoint.controlPoint2 = {
+          x: startPoint.x + Math.cos(angle) * distance,
+          y: startPoint.y + Math.sin(angle) * distance,
+        }
+
+        // 更新路径点
+        coursePath.value.points = points
+      }
+    }
+
     updateCourse()
   }
 
   // 更新终点旋转角度
   const updateEndRotation = (rotation: number) => {
     endPoint.value.rotation = rotation
+
+    // 如果路径存在且可见，更新终点附近的控制点
+    if (coursePath.value.visible && coursePath.value.points.length > 1) {
+      const points = [...coursePath.value.points]
+      const lastIndex = points.length - 1
+      const endPoint = points[lastIndex]
+      const prevPoint = points[lastIndex - 1]
+
+      // 计算新的控制点位置，基于旋转角度
+      if (endPoint && prevPoint && endPoint.controlPoint1) {
+        const angle = (rotation - 90) * (Math.PI / 180)
+        const distance =
+          Math.sqrt(Math.pow(prevPoint.x - endPoint.x, 2) + Math.pow(prevPoint.y - endPoint.y, 2)) /
+          3
+
+        // 更新终点的前控制点
+        endPoint.controlPoint1 = {
+          x: endPoint.x + Math.cos(angle) * distance,
+          y: endPoint.y + Math.sin(angle) * distance,
+        }
+
+        // 更新路径点
+        coursePath.value.points = points
+      }
+    }
+
     updateCourse()
   }
 
   // 更新起点位置
   const updateStartPoint = (position: { x: number; y: number }) => {
+    // 更新起点位置
     startPoint.value.x = position.x
     startPoint.value.y = position.y
+
+    // 如果路径存在且可见，更新路径的起点位置
+    if (coursePath.value.visible && coursePath.value.points.length > 0) {
+      // 创建新的点数组以触发响应式更新
+      const newPoints = [...coursePath.value.points]
+
+      // 更新起点位置（第一个点）
+      if (newPoints.length > 0) {
+        const startPathPoint = newPoints[0]
+        const oldStartX = startPathPoint.x
+        const oldStartY = startPathPoint.y
+
+        // 更新起点坐标
+        startPathPoint.x = position.x
+        startPathPoint.y = position.y
+
+        // 处理控制点2（起点只有后控制点）
+        if (startPathPoint.controlPoint2) {
+          if (startPathPoint.isControlPoint2Moved) {
+            // 如果控制点已被移动过，保持相对位置
+            const dx = startPathPoint.x - oldStartX
+            const dy = startPathPoint.y - oldStartY
+            startPathPoint.controlPoint2.x += dx
+            startPathPoint.controlPoint2.y += dy
+          } else {
+            // 如果控制点未被移动过，重新计算位置
+            const nextPoint = newPoints[1]
+            if (nextPoint) {
+              const angle = (startPoint.value.rotation - 270) * (Math.PI / 180)
+              const distance =
+                Math.sqrt(
+                  Math.pow(nextPoint.x - startPathPoint.x, 2) +
+                    Math.pow(nextPoint.y - startPathPoint.y, 2),
+                ) / 3
+              startPathPoint.controlPoint2 = {
+                x: startPathPoint.x + Math.cos(angle) * distance,
+                y: startPathPoint.y + Math.sin(angle) * distance,
+              }
+            }
+          }
+        }
+
+        // 更新整个点数组以确保视图更新
+        coursePath.value = {
+          ...coursePath.value,
+          points: newPoints,
+        }
+      }
+    }
+
     updateCourse()
   }
 
   // 更新终点位置
   const updateEndPoint = (position: { x: number; y: number }) => {
+    // 更新终点位置
     endPoint.value.x = position.x
     endPoint.value.y = position.y
+
+    // 如果路径存在且可见，更新路径的终点位置
+    if (coursePath.value.visible && coursePath.value.points.length > 0) {
+      // 创建新的点数组以触发响应式更新
+      const newPoints = [...coursePath.value.points]
+
+      // 更新终点位置（最后一个点）
+      if (newPoints.length > 0) {
+        const lastIndex = newPoints.length - 1
+        const endPathPoint = newPoints[lastIndex]
+        const oldEndX = endPathPoint.x
+        const oldEndY = endPathPoint.y
+
+        // 更新终点坐标
+        endPathPoint.x = position.x
+        endPathPoint.y = position.y
+
+        // 处理控制点1（终点只有前控制点）
+        if (endPathPoint.controlPoint1) {
+          if (endPathPoint.isControlPoint1Moved) {
+            // 如果控制点已被移动过，保持相对位置
+            const dx = endPathPoint.x - oldEndX
+            const dy = endPathPoint.y - oldEndY
+            endPathPoint.controlPoint1.x += dx
+            endPathPoint.controlPoint1.y += dy
+          } else {
+            // 如果控制点未被移动过，重新计算位置
+            const prevPoint = newPoints[lastIndex - 1]
+            if (prevPoint) {
+              const angle = (endPoint.value.rotation - 90) * (Math.PI / 180)
+              const distance =
+                Math.sqrt(
+                  Math.pow(prevPoint.x - endPathPoint.x, 2) +
+                    Math.pow(prevPoint.y - endPathPoint.y, 2),
+                ) / 3
+              endPathPoint.controlPoint1 = {
+                x: endPathPoint.x + Math.cos(angle) * distance,
+                y: endPathPoint.y + Math.sin(angle) * distance,
+              }
+            }
+          }
+        }
+
+        // 更新整个点数组以确保视图更新
+        coursePath.value = {
+          ...coursePath.value,
+          points: newPoints,
+        }
+      }
+    }
+
     updateCourse()
   }
 
@@ -292,8 +447,10 @@ export const useCourseStore = defineStore('course', () => {
 
       if (controlPointNumber === 1) {
         point.controlPoint1 = position
+        point.isControlPoint1Moved = true // 标记控制点1已被手动移动
       } else {
         point.controlPoint2 = position
+        point.isControlPoint2Moved = true // 标记控制点2已被手动移动
       }
 
       // 更新整个点数组以确保视图更新
@@ -503,6 +660,8 @@ export const useCourseStore = defineStore('course', () => {
 
     // 1. 障碍物前的连接点（可调节点）
     const point1 = points[startIndex]
+    const oldX1 = point1.x
+    const oldY1 = point1.y
     point1.x = center.x - Math.cos(angle) * (approachDistance + 50)
     point1.y = center.y - Math.sin(angle) * (approachDistance + 50)
 
@@ -523,8 +682,101 @@ export const useCourseStore = defineStore('course', () => {
 
     // 5. 障碍物后的连接点（可调节点）
     const point5 = points[startIndex + 4]
+    const oldX5 = point5.x
+    const oldY5 = point5.y
     point5.x = center.x + Math.cos(angle) * (departDistance + 50)
     point5.y = center.y + Math.sin(angle) * (departDistance + 50)
+
+    // 处理连接点的控制点
+    // 对于连接点1（障碍物前的连接点）
+    if (point1.controlPoint1) {
+      if (point1.isControlPoint1Moved) {
+        // 如果控制点1已被移动过，保持相对位置
+        const dx = point1.x - oldX1
+        const dy = point1.y - oldY1
+        point1.controlPoint1.x += dx
+        point1.controlPoint1.y += dy
+      } else {
+        // 如果控制点1未被移动过，重新计算位置
+        const prevPoint = points[startIndex - 1]
+        if (prevPoint) {
+          const angleToPoint = Math.atan2(prevPoint.y - point1.y, prevPoint.x - point1.x)
+          const distance =
+            Math.sqrt(Math.pow(prevPoint.x - point1.x, 2) + Math.pow(prevPoint.y - point1.y, 2)) / 3
+          point1.controlPoint1 = {
+            x: point1.x + Math.cos(angleToPoint) * distance,
+            y: point1.y + Math.sin(angleToPoint) * distance,
+          }
+        }
+      }
+    }
+
+    if (point1.controlPoint2) {
+      if (point1.isControlPoint2Moved) {
+        // 如果控制点2已被移动过，保持相对位置
+        const dx = point1.x - oldX1
+        const dy = point1.y - oldY1
+        point1.controlPoint2.x += dx
+        point1.controlPoint2.y += dy
+      } else {
+        // 如果控制点2未被移动过，重新计算位置
+        const nextPoint = points[startIndex + 1]
+        if (nextPoint) {
+          const angleToPoint = Math.atan2(nextPoint.y - point1.y, nextPoint.x - point1.x)
+          const distance =
+            Math.sqrt(Math.pow(nextPoint.x - point1.x, 2) + Math.pow(nextPoint.y - point1.y, 2)) / 3
+          point1.controlPoint2 = {
+            x: point1.x + Math.cos(angleToPoint) * distance,
+            y: point1.y + Math.sin(angleToPoint) * distance,
+          }
+        }
+      }
+    }
+
+    // 对于连接点5（障碍物后的连接点）
+    if (point5.controlPoint1) {
+      if (point5.isControlPoint1Moved) {
+        // 如果控制点1已被移动过，保持相对位置
+        const dx = point5.x - oldX5
+        const dy = point5.y - oldY5
+        point5.controlPoint1.x += dx
+        point5.controlPoint1.y += dy
+      } else {
+        // 如果控制点1未被移动过，重新计算位置
+        const prevPoint = points[startIndex + 3]
+        if (prevPoint) {
+          const angleToPoint = Math.atan2(prevPoint.y - point5.y, prevPoint.x - point5.x)
+          const distance =
+            Math.sqrt(Math.pow(prevPoint.x - point5.x, 2) + Math.pow(prevPoint.y - point5.y, 2)) / 3
+          point5.controlPoint1 = {
+            x: point5.x + Math.cos(angleToPoint) * distance,
+            y: point5.y + Math.sin(angleToPoint) * distance,
+          }
+        }
+      }
+    }
+
+    if (point5.controlPoint2) {
+      if (point5.isControlPoint2Moved) {
+        // 如果控制点2已被移动过，保持相对位置
+        const dx = point5.x - oldX5
+        const dy = point5.y - oldY5
+        point5.controlPoint2.x += dx
+        point5.controlPoint2.y += dy
+      } else {
+        // 如果控制点2未被移动过，重新计算位置
+        const nextPoint = points[startIndex + 5]
+        if (nextPoint) {
+          const angleToPoint = Math.atan2(nextPoint.y - point5.y, nextPoint.x - point5.x)
+          const distance =
+            Math.sqrt(Math.pow(nextPoint.x - point5.x, 2) + Math.pow(nextPoint.y - point5.y, 2)) / 3
+          point5.controlPoint2 = {
+            x: point5.x + Math.cos(angleToPoint) * distance,
+            y: point5.y + Math.sin(angleToPoint) * distance,
+          }
+        }
+      }
+    }
 
     // 更新路径点数组
     coursePath.value.points = points
@@ -840,16 +1092,39 @@ export const useCourseStore = defineStore('course', () => {
     updateCourse()
   }
 
-  // 导出课程数据
-  const exportCourse = () => {
-    return {
-      ...currentCourse.value,
-      obstacles: currentCourse.value.obstacles.map((obstacle) => ({
-        ...obstacle,
-        position: { ...obstacle.position },
-        numberPosition: obstacle.numberPosition ? { ...obstacle.numberPosition } : undefined,
-      })),
+  // 导出当前课程设计
+  const exportCourse = (): CourseDesign => {
+    // 创建一个新的对象，避免直接修改原对象
+    const exportData: CourseDesign = {
+      id: currentCourse.value.id,
+      name: currentCourse.value.name,
+      obstacles: [...currentCourse.value.obstacles],
+      createdAt: currentCourse.value.createdAt,
+      updatedAt: new Date().toISOString(),
+      fieldWidth: currentCourse.value.fieldWidth,
+      fieldHeight: currentCourse.value.fieldHeight,
     }
+
+    // 如果有路径数据，添加到导出数据中
+    if (coursePath.value.visible && coursePath.value.points.length > 0) {
+      exportData.path = {
+        visible: coursePath.value.visible,
+        points: [...coursePath.value.points],
+        startPoint: {
+          x: startPoint.value.x,
+          y: startPoint.value.y,
+          rotation: startPoint.value.rotation,
+        },
+        endPoint: {
+          x: endPoint.value.x,
+          y: endPoint.value.y,
+          rotation: endPoint.value.rotation,
+        },
+      }
+      console.log('导出路线数据，路线点数量:', coursePath.value.points.length)
+    }
+
+    return exportData
   }
 
   return {

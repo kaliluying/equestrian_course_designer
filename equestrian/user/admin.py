@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin, GroupAdmin
 from django.contrib.auth.models import Group
 from django.utils.html import format_html
+import os
 
 admin.site.site_header = '用户中心'
 admin.site.site_title = '用户中心'
@@ -66,36 +67,64 @@ class CustomUserAdmin(BaseUserAdmin):
 class DesignAdmin(admin.ModelAdmin):
     # 列表显示字段
     list_display = ('title', 'author', 'display_image', 'create_time',
-                    'update_time', 'download_button', 'export_button')
+                    'update_time', 'download_button', 'export_button', 'edit_button')
     list_filter = ('create_time', 'update_time')
     search_fields = ('title', 'author__username')
     readonly_fields = ('create_time', 'update_time',
-                       'display_image', 'download_button', 'export_button')
+                       'display_image', 'download_button', 'export_button', 'edit_button')
+
+    list_display_links = None
 
     def display_image(self, obj):
         """显示缩略图"""
         if obj.image:
-            return format_html('<img src="{}" width="100" height="100" style="object-fit: cover;" />', obj.image.url)
+            return format_html(
+                '<div class="image-preview-container">'
+                '<img src="{}" width="100" height="100" style="object-fit: cover; cursor: pointer;" '
+                'onclick="showImagePreview(\'{}\', \'{}\')" />'
+                '</div>',
+                obj.image.url, obj.image.url, obj.title
+            )
         return "无图片"
     display_image.short_description = '缩略图'
 
     def download_button(self, obj):
         """下载按钮"""
-        if obj.download:
+        if obj.image:
+            # 获取图片文件名
+            filename = os.path.basename(obj.image.name)
             return format_html(
-                '<button class="el-button el-button--primary el-button--small" onclick="window.location.href=\'{}\'">下载图片</button>',
-                obj.download.url
+                '<button class="el-button el-button--primary el-button--small" onclick="downloadFile(\'{}\', \'{}\'); return false;">下载图片</button>',
+                obj.image.url,
+                filename
             )
-        return "无文件"
+        return "无图片"
     download_button.short_description = '下载'
 
     def export_button(self, obj):
         """导出按钮"""
-        return format_html(
-            '<button class="el-button el-button--success el-button--small" onclick="exportDesign(\'{}\')">导出数据</button>',
-            obj.id
-        )
+        if obj.download:
+            # 获取JSON文件名
+            filename = os.path.basename(obj.download.name)
+            return format_html(
+                '<button class="el-button el-button--success el-button--small" onclick="downloadFile(\'{}\', \'{}\'); return false;">导出数据</button>',
+                obj.download.url,
+                filename
+            )
+        return "无数据"
     export_button.short_description = '导出'
+
+    def edit_button(self, obj):
+        """修改按钮"""
+        if obj.download:
+            return format_html(
+                '<button class="el-button el-button--warning el-button--small" onclick="editDesign(\'{}\', \'{}\', \'{}\'); return false;">修改设计</button>',
+                obj.download.url,
+                obj.title,
+                obj.id
+            )
+        return "无数据"
+    edit_button.short_description = '修改'
 
     class Media:
         css = {
