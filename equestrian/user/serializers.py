@@ -142,3 +142,82 @@ class DesignSerializer(serializers.ModelSerializer):
         model = Design
         fields = '__all__'
         read_only_fields = ('author', 'create_time', 'update_time')
+
+
+class ForgotPasswordSerializer(serializers.Serializer):
+    """忘记密码序列化器"""
+    username = serializers.CharField(
+        required=True,
+        error_messages={
+            'required': '请输入用户名',
+            'blank': '用户名不能为空',
+        }
+    )
+    email = serializers.EmailField(
+        required=True,
+        error_messages={
+            'required': '请输入邮箱地址',
+            'invalid': '请输入有效的邮箱地址',
+        }
+    )
+
+    def validate(self, attrs):
+        """验证用户名和邮箱是否匹配"""
+        username = attrs.get('username')
+        email = attrs.get('email')
+
+        # 检查用户是否存在
+        try:
+            user = User.objects.get(username=username)
+            # 检查邮箱是否匹配
+            if user.email != email:
+                # 为了安全，不透露具体错误原因
+                raise serializers.ValidationError('用户名或邮箱不正确')
+        except User.DoesNotExist:
+            # 为了安全，不透露具体错误原因
+            raise serializers.ValidationError('用户名或邮箱不正确')
+
+        return attrs
+
+
+class ResetPasswordSerializer(serializers.Serializer):
+    """重置密码序列化器"""
+    token = serializers.CharField(
+        required=True,
+        error_messages={
+            'required': '重置令牌不能为空',
+        }
+    )
+    password = serializers.CharField(
+        write_only=True,
+        required=True,
+        validators=[validate_password],
+        error_messages={
+            'required': '请输入新密码',
+        }
+    )
+    confirmPassword = serializers.CharField(
+        write_only=True,
+        required=True,
+        error_messages={
+            'required': '请确认新密码',
+        }
+    )
+
+    def validate(self, attrs):
+        """验证两次密码是否一致"""
+        if attrs['password'] != attrs['confirmPassword']:
+            raise serializers.ValidationError(
+                {"confirmPassword": ["两次输入的密码不一致"]}
+            )
+
+        # 验证密码复杂度
+        password = attrs['password']
+        if len(password) < 8:
+            raise serializers.ValidationError({"password": ["密码长度不能小于8位"]})
+        if not any(char.isdigit() for char in password):
+            raise serializers.ValidationError({"password": ["密码必须包含数字"]})
+        if not any(char.isalpha() for char in password):
+            raise serializers.ValidationError({"password": ["密码必须包含字母"]})
+
+        return attrs

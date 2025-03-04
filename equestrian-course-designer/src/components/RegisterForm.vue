@@ -1,55 +1,32 @@
 <template>
   <div class="register-form">
     <h2>注册</h2>
-    <el-form
-      ref="formRef"
-      :model="form"
-      :rules="rules"
-      label-width="80px"
-      @submit.prevent="handleSubmit"
-    >
+    <el-form ref="formRef" :model="form" :rules="rules" label-width="80px" @submit.prevent="handleSubmit">
       <el-form-item label="用户名" prop="username">
-        <el-input
-          v-model="form.username"
-          placeholder="请输入用户名"
-          :class="{ 'is-error': errors.username }"
-        />
+        <el-input v-model="form.username" placeholder="请输入用户名" :class="{ 'is-error': errors.username }" />
         <div v-if="errors.username" class="el-form-item__error">
           {{ errors.username[0] }}
         </div>
       </el-form-item>
 
       <el-form-item label="邮箱" prop="email">
-        <el-input
-          v-model="form.email"
-          type="email"
-          placeholder="请输入邮箱"
-          :class="{ 'is-error': errors.email }"
-        />
+        <el-input v-model="form.email" type="email" placeholder="请输入邮箱" :class="{ 'is-error': errors.email }" />
         <div v-if="errors.email" class="el-form-item__error">
           {{ errors.email[0] }}
         </div>
       </el-form-item>
 
       <el-form-item label="密码" prop="password">
-        <el-input
-          v-model="form.password"
-          type="password"
-          placeholder="请输入密码"
-          :class="{ 'is-error': errors.password }"
-        />
+        <el-input v-model="form.password" type="password" placeholder="请输入密码"
+          :class="{ 'is-error': errors.password }" />
         <div v-if="errors.password" class="el-form-item__error">
           {{ errors.password[0] }}
         </div>
       </el-form-item>
 
       <el-form-item label="确认密码" prop="confirmPassword">
-        <el-input
-          v-model="form.confirmPassword"
-          type="password"
-          placeholder="请再次输入密码"
-          :class="{ 'is-error': errors.confirmPassword }"
-        />
+        <el-input v-model="form.confirmPassword" type="password" placeholder="请再次输入密码"
+          :class="{ 'is-error': errors.confirmPassword }" />
         <div v-if="errors.confirmPassword" class="el-form-item__error">
           {{ errors.confirmPassword[0] }}
         </div>
@@ -85,7 +62,7 @@ const form = reactive<RegisterForm>({
 })
 
 // 错误信息
-const errors = reactive<{[key: string]: string[]}>({
+const errors = reactive<{ [key: string]: string[] }>({
   username: [],
   email: [],
   password: [],
@@ -152,6 +129,7 @@ const handleSubmit = async () => {
     loading.value = true
     clearErrors() // 清除之前的错误信息
 
+    // 注册成功后，用户已经自动登录（userStore.register方法已经设置了token和用户信息）
     const user = await userStore.register(form)
     ElMessage.success('注册成功')
     emit('register-success', user)

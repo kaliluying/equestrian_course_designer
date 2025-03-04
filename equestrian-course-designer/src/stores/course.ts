@@ -49,7 +49,6 @@ export const useCourseStore = defineStore('course', () => {
           y: startPoint.y + Math.sin(angle) * distance,
         }
 
-        // 更新路径点
         coursePath.value.points = points
       }
     }
@@ -1127,6 +1126,37 @@ export const useCourseStore = defineStore('course', () => {
     return exportData
   }
 
+  // 从协作会话中导入课程数据
+  function importCourse(course: CourseDesign) {
+    // 保留当前的ID，避免覆盖本地ID
+    const currentId = currentCourse.value.id
+
+    // 更新课程数据
+    currentCourse.value = {
+      ...course,
+      id: currentId, // 保留原始ID
+      updatedAt: new Date().toISOString(),
+    }
+
+    // 清除选中的障碍物
+    selectedObstacle.value = null
+
+    // 更新路径
+    if (course.path) {
+      coursePath.value = course.path
+    }
+  }
+
+  // 设置当前课程ID
+  const setCurrentCourseId = (id: string) => {
+    if (id) {
+      console.log('设置当前设计ID:', id)
+      // 如果ID为空或未定义，生成新的UUID
+      currentCourse.value.id = id || uuidv4()
+      console.log('当前设计ID已更新为:', currentCourse.value.id)
+    }
+  }
+
   return {
     currentCourse,
     selectedObstacle,
@@ -1151,5 +1181,7 @@ export const useCourseStore = defineStore('course', () => {
     clearPath,
     resetStartEndPoints,
     exportCourse,
+    importCourse,
+    setCurrentCourseId,
   }
 })

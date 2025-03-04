@@ -1,12 +1,9 @@
 <template>
-  <div
-    ref="canvasRef"
-    class="course-canvas"
-    :style="canvasStyle"
-    @drop="handleDrop"
-    @dragover.prevent
-    @mousedown.self="startSelection"
-  >
+  <div class="course-canvas" :style="canvasStyle" @drop="handleDrop" @dragover.prevent @mousedown.self="startSelection"
+    @mousemove="handleCollaborationMouseMove" ref="canvasContainerRef">
+    <!-- 添加协作者光标组件 -->
+    <CollaboratorCursors v-if="isCollaborating" :collaborators="collaborators" />
+
     <div class="canvas-grid"></div>
     <div class="dimension-labels">
       <div class="width-label">宽度: {{ courseStore.currentCourse.fieldWidth }}m</div>
@@ -14,90 +11,66 @@
     </div>
     <div class="field-dimensions" @click="showSizeDialog">
       {{ courseStore.currentCourse.fieldWidth }}m × {{ courseStore.currentCourse.fieldHeight }}m
-      <el-icon class="edit-icon"><Edit /></el-icon>
+      <el-icon class="edit-icon">
+        <Edit />
+      </el-icon>
     </div>
     <div class="scale-indicator">
       <div class="scale-line" :style="{ width: `${scaleWidth}px` }"></div>
       <div class="scale-label">5m</div>
     </div>
-    <div
-      v-for="obstacle in courseStore.currentCourse.obstacles"
-      :key="obstacle.id"
-      :data-id="obstacle.id"
-      class="obstacle"
-      :class="{
+    <div v-for="obstacle in courseStore.currentCourse.obstacles" :key="obstacle.id" :data-id="obstacle.id"
+      class="obstacle" :class="{
         selected: isSelected(obstacle),
         dragging: draggingObstacle?.id === obstacle.id,
-      }"
-      :style="{
+      }" :style="{
         left: `${obstacle.position.x}px`,
         top: `${obstacle.position.y}px`,
         transform: `rotate(${obstacle.rotation}deg)`,
-      }"
-      @click="selectObstacle(obstacle, $event.ctrlKey || $event.metaKey)"
-      @mousedown="startDragging($event, obstacle)"
-    >
+      }" @click="selectObstacle(obstacle, $event.ctrlKey || $event.metaKey)"
+      @mousedown="startDragging($event, obstacle)">
       <div class="obstacle-content">
         <div class="direction-arrow">
           <div class="arrow-line"></div>
           <div class="arrow-head"></div>
         </div>
         <template v-if="obstacle.type === ObstacleType.WALL">
-          <div
-            class="wall"
-            :style="{
-              width: `${obstacle.wallProperties?.width}px`,
-              height: `${obstacle.wallProperties?.height}px`,
-              background: obstacle.wallProperties?.color,
-            }"
-          >
+          <div class="wall" :style="{
+            width: `${obstacle.wallProperties?.width}px`,
+            height: `${obstacle.wallProperties?.height}px`,
+            background: obstacle.wallProperties?.color,
+          }">
             <div class="wall-texture"></div>
           </div>
         </template>
         <template v-else-if="obstacle.type === ObstacleType.LIVERPOOL">
-          <div
-            class="liverpool"
-            :style="{
-              width: `${obstacle.poles[0]?.width}px`,
-            }"
-          >
+          <div class="liverpool" :style="{
+            width: `${obstacle.poles[0]?.width}px`,
+          }">
             <template v-if="obstacle.liverpoolProperties?.hasRail">
-              <div
-                v-for="(pole, index) in obstacle.poles"
-                :key="index"
-                class="pole"
-                :style="{
-                  width: '100%',
-                  height: `${pole.height}px`,
-                  background: `linear-gradient(90deg, ${pole.color} 0%, ${adjustColor(pole.color, 20)} 100%)`,
-                }"
-              >
+              <div v-for="(pole, index) in obstacle.poles" :key="index" class="pole" :style="{
+                width: '100%',
+                height: `${pole.height}px`,
+                background: `linear-gradient(90deg, ${pole.color} 0%, ${adjustColor(pole.color, 20)} 100%)`,
+              }">
                 <div class="pole-shadow"></div>
               </div>
             </template>
-            <div
-              class="water"
-              :style="{
-                width: `${obstacle.liverpoolProperties?.width}px`,
-                height: `${obstacle.liverpoolProperties?.waterDepth}px`,
-                background: obstacle.liverpoolProperties?.waterColor,
-                marginLeft: `${(obstacle.poles[0]?.width - (obstacle.liverpoolProperties?.width || 0)) / 2}px`,
-              }"
-            ></div>
+            <div class="water" :style="{
+              width: `${obstacle.liverpoolProperties?.width}px`,
+              height: `${obstacle.liverpoolProperties?.waterDepth}px`,
+              background: obstacle.liverpoolProperties?.waterColor,
+              marginLeft: `${(obstacle.poles[0]?.width - (obstacle.liverpoolProperties?.width || 0)) / 2}px`,
+            }"></div>
           </div>
         </template>
         <template v-else>
-          <div
-            v-for="(pole, index) in obstacle.poles"
-            :key="index"
-            class="pole"
-            :style="{
-              width: `${pole.width}px`,
-              height: `${pole.height}px`,
-              background: `linear-gradient(90deg, ${pole.color} 0%, ${adjustColor(pole.color, 20)} 100%)`,
-              marginBottom: pole.spacing ? `${pole.spacing}px` : '0',
-            }"
-          >
+          <div v-for="(pole, index) in obstacle.poles" :key="index" class="pole" :style="{
+            width: `${pole.width}px`,
+            height: `${pole.height}px`,
+            background: `linear-gradient(90deg, ${pole.color} 0%, ${adjustColor(pole.color, 20)} 100%)`,
+            marginBottom: pole.spacing ? `${pole.spacing}px` : '0',
+          }">
             <div class="pole-shadow"></div>
           </div>
         </template>
@@ -107,38 +80,29 @@
       </div>
     </div>
 
-    <template
-      v-for="obstacle in courseStore.currentCourse.obstacles"
-      :key="`numbers-${obstacle.id}`"
-    >
-      <div
-        v-for="(pole, index) in obstacle.poles.filter((p) => p.number)"
-        :key="`number-${index}`"
-        class="pole-number"
-        @mousedown.stop="startDraggingPoleNumber($event, obstacle, index)"
-        :style="{
+    <template v-for="obstacle in courseStore.currentCourse.obstacles" :key="`numbers-${obstacle.id}`">
+      <div v-for="(pole, index) in obstacle.poles.filter((p) => p.number)" :key="`number-${index}`" class="pole-number"
+        @mousedown.stop="startDraggingPoleNumber($event, obstacle, index)" :style="{
           position: 'absolute',
           left: `${obstacle.position.x + (pole.numberPosition?.x ?? 0)}px`,
           top: `${obstacle.position.y + (pole.numberPosition?.y ?? 50)}px`,
           transform: 'translate(-50%, -50%)',
-        }"
-      >
+        }">
         {{ pole.number }}
       </div>
     </template>
 
     <div class="canvas-placeholder" v-if="!courseStore.currentCourse.obstacles.length">
-      <el-icon :size="48" class="placeholder-icon"><Plus /></el-icon>
+      <el-icon :size="48" class="placeholder-icon">
+        <Plus />
+      </el-icon>
       <p>从左侧拖拽障碍物到此处</p>
     </div>
     <div v-show="isSelecting" class="selection-box" :style="selectionStyle"></div>
 
     <div v-if="courseStore.coursePath.visible" class="course-path">
-      <div
-        class="path-indicator start-indicator"
-        :style="startStyle"
-        @mousedown.stop="startDraggingPoint('start', $event)"
-      >
+      <div class="path-indicator start-indicator" :style="startStyle"
+        @mousedown.stop="startDraggingPoint('start', $event)">
         <div class="direction-arrow">
           <div class="arrow-line"></div>
           <div class="arrow-head"></div>
@@ -147,11 +111,7 @@
         <div class="rotation-handle" @mousedown.stop="startRotatingPoint('start', $event)"></div>
       </div>
 
-      <div
-        class="path-indicator end-indicator"
-        :style="endStyle"
-        @mousedown.stop="startDraggingPoint('end', $event)"
-      >
+      <div class="path-indicator end-indicator" :style="endStyle" @mousedown.stop="startDraggingPoint('end', $event)">
         <div class="direction-arrow">
           <div class="arrow-line"></div>
           <div class="arrow-head"></div>
@@ -163,66 +123,27 @@
       <!-- 添加 SVG 路径渲染 -->
       <svg class="course-path-svg">
         <!-- 先渲染控制线 -->
-        <template
-          v-for="(point, pointIndex) in courseStore.coursePath.points"
-          :key="`lines-${pointIndex}`"
-        >
-          <line
-            v-if="point.controlPoint1"
-            :x1="point.x"
-            :y1="point.y"
-            :x2="point.controlPoint1.x"
-            :y2="point.controlPoint1.y"
-            class="control-line"
-          />
-          <line
-            v-if="point.controlPoint2"
-            :x1="point.x"
-            :y1="point.y"
-            :x2="point.controlPoint2.x"
-            :y2="point.controlPoint2.y"
-            class="control-line"
-          />
+        <template v-for="(point, pointIndex) in courseStore.coursePath.points" :key="`lines-${pointIndex}`">
+          <line v-if="point.controlPoint1" :x1="point.x" :y1="point.y" :x2="point.controlPoint1.x"
+            :y2="point.controlPoint1.y" class="control-line" />
+          <line v-if="point.controlPoint2" :x1="point.x" :y1="point.y" :x2="point.controlPoint2.x"
+            :y2="point.controlPoint2.y" class="control-line" />
         </template>
 
         <!-- 渲染路径 -->
-        <path
-          v-for="(segment, index) in pathSegments"
-          :key="`path-${index}`"
-          :d="segment"
-          class="course-path-line"
-          fill="none"
-          stroke="var(--primary-color)"
-          stroke-width="2"
-          stroke-dasharray="5,5"
-        />
+        <path v-for="(segment, index) in pathSegments" :key="`path-${index}`" :d="segment" class="course-path-line"
+          fill="none" stroke="var(--primary-color)" stroke-width="2" stroke-dasharray="5,5" />
 
         <!-- 渲染距离标签 -->
         <template v-if="showDistanceLabels">
           <g v-for="(distance, index) in obstacleDistances" :key="`distance-${index}`">
-            <g :transform="`translate(${distance.position.x}, ${distance.position.y}) rotate(${adjustLabelAngle(distance.angle)})`">
-              <rect
-                x="-25"
-                y="-12"
-                width="50"
-                height="24"
-                rx="4"
-                ry="4"
-                class="distance-label-bg"
-              />
-              <text
-                x="0"
-                y="5"
-                class="distance-label-text"
-              >
+            <g
+              :transform="`translate(${distance.position.x}, ${distance.position.y}) rotate(${adjustLabelAngle(distance.angle)})`">
+              <rect x="-25" y="-12" width="50" height="24" rx="4" ry="4" class="distance-label-bg" />
+              <text x="0" y="5" class="distance-label-text">
                 {{ distance.distance }}m
               </text>
-              <text
-                v-if="distance.fromNumber && distance.toNumber"
-                x="0"
-                y="-20"
-                class="obstacle-number-text"
-              >
+              <text v-if="distance.fromNumber && distance.toNumber" x="0" y="-20" class="obstacle-number-text">
                 {{ distance.fromNumber }} → {{ distance.toNumber }}
               </text>
             </g>
@@ -231,45 +152,20 @@
 
         <!-- 显示总距离 -->
         <g v-if="showDistanceLabels && Number(totalDistance) > 0" :transform="`translate(20, 20)`">
-          <rect
-            x="0"
-            y="0"
-            width="120"
-            height="30"
-            rx="5"
-            ry="5"
-            class="total-distance-bg"
-          />
-          <text
-            x="60"
-            y="20"
-            class="total-distance-text"
-          >
+          <rect x="0" y="0" width="120" height="30" rx="5" ry="5" class="total-distance-bg" />
+          <text x="60" y="20" class="total-distance-text">
             总长度: {{ totalDistance }}m
           </text>
         </g>
 
         <!-- 渲染控制点 -->
-        <template
-          v-for="(point, pointIndex) in courseStore.coursePath.points"
-          :key="`points-${pointIndex}`"
-        >
-          <circle
-            v-if="point.controlPoint1"
-            :cx="point.controlPoint1.x"
-            :cy="point.controlPoint1.y"
+        <template v-for="(point, pointIndex) in courseStore.coursePath.points" :key="`points-${pointIndex}`">
+          <circle v-if="point.controlPoint1" :cx="point.controlPoint1.x" :cy="point.controlPoint1.y"
             :r="draggingControlPoint?.pointIndex === pointIndex && draggingControlPoint?.controlPointNumber === 1 ? 8 : 6"
-            class="control-point"
-            @mousedown.stop="startDraggingControlPoint(pointIndex, 1, $event)"
-          />
-          <circle
-            v-if="point.controlPoint2"
-            :cx="point.controlPoint2.x"
-            :cy="point.controlPoint2.y"
+            class="control-point" @mousedown.stop="startDraggingControlPoint(pointIndex, 1, $event)" />
+          <circle v-if="point.controlPoint2" :cx="point.controlPoint2.x" :cy="point.controlPoint2.y"
             :r="draggingControlPoint?.pointIndex === pointIndex && draggingControlPoint?.controlPointNumber === 2 ? 8 : 6"
-            class="control-point"
-            @mousedown.stop="startDraggingControlPoint(pointIndex, 2, $event)"
-          />
+            class="control-point" @mousedown.stop="startDraggingControlPoint(pointIndex, 2, $event)" />
         </template>
       </svg>
 
@@ -282,46 +178,28 @@
     <!-- 添加距离标签显示控制按钮 -->
     <div v-if="courseStore.coursePath.visible" class="distance-toggle">
       <el-tooltip content="显示/隐藏距离标签" placement="left">
-        <el-button
-          type="primary"
-          circle
-          size="small"
-          :icon="showDistanceLabels ? 'Hide' : 'View'"
-          @click="toggleDistanceLabels"
-        >
-          <el-icon v-if="showDistanceLabels"><Hide /></el-icon>
-          <el-icon v-else><View /></el-icon>
+        <el-button type="primary" circle size="small" :icon="showDistanceLabels ? 'Hide' : 'View'"
+          @click="toggleDistanceLabels">
+          <el-icon v-if="showDistanceLabels">
+            <Hide />
+          </el-icon>
+          <el-icon v-else>
+            <View />
+          </el-icon>
         </el-button>
       </el-tooltip>
     </div>
   </div>
 
-  <el-dialog
-    v-model="sizeDialogVisible"
-    title="设置场地尺寸"
-    width="400px"
-    :close-on-click-modal="false"
-  >
+  <el-dialog v-model="sizeDialogVisible" title="设置场地尺寸" width="400px" :close-on-click-modal="false">
     <el-form label-position="top">
       <el-form-item label="场地宽度 (米)">
-        <el-input-number
-          v-model="tempFieldSize.width"
-          :min="40"
-          :max="200"
-          :step="5"
-          controls-position="right"
-          class="full-width"
-        />
+        <el-input-number v-model="tempFieldSize.width" :min="40" :max="200" :step="5" controls-position="right"
+          class="full-width" />
       </el-form-item>
       <el-form-item label="场地高度 (米)">
-        <el-input-number
-          v-model="tempFieldSize.height"
-          :min="20"
-          :max="150"
-          :step="5"
-          controls-position="right"
-          class="full-width"
-        />
+        <el-input-number v-model="tempFieldSize.height" :min="20" :max="150" :step="5" controls-position="right"
+          class="full-width" />
       </el-form-item>
     </el-form>
     <template #footer>
@@ -331,15 +209,22 @@
       </div>
     </template>
   </el-dialog>
+
+  <!-- 添加协作面板 -->
+  <CollaborationPanel v-if="isCollaborating" :design-id="courseStore.currentCourse.id" />
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { Plus, Edit, Hide, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useCourseStore } from '@/stores/course'
 import type { Obstacle } from '@/types/obstacle'
 import { ObstacleType, type PathPoint } from '@/types/obstacle'
+import CollaboratorCursors from './CollaboratorCursors.vue'
+import CollaborationPanel from './CollaborationPanel.vue'
+import { useWebSocketConnection } from '@/utils/websocket'
+import { throttle } from 'lodash-es'
 
 // 组件状态管理
 const courseStore = useCourseStore()
@@ -352,6 +237,7 @@ const draggingNumberObstacle = ref<Obstacle | null>(null)
 const draggingPoleIndex = ref<number | null>(null)
 const startPos = ref<Record<string, { x: number; y: number }>>({})
 const startMousePos = ref({ x: 0, y: 0 }) // 开始位置
+const canvasContainerRef = ref<HTMLElement | null>(null) // 修改ref名称
 
 // 场地尺寸对话框
 const sizeDialogVisible = ref(false)
@@ -374,6 +260,258 @@ const draggingPoint = ref<'start' | 'end' | 'start-rotate' | 'end-rotate' | null
 // 距离标签显示控制
 const showDistanceLabels = ref(true)
 
+// 协作状态
+const isCollaborating = ref(false)
+const {
+  collaborators,
+  sendCursorPosition,
+  sendPathUpdate,
+  connect, // 添加connect方法
+  disconnect, // 添加disconnect方法
+  connectionStatus // 添加connectionStatus
+} = useWebSocketConnection(courseStore.currentCourse.id)
+
+// 处理鼠标移动，同步光标位置
+const handleCollaborationMouseMove = throttle((event: MouseEvent) => {
+  if (isCollaborating.value && canvasContainerRef.value) {
+    const rect = canvasContainerRef.value.getBoundingClientRect()
+    const x = event.clientX - rect.left
+    const y = event.clientY - rect.top
+    sendCursorPosition({ x, y })
+  }
+}, 50) // 50ms节流，避免发送过多消息
+
+// 监听路径变化，同步到其他协作者
+watch(() => courseStore.coursePath, (newPath) => {
+  if (isCollaborating.value) {
+    sendPathUpdate(newPath)
+  }
+}, { deep: true })
+
+// 添加协作控制方法
+const startCollaboration = async () => {
+  const designId = courseStore.currentCourse.id
+  console.log('开始协作，设计ID:', designId)
+
+  // 验证设计ID
+  if (!designId) {
+    console.error('无法开始协作：设计ID为空')
+    ElMessage.error('无法开始协作：设计ID为空')
+    return false
+  }
+
+  // 检查WebSocket连接状态
+  console.log('当前WebSocket连接状态:', connectionStatus.value)
+
+  // 如果已经在协作中且已连接，则不重复启动
+  if (isCollaborating.value && (connectionStatus.value as string) === 'connected') {
+    console.log('已经在协作中且已连接，不重复启动')
+    return true
+  }
+
+  // 设置协作状态为true
+  isCollaborating.value = true
+  console.log('已设置协作状态为true')
+
+  // 设置协作钩子
+  setupCollaborationHooks()
+
+  // 如果WebSocket未连接，手动连接
+  if ((connectionStatus.value as string) !== 'connected') {
+    console.log('WebSocket未连接，尝试连接...当前状态:', connectionStatus.value)
+
+    // 如果正在断开连接，等待断开完成
+    if ((connectionStatus.value as string) === 'disconnecting') {
+      console.log('WebSocket正在断开连接，等待断开完成...')
+      await new Promise(resolve => setTimeout(resolve, 1000))
+    }
+
+    // 如果已断开连接，尝试重新连接
+    if ((connectionStatus.value as string) === 'disconnected') {
+      console.log('WebSocket已断开连接，尝试重新连接')
+      try {
+        connect()
+        console.log('已调用connect方法，等待连接状态更新')
+      } catch (error) {
+        console.error('调用connect方法时出错:', error)
+        isCollaborating.value = false
+
+        // 触发协作停止事件
+        const event = new CustomEvent('collaboration-stopped', {
+          bubbles: true,
+          detail: {
+            timestamp: new Date().toISOString(),
+            source: 'connection_failed',
+            error: '连接WebSocket时出错'
+          }
+        })
+        document.dispatchEvent(event)
+        return false
+      }
+
+      // 等待连接状态更新
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      // 检查连接是否成功
+      console.log('检查连接是否成功，当前状态:', connectionStatus.value)
+      if ((connectionStatus.value as string) !== 'connected') {
+        console.error('WebSocket连接失败，状态:', connectionStatus.value)
+        isCollaborating.value = false
+
+        // 触发协作停止事件
+        const event = new CustomEvent('collaboration-stopped', {
+          bubbles: true,
+          detail: {
+            timestamp: new Date().toISOString(),
+            source: 'connection_failed',
+            error: '无法连接到协作服务器'
+          }
+        })
+        document.dispatchEvent(event)
+        return false
+      }
+    } else {
+      // 其他状态（如CONNECTING），尝试连接
+      console.log('尝试连接WebSocket...')
+      connect()
+    }
+  } else {
+    console.log('WebSocket已连接，无需重新连接')
+  }
+
+  console.log('协作启动成功，当前状态:', isCollaborating.value)
+  return true
+}
+
+const stopCollaboration = () => {
+  console.log('停止协作，当前协作状态:', isCollaborating.value)
+
+  // 添加检查，如果当前不在协作中，直接返回
+  if (!isCollaborating.value) {
+    console.log('当前不在协作中，无需停止')
+    return
+  }
+
+  try {
+    // 先断开WebSocket连接
+    console.log('断开WebSocket连接')
+    if (typeof disconnect === 'function') {
+      try {
+        // 先更新状态，确保UI立即响应
+        isCollaborating.value = false
+        console.log('协作状态已更新为:', isCollaborating.value)
+
+        // 触发自定义事件通知App.vue更新状态
+        const event = new CustomEvent('collaboration-stopped', {
+          bubbles: true,
+          detail: { timestamp: new Date().toISOString(), reason: '用户主动退出' },
+        })
+        document.dispatchEvent(event)
+
+        // 然后断开连接
+        disconnect()
+        console.log('WebSocket连接已断开')
+      } catch (disconnectError) {
+        console.error('断开WebSocket连接时出错:', disconnectError)
+
+        // 确保状态被重置
+        isCollaborating.value = false
+        console.log('出错后已更新协作状态为:', isCollaborating.value)
+
+        // 触发自定义事件
+        const event = new CustomEvent('collaboration-stopped', {
+          bubbles: true,
+          detail: { timestamp: new Date().toISOString(), error: true },
+        })
+        document.dispatchEvent(event)
+      }
+    } else {
+      console.error('disconnect方法不存在或不是函数')
+
+      // 确保状态被重置
+      isCollaborating.value = false
+      console.log('disconnect方法不存在，已更新协作状态为:', isCollaborating.value)
+
+      // 触发自定义事件
+      const event = new CustomEvent('collaboration-stopped', {
+        bubbles: true,
+        detail: { timestamp: new Date().toISOString(), manual: true, reason: 'disconnect方法不存在' },
+      })
+      document.dispatchEvent(event)
+    }
+
+    // 移除协作功能的钩子
+    console.log('移除协作钩子')
+    try {
+      removeCollaborationHooks()
+      console.log('协作钩子已移除')
+    } catch (hookError) {
+      console.error('移除协作钩子时出错:', hookError)
+    }
+  } catch (error) {
+    console.error('停止协作时出错:', error)
+    // 确保状态被重置
+    isCollaborating.value = false
+    console.log('出错后已更新协作状态为:', isCollaborating.value)
+
+    // 触发自定义事件
+    try {
+      const event = new CustomEvent('collaboration-stopped', {
+        bubbles: true,
+        detail: { timestamp: new Date().toISOString(), error: true, reason: '未知错误' },
+      })
+      document.dispatchEvent(event)
+    } catch (eventError) {
+      console.error('发送错误状态的collaboration-stopped事件失败:', eventError)
+    }
+  }
+}
+
+// 设置协作钩子函数
+const setupCollaborationHooks = () => {
+  // 这里可以添加更多的协作钩子
+  console.log('协作模式已启用')
+}
+
+// 移除协作钩子函数
+const removeCollaborationHooks = () => {
+  // 这里可以移除协作钩子
+  console.log('协作模式已禁用')
+}
+
+// 修改清空画布的方法
+const handleClearCanvas = () => {
+  // 先清除路线（这会同时处理可见性和起终点）
+  courseStore.clearPath()
+
+  // 清除所有障碍物
+  courseStore.currentCourse.obstacles.forEach(obstacle => {
+    courseStore.removeObstacle(obstacle.id)
+  })
+
+  // 清除选中状态
+  clearSelection()
+}
+
+// 切换距离标签显示
+const toggleDistanceLabels = () => {
+  showDistanceLabels.value = !showDistanceLabels.value
+}
+
+// 暴露协作控制方法
+defineExpose({
+  startCollaboration,
+  stopCollaboration,
+  handleClearCanvas,
+  toggleDistanceLabels
+})
+
+// 确保stopCollaboration方法可以被外部访问
+window.debugCanvas = {
+  startCollaboration,
+  stopCollaboration
+}
+
 // 选择障碍物
 const selectObstacle = (obstacle: Obstacle, multiSelect = false) => {
   if (multiSelect) {
@@ -385,10 +523,15 @@ const selectObstacle = (obstacle: Obstacle, multiSelect = false) => {
       selectedObstacles.value.splice(index, 1)
     }
   } else {
-    // 单选模式
+    // 如果是单选模式
     selectedObstacles.value = [obstacle]
   }
   courseStore.selectedObstacle = selectedObstacles.value[0] // 保持兼容性
+
+  // 如果在协作模式下，同步选择状态
+  if (isCollaborating.value) {
+    // 这里可以添加同步选择状态的代码
+  }
 }
 
 // 清除选择
@@ -746,10 +889,9 @@ const updateFieldSize = () => {
 }
 
 // 计算每米对应的像素数
-const canvasRef = ref<HTMLElement | null>(null)
 const meterScale = computed(() => {
-  if (!canvasRef.value) return 1
-  const rect = canvasRef.value.getBoundingClientRect()
+  if (!canvasContainerRef.value) return 1
+  const rect = canvasContainerRef.value.getBoundingClientRect()
   return rect.width / courseStore.currentCourse.fieldWidth
 })
 
@@ -1008,9 +1150,9 @@ const pasteObstacle = () => {
       },
       numberPosition: obstacle.numberPosition
         ? {
-            x: obstacle.numberPosition.x + offsetX,
-            y: obstacle.numberPosition.y + offsetY,
-          }
+          x: obstacle.numberPosition.x + offsetX,
+          y: obstacle.numberPosition.y + offsetY,
+        }
         : undefined,
     }
 
@@ -1095,9 +1237,9 @@ const pathSegments = computed(() => {
       // 使用三次贝塞尔曲线
       segments.push(
         `M ${previous.x} ${previous.y} ` +
-          `C ${previous.controlPoint2.x} ${previous.controlPoint2.y}, ` +
-          `${current.controlPoint1.x} ${current.controlPoint1.y}, ` +
-          `${current.x} ${current.y}`,
+        `C ${previous.controlPoint2.x} ${previous.controlPoint2.y}, ` +
+        `${current.controlPoint1.x} ${current.controlPoint1.y}, ` +
+        `${current.x} ${current.y}`,
       )
     } else {
       // 使用直线
@@ -1120,20 +1262,6 @@ const endStyle = computed(() => ({
   top: `${courseStore.endPoint.y}px`,
   transform: `translate(-50%, -50%) rotate(${courseStore.endPoint.rotation}deg)`,
 }))
-
-// 修改清空画布的方法
-const handleClearCanvas = () => {
-  // 先清除路线（这会同时处理可见性和起终点）
-  courseStore.clearPath()
-
-  // 清除所有障碍物
-  courseStore.currentCourse.obstacles.forEach(obstacle => {
-    courseStore.removeObstacle(obstacle.id)
-  })
-
-  // 清除选中状态
-  clearSelection()
-}
 
 // 修改生成路线的方法
 const handleGenerateCoursePath = () => {
@@ -1191,14 +1319,14 @@ const calculateBezierLength = (
 
     // 三次贝塞尔曲线的参数方程
     const x = t1 * t1 * t1 * p0.x +
-              3 * t1 * t1 * t * p1.x +
-              3 * t1 * t * t * p2.x +
-              t * t * t * p3.x
+      3 * t1 * t1 * t * p1.x +
+      3 * t1 * t * t * p2.x +
+      t * t * t * p3.x
 
     const y = t1 * t1 * t1 * p0.y +
-              3 * t1 * t1 * t * p1.y +
-              3 * t1 * t * t * p2.y +
-              t * t * t * p3.y
+      3 * t1 * t1 * t * p1.y +
+      3 * t1 * t * t * p2.y +
+      t * t * t * p3.y
 
     const currentPoint = { x, y }
 
@@ -1393,16 +1521,6 @@ const totalDistance = computed(() => {
 
   // 保留一位小数
   return total.toFixed(1)
-})
-
-// 距离标签显示控制
-const toggleDistanceLabels = () => {
-  showDistanceLabels.value = !showDistanceLabels.value
-}
-
-// 将方法暴露给父组件
-defineExpose({
-  handleClearCanvas
 })
 </script>
 
@@ -1642,6 +1760,7 @@ defineExpose({
 
   &:hover {
     background-color: white;
+
     .edit-icon {
       opacity: 0.6;
     }
@@ -1762,20 +1881,16 @@ defineExpose({
     left: 0;
     right: 0;
     bottom: 0;
-    background-image: repeating-linear-gradient(
-        90deg,
+    background-image: repeating-linear-gradient(90deg,
         rgba(0, 0, 0, 0.1) 0px,
         rgba(0, 0, 0, 0.1) 4px,
         transparent 4px,
-        transparent 8px
-      ),
-      repeating-linear-gradient(
-        0deg,
+        transparent 8px),
+      repeating-linear-gradient(0deg,
         rgba(0, 0, 0, 0.1) 0px,
         rgba(0, 0, 0, 0.1) 4px,
         transparent 4px,
-        transparent 8px
-      );
+        transparent 8px);
   }
 }
 
@@ -1806,6 +1921,7 @@ defineExpose({
 
   &.start-point {
     background-color: #67c23a;
+
     &::after {
       content: '';
       position: absolute;
@@ -1819,6 +1935,7 @@ defineExpose({
 
   &.end-point {
     background-color: #f56c6c;
+
     &::after {
       content: '';
       position: absolute;
@@ -1873,13 +1990,16 @@ defineExpose({
 
   &.start-indicator {
     color: #409eff;
+
     .path-line {
       border: 2px dashed currentColor;
     }
+
     .direction-arrow {
       .arrow-line {
         background: currentColor;
       }
+
       .arrow-head {
         border-top-color: currentColor;
       }
@@ -1888,13 +2008,16 @@ defineExpose({
 
   &.end-indicator {
     color: #f56c6c;
+
     .path-line {
       border: 2px dashed currentColor;
     }
+
     .direction-arrow {
       .arrow-line {
         background: currentColor;
       }
+
       .arrow-head {
         border-top-color: currentColor;
       }

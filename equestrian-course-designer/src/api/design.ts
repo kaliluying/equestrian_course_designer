@@ -20,7 +20,7 @@ export const saveDesign = async (data: SaveDesignRequest): Promise<DesignRespons
     // 如果有ID，则是更新操作
     if (data.id) {
       console.log(`执行更新操作，设计ID: ${data.id}`)
-      const response = await request.put<DesignResponse>(`/designs/${data.id}/`, formData, {
+      const response = await request.put<DesignResponse>(`/user/designs/${data.id}/`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -31,7 +31,7 @@ export const saveDesign = async (data: SaveDesignRequest): Promise<DesignRespons
 
     // 否则是创建操作
     console.log('执行创建操作')
-    const response = await request.post<DesignResponse>('/designs/', formData, {
+    const response = await request.post<DesignResponse>('/user/designs/', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -46,12 +46,12 @@ export const saveDesign = async (data: SaveDesignRequest): Promise<DesignRespons
 
 // // 获取设计列表
 // export const getDesigns = async (): Promise<DesignResponse[]> => {
-//   return request.get<DesignResponse[]>('/designs/')
+//   return request.get<DesignResponse[]>('/user/designs/')
 // }
 
 // // 获取设计详情
 // export const getDesign = async (id: number): Promise<DesignResponse> => {
-//   return request.get<DesignResponse>(`/designs/${id}/`)
+//   return request.get<DesignResponse>(`/user/designs/${id}/`)
 // }
 
 // // 更新设计
@@ -65,7 +65,7 @@ export const saveDesign = async (data: SaveDesignRequest): Promise<DesignRespons
 //   if (data.image) formData.append('image', data.image)
 //   if (data.download) formData.append('download', data.download)
 
-//   return request.put<DesignResponse>(`/designs/${id}/`, formData, {
+//   return request.put<DesignResponse>(`/user/designs/${id}/`, formData, {
 //     headers: {
 //       'Content-Type': 'multipart/form-data',
 //     },
@@ -74,5 +74,5 @@ export const saveDesign = async (data: SaveDesignRequest): Promise<DesignRespons
 
 // // 删除设计
 // export const deleteDesign = async (id: number): Promise<void> => {
-//   return request.delete<void>(`/designs/${id}/`)
+//   return request.delete<void>(`/user/designs/${id}/`)
 // }

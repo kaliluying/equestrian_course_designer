@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-p_%_x$&etn*k5*mikk9o=^shm3@0w+l+8kccf3hpe-gr8kjw-$
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 # Application definition
 
@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
+    'channels',
     "user.apps.UserConfig"
 ]
 
@@ -47,11 +48,11 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'user.middleware.TokenAuthenticationMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
 ]
 
 ROOT_URLCONF = 'equestrian.urls'
@@ -59,7 +60,7 @@ ROOT_URLCONF = 'equestrian.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -73,6 +74,14 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'equestrian.wsgi.application'
+
+# Channels配置
+ASGI_APPLICATION = 'equestrian.asgi.application'
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
@@ -174,7 +183,94 @@ SIMPLE_JWT = {
     'USER_ID_CLAIM': 'user_id',
 }
 
-# 跨域设置
+# CSRF配置
+CSRF_COOKIE_SECURE = False  # 开发环境设为False，生产环境设为True
+CSRF_COOKIE_HTTPONLY = False  # 允许JavaScript访问CSRF cookie
+CSRF_COOKIE_SAMESITE = 'Lax'  # 允许跨站请求携带cookie
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+]
+
+# CORS配置
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",  # Vite默认开发服务器
+    "http://127.0.0.1:5173",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+]
+
+# 允许跨域请求携带cookie
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOW_HEADERS = ('*')
+
+# 允许的HTTP方法
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+# 允许的HTTP头
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# 前端URL配置
+FRONTEND_URL = 'http://localhost:5173'  # 开发环境
+# FRONTEND_URL = 'https://yourdomain.com'  # 生产环境
+
+# 邮件配置
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.example.com'  # 邮件服务器
+EMAIL_PORT = 587  # 邮件服务器端口
+EMAIL_USE_TLS = True  # 是否使用TLS加密
+EMAIL_HOST_USER = 'your-email@example.com'  # 发件人邮箱
+EMAIL_HOST_PASSWORD = 'your-email-password'  # 发件人邮箱密码
+DEFAULT_FROM_EMAIL = 'Your Name <your-email@example.com>'  # 默认发件人
+
+# WebSocket配置
+ALLOWED_HOSTS = ['*']  # 允许所有主机访问，生产环境应该限制
+
+# 日志配置
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'django.channels': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    },
+}

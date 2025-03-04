@@ -169,7 +169,9 @@ function editDesign(jsonUrl, title, designId) {
   console.log("修改设计:", jsonUrl, title, designId);
 
   // 使用指定的前端应用URL - 开发环境
-  const frontendUrl = "http://localhost:5173/";
+  const frontendUrl = "http://127.0.0.1:5173/";
+  // // 获取当前域名作为前端应用URL - 生产环境
+  // const frontendUrl = window.location.origin + "/";
 
   // 构建带参数的URL
   const designEditorUrl = new URL(frontendUrl);
