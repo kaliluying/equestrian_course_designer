@@ -1,5 +1,13 @@
 <template>
   <div class="reset-password-container">
+    <div class="back-to-home">
+      <router-link to="/" class="home-link">
+        <el-icon>
+          <ArrowLeft />
+        </el-icon> 返回首页
+      </router-link>
+    </div>
+
     <div class="reset-password-card">
       <h2>重置密码</h2>
       <p v-if="!token" class="error-message">
@@ -39,7 +47,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { resetPassword } from '@/api/user'
-import { Check } from '@element-plus/icons-vue'
+import { Check, ArrowLeft } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -137,10 +145,37 @@ const goToLogin = () => {
 <style scoped>
 .reset-password-container {
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
   min-height: 100vh;
   background-color: #f5f7fa;
+  position: relative;
+}
+
+.back-to-home {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+}
+
+.home-link {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  text-decoration: none;
+  color: #409EFF;
+  padding: 8px 16px;
+  border-radius: 4px;
+  transition: all 0.3s;
+  border: 1px solid #DCDFE6;
+  background-color: #fff;
+}
+
+.home-link:hover {
+  color: #1890ff;
+  background-color: #f0f5ff;
+  border-color: #b3d8ff;
 }
 
 .reset-password-card {

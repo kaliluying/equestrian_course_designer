@@ -1,7 +1,7 @@
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 from rest_framework import status
 from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny, IsAdminUser
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from django.contrib.auth.models import User, Group
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -9,8 +9,8 @@ from .serializers import UserRegisterSerializer, UserLoginSerializer, ForgotPass
 from rest_framework import serializers
 from rest_framework import viewsets
 from rest_framework.parsers import MultiPartParser, FormParser
-from .models import Design, PasswordResetToken
-from .serializers import DesignSerializer
+from .models import Design, PasswordResetToken, DesignLike, UserProfile, MembershipPlan
+from .serializers import DesignSerializer, DesignListSerializer
 import uuid
 from django.core.mail import send_mail
 from django.conf import settings
@@ -22,6 +22,8 @@ from django.utils.html import strip_tags
 from django.middleware.csrf import get_token
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.utils.decorators import method_decorator
+from rest_framework.decorators import action
+from django.db.models import F
 
 # Create your views here.
 
@@ -52,13 +54,13 @@ class CSRFTokenView(APIView):
 @method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(APIView):
     """
-    普通用户注册视图
+    普通用户注册视图，用户注册后没有后台访问权限
     """
     permission_classes = [AllowAny]
 
     def post(self, request):
         """
-        用户注册，自动设置后台访问权限并加入普通用户
+        用户注册
         """
         # 打印请求信息，便于调试
         print(f"注册请求: {request.data}")
@@ -69,18 +71,9 @@ class RegisterView(APIView):
             if serializer.is_valid(raise_exception=True):
                 user = serializer.save()
 
-                # 设置后台访问权限
-                user.is_staff = True
+                # 取消后台访问权限
+                user.is_staff = False
                 user.save()
-
-                # 添加到普通用户组
-                try:
-                    normal_group = Group.objects.get(name='普通用户')
-                    user.groups.add(normal_group)
-                except Group.DoesNotExist:
-                    # 如果组不存在，创建并添加用户
-                    normal_group = Group.objects.create(name='普通用户')
-                    user.groups.add(normal_group)
 
                 refresh = RefreshToken.for_user(user)
                 return Response({
@@ -250,8 +243,18 @@ class DesignViewSet(viewsets.ModelViewSet):
     serializer_class = DesignSerializer
     parser_classes = (MultiPartParser, FormParser)
 
+    def get_serializer_class(self):
+        """根据不同的操作返回不同的序列化器"""
+        if self.action == 'shared_designs':
+            return DesignListSerializer
+        return DesignSerializer
+
     def get_queryset(self):
-        """只返回当前用户的设计"""
+        """根据不同的操作返回不同的查询集"""
+        if self.action == 'shared_designs':
+            # 公开分享的设计
+            return Design.objects.filter(is_shared=True)
+        # 默认只返回当前用户的设计
         return Design.objects.filter(author=self.request.user)
 
     def perform_create(self, serializer):
@@ -272,3 +275,422 @@ class DesignViewSet(viewsets.ModelViewSet):
         except Exception as e:
             print(f"设计更新失败: ID={instance.id}, 错误={str(e)}")
             raise
+
+    @action(detail=False, methods=['get'], url_path='shared')
+    def shared_designs(self, request):
+        """获取所有公开分享的设计"""
+        queryset = self.get_queryset()
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='my')
+    def my_designs(self, request):
+        """获取当前用户的所有设计"""
+        queryset = Design.objects.filter(author=request.user)
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path='like')
+    def like_design(self, request, pk=None):
+        """点赞设计"""
+        # 直接获取设计，不使用self.get_object()，允许点赞任何共享的设计
+        try:
+            # 先尝试获取指定ID的设计，不考虑作者限制
+            design = Design.objects.get(pk=pk)
+
+            # 如果不是自己的设计，检查是否已共享
+            if design.author != request.user and not design.is_shared:
+                return Response({
+                    'message': '您无权点赞未共享的设计'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            user = request.user
+
+            # 检查是否已点赞
+            like_exists = DesignLike.objects.filter(
+                design=design, user=user).exists()
+
+            if like_exists:
+                # 如果已点赞，则取消点赞
+                DesignLike.objects.filter(design=design, user=user).delete()
+                # 减少点赞数
+                design.likes_count = F('likes_count') - 1
+                design.save()
+                design.refresh_from_db()  # 刷新以获取最新的点赞数
+                return Response({
+                    'message': '取消点赞成功',
+                    'likes_count': design.likes_count,
+                    'is_liked': False
+                })
+            else:
+                # 如果未点赞，则添加点赞
+                DesignLike.objects.create(design=design, user=user)
+                # 增加点赞数
+                design.likes_count = F('likes_count') + 1
+                design.save()
+                design.refresh_from_db()  # 刷新以获取最新的点赞数
+                return Response({
+                    'message': '点赞成功',
+                    'likes_count': design.likes_count,
+                    'is_liked': True
+                })
+        except Design.DoesNotExist:
+            return Response({
+                'message': '设计不存在'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=True, methods=['post'], url_path='share')
+    def share_design(self, request, pk=None):
+        """分享/取消分享设计"""
+        design = self.get_object()
+
+        # 切换分享状态
+        design.is_shared = not design.is_shared
+        design.save()
+
+        return Response({
+            'message': '分享状态已更新',
+            'is_shared': design.is_shared
+        })
+
+    @action(detail=True, methods=['post'], url_path='toggle-share')
+    def toggle_design_sharing(self, request, pk=None):
+        """切换设计的分享状态"""
+        design = self.get_object()
+
+        # 切换分享状态
+        design.is_shared = not design.is_shared
+        design.save()
+
+        return Response({
+            'message': '设计已分享' if design.is_shared else '设计已取消分享',
+            'is_shared': design.is_shared
+        })
+
+    @action(detail=True, methods=['get'], url_path='download')
+    def download_design(self, request, pk=None):
+        """下载设计并增加下载计数"""
+        try:
+            # 获取下载类型参数，默认为json
+            file_type = request.query_params.get('type', 'json').lower()
+            if file_type not in ['json', 'png', 'pdf']:
+                return Response({
+                    'message': '不支持的文件类型，支持的类型有：json, png, pdf'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # 直接获取设计，不使用self.get_object()，允许下载任何共享的设计
+            design = Design.objects.get(pk=pk)
+
+            # 如果不是自己的设计，检查是否已共享
+            if design.author != request.user and not design.is_shared:
+                return Response({
+                    'message': '您无权下载未共享的设计'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # 检查是否有下载文件
+            if not design.download and file_type == 'json':
+                return Response({
+                    'message': '该设计没有可下载的JSON文件'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # 检查是否有图片文件
+            if not design.image and file_type == 'png':
+                return Response({
+                    'message': '该设计没有可下载的PNG图片'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # 增加下载计数
+            design.downloads_count = F('downloads_count') + 1
+            design.save()
+            design.refresh_from_db()
+
+            # 根据文件类型返回不同的下载URL
+            if file_type == 'json':
+                download_url = request.build_absolute_uri(design.download.url)
+                filename = f"{design.title}.json"
+            elif file_type == 'png':
+                download_url = request.build_absolute_uri(design.image.url)
+                filename = f"{design.title}.png"
+            elif file_type == 'pdf':
+                # 这里需要实现PDF生成逻辑，暂时返回错误
+                return Response({
+                    'message': 'PDF下载功能正在开发中，敬请期待'
+                }, status=status.HTTP_501_NOT_IMPLEMENTED)
+
+            # 返回下载URL和文件名
+            return Response({
+                'message': '下载成功',
+                'download_url': download_url,
+                'filename': filename,
+                'file_type': file_type,
+                'downloads_count': design.downloads_count
+            })
+
+        except Design.DoesNotExist:
+            return Response({
+                'message': '设计不存在'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    def create(self, request, *args, **kwargs):
+        """创建设计前检查存储限制"""
+        # 获取用户当前的设计数量
+        user = request.user
+        try:
+            profile = user.profile
+        except UserProfile.DoesNotExist:
+            # 如果用户资料不存在，创建一个
+            profile = UserProfile.objects.create(user=user)
+
+        # 获取用户的设计数量
+        user_designs_count = Design.objects.filter(author=user).count()
+
+        # 检查是否超出存储限制
+        storage_limit = profile.get_storage_limit()
+        if user_designs_count >= storage_limit:
+            return Response({
+                'message': f'您已达到存储限制（{storage_limit}个设计）。升级为会员可获得无限存储空间！',
+                'is_limit_reached': True,
+                'current_count': user_designs_count,
+                'limit': storage_limit,
+                'is_premium': profile.is_premium_active()
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        # 继续正常的创建流程
+        return super().create(request, *args, **kwargs)
+
+
+# 用户视图集
+class UserViewSet(viewsets.ModelViewSet):
+    """
+    用户管理视图集，提供用户相关的API
+    """
+    queryset = User.objects.all()
+    serializer_class = UserRegisterSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        """
+        根据不同的操作设置不同的权限
+        """
+        if self.action == 'create':
+            return [AllowAny()]
+        elif self.action in ['set_premium', 'list', 'retrieve', 'update', 'partial_update', 'destroy']:
+            return [IsAdminUser()]
+        return [IsAuthenticated()]
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
+    def set_premium(self, request, pk=None):
+        """设置用户的会员状态"""
+        try:
+            user = User.objects.get(pk=pk)
+            profile, created = UserProfile.objects.get_or_create(user=user)
+
+            # 获取请求参数
+            is_premium = request.data.get('is_premium', False)
+            duration_days = request.data.get('duration_days', 30)  # 默认30天
+            membership_plan_id = request.data.get('membership_plan_id')
+
+            # 获取会员计划
+            membership_plan = None
+            if membership_plan_id:
+                try:
+                    membership_plan = MembershipPlan.objects.get(
+                        id=membership_plan_id, is_active=True)
+                except MembershipPlan.DoesNotExist:
+                    return Response({
+                        'success': False,
+                        'message': "指定的会员计划不存在或未激活"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            # 设置会员状态
+            profile.is_premium = is_premium
+            profile.membership_plan = membership_plan if is_premium else None
+
+            # 如果是会员，设置到期时间
+            if is_premium:
+                if profile.premium_expiry and profile.premium_expiry > timezone.now():
+                    # 如果当前会员未过期，则在当前到期时间基础上增加时间
+                    profile.premium_expiry = profile.premium_expiry + \
+                        timedelta(days=duration_days)
+                else:
+                    # 如果当前不是会员或已过期，则从现在开始计算
+                    profile.premium_expiry = timezone.now() + timedelta(days=duration_days)
+
+            profile.save()
+
+            return Response({
+                'success': True,
+                'message': f"用户 {user.username} 的会员状态已更新",
+                'is_premium': profile.is_premium,
+                'premium_expiry': profile.premium_expiry,
+                'membership_plan': membership_plan.name if membership_plan else None,
+                'design_storage_limit': profile.get_storage_limit()
+            })
+        except User.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': "用户不存在"
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f"设置会员状态失败: {str(e)}"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['get'])
+    def my_profile(self, request):
+        """获取当前用户的资料，包括会员状态"""
+        user = request.user
+        if not user.is_authenticated:
+            return Response({
+                'success': False,
+                'message': "用户未登录"
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            profile, created = UserProfile.objects.get_or_create(user=user)
+
+            # 检查会员状态
+            is_premium_active = profile.is_premium_active()
+
+            # 获取会员计划信息
+            membership_data = None
+            if profile.membership_plan:
+                membership_data = {
+                    'id': profile.membership_plan.id,
+                    'name': profile.membership_plan.name,
+                    'monthly_price': profile.membership_plan.monthly_price,
+                    'yearly_price': profile.membership_plan.yearly_price,
+                    'storage_limit': profile.membership_plan.storage_limit,
+                    'description': profile.membership_plan.description
+                }
+
+            # 获取所有可用的会员计划
+            available_plans = []
+            for plan in MembershipPlan.objects.filter(is_active=True):
+                available_plans.append({
+                    'id': plan.id,
+                    'name': plan.name,
+                    'monthly_price': plan.monthly_price,
+                    'yearly_price': plan.yearly_price,
+                    'storage_limit': plan.storage_limit,
+                    'description': plan.description
+                })
+
+            return Response({
+                'success': True,
+                'username': user.username,
+                'email': user.email,
+                'is_premium': profile.is_premium,
+                'is_premium_active': is_premium_active,
+                'premium_expiry': profile.premium_expiry,
+                'design_storage_limit': profile.get_storage_limit(),
+                'design_count': Design.objects.filter(author=user).count(),
+                'membership_plan': membership_data,
+                'available_plans': available_plans
+            })
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f"获取用户资料失败: {str(e)}"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'])
+    def change_password(self, request):
+        """修改用户密码"""
+        user = request.user
+        if not user.is_authenticated:
+            return Response({
+                'success': False,
+                'message': "用户未登录"
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        old_password = request.data.get('old_password')
+        new_password = request.data.get('new_password')
+        confirm_password = request.data.get('confirm_password')
+
+        # 验证数据
+        if not old_password or not new_password or not confirm_password:
+            return Response({
+                'success': False,
+                'message': "所有字段都是必填的"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if new_password != confirm_password:
+            return Response({
+                'success': False,
+                'message': "两次输入的新密码不一致"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # 验证旧密码
+        if not user.check_password(old_password):
+            return Response({
+                'success': False,
+                'message': "旧密码不正确"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # 设置新密码
+        user.set_password(new_password)
+        user.save()
+
+        # 更新令牌
+        refresh = RefreshToken.for_user(user)
+
+        return Response({
+            'success': True,
+            'message': "密码修改成功",
+            'refresh': str(refresh),
+            'access': str(refresh.access_token)
+        })
+
+    @action(detail=False, methods=['post'])
+    def change_email(self, request):
+        """修改用户邮箱"""
+        user = request.user
+        if not user.is_authenticated:
+            return Response({
+                'success': False,
+                'message': "用户未登录"
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+        password = request.data.get('password')
+        new_email = request.data.get('new_email')
+
+        # 验证数据
+        if not password or not new_email:
+            return Response({
+                'success': False,
+                'message': "所有字段都是必填的"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # 验证密码
+        if not user.check_password(password):
+            return Response({
+                'success': False,
+                'message': "密码不正确"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # 检查邮箱是否已被使用
+        if User.objects.filter(email=new_email).exclude(id=user.id).exists():
+            return Response({
+                'success': False,
+                'message': "该邮箱已被其他用户使用"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # 更新邮箱
+        user.email = new_email
+        user.save()
+
+        return Response({
+            'success': True,
+            'message': "邮箱修改成功",
+            'email': new_email
+        })

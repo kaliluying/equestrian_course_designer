@@ -129,8 +129,8 @@ const handleSubmit = async () => {
     loading.value = true
     clearErrors() // 清除之前的错误信息
 
-    // 注册成功后，用户已经自动登录（userStore.register方法已经设置了token和用户信息）
-    const user = await userStore.register(form)
+    // 注册成功后，用户已经自动登录（userStore.registerUser方法已经设置了token和用户信息）
+    const user = await userStore.registerUser(form)
     ElMessage.success('注册成功')
     emit('register-success', user)
   } catch (error) {

@@ -1,4 +1,4 @@
-import { ref, onUnmounted, shallowRef } from 'vue'
+import { ref, onUnmounted, shallowRef, nextTick } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useCourseStore } from '@/stores/course'
 import { ElMessage } from 'element-plus'
@@ -78,6 +78,8 @@ export function useWebSocketConnection(designId: string) {
   const collaborators = ref<CollaboratorInfo[]>([])
   const chatMessages = ref<ChatMessage[]>([])
   const isOwner = ref(false)
+  const backupUrl = ref<string | null>(null)
+  const reconnectAttempts = ref(0)
 
   // 生成随机颜色
   const generateRandomColor = () => {
@@ -99,7 +101,6 @@ export function useWebSocketConnection(designId: string) {
   // 连接WebSocket
   const connect = () => {
     console.log('尝试连接WebSocket，当前状态:', connectionStatus.value, '设计ID:', designId)
-    console.log('当前socket实例:', socket.value ? '存在' : '不存在')
 
     // 检查用户是否已登录
     if (!userStore.currentUser) {
@@ -157,6 +158,8 @@ export function useWebSocketConnection(designId: string) {
       if (connectionStatus.value === ConnectionStatus.CONNECTED && !socket.value) {
         console.log('状态不一致：状态为CONNECTED但socket不存在，修正为DISCONNECTED')
         connectionStatus.value = ConnectionStatus.DISCONNECTED
+        // 重新尝试连接
+        setTimeout(() => connect(), 100)
         return
       }
 
@@ -193,34 +196,17 @@ export function useWebSocketConnection(designId: string) {
     if (import.meta.env.DEV) {
       // 开发环境
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      // 获取当前端口，如果是5174，则使用8000端口
-      const currentPort = window.location.port
-      console.log('当前前端端口:', currentPort)
-
       // 使用8000端口连接WebSocket服务
       wsUrl = `${wsProtocol}//127.0.0.1:8000/ws/collaboration/${designId}/`
-      console.log('使用开发环境WebSocket URL:', wsUrl)
 
-      // 尝试检查服务器是否可访问
-      try {
-        console.log('尝试检查WebSocket服务器是否可访问')
-        fetch(`http://127.0.0.1:8000/ws/collaboration/test/`)
-          .then((response) => {
-            console.log('WebSocket服务器响应状态:', response.status)
-            if (response.ok) {
-              console.log('WebSocket服务器可访问')
-            } else {
-              console.error('WebSocket服务器返回错误状态码:', response.status)
-              ElMessage.warning('协作服务器可能不可用，连接可能会失败')
-            }
-          })
-          .catch((error) => {
-            console.error('检查WebSocket服务器可访问性失败:', error)
-            ElMessage.warning('无法连接到协作服务器，请确保后端服务已启动')
-          })
-      } catch (error) {
-        console.error('检查WebSocket服务器可访问性时出错:', error)
-      }
+      // 添加备用URL，如果主URL连接失败，尝试使用备用URL
+      const backupWsUrl = `${wsProtocol}//localhost:8000/ws/collaboration/${designId}/`
+
+      console.log('使用开发环境WebSocket URL:', wsUrl)
+      console.log('备用WebSocket URL:', backupWsUrl)
+
+      // 存储备用URL以便在主URL连接失败时使用
+      backupUrl.value = backupWsUrl
     } else {
       // 生产环境
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -239,6 +225,7 @@ export function useWebSocketConnection(designId: string) {
         socket.value = null
       }
 
+      // 创建新的WebSocket连接
       socket.value = new WebSocket(wsUrl)
       console.log('WebSocket实例已创建，等待连接建立...')
 
@@ -246,6 +233,39 @@ export function useWebSocketConnection(designId: string) {
       const connectionTimeout = setTimeout(() => {
         if (connectionStatus.value === ConnectionStatus.CONNECTING) {
           console.error('WebSocket连接超时')
+
+          // 如果有备用URL且当前不是使用备用URL，尝试使用备用URL连接
+          if (backupUrl.value && wsUrl !== backupUrl.value) {
+            console.log('尝试使用备用URL连接:', backupUrl.value)
+
+            // 关闭当前连接
+            if (socket.value) {
+              socket.value.close()
+              socket.value = null
+            }
+
+            // 使用备用URL创建新连接
+            socket.value = new WebSocket(backupUrl.value)
+
+            // 重新设置事件处理器
+            setupSocketEventHandlers(socket.value)
+
+            // 设置新的超时
+            setTimeout(() => {
+              if (connectionStatus.value === ConnectionStatus.CONNECTING) {
+                connectionStatus.value = ConnectionStatus.ERROR
+                ElMessage.error('连接超时，请确保后端服务已启动')
+
+                if (socket.value) {
+                  socket.value.close()
+                  socket.value = null
+                }
+              }
+            }, 10000)
+
+            return
+          }
+
           connectionStatus.value = ConnectionStatus.ERROR
           ElMessage.error('连接超时，请确保后端服务已启动')
 
@@ -257,138 +277,162 @@ export function useWebSocketConnection(designId: string) {
         }
       }, 10000) // 10秒超时
 
-      socket.value.onopen = () => {
-        console.log('WebSocket连接已建立')
-        clearTimeout(connectionTimeout) // 清除超时定时器
-        connectionStatus.value = ConnectionStatus.CONNECTED
-        console.log('已将连接状态设置为已连接:', connectionStatus.value)
+      // 设置WebSocket事件处理器
+      setupSocketEventHandlers(socket.value, connectionTimeout)
+    } catch (error) {
+      console.error('创建WebSocket连接时出错:', error)
+      connectionStatus.value = ConnectionStatus.ERROR
+      ElMessage.error('创建WebSocket连接失败')
+      socket.value = null
+    }
+  }
 
-        // 发送加入消息
-        if (userStore.currentUser) {
-          console.log('发送加入消息')
-          try {
-            sendMessage({
-              type: MessageType.JOIN,
-              senderId: String(userStore.currentUser.id),
-              senderName: userStore.currentUser.username,
-              sessionId: designId,
-              timestamp: new Date().toISOString(),
-              payload: {
-                color: generateRandomColor(),
-              },
-            })
-            console.log('加入消息已发送')
+  // 设置WebSocket事件处理器
+  const setupSocketEventHandlers = (ws: WebSocket, timeout?: ReturnType<typeof setTimeout>) => {
+    console.log('设置WebSocket事件处理器')
 
-            // 请求同步当前状态
-            console.log('发送同步请求消息')
-            sendMessage({
+    // 连接打开事件
+    ws.onopen = () => {
+      console.log('WebSocket连接已打开')
+      connectionStatus.value = ConnectionStatus.CONNECTED
+      reconnectAttempts.value = 0 // 重置重连尝试次数
+
+      // 如果有超时定时器，清除它
+      if (timeout) {
+        clearTimeout(timeout)
+      }
+
+      // 发送加入消息
+      const joinMessage: WebSocketMessage = {
+        type: MessageType.JOIN,
+        senderId: userStore.currentUser?.id.toString() || 'anonymous',
+        senderName: userStore.currentUser?.username || 'Anonymous',
+        sessionId: designId,
+        timestamp: new Date().toISOString(),
+        payload: {
+          color: generateRandomColor(),
+        },
+      }
+
+      try {
+        sendMessage(joinMessage)
+        console.log('已发送加入消息')
+
+        // 延迟一段时间后再发送同步请求，确保服务器有时间处理加入消息
+        setTimeout(() => {
+          // 发送同步请求消息
+          if (userStore.currentUser) {
+            const syncRequestMessage: WebSocketMessage = {
               type: MessageType.SYNC_REQUEST,
-              senderId: String(userStore.currentUser.id),
-              senderName: userStore.currentUser.username,
+              senderId: userStore.currentUser.id.toString() || 'anonymous',
+              senderName: userStore.currentUser.username || 'Anonymous',
               sessionId: designId,
               timestamp: new Date().toISOString(),
               payload: {},
-            })
-            console.log('同步请求消息已发送')
-          } catch (error) {
-            console.error('发送消息失败:', error)
+            }
+
+            try {
+              sendMessage(syncRequestMessage)
+              console.log('已发送同步请求消息')
+            } catch (error) {
+              console.error('发送同步请求消息失败:', error)
+            }
           }
-        } else {
-          console.error('用户未登录，无法发送加入消息')
-        }
+        }, 500) // 延迟500毫秒
 
         // 触发连接成功事件
         try {
-          console.log('发送collaboration-connected事件')
           const event = new CustomEvent('collaboration-connected', {
             bubbles: true,
-            detail: { timestamp: new Date().toISOString(), session: session.value },
+            detail: {
+              timestamp: new Date().toISOString(),
+              designId: designId,
+            },
           })
           document.dispatchEvent(event)
           console.log('已发送collaboration-connected事件')
-
-          // 再次使用setTimeout触发一次，确保事件被处理
-          setTimeout(() => {
-            try {
-              console.log('延迟发送collaboration-connected事件')
-              const event = new CustomEvent('collaboration-connected', {
-                bubbles: true,
-                detail: {
-                  timestamp: new Date().toISOString(),
-                  delayed: true,
-                  session: session.value,
-                },
-              })
-              document.dispatchEvent(event)
-              console.log('已发送延迟collaboration-connected事件')
-            } catch (error) {
-              console.error('发送延迟collaboration-connected事件失败:', error)
-            }
-          }, 500)
         } catch (error) {
           console.error('发送collaboration-connected事件失败:', error)
         }
+      } catch (error) {
+        console.error('发送初始消息失败:', error)
       }
+    }
 
-      socket.value.onmessage = (event) => {
-        console.log('收到WebSocket消息:', event.data)
-        try {
-          const message = JSON.parse(event.data)
-          handleMessage(message)
-        } catch (error) {
-          console.error('解析WebSocket消息失败:', error)
-        }
+    ws.onmessage = (event) => {
+      // 减少日志输出，只在调试时打开
+      // console.log('收到WebSocket消息:', event.data)
+      try {
+        const message = JSON.parse(event.data)
+        handleMessage(message)
+      } catch (error) {
+        console.error('解析WebSocket消息失败:', error)
       }
+    }
 
-      socket.value.onerror = (error) => {
-        console.error('WebSocket连接错误:', error)
-        connectionStatus.value = ConnectionStatus.ERROR
-        console.log('已将连接状态设置为错误:', connectionStatus.value)
-        ElMessage.error('WebSocket连接错误，请检查网络连接')
-
-        // 触发连接错误事件
-        try {
-          console.log('发送collaboration-connection-error事件')
-          const event = new CustomEvent('collaboration-connection-error', {
-            bubbles: true,
-            detail: { timestamp: new Date().toISOString(), error: '连接错误' },
-          })
-          document.dispatchEvent(event)
-        } catch (eventError) {
-          console.error('发送collaboration-connection-error事件失败:', eventError)
-        }
-      }
-
-      socket.value.onclose = (event) => {
-        console.log(`WebSocket连接已关闭，代码: ${event.code}, 原因: ${event.reason}`)
-        clearTimeout(connectionTimeout)
-        connectionStatus.value = ConnectionStatus.DISCONNECTED
-        ElMessage.warning('连接已断开')
-
-        // 使用setTimeout确保事件在状态更新后触发
-        setTimeout(() => {
-          try {
-            console.log('WebSocket onclose: 发送collaboration-stopped事件')
-            const closeEvent = new CustomEvent('collaboration-stopped', {
-              bubbles: true,
-              detail: {
-                timestamp: new Date().toISOString(),
-                code: event.code,
-                reason: event.reason,
-                source: 'onclose',
-              },
-            })
-            document.dispatchEvent(closeEvent)
-            console.log('WebSocket onclose: collaboration-stopped事件已发送')
-          } catch (error) {
-            console.error('WebSocket onclose: 发送collaboration-stopped事件失败:', error)
-          }
-        }, 300)
-      }
-    } catch (error) {
-      console.error('创建WebSocket连接失败:', error)
+    ws.onerror = (error) => {
+      console.error('WebSocket连接错误:', error)
       connectionStatus.value = ConnectionStatus.ERROR
-      ElMessage.error('创建WebSocket连接失败')
+      console.log('已将连接状态设置为错误:', connectionStatus.value)
+      ElMessage.error('WebSocket连接错误，请检查网络连接')
+
+      // 触发连接错误事件
+      try {
+        console.log('发送collaboration-connection-error事件')
+        const event = new CustomEvent('collaboration-connection-error', {
+          bubbles: true,
+          detail: { timestamp: new Date().toISOString(), error: '连接错误' },
+        })
+        document.dispatchEvent(event)
+      } catch (eventError) {
+        console.error('发送collaboration-connection-error事件失败:', eventError)
+      }
+    }
+
+    ws.onclose = (closeEvent: CloseEvent) => {
+      console.log(
+        `WebSocket连接已关闭，代码: ${closeEvent.code}，原因: ${closeEvent.reason || '未提供'}`,
+      )
+
+      // 如果不是正常关闭且重连尝试次数小于5，尝试重新连接
+      if (closeEvent.code !== 1000 && closeEvent.code !== 1001 && reconnectAttempts.value < 5) {
+        console.log(
+          `WebSocket连接异常关闭，尝试重新连接，尝试次数: ${reconnectAttempts.value + 1}/5`,
+        )
+        connectionStatus.value = ConnectionStatus.DISCONNECTED
+        reconnectAttempts.value++
+
+        // 使用指数退避策略，延迟重连
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.value), 10000)
+        console.log(`将在${delay}毫秒后尝试重新连接`)
+
+        setTimeout(() => {
+          console.log(`开始第${reconnectAttempts.value}次重连尝试`)
+          connect()
+        }, delay)
+
+        return
+      }
+
+      // 更新连接状态
+      connectionStatus.value = ConnectionStatus.DISCONNECTED
+      socket.value = null
+
+      // 触发断开连接事件
+      try {
+        const disconnectEvent = new CustomEvent('collaboration-stopped', {
+          bubbles: true,
+          detail: {
+            timestamp: new Date().toISOString(),
+            code: closeEvent.code,
+            reason: closeEvent.reason || '连接已关闭',
+          },
+        })
+        document.dispatchEvent(disconnectEvent)
+        console.log('已发送collaboration-stopped事件')
+      } catch (error) {
+        console.error('发送collaboration-stopped事件失败:', error)
+      }
     }
   }
 
@@ -513,10 +557,12 @@ export function useWebSocketConnection(designId: string) {
   }
 
   // 检查WebSocket连接状态
-  const checkConnection = (autoReconnect = false) => {
-    console.log('检查WebSocket连接状态，自动重连:', autoReconnect)
+  const checkConnection = (autoReconnect = true) => {
+    console.log('检查WebSocket连接状态')
+
+    // 检查socket实例是否存在
     if (!socket.value) {
-      console.warn('WebSocket实例不存在，确保状态为DISCONNECTED')
+      console.error('WebSocket实例不存在')
 
       // 确保状态为DISCONNECTED
       if (connectionStatus.value !== ConnectionStatus.DISCONNECTED) {
@@ -525,7 +571,7 @@ export function useWebSocketConnection(designId: string) {
 
         // 触发断开连接事件
         try {
-          console.log('发送状态不一致的collaboration-stopped事件')
+          console.log('发送WebSocket实例不存在事件')
           const event = new CustomEvent('collaboration-stopped', {
             bubbles: true,
             detail: {
@@ -536,7 +582,7 @@ export function useWebSocketConnection(designId: string) {
           })
           document.dispatchEvent(event)
         } catch (error) {
-          console.error('发送状态不一致的collaboration-stopped事件失败:', error)
+          console.error('发送WebSocket实例不存在事件失败:', error)
         }
       }
 
@@ -788,17 +834,51 @@ export function useWebSocketConnection(designId: string) {
     } else {
       collaborators.value.push(newCollaborator)
 
-      // 显示加入消息
-      ElMessage.info(`${senderName} 加入了协作会话`)
+      // 检查是否是当前用户
+      const isCurrentUser = userStore.currentUser && String(userStore.currentUser.id) === senderId
 
-      // 添加系统消息到聊天
-      chatMessages.value.push({
-        id: crypto.randomUUID(),
-        senderId: 'system',
-        senderName: '系统',
-        content: `${senderName} 加入了协作会话`,
-        timestamp: new Date(),
-      })
+      if (!isCurrentUser) {
+        // 显示加入消息，使用更醒目的通知
+        ElMessage({
+          message: `${senderName} 加入了协作会话`,
+          type: 'success',
+          duration: 5000,
+          showClose: true,
+          offset: 80,
+        })
+
+        // 添加系统消息到聊天
+        chatMessages.value.push({
+          id: crypto.randomUUID(),
+          senderId: 'system',
+          senderName: '系统',
+          content: `${senderName} 加入了协作会话`,
+          timestamp: new Date(),
+        })
+      }
+    }
+
+    // 如果是当前用户加入，且不是第一个加入的用户，则发送同步请求
+    // 这样可以确保新加入的用户能获取到所有已存在的协作者信息
+    if (
+      userStore.currentUser &&
+      String(userStore.currentUser.id) === senderId &&
+      collaborators.value.length > 0
+    ) {
+      // 发送同步请求消息
+      try {
+        sendMessage({
+          type: MessageType.SYNC_REQUEST,
+          senderId: String(userStore.currentUser.id),
+          senderName: userStore.currentUser.username,
+          sessionId: designId,
+          timestamp: new Date().toISOString(),
+          payload: {},
+        })
+        console.log('已发送同步请求消息，请求获取所有协作者信息')
+      } catch (error) {
+        console.error('发送同步请求消息失败:', error)
+      }
     }
   }
 
@@ -887,6 +967,7 @@ export function useWebSocketConnection(designId: string) {
         timestamp: new Date().toISOString(),
         payload: {
           course: courseStore.exportCourse(),
+          collaborators: collaborators.value, // 添加协作者信息
         },
       })
     }
@@ -901,19 +982,64 @@ export function useWebSocketConnection(designId: string) {
       // 这里需要实现一个导入课程的方法
       courseStore.importCourse(payload.course as CourseDesign)
     }
+
+    // 同步协作者信息
+    if (payload.collaborators && Array.isArray(payload.collaborators)) {
+      console.log('收到协作者信息同步:', payload.collaborators)
+
+      // 合并协作者信息，确保不会丢失已有的协作者
+      const receivedCollaborators = payload.collaborators as CollaboratorInfo[]
+
+      // 遍历接收到的协作者列表
+      receivedCollaborators.forEach((receivedCollaborator) => {
+        // 检查是否已存在
+        const existingIndex = collaborators.value.findIndex((c) => c.id === receivedCollaborator.id)
+
+        // 如果不存在，则添加
+        if (existingIndex === -1) {
+          // 确保lastActive是Date对象
+          const collaborator = {
+            ...receivedCollaborator,
+            lastActive: new Date(receivedCollaborator.lastActive),
+          }
+          collaborators.value.push(collaborator)
+          console.log(`添加协作者: ${collaborator.username}`)
+        }
+      })
+
+      console.log('同步后的协作者列表:', collaborators.value)
+    }
   }
 
   // 处理聊天消息
   const handleChatMessage = (message: WebSocketMessage) => {
-    const { senderId, senderName, timestamp, payload } = message
+    const { senderId, senderName, timestamp, payload, sessionId } = message
+
+    // 检查消息是否已存在（防止重复）
+    const messageContent = payload.content as string
+    const messageTime = new Date(timestamp)
+
+    // 查找最近5秒内的相同内容、相同发送者的消息
+    const isDuplicate = chatMessages.value.some(
+      (existingMsg) =>
+        existingMsg.senderId === senderId &&
+        existingMsg.content === messageContent &&
+        Math.abs(existingMsg.timestamp.getTime() - messageTime.getTime()) < 5000,
+    )
+
+    // 如果是重复消息，不添加到列表
+    if (isDuplicate) {
+      console.log('检测到重复消息，已忽略:', messageContent)
+      return
+    }
 
     // 添加到聊天消息列表
     chatMessages.value.push({
       id: crypto.randomUUID(),
       senderId,
       senderName,
-      content: payload.content as string,
-      timestamp: new Date(timestamp),
+      content: messageContent,
+      timestamp: messageTime,
     })
   }
 
@@ -924,43 +1050,34 @@ export function useWebSocketConnection(designId: string) {
 
   // 发送聊天消息
   const sendChatMessage = (content: string) => {
-    console.log('准备发送聊天消息，检查连接状态')
+    console.log('发送聊天消息:', content)
 
-    // 先检查socket实例是否存在
-    if (!socket.value) {
-      console.error('WebSocket实例不存在，无法发送聊天消息')
+    // 检查WebSocket连接状态
+    if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
+      console.error('WebSocket未连接，无法发送消息')
 
-      // 确保状态为DISCONNECTED
+      // 更新连接状态
       if (connectionStatus.value !== ConnectionStatus.DISCONNECTED) {
-        console.log('状态不一致，更新为DISCONNECTED')
         connectionStatus.value = ConnectionStatus.DISCONNECTED
+        console.log('已将连接状态更新为DISCONNECTED')
 
         // 触发断开连接事件
         try {
-          console.log('发送状态不一致的collaboration-stopped事件')
           const event = new CustomEvent('collaboration-stopped', {
             bubbles: true,
             detail: {
               timestamp: new Date().toISOString(),
               error: true,
-              reason: 'WebSocket实例不存在',
+              reason: 'WebSocket未连接',
             },
           })
           document.dispatchEvent(event)
         } catch (error) {
-          console.error('发送状态不一致的collaboration-stopped事件失败:', error)
+          console.error('发送WebSocket未连接事件失败:', error)
         }
       }
 
-      ElMessage.error('协作连接已断开，无法发送消息')
-      return
-    }
-
-    // 检查连接状态，不自动重连
-    if (!checkConnection(false)) {
-      console.error('WebSocket连接检查失败，无法发送聊天消息')
-      ElMessage.warning('WebSocket未连接，无法发送消息')
-      return
+      throw new Error('WebSocket未连接，无法发送消息')
     }
 
     if (!userStore.currentUser) {

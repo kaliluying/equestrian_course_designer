@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Design
+from .models import Design, DesignLike, PasswordResetToken, UserProfile, MembershipPlan
 from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin, GroupAdmin
 from django.contrib.auth.models import Group
@@ -68,7 +68,7 @@ class DesignAdmin(admin.ModelAdmin):
     # 列表显示字段
     list_display = ('title', 'author', 'display_image', 'create_time',
                     'update_time', 'download_button', 'export_button', 'edit_button')
-    list_filter = ('create_time', 'update_time')
+    list_filter = ('author',)
     search_fields = ('title', 'author__username')
     readonly_fields = ('create_time', 'update_time',
                        'display_image', 'download_button', 'export_button', 'edit_button')
@@ -193,10 +193,25 @@ class CustomGroupAdmin(GroupAdmin):
         return request.user.is_superuser
 
 
-# 重新注册 User 和 Group 模型
+# 注册UserProfile模型
+class UserProfileInline(admin.StackedInline):
+    model = UserProfile
+    can_delete = False
+    verbose_name_plural = '用户资料'
+
+# 扩展User管理
+
+
+class UserAdmin(BaseUserAdmin):
+    inlines = (UserProfileInline,)
+
+
+# 重新注册User
 admin.site.unregister(User)
+admin.site.register(User, UserAdmin)
+
+# 重新注册 Group 模型
 admin.site.unregister(Group)
-admin.site.register(User, CustomUserAdmin)
 admin.site.register(Group, CustomGroupAdmin)
 
 # 修改应用名称
@@ -232,3 +247,26 @@ admin.site.get_app_list = lambda request: [
         ],
     },
 ]
+
+# 注册会员计划模型
+
+
+@admin.register(MembershipPlan)
+class MembershipPlanAdmin(admin.ModelAdmin):
+    """会员计划管理"""
+    list_display = ('name', 'code', 'monthly_price', 'yearly_price',
+                    'storage_limit', 'is_active', 'created_at')
+    list_filter = ('is_active',)
+    search_fields = ('name', 'code', 'description')
+    ordering = ('monthly_price',)
+    fieldsets = (
+        (None, {'fields': ('name', 'code', 'is_active')}),
+        ('价格信息', {'fields': ('monthly_price', 'yearly_price')}),
+        ('权限设置', {'fields': ('storage_limit', 'description')}),
+    )
+
+
+# 注册自定义模型到管理后台
+admin.site.register(DesignLike)
+admin.site.register(PasswordResetToken)
+admin.site.register(UserProfile)

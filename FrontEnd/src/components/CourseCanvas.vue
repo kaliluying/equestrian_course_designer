@@ -209,9 +209,6 @@
       </div>
     </template>
   </el-dialog>
-
-  <!-- 添加协作面板 -->
-  <CollaborationPanel v-if="isCollaborating" :design-id="courseStore.currentCourse.id" />
 </template>
 
 <script setup lang="ts">
@@ -222,8 +219,7 @@ import { useCourseStore } from '@/stores/course'
 import type { Obstacle } from '@/types/obstacle'
 import { ObstacleType, type PathPoint } from '@/types/obstacle'
 import CollaboratorCursors from './CollaboratorCursors.vue'
-import CollaborationPanel from './CollaborationPanel.vue'
-import { useWebSocketConnection } from '@/utils/websocket'
+import { useWebSocketConnection, ConnectionStatus } from '@/utils/websocket'
 import { throttle } from 'lodash-es'
 
 // 组件状态管理
@@ -279,7 +275,7 @@ const handleCollaborationMouseMove = throttle((event: MouseEvent) => {
     const y = event.clientY - rect.top
     sendCursorPosition({ x, y })
   }
-}, 50) // 50ms节流，避免发送过多消息
+}, 50)
 
 // 监听路径变化，同步到其他协作者
 watch(() => courseStore.coursePath, (newPath) => {
@@ -316,71 +312,14 @@ const startCollaboration = async () => {
   // 设置协作钩子
   setupCollaborationHooks()
 
-  // 如果WebSocket未连接，手动连接
-  if ((connectionStatus.value as string) !== 'connected') {
-    console.log('WebSocket未连接，尝试连接...当前状态:', connectionStatus.value)
+  // 不需要手动连接WebSocket，CollaborationPanel组件会自动连接
+  console.log('CollaborationPanel组件会自动连接WebSocket，不需要在这里手动连接')
 
-    // 如果正在断开连接，等待断开完成
-    if ((connectionStatus.value as string) === 'disconnecting') {
-      console.log('WebSocket正在断开连接，等待断开完成...')
-      await new Promise(resolve => setTimeout(resolve, 1000))
-    }
+  // 等待一段时间，确保CollaborationPanel有足够时间连接
+        await new Promise(resolve => setTimeout(resolve, 1000))
 
-    // 如果已断开连接，尝试重新连接
-    if ((connectionStatus.value as string) === 'disconnected') {
-      console.log('WebSocket已断开连接，尝试重新连接')
-      try {
-        connect()
-        console.log('已调用connect方法，等待连接状态更新')
-      } catch (error) {
-        console.error('调用connect方法时出错:', error)
-        isCollaborating.value = false
-
-        // 触发协作停止事件
-        const event = new CustomEvent('collaboration-stopped', {
-          bubbles: true,
-          detail: {
-            timestamp: new Date().toISOString(),
-            source: 'connection_failed',
-            error: '连接WebSocket时出错'
-          }
-        })
-        document.dispatchEvent(event)
-        return false
-      }
-
-      // 等待连接状态更新
-      await new Promise(resolve => setTimeout(resolve, 2000))
-
-      // 检查连接是否成功
-      console.log('检查连接是否成功，当前状态:', connectionStatus.value)
-      if ((connectionStatus.value as string) !== 'connected') {
-        console.error('WebSocket连接失败，状态:', connectionStatus.value)
-        isCollaborating.value = false
-
-        // 触发协作停止事件
-        const event = new CustomEvent('collaboration-stopped', {
-          bubbles: true,
-          detail: {
-            timestamp: new Date().toISOString(),
-            source: 'connection_failed',
-            error: '无法连接到协作服务器'
-          }
-        })
-        document.dispatchEvent(event)
-        return false
-      }
-    } else {
-      // 其他状态（如CONNECTING），尝试连接
-      console.log('尝试连接WebSocket...')
-      connect()
-    }
-  } else {
-    console.log('WebSocket已连接，无需重新连接')
-  }
-
-  console.log('协作启动成功，当前状态:', isCollaborating.value)
-  return true
+  // 返回成功
+      return true
 }
 
 const stopCollaboration = () => {

@@ -1157,6 +1157,32 @@ export const useCourseStore = defineStore('course', () => {
     }
   }
 
+  // 重置课程状态到初始值
+  function resetCourse() {
+    // 重置课程状态为初始状态
+    currentCourse.value = {
+      id: uuidv4(),
+      name: '马术路线设计',
+      obstacles: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      fieldWidth: 80,
+      fieldHeight: 60,
+    }
+
+    // 清除选中的障碍物
+    selectedObstacle.value = null
+
+    // 清除路径
+    coursePath.value = {
+      visible: false,
+      points: [] as PathPoint[],
+    }
+
+    // 重置起终点
+    resetStartEndPoints()
+  }
+
   return {
     currentCourse,
     selectedObstacle,
@@ -1183,5 +1209,6 @@ export const useCourseStore = defineStore('course', () => {
     exportCourse,
     importCourse,
     setCurrentCourseId,
+    resetCourse,
   }
 })

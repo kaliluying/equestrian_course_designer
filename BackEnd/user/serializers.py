@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
-from .models import Design
+from .models import Design, DesignLike, UserProfile, MembershipPlan
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):
@@ -90,6 +90,26 @@ class UserRegisterSerializer(serializers.ModelSerializer):
             user.is_staff = True
             user.save()
 
+        # 获取免费会员计划
+        try:
+            free_plan = MembershipPlan.objects.get(code='free')
+        except MembershipPlan.DoesNotExist:
+            # 如果免费计划不存在，创建一个
+            free_plan = MembershipPlan.objects.create(
+                name='免费用户',
+                code='free',
+                monthly_price=0,
+                yearly_price=0,
+                storage_limit=5,
+                description='免费用户计划，限制存储5个设计'
+            )
+
+        # 创建用户资料并绑定免费会员计划
+        UserProfile.objects.create(
+            user=user,
+            membership_plan=free_plan
+        )
+
         return user
 
 
@@ -138,10 +158,49 @@ class UserLoginSerializer(serializers.Serializer):
 
 class DesignSerializer(serializers.ModelSerializer):
     """设计序列化器"""
+    author_username = serializers.SerializerMethodField()
+    is_liked = serializers.SerializerMethodField()
+
     class Meta:
         model = Design
         fields = '__all__'
-        read_only_fields = ('author', 'create_time', 'update_time')
+        read_only_fields = ('author', 'create_time',
+                            'update_time', 'likes_count', 'downloads_count')
+
+    def get_author_username(self, obj):
+        """获取作者用户名"""
+        return obj.author.username if obj.author else None
+
+    def get_is_liked(self, obj):
+        """当前用户是否已点赞"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return DesignLike.objects.filter(design=obj, user=request.user).exists()
+        return False
+
+
+class DesignListSerializer(serializers.ModelSerializer):
+    """设计列表序列化器（用于公开分享列表）"""
+    author_username = serializers.SerializerMethodField()
+    is_liked = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Design
+        fields = ('id', 'title', 'image', 'create_time', 'update_time',
+                  'author', 'author_username', 'likes_count', 'downloads_count',
+                  'is_shared', 'description', 'is_liked')
+        read_only_fields = fields
+
+    def get_author_username(self, obj):
+        """获取作者用户名"""
+        return obj.author.username if obj.author else None
+
+    def get_is_liked(self, obj):
+        """当前用户是否已点赞"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return DesignLike.objects.filter(design=obj, user=request.user).exists()
+        return False
 
 
 class ForgotPasswordSerializer(serializers.Serializer):

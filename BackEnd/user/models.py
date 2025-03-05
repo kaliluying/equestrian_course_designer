@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 import os
 import uuid
+from django.utils import timezone
 from datetime import datetime, timedelta
 
 
@@ -71,6 +72,27 @@ class Design(models.Model):
         blank=True,
         null=True
     )
+    # 添加分享状态字段
+    is_shared = models.BooleanField(
+        default=False,
+        verbose_name='是否分享'
+    )
+    # 添加描述字段
+    description = models.TextField(
+        verbose_name='设计描述',
+        blank=True,
+        null=True
+    )
+    # 添加点赞数字段
+    likes_count = models.PositiveIntegerField(
+        default=0,
+        verbose_name='点赞数'
+    )
+    # 添加下载数字段
+    downloads_count = models.PositiveIntegerField(
+        default=0,
+        verbose_name='下载数'
+    )
 
     def __str__(self):
         return self.title
@@ -79,6 +101,34 @@ class Design(models.Model):
         verbose_name = '设计图'
         verbose_name_plural = '设计图'
         ordering = ['-create_time']  # 按创建时间倒序排列
+
+
+# 添加点赞记录模型
+class DesignLike(models.Model):
+    """设计点赞记录模型"""
+    design = models.ForeignKey(
+        Design,
+        on_delete=models.CASCADE,
+        related_name='likes',
+        verbose_name='设计'
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='liked_designs',
+        verbose_name='用户'
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='点赞时间'
+    )
+
+    class Meta:
+        verbose_name = '设计点赞'
+        verbose_name_plural = '设计点赞'
+        # 确保一个用户只能给一个设计点赞一次
+        unique_together = ('design', 'user')
+        ordering = ['-created_at']
 
 
 class PasswordResetToken(models.Model):
@@ -123,3 +173,107 @@ class PasswordResetToken(models.Model):
         verbose_name = '密码重置令牌'
         verbose_name_plural = '密码重置令牌'
         ordering = ['-created_at']
+
+
+# 添加会员计划模型
+class MembershipPlan(models.Model):
+    """会员计划模型，定义不同的会员类型、价格和权限"""
+    name = models.CharField(
+        max_length=50,
+        verbose_name='会员计划名称'
+    )
+    code = models.CharField(
+        max_length=20,
+        unique=True,
+        verbose_name='会员计划代码'
+    )
+    monthly_price = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=15.00,
+        verbose_name='月度价格'
+    )
+    yearly_price = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=150.00,
+        verbose_name='年度价格'
+    )
+    storage_limit = models.PositiveIntegerField(
+        default=100,
+        verbose_name='存储限制(设计数量)'
+    )
+    description = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name='会员计划描述'
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name='是否激活'
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='创建时间'
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name='更新时间'
+    )
+
+    def __str__(self):
+        return f"{self.name} (¥{self.monthly_price}/月)"
+
+    class Meta:
+        verbose_name = '会员计划'
+        verbose_name_plural = '会员计划'
+        ordering = ['monthly_price']
+
+
+# 添加用户资料模型
+class UserProfile(models.Model):
+    """用户资料模型，扩展Django内置的User模型"""
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='profile',
+        verbose_name='用户'
+    )
+    is_premium = models.BooleanField(
+        default=False,
+        verbose_name='是否为会员'
+    )
+    premium_expiry = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='会员过期时间'
+    )
+    membership_plan = models.ForeignKey(
+        MembershipPlan,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='users',
+        verbose_name='会员计划'
+    )
+
+    def __str__(self):
+        return f"{self.user.username}的资料"
+
+    def is_premium_active(self):
+        """检查会员是否有效"""
+        if not self.is_premium:
+            return False
+        if not self.premium_expiry:
+            return False
+        return self.premium_expiry > timezone.now()
+
+    def get_storage_limit(self):
+        """获取存储限制"""
+        if self.is_premium_active() and self.membership_plan:
+            return self.membership_plan.storage_limit
+        return 5  # 免费用户默认限制5个设计
+
+    class Meta:
+        verbose_name = '用户资料'
+        verbose_name_plural = '用户资料'

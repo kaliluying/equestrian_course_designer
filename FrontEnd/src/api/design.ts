@@ -9,11 +9,23 @@ export const saveDesign = async (data: SaveDesignRequest): Promise<DesignRespons
   formData.append('image', data.image)
   formData.append('download', data.download)
 
+  // 添加描述字段
+  if (data.description) {
+    formData.append('description', data.description)
+  }
+
+  // 添加分享状态
+  if (data.is_shared !== undefined) {
+    formData.append('is_shared', data.is_shared.toString())
+  }
+
   console.log('保存设计数据:', {
     id: data.id,
     title: data.title,
     imageSize: data.image.size,
     downloadSize: data.download.size,
+    description: data.description,
+    is_shared: data.is_shared,
   })
 
   try {
@@ -44,35 +56,100 @@ export const saveDesign = async (data: SaveDesignRequest): Promise<DesignRespons
   }
 }
 
-// // 获取设计列表
-// export const getDesigns = async (): Promise<DesignResponse[]> => {
-//   return request.get<DesignResponse[]>('/user/designs/')
-// }
+// 获取设计列表
+export const getDesigns = async (): Promise<DesignResponse[]> => {
+  return request.get<DesignResponse[]>('/user/designs/')
+}
 
-// // 获取设计详情
-// export const getDesign = async (id: number): Promise<DesignResponse> => {
-//   return request.get<DesignResponse>(`/user/designs/${id}/`)
-// }
+// 定义分页响应接口
+export interface PaginatedResponse<T> {
+  count: number
+  next: string | null
+  previous: string | null
+  results: T[]
+}
 
-// // 更新设计
-// export const updateDesign = async (
-//   id: number,
-//   data: Partial<SaveDesignRequest>,
-// ): Promise<DesignResponse> => {
-//   // 创建 FormData 对象
-//   const formData = new FormData()
-//   if (data.title) formData.append('title', data.title)
-//   if (data.image) formData.append('image', data.image)
-//   if (data.download) formData.append('download', data.download)
+// 获取用户自己的设计列表
+export const getUserDesigns = async (
+  page: number = 1,
+): Promise<PaginatedResponse<DesignResponse>> => {
+  return request.get<PaginatedResponse<DesignResponse>>(`/user/designs/my/?page=${page}`)
+}
 
-//   return request.put<DesignResponse>(`/user/designs/${id}/`, formData, {
-//     headers: {
-//       'Content-Type': 'multipart/form-data',
-//     },
-//   })
-// }
+// 获取公开分享的设计列表
+export const getSharedDesigns = async (
+  page: number = 1,
+): Promise<PaginatedResponse<DesignResponse>> => {
+  return request.get<PaginatedResponse<DesignResponse>>(`/user/designs/shared/?page=${page}`)
+}
 
-// // 删除设计
-// export const deleteDesign = async (id: number): Promise<void> => {
-//   return request.delete<void>(`/user/designs/${id}/`)
-// }
+// 获取设计详情
+export const getDesign = async (id: number): Promise<DesignResponse> => {
+  return request.get<DesignResponse>(`/user/designs/${id}/`)
+}
+
+// 点赞/取消点赞设计
+export const likeDesign = async (
+  id: number,
+): Promise<{
+  message: string
+  likes_count: number
+  is_liked: boolean
+}> => {
+  return request.post<{
+    message: string
+    likes_count: number
+    is_liked: boolean
+  }>(`/user/designs/${id}/like/`)
+}
+
+// 分享/取消分享设计
+export const shareDesign = async (
+  id: number,
+): Promise<{
+  message: string
+  is_shared: boolean
+}> => {
+  return request.post<{
+    message: string
+    is_shared: boolean
+  }>(`/user/designs/${id}/share/`)
+}
+
+// 切换设计的分享状态
+export const toggleDesignSharing = async (
+  id: number,
+): Promise<{
+  message: string
+  is_shared: boolean
+}> => {
+  return request.post<{
+    message: string
+    is_shared: boolean
+  }>(`/user/designs/${id}/toggle-share/`)
+}
+
+// 下载设计
+export const downloadDesign = async (
+  id: number,
+  fileType: 'json' | 'png' | 'pdf' = 'json',
+): Promise<{
+  message: string
+  download_url: string
+  filename: string
+  file_type: string
+  downloads_count: number
+}> => {
+  return request.get<{
+    message: string
+    download_url: string
+    filename: string
+    file_type: string
+    downloads_count: number
+  }>(`/user/designs/${id}/download/?type=${fileType}`)
+}
+
+// 删除设计
+export const deleteDesign = async (id: number): Promise<void> => {
+  return request.delete<void>(`/user/designs/${id}/`)
+}

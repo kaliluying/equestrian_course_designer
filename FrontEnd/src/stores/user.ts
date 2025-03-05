@@ -2,7 +2,14 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { User, LoginForm, RegisterForm, AuthResponse } from '@/types/user'
 import { request } from '@/utils/request'
-import { login } from '@/api/user'
+import { login, register } from '@/api/user'
+
+// 定义用户类型
+interface User {
+  id: number
+  username: string
+  is_premium_active?: boolean
+}
 
 export const useUserStore = defineStore('user', () => {
   const currentUser = ref<User | null>(null)
@@ -16,6 +23,9 @@ export const useUserStore = defineStore('user', () => {
       currentUser.value = JSON.parse(userData)
       isAuthenticated.value = true
       console.log('用户已登录:', currentUser.value)
+
+      // 获取最新的用户资料，包括会员状态
+      updateUserProfile()
     } else {
       console.log('用户未登录')
     }
@@ -45,6 +55,9 @@ export const useUserStore = defineStore('user', () => {
       isAuthenticated.value = true
       console.log('用户状态管理: 用户状态已更新')
 
+      // 获取最新的用户资料，包括会员状态
+      updateUserProfile()
+
       return currentUser.value
     } catch (error) {
       console.error('用户状态管理: 登录失败:', error)
@@ -53,29 +66,42 @@ export const useUserStore = defineStore('user', () => {
   }
 
   const registerUser = async (form: RegisterForm) => {
-    const response = await request.post<AuthResponse>('/register/', form)
-    const { access_token, refresh_token, user_id, username } = response
+    try {
+      console.log('用户状态管理: 尝试注册:', form.username)
 
-    // 保存 token 和用户信息
-    localStorage.setItem('access_token', access_token)
-    localStorage.setItem('refresh_token', refresh_token)
-    localStorage.setItem(
-      'user',
-      JSON.stringify({
+      // 使用api中的register方法，它已经处理了CSRF令牌
+      const response = await register(form)
+      console.log('用户状态管理: 注册API响应:', response)
+
+      const { access_token, refresh_token, user_id, username } = response
+
+      // 保存 token 和用户信息
+      localStorage.setItem('access_token', access_token)
+      localStorage.setItem('refresh_token', refresh_token)
+      localStorage.setItem(
+        'user',
+        JSON.stringify({
+          id: user_id,
+          username: username,
+        }),
+      )
+
+      // 设置 refresh token 到 cookie
+      document.cookie = `refresh_token=${refresh_token}; path=/; secure; samesite=strict`
+
+      currentUser.value = {
         id: user_id,
         username: username,
-      }),
-    )
+      }
 
-    // 设置 refresh token 到 cookie
-    document.cookie = `refresh_token=${refresh_token}; path=/; secure; samesite=strict`
+      isAuthenticated.value = true
+      console.log('用户状态管理: 用户状态已更新')
 
-    currentUser.value = {
-      id: user_id,
-      username: username,
+      return currentUser.value
+    } catch (error) {
+      console.error('用户状态管理: 注册失败:', error)
+      throw error
     }
-
-    return currentUser.value
   }
 
   const logout = () => {
@@ -90,12 +116,39 @@ export const useUserStore = defineStore('user', () => {
     isAuthenticated.value = false
   }
 
+  // 更新用户资料，包括会员状态
+  const updateUserProfile = async () => {
+    if (!isAuthenticated.value || !currentUser.value) return
+
+    try {
+      console.log('正在更新用户资料...')
+      const { getUserProfile } = await import('@/api/user')
+      const response = await getUserProfile()
+
+      if (response && response.success) {
+        // 更新用户会员状态
+        currentUser.value = {
+          ...currentUser.value,
+          is_premium_active: response.is_premium_active,
+        }
+
+        // 更新本地存储
+        localStorage.setItem('user', JSON.stringify(currentUser.value))
+        console.log('用户资料已更新:', currentUser.value)
+      }
+    } catch (error) {
+      console.error('更新用户资料失败:', error)
+    }
+  }
+
   return {
     currentUser,
     isAuthenticated,
-    login: loginUser,
-    register: registerUser,
-    logout,
     initializeAuth,
+    loginUser,
+    registerUser,
+    logout,
+    updateUserProfile,
+    login: loginUser,
   }
 })

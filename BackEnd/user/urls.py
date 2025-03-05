@@ -1,11 +1,12 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
-from .views import RegisterView, LoginView, DesignViewSet, ForgotPasswordView, ResetPasswordView, CSRFTokenView
+from .views import RegisterView, LoginView, DesignViewSet, ForgotPasswordView, ResetPasswordView, CSRFTokenView, UserViewSet
 
 # 创建路由器并注册视图集
 router = DefaultRouter()
 router.register(r'designs', DesignViewSet)
+router.register(r'users', UserViewSet)
 
 urlpatterns = [
     # CSRF令牌

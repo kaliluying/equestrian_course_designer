@@ -18,13 +18,34 @@ export const getCsrfToken = async () => {
 }
 
 // 用户注册
-export const register = (data: {
+export const register = async (data: {
   username: string
   password: string
   confirmPassword: string
   email: string
 }) => {
-  return request.post('/user/register/', data)
+  try {
+    console.log('开始注册流程，获取CSRF令牌...')
+    // 先获取CSRF令牌
+    const csrfToken = await getCsrfToken()
+    console.log('获取到的CSRF令牌:', csrfToken)
+
+    console.log('发送注册请求...')
+    // 使用axios直接发送请求，确保包含CSRF令牌
+    const response = await axios.post('http://127.0.0.1:8000/user/register/', data, {
+      withCredentials: true,
+      headers: {
+        'X-CSRFToken': csrfToken || '',
+        'Content-Type': 'application/json',
+      },
+    })
+
+    console.log('注册请求成功，响应数据:', response.data)
+    return response.data
+  } catch (error) {
+    console.error('注册请求失败:', error)
+    throw error
+  }
 }
 
 // 用户登录
@@ -70,4 +91,59 @@ export const resetPassword = (data: {
   confirmPassword: string
 }) => {
   return request.post('/user/reset-password/', data)
+}
+
+// 获取当前用户资料
+export const getUserProfile = async () => {
+  console.log('正在获取用户资料...')
+  try {
+    const response = await request.get('/user/users/my_profile/')
+    console.log('获取用户资料成功:', response)
+    return response
+  } catch (error) {
+    console.error('获取用户资料失败:', error)
+    throw error
+  }
+}
+
+// 管理员设置用户会员状态
+export const setPremiumStatus = async (
+  userId: number,
+  data: {
+    is_premium: boolean
+    duration_days?: number
+    storage_limit?: number
+  },
+) => {
+  return request.post(`/user/users/${userId}/set_premium/`, data)
+}
+
+// 修改密码
+export const changePassword = async (data: {
+  old_password: string
+  new_password: string
+  confirm_password: string
+}) => {
+  console.log('正在修改密码...')
+  try {
+    const response = await request.post('/user/users/change_password/', data)
+    console.log('修改密码成功:', response)
+    return response
+  } catch (error) {
+    console.error('修改密码失败:', error)
+    throw error
+  }
+}
+
+// 修改邮箱
+export const changeEmail = async (data: { password: string; new_email: string }) => {
+  console.log('正在修改邮箱...')
+  try {
+    const response = await request.post('/user/users/change_email/', data)
+    console.log('修改邮箱成功:', response)
+    return response
+  } catch (error) {
+    console.error('修改邮箱失败:', error)
+    throw error
+  }
 }

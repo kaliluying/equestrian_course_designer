@@ -3,17 +3,33 @@
     <!-- 顶部导航栏 -->
     <div class="header">
       <div class="header-left">
-        <el-icon :size="24" class="header-icon">
-          <Position />
-        </el-icon>
-        <h1>马术障碍赛路线设计器</h1>
+        <router-link to="/" class="logo-link">
+          <el-icon :size="24" class="header-icon">
+            <Position />
+          </el-icon>
+          <h1>马术障碍赛路线设计器</h1>
+        </router-link>
       </div>
+
+      <!-- 导航菜单 -->
+      <div class="nav-menu" v-if="userStore.currentUser">
+        <router-link to="/" class="nav-link">首页</router-link>
+        <router-link to="/my-designs" class="nav-link">我的设计</router-link>
+        <router-link to="/shared-designs" class="nav-link">共享设计</router-link>
+        <router-link to="/profile" class="nav-link">
+          <el-icon>
+            <User />
+          </el-icon>
+          我的资料
+        </router-link>
+      </div>
+
       <div class="user-info">
         <template v-if="userStore.currentUser">
           <el-button type="primary" size="small" :disabled="!userStore.currentUser" @click="toggleCollaboration">
             {{ isCollaborating ? '退出协作' : '协作' }}
           </el-button>
-          <span class="username-link" @click="handleUsernameClick" :title="'点击访问后台管理'">
+          <span class="username-display">
             {{ userStore.currentUser.username }}
           </span>
           <el-button link @click="handleLogout">退出登录</el-button>
@@ -29,9 +45,15 @@
 
     <!-- 主界面内容 -->
     <div class="main">
-      <ToolBar class="toolbar" />
-      <CourseCanvas class="canvas" ref="canvasRef" />
-      <PropertiesPanel class="properties-panel" />
+      <!-- 只在主页显示这些组件 -->
+      <template v-if="$route.path === '/'">
+        <ToolBar class="toolbar" />
+        <CourseCanvas class="canvas" ref="canvasRef" />
+        <PropertiesPanel class="properties-panel" />
+      </template>
+
+      <!-- 路由视图，用于显示其他页面 -->
+      <router-view v-else class="router-view"></router-view>
 
       <!-- 直接显示登录表单 -->
       <div v-if="showLoginForm && !userStore.currentUser" class="test-login-form">
@@ -66,9 +88,9 @@ import PropertiesPanel from '@/components/PropertiesPanel.vue'
 import LoginForm from '@/components/LoginForm.vue'
 import RegisterForm from '@/components/RegisterForm.vue'
 import CollaborationPanel from '@/components/CollaborationPanel.vue'
-import { Position } from '@element-plus/icons-vue'
+import { Position, User } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useCourseStore } from '@/stores/course'
 import { v4 as uuidv4 } from 'uuid'
 import type { CollaborationSession } from '@/utils/websocket'
@@ -76,6 +98,7 @@ import type { CollaborationSession } from '@/utils/websocket'
 const userStore = useUserStore()
 const courseStore = useCourseStore()
 const route = useRoute()
+const router = useRouter()
 const loginDialogVisible = ref(false)
 const registerDialogVisible = ref(false)
 const showLoginForm = ref(false)
@@ -101,16 +124,17 @@ onMounted(() => {
   // 监听协作停止事件
   const handleCollaborationStopped = (event: Event) => {
     const customEvent = event as CustomEvent
-    console.log('收到协作停止事件', customEvent.detail)
+    // 减少日志输出
+    // console.log('收到协作停止事件', customEvent.detail)
 
     // 检查当前状态，避免重复处理
     if (!isCollaborating.value) {
-      console.log('当前已经不在协作中，无需更新状态')
+      // console.log('当前已经不在协作中，无需更新状态')
       return
     }
 
     // 更新状态
-    console.log('当前协作状态:', isCollaborating.value)
+    // console.log('当前协作状态:', isCollaborating.value)
     isCollaborating.value = false
     console.log('协作状态已更新为:', isCollaborating.value)
 
@@ -119,53 +143,54 @@ onMounted(() => {
       console.log('这是一个错误导致的停止事件')
       ElMessage.error('协作连接出错，已断开连接')
     } else if (customEvent.detail && customEvent.detail.manual) {
-      console.log('这是一个手动停止事件')
+      // console.log('这是一个手动停止事件')
       ElMessage.warning('协作已被手动停止')
     } else if (customEvent.detail && customEvent.detail.source === 'onclose') {
-      console.log('这是由WebSocket关闭触发的停止事件')
+      // console.log('这是由WebSocket关闭触发的停止事件')
       ElMessage.warning(`协作连接已关闭 (代码: ${customEvent.detail.code})`)
     } else if (customEvent.detail && customEvent.detail.source === 'disconnect') {
-      console.log('这是由disconnect方法触发的停止事件')
+      // console.log('这是由disconnect方法触发的停止事件')
       ElMessage.info('已断开协作连接')
     } else if (customEvent.detail && customEvent.detail.delayed) {
-      console.log('这是一个延迟触发的停止事件')
+      // console.log('这是一个延迟触发的停止事件')
       ElMessage.info('已退出协作模式')
     } else if (customEvent.detail && customEvent.detail.reason === '用户主动退出') {
-      console.log('这是用户主动退出的事件')
+      // console.log('这是用户主动退出的事件')
       ElMessage.info('已退出协作模式')
     } else {
-      console.log('这是一个正常停止事件')
+      // console.log('这是一个正常停止事件')
       ElMessage.info('已退出协作模式')
     }
 
     // 使用nextTick确保DOM更新
     nextTick(() => {
-      console.log('DOM已更新，确认协作状态:', isCollaborating.value)
+      // console.log('DOM已更新，确认协作状态:', isCollaborating.value)
     })
   }
 
   // 监听协作连接成功事件
   const handleCollaborationConnected = (event: CustomEvent) => {
-    console.log('收到collaboration-connected事件', event.detail)
+    // 减少日志输出
+    // console.log('收到collaboration-connected事件', event.detail)
 
     // 检查是否是延迟事件，如果是普通事件已经处理过，则不重复处理
     if (event.detail.delayed && isCollaborating.value) {
-      console.log('已经处理过普通连接事件，忽略延迟事件')
+      // console.log('已经处理过普通连接事件，忽略延迟事件')
       return
     }
 
     // 如果已经在协作状态，不重复设置
     if (isCollaborating.value) {
-      console.log('已经在协作状态，不重复设置')
+      // console.log('已经在协作状态，不重复设置')
       return
     }
 
-    console.log('更新协作状态为true')
+    // console.log('更新协作状态为true')
     isCollaborating.value = true
 
     // 更新会话信息
     if (event.detail.session) {
-      console.log('更新会话信息:', event.detail.session)
+      // console.log('更新会话信息:', event.detail.session)
       collaborationSession.value = event.detail.session
     }
 
@@ -194,16 +219,40 @@ onMounted(() => {
     console.error('添加事件监听器失败:', error)
   }
 
-  // 添加调试事件监听器
-  const debugEventListener = (event: Event) => {
-    console.log('收到事件:', event.type, event)
-  }
-  document.addEventListener('collaboration-stopped', debugEventListener)
-  document.addEventListener('collaboration-connected', debugEventListener)
-  console.log('已添加调试事件监听器')
-
   // 处理协作链接
   handleCollaborationRoute()
+
+  // 检查URL参数中是否有协作邀请
+  checkCollaborationInvite()
+
+  // 检查登录后是否有待处理的协作邀请
+  if (userStore.isAuthenticated) {
+    const pendingCollaboration = localStorage.getItem('pendingCollaboration')
+    if (pendingCollaboration) {
+      try {
+        const { designId, timestamp } = JSON.parse(pendingCollaboration)
+        const inviteTime = new Date(timestamp)
+        const now = new Date()
+
+        // 检查邀请是否在24小时内
+        if (now.getTime() - inviteTime.getTime() < 24 * 60 * 60 * 1000) {
+          console.log('发现待处理的协作邀请，设计ID:', designId)
+          courseStore.setCurrentCourseId(designId)
+
+          setTimeout(() => {
+            isCollaborating.value = true
+            ElMessage.success('已自动加入协作会话')
+          }, 1000)
+        }
+
+        // 清除待处理的协作邀请
+        localStorage.removeItem('pendingCollaboration')
+      } catch (error) {
+        console.error('处理待处理协作邀请时出错:', error)
+        localStorage.removeItem('pendingCollaboration')
+      }
+    }
+  }
 
   // 在组件卸载时移除事件监听
   onUnmounted(() => {
@@ -211,8 +260,6 @@ onMounted(() => {
     window.removeEventListener('token-expired', handleTokenExpired)
     document.removeEventListener('collaboration-stopped', handleCollaborationStopped as EventListener)
     document.removeEventListener('collaboration-connected', handleCollaborationConnected as EventListener)
-    document.removeEventListener('collaboration-stopped', debugEventListener)
-    document.removeEventListener('collaboration-connected', debugEventListener)
     console.log('已移除所有事件监听器')
   })
 })
@@ -292,31 +339,6 @@ const handleLogout = () => {
   ElMessage.success('已退出登录')
 }
 
-const handleUsernameClick = () => {
-  // 获取 token 并确保它是完整的 Bearer token
-  const token = localStorage.getItem('access_token')
-  if (!token) {
-    ElMessage.error('请先登录')
-    return
-  }
-  // 移除可能存在的 Bearer 前缀
-  const cleanToken = token.replace('Bearer ', '')
-
-  // 使用当前环境的后端URL
-  let adminUrl = ''
-  if (import.meta.env.DEV) {
-    // 开发环境
-    adminUrl = `http://127.0.0.1:8000/admin/?token=${cleanToken}`
-  } else {
-    // 生产环境
-    const host = window.location.host
-    adminUrl = `http://${host}/admin/?token=${cleanToken}`
-  }
-
-  console.log('打开管理后台URL:', adminUrl)
-  window.open(adminUrl, '_blank')
-}
-
 // 为window添加debugCanvas类型声明
 declare global {
   interface Window {
@@ -329,47 +351,37 @@ declare global {
 
 // 切换协作状态
 const toggleCollaboration = async () => {
-  console.log('切换协作状态，当前状态:', isCollaborating.value)
-
-  // 防止重复点击
-  if (isTogglingCollaboration) {
-    console.log('正在处理协作状态切换，请稍候')
-    return
-  }
-
+  if (isTogglingCollaboration) return
   isTogglingCollaboration = true
 
   try {
-    if (!isCollaborating.value) {
-      // 进入协作模式
-      console.log('尝试进入协作模式')
+    // 检查用户是否为会员
+    if (!userStore.currentUser?.is_premium_active && !isCollaborating.value) {
+      // 先尝试更新用户资料，确保会员状态是最新的
+      await userStore.updateUserProfile()
 
-      // 确保有设计ID
-      if (!courseStore.currentCourse.id) {
-        console.log('设计ID不存在，生成新ID')
-        courseStore.currentCourse.id = uuidv4()
-      }
-
-      console.log('调用startCollaboration前，协作状态:', isCollaborating.value)
-
-      // 调用Canvas组件的startCollaboration方法
-      if (canvasRef.value) {
-        console.log('调用Canvas的startCollaboration方法')
-        const result = await canvasRef.value.startCollaboration()
-        console.log('startCollaboration结果:', result)
-
-        if (!result) {
-          console.error('启动协作失败')
-          isTogglingCollaboration = false
-          return
-        }
-      } else {
-        console.error('Canvas引用不存在，无法启动协作')
-        ElMessage.error('无法启动协作，请刷新页面后重试')
+      // 再次检查会员状态
+      if (!userStore.currentUser?.is_premium_active) {
+        ElMessageBox.confirm(
+          '协作功能是会员专属功能，请升级到会员以使用此功能。',
+          '会员专属功能',
+          {
+            confirmButtonText: '立即升级',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }
+        ).then(() => {
+          // 跳转到用户资料页面
+          router.push('/profile')
+        }).catch(() => {
+          // 用户取消操作
+        })
         isTogglingCollaboration = false
         return
       }
-    } else {
+    }
+
+    if (isCollaborating.value) {
       // 退出协作模式
       console.log('尝试退出协作模式')
 
@@ -378,7 +390,6 @@ const toggleCollaboration = async () => {
 
       // 调用Canvas组件的stopCollaboration方法
       if (canvasRef.value) {
-        console.log('调用Canvas的stopCollaboration方法')
         try {
           await canvasRef.value.stopCollaboration()
           console.log('协作已停止')
@@ -402,6 +413,45 @@ const toggleCollaboration = async () => {
 
       // 显示提示消息
       ElMessage.success('已退出协作模式')
+    } else {
+      // 进入协作模式
+      console.log('尝试进入协作模式')
+
+      // 确保有设计ID
+      if (!courseStore.currentCourse.id) {
+        console.log('设计ID不存在，生成新ID')
+        courseStore.currentCourse.id = uuidv4()
+      }
+
+      // 先设置协作状态为true，确保面板显示
+      isCollaborating.value = true
+
+      // 等待DOM更新，确保面板已渲染
+      await nextTick()
+
+      // 调用Canvas组件的startCollaboration方法
+      if (canvasRef.value) {
+        const result = await canvasRef.value.startCollaboration()
+        console.log('startCollaboration结果:', result)
+
+        if (!result) {
+          console.error('启动协作失败')
+          // 如果失败，恢复状态
+          isCollaborating.value = false
+          isTogglingCollaboration = false
+          return
+        }
+
+        // 显示成功消息
+        ElMessage.success('已成功进入协作模式')
+      } else {
+        console.error('Canvas引用不存在，无法启动协作')
+        ElMessage.error('无法启动协作，请刷新页面后重试')
+        // 如果失败，恢复状态
+        isCollaborating.value = false
+        isTogglingCollaboration = false
+        return
+      }
     }
   } catch (error) {
     console.error('切换协作状态时出错:', error)
@@ -409,8 +459,6 @@ const toggleCollaboration = async () => {
   } finally {
     isTogglingCollaboration = false
   }
-
-  console.log('协作状态切换完成，当前状态:', isCollaborating.value)
 }
 
 // 处理协作路由
@@ -476,6 +524,49 @@ const handleCollaborationRoute = async () => {
     }
   }
 }
+
+// 检查URL参数中是否有协作邀请
+const checkCollaborationInvite = () => {
+  const urlParams = new URLSearchParams(window.location.search)
+  const isCollaboration = urlParams.get('collaboration') === 'true'
+  const designId = urlParams.get('designId')
+
+  if (isCollaboration && designId) {
+    console.log('检测到协作邀请链接，设计ID:', designId)
+
+    // 如果用户已登录，自动进入协作模式
+    if (userStore.isAuthenticated) {
+      console.log('用户已登录，自动进入协作模式')
+
+      // 加载设计
+      courseStore.setCurrentCourseId(designId)
+
+      // 延迟一点时间后开启协作模式
+      setTimeout(() => {
+        isCollaborating.value = true
+        ElMessage.success('已自动加入协作会话')
+      }, 1000)
+    } else {
+      console.log('用户未登录，提示登录后加入协作')
+      ElMessage.warning('请先登录后再加入协作会话')
+
+      // 保存协作信息，登录后可以自动加入
+      localStorage.setItem('pendingCollaboration', JSON.stringify({
+        designId,
+        timestamp: new Date().toISOString()
+      }))
+
+      // 跳转到登录页面
+      router.push('/login')
+    }
+
+    // 清除URL参数，避免刷新页面重复处理
+    const url = new URL(window.location.href)
+    url.searchParams.delete('collaboration')
+    url.searchParams.delete('designId')
+    window.history.replaceState({}, document.title, url.toString())
+  }
+}
 </script>
 
 <style>
@@ -504,16 +595,10 @@ body {
   width: 100vw;
 }
 
-.username-link {
-  cursor: pointer;
+.username-display {
   color: #fff;
-  text-decoration: underline;
   margin-right: 16px;
-  transition: opacity 0.3s;
-}
-
-.username-link:hover {
-  opacity: 0.8;
+  font-weight: 500;
 }
 </style>
 
@@ -550,6 +635,52 @@ body {
       font-size: 20px;
       font-weight: 500;
     }
+
+    .logo-link {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      text-decoration: none;
+      color: white;
+
+      &:hover {
+        opacity: 0.9;
+      }
+    }
+  }
+}
+
+.nav-menu {
+  display: flex;
+  gap: 24px;
+  margin: 0 20px;
+
+  .nav-link {
+    color: white;
+    text-decoration: none;
+    font-size: 16px;
+    position: relative;
+    padding: 4px 0;
+    transition: opacity 0.3s;
+
+    &:hover {
+      opacity: 0.8;
+    }
+
+    &.router-link-active {
+      font-weight: 500;
+
+      &:after {
+        content: '';
+        position: absolute;
+        bottom: -4px;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background-color: white;
+        border-radius: 2px;
+      }
+    }
   }
 }
 
@@ -574,6 +705,12 @@ body {
   overflow: hidden;
   background-color: var(--bg-color);
   height: calc(100vh - 50px);
+
+  .router-view {
+    flex: 1;
+    overflow: auto;
+    background-color: white;
+  }
 }
 
 .toolbar {

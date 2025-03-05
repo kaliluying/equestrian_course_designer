@@ -194,7 +194,7 @@ const handleSubmit = async () => {
     console.log('提交登录表单:', form.value)
 
     // 使用修改后的登录方法
-    const user = await userStore.login(form.value)
+    const user = await userStore.loginUser(form.value)
 
     console.log('登录成功:', user)
     ElMessage.success('登录成功')
