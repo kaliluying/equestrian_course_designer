@@ -175,7 +175,7 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getUserProfile, changePassword, changeEmail } from '@/api/user'
 import { useUserStore } from '@/stores/user'
-import type { FormInstance, FormRules } from 'element-plus'
+import type { FormInstance } from 'element-plus'
 
 // 定义会员计划类型
 interface MembershipPlan {
@@ -281,7 +281,7 @@ const passwordRules = {
   confirm_password: [
     { required: true, message: '请再次输入新密码', trigger: 'blur' },
     {
-      validator: (rule: any, value: string, callback: any) => {
+      validator: (rule: unknown, value: string, callback: (error?: Error) => void) => {
         if (value !== passwordForm.value.new_password) {
           callback(new Error('两次输入的密码不一致'))
         } else {
@@ -440,8 +440,9 @@ const submitChangePassword = async () => {
         } else {
           ElMessage.error(response.message || '密码修改失败')
         }
-      } catch (error: any) {
-        ElMessage.error(error.response?.data?.message || '密码修改失败，请稍后重试')
+      } catch (error: unknown) {
+        const err = error as { response?: { data?: { message?: string } } }
+        ElMessage.error(err.response?.data?.message || '密码修改失败，请稍后重试')
       } finally {
         passwordSubmitting.value = false
       }
@@ -476,8 +477,9 @@ const submitChangeEmail = async () => {
         } else {
           ElMessage.error(response.message || '邮箱修改失败')
         }
-      } catch (error: any) {
-        ElMessage.error(error.response?.data?.message || '邮箱修改失败，请稍后重试')
+      } catch (error: unknown) {
+        const err = error as { response?: { data?: { message?: string } } }
+        ElMessage.error(err.response?.data?.message || '邮箱修改失败，请稍后重试')
       } finally {
         emailSubmitting.value = false
       }

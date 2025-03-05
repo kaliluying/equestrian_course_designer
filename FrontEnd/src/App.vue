@@ -557,7 +557,7 @@ const checkCollaborationInvite = () => {
       }))
 
       // 跳转到登录页面
-      router.push('/login')
+      router.push('/')
     }
 
     // 清除URL参数，避免刷新页面重复处理

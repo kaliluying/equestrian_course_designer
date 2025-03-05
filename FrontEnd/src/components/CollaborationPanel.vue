@@ -174,15 +174,23 @@ const props = defineProps({
 
 const userStore = useUserStore()
 
-// 使用WebSocket连接
+// 连接状态相关变量
+const isConnecting = ref(false)
+const connectionError = ref<string | null>(null)
+const previousStatus = ref<ConnectionStatus>(ConnectionStatus.DISCONNECTED)
+
+// 从useWebSocketConnection获取状态和方法
 const {
   connectionStatus,
-  collaborators,
-  chatMessages,
   socket,
+  chatMessages,
+  collaborators,
   sendChatMessage,
-  connect
+  connect,
 } = useWebSocketConnection(props.designId)
+
+// 手动定义reconnectAttempts
+const reconnectAttempts = ref(0)
 
 // 当前用户
 const currentUser = computed(() => userStore.currentUser)
@@ -807,10 +815,11 @@ const tryGetSessionInfo = () => {
   // 例如发送特定的WebSocket消息请求会话数据
 }
 
-// 添加新的计算属性
+// 计算属性：是否已连接
 const isConnected = computed(() => {
+  // 修复类型比较问题
   const status = connectionStatus.value as ConnectionStatus | string;
-  return status === ConnectionStatus.CONNECTED || status === 'connected';
+  return status === ConnectionStatus.CONNECTED || status === 'connected'
 })
 
 // 新增状态变量
@@ -854,6 +863,8 @@ const getWebSocketStateText = () => {
 const reconnect = () => {
   console.log('尝试重新连接WebSocket')
   if (typeof connect === 'function') {
+    // 重置重连尝试次数
+    reconnectAttempts.value = 0
     connect()
   } else {
     console.error('connect函数不存在')
@@ -902,7 +913,16 @@ const refreshCollaborators = () => {
   console.log('手动刷新协作者列表')
   if (connectionStatus.value === ConnectionStatus.CONNECTED && userStore.currentUser) {
     try {
-      // 发送同步请求
+      // 检查WebSocket连接状态
+      if (!socket || !socket.value || socket.value.readyState !== WebSocket.OPEN) {
+        console.error('WebSocket未连接，无法发送同步请求')
+        ElMessage.error('WebSocket未连接，无法刷新')
+        return
+      }
+
+      console.log('准备发送同步请求消息')
+
+      // 构造同步请求消息
       const syncRequestMessage = {
         type: MessageType.SYNC_REQUEST,
         senderId: String(userStore.currentUser.id),
@@ -912,21 +932,83 @@ const refreshCollaborators = () => {
         payload: {},
       }
 
-      if (socket && socket.value && socket.value.readyState === WebSocket.OPEN) {
-        socket.value.send(JSON.stringify(syncRequestMessage))
-        console.log('已发送同步请求消息')
-        ElMessage.success('已刷新协作者列表')
-      } else {
-        ElMessage.error('WebSocket未连接，无法刷新')
-      }
+      // 直接发送消息，不通过sendMessage函数，避免在聊天中显示
+      socket.value.send(JSON.stringify(syncRequestMessage))
+      console.log('已发送同步请求消息')
+      ElMessage.success('已刷新协作者列表')
     } catch (error) {
       console.error('刷新协作者列表失败:', error)
       ElMessage.error('刷新协作者列表失败')
     }
   } else {
+    console.error('未连接到协作服务器，无法刷新，当前状态:', connectionStatus.value)
     ElMessage.error('未连接到协作服务器，无法刷新')
   }
 }
+
+// 监听WebSocket连接状态变化
+watch(
+  () => connectionStatus.value,
+  (newStatus) => {
+    console.log('WebSocket连接状态变化:', newStatus)
+
+    // 根据连接状态更新UI
+    if (newStatus === ConnectionStatus.CONNECTED) {
+      isConnecting.value = false
+      connectionError.value = null
+      console.log('WebSocket连接成功')
+
+      // 显示成功消息
+      ElMessage.success('协作连接已建立')
+    } else if (newStatus === ConnectionStatus.CONNECTING) {
+      isConnecting.value = true
+      connectionError.value = null
+      console.log('WebSocket正在连接中...')
+    } else if (newStatus === ConnectionStatus.ERROR) {
+      isConnecting.value = false
+      connectionError.value = '连接失败，请检查网络连接'
+      console.error('WebSocket连接错误')
+
+      // 显示错误消息
+      ElMessage.error('协作连接失败，请检查网络连接')
+    } else if (newStatus === ConnectionStatus.DISCONNECTED) {
+      isConnecting.value = false
+
+      // 只有在之前是连接状态时才显示断开连接消息
+      if (previousStatus.value === ConnectionStatus.CONNECTED) {
+        connectionError.value = '连接已断开'
+        console.log('WebSocket连接已断开')
+
+        // 显示断开连接消息
+        ElMessage.warning('协作连接已断开')
+      }
+    }
+
+    // 保存上一次的状态
+    previousStatus.value = newStatus
+  }
+)
+
+// 监听WebSocket实例变化
+watch(
+  () => socket.value,
+  (newSocket) => {
+    console.log('WebSocket实例变化:', newSocket ? '存在' : '不存在')
+
+    if (newSocket) {
+      // 如果有新的WebSocket实例，检查其readyState
+      console.log('WebSocket readyState:', newSocket.readyState,
+        '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)')
+
+      // 如果WebSocket已经打开但连接状态不是CONNECTED，更新状态
+      if (newSocket.readyState === WebSocket.OPEN &&
+          connectionStatus.value !== ConnectionStatus.CONNECTED) {
+        console.log('WebSocket已打开但状态不一致，更新为CONNECTED')
+        connectionStatus.value = ConnectionStatus.CONNECTED
+      }
+    }
+  }
+)
 </script>
 
 <style scoped>
@@ -1289,10 +1371,42 @@ const refreshCollaborators = () => {
 }
 
 .connection-info {
-  margin-top: 20px;
+  margin-top: 10px;
   padding: 10px;
-  background-color: #f5f7fa;
   border-radius: 4px;
+  background-color: #f5f7fa;
+  font-size: 12px;
+  color: #606266;
+
+  .connection-status, .design-info {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+
+    span {
+      margin-right: 5px;
+    }
+
+    .status-connected {
+      color: #67c23a;
+      font-weight: bold;
+    }
+
+    .status-connecting {
+      color: #e6a23c;
+      font-weight: bold;
+    }
+
+    .status-error {
+      color: #f56c6c;
+      font-weight: bold;
+    }
+  }
+
+  .connection-error {
+    color: #f56c6c;
+    margin-bottom: 5px;
+  }
 }
 
 .status-indicator {

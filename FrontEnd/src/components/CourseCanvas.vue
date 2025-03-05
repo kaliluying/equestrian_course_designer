@@ -264,7 +264,10 @@ const {
   sendPathUpdate,
   connect, // 添加connect方法
   disconnect, // 添加disconnect方法
-  connectionStatus // 添加connectionStatus
+  connectionStatus, // 添加connectionStatus
+  sendAddObstacle, // 添加sendAddObstacle方法
+  sendObstacleUpdate, // 添加sendObstacleUpdate方法
+  sendRemoveObstacle, // 添加sendRemoveObstacle方法
 } = useWebSocketConnection(courseStore.currentCourse.id)
 
 // 处理鼠标移动，同步光标位置
@@ -273,7 +276,14 @@ const handleCollaborationMouseMove = throttle((event: MouseEvent) => {
     const rect = canvasContainerRef.value.getBoundingClientRect()
     const x = event.clientX - rect.left
     const y = event.clientY - rect.top
-    sendCursorPosition({ x, y })
+
+    // 添加日志输出
+    console.log('发送光标位置:', { x, y })
+
+    // 确保连接状态正常
+    if (connectionStatus.value === ConnectionStatus.CONNECTED) {
+      sendCursorPosition({ x, y })
+    }
   }
 }, 50)
 
@@ -316,10 +326,10 @@ const startCollaboration = async () => {
   console.log('CollaborationPanel组件会自动连接WebSocket，不需要在这里手动连接')
 
   // 等待一段时间，确保CollaborationPanel有足够时间连接
-        await new Promise(resolve => setTimeout(resolve, 1000))
+  await new Promise(resolve => setTimeout(resolve, 1000))
 
   // 返回成功
-      return true
+  return true
 }
 
 const stopCollaboration = () => {
@@ -426,6 +436,11 @@ const handleClearCanvas = () => {
   // 清除所有障碍物
   courseStore.currentCourse.obstacles.forEach(obstacle => {
     courseStore.removeObstacle(obstacle.id)
+
+    // 如果在协作模式下，发送移除障碍物消息
+    if (isCollaborating.value) {
+      sendRemoveObstacle(obstacle.id)
+    }
   })
 
   // 清除选中状态
@@ -598,9 +613,17 @@ const handleMouseMove = (event: MouseEvent) => {
           x: initialPos.x + dx,
           y: initialPos.y + dy,
         }
+
+        // 更新本地障碍物位置
         courseStore.updateObstacle(obstacle.id, {
           position: newPosition,
         })
+
+        // 如果在协作模式下，发送障碍物更新消息
+        if (isCollaborating.value) {
+          console.log('发送障碍物位置更新:', obstacle.id, newPosition)
+          sendObstacleUpdate(obstacle.id, { position: newPosition })
+        }
       }
     })
   } else if (isRotating.value && draggingObstacle.value) {
@@ -625,9 +648,17 @@ const handleMouseMove = (event: MouseEvent) => {
 
     // 更新障碍物的旋转角度
     draggingObstacle.value.rotation = newRotation
+
+    // 更新本地障碍物旋转角度
     courseStore.updateObstacle(draggingObstacle.value.id, {
       rotation: newRotation,
     })
+
+    // 如果在协作模式下，发送障碍物旋转更新消息
+    if (isCollaborating.value) {
+      console.log('发送障碍物旋转更新:', draggingObstacle.value.id, newRotation)
+      sendObstacleUpdate(draggingObstacle.value.id, { rotation: newRotation })
+    }
   }
 
   // 处理起终点拖拽
@@ -702,114 +733,126 @@ const handleMouseUp = () => {
 // 处理拖放新障碍物
 const handleDrop = (event: DragEvent) => {
   event.preventDefault()
-  const obstacleType = event.dataTransfer?.getData('obstacleType')
-  if (!obstacleType) return
 
-  const rect = (event.target as HTMLElement).getBoundingClientRect()
-  const x = event.clientX - rect.left
-  const y = event.clientY - rect.top
+  // 获取拖放的数据
+  const obstacleType = event.dataTransfer?.getData('text/plain')
+  console.log('拖放事件，障碍物类型:', obstacleType)
 
-  // 实际横木尺寸：
-  const poleWidth = 4 * meterScale.value // 4米转换为像素（横木长度）
-  const poleHeight = 0.2 * meterScale.value // 20厘米转换为米再转像素（横木宽度）
-  const defaultSpacing = 2.5 * meterScale.value // 2.5米转换为像素
+  if (!obstacleType) {
+    console.error('拖放事件中没有障碍物类型数据')
+    return
+  }
+
+  // 获取鼠标在画布上的位置
+  const canvasRect = canvasContainerRef.value?.getBoundingClientRect()
+  if (!canvasRect) {
+    console.error('无法获取画布位置')
+    return
+  }
+
+  // 计算鼠标在画布上的位置
+  const x = event.clientX - canvasRect.left
+  const y = event.clientY - canvasRect.top
+  console.log('拖放位置:', x, y)
 
   // 创建新障碍物
-  const newObstacle: Omit<Obstacle, 'id'> = {
+  let newObstacle: Omit<Obstacle, 'id'> = {
     type: obstacleType as ObstacleType,
-    position: { x, y },
-    rotation: 270,
-    poles: [],
+    position: {
+      x: x,
+      y: y
+    },
+    rotation: 0,
+    poles: []
   }
 
   // 根据障碍物类型设置属性
   switch (obstacleType) {
-    case ObstacleType.WALL:
-      newObstacle.wallProperties = {
-        height: 1.2 * meterScale.value, // 1.2米高
-        width: 3 * meterScale.value, // 3米宽
-        color: '#8B4513', // 棕色
-        texture: 'brick', // 砖块纹理
-      }
-      break
-
-    case ObstacleType.LIVERPOOL:
-      const liverpoolWidth = 4 * meterScale.value // 横杆长度4米
-      newObstacle.liverpoolProperties = {
-        height: 0.3 * meterScale.value, // 水池高度30厘米
-        width: liverpoolWidth, // 水池宽度与横杆相同
-        waterDepth: 0.2 * meterScale.value, // 水深20厘米
-        waterColor: 'rgba(0, 100, 255, 0.3)', // 半透明蓝色
-        hasRail: true,
-        railHeight: 1.3 * meterScale.value, // 横杆高度1.3米
-      }
-      // 添加顶部横杆
-      newObstacle.poles = [
-        {
-          width: liverpoolWidth, // 横杆长度4米
-          height: 0.2 * meterScale.value,
-          color: '#8B4513',
-          numberPosition: { x: 0, y: 50 },
-        },
-      ]
-      break
-
     case ObstacleType.SINGLE:
-      newObstacle.poles = [
-        {
-          width: poleWidth,
-          height: poleHeight,
-          color: '#8B4513',
-          numberPosition: { x: 0, y: 50 },
-        },
-      ]
+      newObstacle.poles = [{
+        height: 20,
+        width: 100,
+        color: '#8B4513'
+      }]
       break
-
     case ObstacleType.DOUBLE:
       newObstacle.poles = [
         {
-          width: poleWidth,
-          height: poleHeight,
+          height: 20,
+          width: 100,
           color: '#8B4513',
-          spacing: defaultSpacing,
-          numberPosition: { x: 0, y: 50 },
+          spacing: 0
         },
         {
-          width: poleWidth,
-          height: poleHeight,
+          height: 20,
+          width: 100,
           color: '#8B4513',
-          numberPosition: { x: 0, y: 50 },
-        },
+          spacing: 40
+        }
       ]
       break
-
     case ObstacleType.COMBINATION:
       newObstacle.poles = [
         {
-          width: poleWidth,
-          height: poleHeight,
+          height: 20,
+          width: 100,
           color: '#8B4513',
-          spacing: defaultSpacing,
-          numberPosition: { x: 0, y: 50 },
+          spacing: 0
         },
         {
-          width: poleWidth,
-          height: poleHeight,
+          height: 20,
+          width: 100,
           color: '#8B4513',
-          spacing: defaultSpacing,
-          numberPosition: { x: 0, y: 50 },
+          spacing: 20
         },
         {
-          width: poleWidth,
-          height: poleHeight,
+          height: 20,
+          width: 100,
           color: '#8B4513',
-          numberPosition: { x: 0, y: 50 },
-        },
+          spacing: 40
+        }
       ]
+      break
+    case ObstacleType.WALL:
+      newObstacle.wallProperties = {
+        height: 60,
+        width: 100,
+        color: '#8B4513'
+      }
+      break
+    case ObstacleType.LIVERPOOL:
+      newObstacle.liverpoolProperties = {
+        height: 20,
+        width: 100,
+        waterDepth: 10,
+        waterColor: 'rgba(0, 100, 255, 0.3)',
+        hasRail: true,
+        railHeight: 20
+      }
       break
   }
 
-  courseStore.addObstacle(newObstacle)
+  console.log('准备添加新障碍物:', newObstacle)
+
+  // 添加障碍物到本地
+  const addedObstacle = courseStore.addObstacle(newObstacle)
+  console.log('本地添加障碍物成功:', addedObstacle)
+
+  // 如果在协作模式下，发送添加障碍物的消息
+  if (isCollaborating.value) {
+    console.log('协作模式下，准备发送添加障碍物消息')
+
+    if (!addedObstacle) {
+      console.error('添加障碍物失败，无法发送消息')
+      return
+    }
+
+    console.log('发送添加障碍物消息，障碍物数据:', addedObstacle)
+    const result = sendAddObstacle(addedObstacle)
+    console.log('添加障碍物消息发送结果:', result ? '成功' : '失败')
+  } else {
+    console.log('非协作模式，不发送添加障碍物消息')
+  }
 }
 
 // 显示场地尺寸对话框
@@ -857,7 +900,15 @@ const handleKeyDown = (event: KeyboardEvent) => {
   if ((event.key === 'Delete' || event.key === 'Backspace') && selectedObstacles.value.length > 0) {
     // 删除所有的障碍物
     selectedObstacles.value.forEach((obstacle) => {
+      // 先从本地移除障碍物
       courseStore.removeObstacle(obstacle.id)
+      console.log('本地移除障碍物成功:', obstacle.id)
+
+      // 如果在协作模式下，发送移除障碍物消息
+      if (isCollaborating.value) {
+        console.log('发送移除障碍物消息:', obstacle.id)
+        sendRemoveObstacle(obstacle.id)
+      }
     })
     clearSelection()
   } else if (event.ctrlKey || event.metaKey) {
@@ -1096,6 +1147,11 @@ const pasteObstacle = () => {
     }
 
     courseStore.addObstacle(newObstacle)
+
+    // 如果在协作模式下，发送添加障碍物的消息
+    if (isCollaborating.value) {
+      sendAddObstacle(newObstacle)
+    }
   })
 }
 

@@ -190,7 +190,7 @@ const pdfExportOptions = ref({
 })
 
 const handleDragStart = (event: DragEvent, type: ObstacleType) => {
-  event.dataTransfer?.setData('obstacleType', type)
+  event.dataTransfer?.setData('text/plain', type)
 }
 
 const handleSaveDesign = async () => {
