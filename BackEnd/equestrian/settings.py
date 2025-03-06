@@ -130,7 +130,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
 STATIC_URL = 'static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+# STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static'),
 ]
@@ -138,6 +138,10 @@ STATICFILES_DIRS = [
 # Media files
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
+
+# 站点域名配置，用于媒体文件URL生成
+SITE_DOMAIN = os.environ.get('SITE_DOMAIN', '127.0.0.1:8000')
+USE_HTTPS = os.environ.get('USE_HTTPS', 'False').lower() == 'true'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field

@@ -47,9 +47,11 @@
     <div class="main">
       <!-- 只在主页显示这些组件 -->
       <template v-if="$route.path === '/'">
-        <ToolBar class="toolbar" />
+        <ToolBar class="toolbar" :style="{ width: `${leftPanelWidth}px` }" />
+        <ResizableDivider direction="vertical" @resize="handleLeftPanelResize" />
         <CourseCanvas class="canvas" ref="canvasRef" />
-        <PropertiesPanel class="properties-panel" />
+        <ResizableDivider direction="vertical" @resize="handleRightPanelResize" />
+        <PropertiesPanel class="properties-panel" :style="{ width: `${rightPanelWidth}px` }" />
       </template>
 
       <!-- 路由视图，用于显示其他页面 -->
@@ -58,7 +60,7 @@
       <!-- 直接显示登录表单 -->
       <div v-if="showLoginForm && !userStore.currentUser" class="test-login-form">
         <h3>登录</h3>
-        <LoginForm @login-success="handleAuthSuccess" />
+        <LoginForm @switch-mode="switchToRegister" @login-success="handleAuthSuccess" />
       </div>
     </div>
 
@@ -94,6 +96,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useCourseStore } from '@/stores/course'
 import { v4 as uuidv4 } from 'uuid'
 import type { CollaborationSession } from '@/utils/websocket'
+import ResizableDivider from '@/components/ResizableDivider.vue'
 
 const userStore = useUserStore()
 const courseStore = useCourseStore()
@@ -112,6 +115,9 @@ let isTogglingCollaboration = false
 onMounted(() => {
   userStore.initializeAuth()
   console.log('App.vue已挂载，初始化事件监听器')
+
+  // 初始化面板宽度
+  initializePanelWidths()
 
   // 监听 token 过期事件
   const handleTokenExpired = () => {
@@ -567,6 +573,40 @@ const checkCollaborationInvite = () => {
     window.history.replaceState({}, document.title, url.toString())
   }
 }
+
+const rightPanelWidth = ref(300)
+const handleRightPanelResize = (newWidth: number) => {
+  rightPanelWidth.value = newWidth
+  localStorage.setItem('rightPanelWidth', newWidth.toString())
+}
+
+const leftPanelWidth = ref(300)
+const handleLeftPanelResize = (newWidth: number) => {
+  leftPanelWidth.value = newWidth
+  localStorage.setItem('leftPanelWidth', newWidth.toString())
+}
+
+// 初始化面板宽度
+const initializePanelWidths = () => {
+  // 从本地存储中获取保存的宽度
+  const savedLeftWidth = localStorage.getItem('leftPanelWidth')
+  const savedRightWidth = localStorage.getItem('rightPanelWidth')
+
+  // 如果有保存的宽度，则使用保存的宽度
+  if (savedLeftWidth) {
+    const width = parseInt(savedLeftWidth)
+    if (!isNaN(width) && width >= 220 && width <= 500) {
+      leftPanelWidth.value = width
+    }
+  }
+
+  if (savedRightWidth) {
+    const width = parseInt(savedRightWidth)
+    if (!isNaN(width) && width >= 220 && width <= 600) {
+      rightPanelWidth.value = width
+    }
+  }
+}
 </script>
 
 <style>
@@ -714,16 +754,20 @@ body {
 }
 
 .toolbar {
-  width: 300px;
+  width: 400px;
   background-color: white;
   border-right: 1px solid var(--border-color);
   overflow-y: auto;
+  min-width: 220px;
+  max-width: 500px;
+  transition: width 0.1s ease;
 }
 
 .canvas {
   flex: 1;
   background-color: white;
   overflow: hidden;
+  min-width: 300px;
 }
 
 .properties-panel {
@@ -731,6 +775,9 @@ body {
   background-color: white;
   border-left: 1px solid var(--border-color);
   overflow-y: auto;
+  min-width: 220px;
+  max-width: 600px;
+  transition: width 0.1s ease;
 }
 
 :deep(.el-dialog) {

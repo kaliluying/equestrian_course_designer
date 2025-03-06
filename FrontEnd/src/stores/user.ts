@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { User, LoginForm, RegisterForm, AuthResponse } from '@/types/user'
-import { request } from '@/utils/request'
+import type { LoginForm, RegisterForm } from '@/types/user'
 import { login, register } from '@/api/user'
 
 // 定义用户类型
@@ -58,6 +57,12 @@ export const useUserStore = defineStore('user', () => {
       // 获取最新的用户资料，包括会员状态
       updateUserProfile()
 
+      // 在用户登录成功后初始化障碍物存储
+      // 动态导入避免循环依赖
+      const { useObstacleStore } = await import('@/stores/obstacle')
+      const obstacleStore = useObstacleStore()
+      obstacleStore.initObstacles()
+
       return currentUser.value
     } catch (error) {
       console.error('用户状态管理: 登录失败:', error)
@@ -97,6 +102,12 @@ export const useUserStore = defineStore('user', () => {
       isAuthenticated.value = true
       console.log('用户状态管理: 用户状态已更新')
 
+      // 在用户注册成功后初始化障碍物存储
+      // 动态导入避免循环依赖
+      const { useObstacleStore } = await import('@/stores/obstacle')
+      const obstacleStore = useObstacleStore()
+      obstacleStore.initObstacles()
+
       return currentUser.value
     } catch (error) {
       console.error('用户状态管理: 注册失败:', error)
@@ -114,6 +125,13 @@ export const useUserStore = defineStore('user', () => {
 
     currentUser.value = null
     isAuthenticated.value = false
+
+    // 用户登出后清空障碍物存储
+    // 动态导入避免循环依赖
+    import('@/stores/obstacle').then(({ useObstacleStore }) => {
+      const obstacleStore = useObstacleStore()
+      obstacleStore.initObstacles() // 这将清空障碍物存储，因为用户已登出
+    })
   }
 
   // 更新用户资料，包括会员状态
@@ -123,7 +141,11 @@ export const useUserStore = defineStore('user', () => {
     try {
       console.log('正在更新用户资料...')
       const { getUserProfile } = await import('@/api/user')
-      const response = await getUserProfile()
+      interface UserProfileResponse {
+        success: boolean
+        is_premium_active?: boolean
+      }
+      const response = (await getUserProfile()) as UserProfileResponse
 
       if (response && response.success) {
         // 更新用户会员状态

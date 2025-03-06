@@ -212,14 +212,22 @@ export const useCourseStore = defineStore('course', () => {
     // 如果没有障碍物，则不生成路径
     if (obstacles.length === 0) return
 
+    // 过滤出非装饰物类型的障碍物
+    const nonDecorationObstacles = obstacles.filter(
+      (obstacle) => obstacle.type !== ObstacleType.DECORATION,
+    )
+
+    // 如果没有非装饰物类型的障碍物，则不生成路径
+    if (nonDecorationObstacles.length === 0) return
+
     // 获取当前的米到像素的比例
     const scale = meterScale.value
 
     // 只在第一次生成路径时设置起终点位置
     if (!coursePath.value.points.length) {
-      // 获取第一个和最后一个障碍物
-      const firstObstacle = obstacles[0]
-      const lastObstacle = obstacles[obstacles.length - 1]
+      // 获取第一个和最后一个非装饰物障碍物
+      const firstObstacle = nonDecorationObstacles[0]
+      const lastObstacle = nonDecorationObstacles[nonDecorationObstacles.length - 1]
 
       // 计算第一个障碍物的中心点
       const firstCenter = getObstacleCenter(firstObstacle)
@@ -258,8 +266,8 @@ export const useCourseStore = defineStore('course', () => {
       y: startPoint.value.y,
     })
 
-    // 为每个障碍物生成路径点
-    obstacles.forEach((obstacle) => {
+    // 为每个非装饰物障碍物生成路径点
+    nonDecorationObstacles.forEach((obstacle) => {
       const center = getObstacleCenter(obstacle)
       const angle = (obstacle.rotation - 270) * (Math.PI / 180)
       const approachDistance = 3 * scale // 3米的接近距离
@@ -407,14 +415,34 @@ export const useCourseStore = defineStore('course', () => {
     // 障碍物在UI中是以它的左上角为position定位，然后通过transform: rotate进行旋转
     // 旋转中心是障碍物的中心（由transform-origin: center center控制）
 
-    // 获取障碍物宽度（对应于横杆的宽度）
-    const width = obstacle.poles[0]?.width ?? 0
+    let width = 0
+    let height = 0
 
-    // 计算障碍物高度（所有杆子加上间距）
-    const height = obstacle.poles.reduce(
-      (sum, pole) => sum + (pole.height ?? 0) + (pole.spacing ?? 0),
-      0,
-    )
+    // 根据障碍物类型获取相应宽度和高度
+    if (obstacle.type === ObstacleType.WATER && obstacle.waterProperties) {
+      // 水障类型：使用水障的专有属性计算
+      width = obstacle.waterProperties.width
+      height = obstacle.waterProperties.depth
+    } else if (obstacle.type === ObstacleType.LIVERPOOL && obstacle.liverpoolProperties) {
+      // 利物浦类型：使用利物浦的专有属性计算
+      width = obstacle.liverpoolProperties.width || obstacle.poles[0]?.width || 0
+      height =
+        obstacle.liverpoolProperties.waterDepth +
+        (obstacle.liverpoolProperties.hasRail ? obstacle.poles[0]?.height || 0 : 0)
+    } else if (obstacle.type === ObstacleType.WALL && obstacle.wallProperties) {
+      // 砖墙类型：使用砖墙的专有属性计算
+      width = obstacle.wallProperties.width
+      height = obstacle.wallProperties.height
+    } else {
+      // 其他类型：使用横杆计算
+      width = obstacle.poles[0]?.width ?? 0
+
+      // 计算障碍物高度（所有杆子加上间距）
+      height = obstacle.poles.reduce(
+        (sum, pole) => sum + (pole.height ?? 0) + (pole.spacing ?? 0),
+        0,
+      )
+    }
 
     // 考虑到padding: 20px的影响
     const padding = 20
@@ -488,10 +516,16 @@ export const useCourseStore = defineStore('course', () => {
     }
 
     updateCourse()
+
+    // 返回新创建的障碍物对象
+    return newObstacle
   }
 
   // 为新添加的障碍物追加路径点
   function appendObstacleToPath(obstacle: Obstacle) {
+    // 如果是装饰物类型，不添加到路径中
+    if (obstacle.type === ObstacleType.DECORATION) return
+
     // 确保路径点存在
     if (coursePath.value.points.length === 0) {
       generatePath()
@@ -603,9 +637,22 @@ export const useCourseStore = defineStore('course', () => {
   }
 
   function updateObstacle(obstacleId: string, updates: Partial<Obstacle>) {
+    // 找到要更新的障碍物索引
     const index = currentCourse.value.obstacles.findIndex((o) => o.id === obstacleId)
     if (index !== -1) {
       const obstacle = currentCourse.value.obstacles[index]
+
+      // 检查是否从其他类型变为装饰物类型
+      const isChangingToDecoration =
+        updates.type === ObstacleType.DECORATION && obstacle.type !== ObstacleType.DECORATION
+
+      // 检查是否从装饰物类型变为其他类型
+      const isChangingFromDecoration =
+        updates.type !== undefined &&
+        updates.type !== ObstacleType.DECORATION &&
+        obstacle.type === ObstacleType.DECORATION
+
+      // 更新障碍物
       currentCourse.value.obstacles[index] = {
         ...obstacle,
         ...updates,
@@ -615,11 +662,24 @@ export const useCourseStore = defineStore('course', () => {
         selectedObstacle.value = currentCourse.value.obstacles[index]
       }
 
-      // 如果路径可见，则更新受影响的路径点，而不是重新生成整个路径
+      // 更新路径
       if (coursePath.value.visible && coursePath.value.points.length > 0) {
-        // 只有当位置或旋转发生变化时才更新路径
-        if (updates.position || updates.rotation !== undefined) {
-          updatePathForObstacle(index, obstacle)
+        // 如果变更为装饰物类型，需要从路径中移除这个障碍物
+        if (isChangingToDecoration) {
+          // 重新生成整个路径
+          generatePath()
+        }
+        // 如果从装饰物类型变为其他类型，需要将其添加到路径中
+        else if (isChangingFromDecoration) {
+          // 重新生成整个路径
+          generatePath()
+        }
+        // 只有当位置或旋转发生变化且不是装饰物类型时才更新路径
+        else if (
+          (updates.position || updates.rotation !== undefined) &&
+          currentCourse.value.obstacles[index].type !== ObstacleType.DECORATION
+        ) {
+          updatePathForObstacle(index, currentCourse.value.obstacles[index])
         }
       }
 
@@ -629,6 +689,9 @@ export const useCourseStore = defineStore('course', () => {
 
   // 为单个障碍物更新路径点，保留控制点
   function updatePathForObstacle(obstacleIndex: number, obstacle: Obstacle) {
+    // 如果是装饰物类型，不处理
+    if (obstacle.type === ObstacleType.DECORATION) return
+
     // 确保路径点存在
     if (coursePath.value.points.length === 0) {
       generatePath()
@@ -638,8 +701,13 @@ export const useCourseStore = defineStore('course', () => {
     const points = [...coursePath.value.points]
 
     // 计算障碍物在路径点数组中的起始索引
-    // 起点(1) + 障碍物索引 * 每个障碍物的点数(5)
-    const startIndex = 1 + obstacleIndex * 5
+    // 首先要计算这个障碍物前面有多少个非装饰物
+    const nonDecorationObstaclesBefore = currentCourse.value.obstacles
+      .slice(0, obstacleIndex)
+      .filter((o) => o.type !== ObstacleType.DECORATION).length
+
+    // 起点(1) + 非装饰物障碍物数量 * 每个障碍物的点数(5)
+    const startIndex = 1 + nonDecorationObstaclesBefore * 5
 
     // 确保索引有效
     if (startIndex >= points.length - 1) {
@@ -790,11 +858,23 @@ export const useCourseStore = defineStore('course', () => {
       return
     }
 
-    // 如果路径可见，需要更新路径点
-    if (coursePath.value.visible && coursePath.value.points.length > 0) {
+    // 获取被删除的障碍物
+    const obstacle = currentCourse.value.obstacles[obstacleIndex]
+
+    // 如果路径可见，且不是装饰物类型，则需要更新路径点
+    if (
+      coursePath.value.visible &&
+      coursePath.value.points.length > 0 &&
+      obstacle.type !== ObstacleType.DECORATION
+    ) {
       // 计算障碍物在路径点数组中的起始索引
-      // 起点(1) + 障碍物索引 * 每个障碍物的点数(5)
-      const startIndex = 1 + obstacleIndex * 5
+      // 起点(1) + 非装饰物障碍物索引 * 每个障碍物的点数(5)
+      // 首先要计算这个障碍物前面有多少个非装饰物
+      const nonDecorationObstaclesBefore = currentCourse.value.obstacles
+        .slice(0, obstacleIndex)
+        .filter((o) => o.type !== ObstacleType.DECORATION).length
+
+      const startIndex = 1 + nonDecorationObstaclesBefore * 5
 
       // 确保索引有效
       if (startIndex < coursePath.value.points.length - 1) {
@@ -810,13 +890,18 @@ export const useCourseStore = defineStore('course', () => {
     // 从障碍物数组中移除该障碍物
     currentCourse.value.obstacles = currentCourse.value.obstacles.filter((o) => o.id !== obstacleId)
 
-    // 如果路径可见但点数组为空，重新生成路径
+    // 如果路径可见但点数组为空或只有起点和终点，重新生成路径
     if (coursePath.value.visible && coursePath.value.points.length <= 2) {
-      // 如果只剩下起点和终点，或者点数组为空，重新生成路径
-      if (currentCourse.value.obstacles.length > 0) {
+      // 检查是否有非装饰物障碍物
+      const hasNonDecorationObstacles = currentCourse.value.obstacles.some(
+        (o) => o.type !== ObstacleType.DECORATION,
+      )
+
+      if (hasNonDecorationObstacles) {
+        // 如果有非装饰物障碍物，重新生成路径
         generatePath()
       } else {
-        // 如果没有障碍物了，清除路径
+        // 如果只有装饰物或没有障碍物，清除路径
         clearPath()
       }
     }
@@ -966,6 +1051,13 @@ export const useCourseStore = defineStore('course', () => {
           waterColor: 'rgba(0, 100, 255, 0.3)',
           hasRail: true,
           railHeight: 1.3 * meterScale,
+        }
+      } else if (obstacle.type === ObstacleType.WALL) {
+        // 初始化砖墙属性
+        obstacle.wallProperties = {
+          width: 4 * meterScale,
+          height: 3 * meterScale,
+          color: '#8B4513',
         }
       }
 

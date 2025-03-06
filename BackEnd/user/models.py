@@ -277,3 +277,42 @@ class UserProfile(models.Model):
     class Meta:
         verbose_name = '用户资料'
         verbose_name_plural = '用户资料'
+
+
+class CustomObstacle(models.Model):
+    """自定义障碍物模型，存储用户创建的自定义障碍物"""
+    name = models.CharField(
+        max_length=100,
+        verbose_name='障碍物名称'
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='custom_obstacles',
+        verbose_name='用户'
+    )
+    obstacle_data = models.JSONField(
+        verbose_name='障碍物数据'
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='创建时间'
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name='更新时间'
+    )
+    is_shared = models.BooleanField(
+        default=False,
+        verbose_name='是否共享'
+    )
+
+    def __str__(self):
+        return f"{self.user.username}的自定义障碍物 - {self.name}"
+
+    class Meta:
+        verbose_name = '自定义障碍物'
+        verbose_name_plural = '自定义障碍物'
+        ordering = ['-created_at']
+        # 确保同一用户不能创建同名障碍物
+        unique_together = ('user', 'name')

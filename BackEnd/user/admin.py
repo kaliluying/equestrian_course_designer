@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Design, DesignLike, PasswordResetToken, UserProfile, MembershipPlan
+from .models import Design, DesignLike, PasswordResetToken, UserProfile, MembershipPlan, CustomObstacle
 from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin, GroupAdmin
 from django.contrib.auth.models import Group
@@ -14,7 +14,7 @@ admin.site.index_title = '欢迎使用用户中心'
 class CustomUserAdmin(BaseUserAdmin):
     """自定义用户管理页面"""
     list_display = ('username', 'email', 'get_groups', 'is_staff',
-                    'last_login', 'date_joined')
+                    'get_membership_plan')
     list_filter = ('is_staff', 'is_active', 'groups')
     search_fields = ('username', 'email', 'groups__name')
     ordering = ('-date_joined',)
@@ -24,6 +24,11 @@ class CustomUserAdmin(BaseUserAdmin):
         return ", ".join([group.name for group in obj.groups.all()])
     get_groups.short_description = '用户组'
 
+    def get_membership_plan(self, obj):
+        """获取会员计划"""
+        return obj.profile.membership_plan.name if obj.profile and obj.profile.membership_plan else '无'
+    get_membership_plan.short_description = '会员计划'
+
     # 修改分组显示名称
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
@@ -31,7 +36,7 @@ class CustomUserAdmin(BaseUserAdmin):
         ('权限设置', {
             'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions'),
         }),
-        ('重要日期', {'fields': ('last_login', 'date_joined')}),
+        # ('重要日期', {'fields': ('last_login', 'date_joined')}),
     )
     add_fieldsets = (
         (None, {
@@ -270,3 +275,23 @@ class MembershipPlanAdmin(admin.ModelAdmin):
 admin.site.register(DesignLike)
 admin.site.register(PasswordResetToken)
 admin.site.register(UserProfile)
+
+
+@admin.register(CustomObstacle)
+class CustomObstacleAdmin(admin.ModelAdmin):
+    """自定义障碍物管理"""
+    list_display = ('name', 'user', 'created_at', 'updated_at')
+    list_filter = ('user',)
+    search_fields = ('name', 'user__username')
+    readonly_fields = ('created_at', 'updated_at')
+    fieldsets = (
+        ('基本信息', {
+            'fields': ('name', 'user')
+        }),
+        ('障碍物数据', {
+            'fields': ('obstacle_data',)
+        }),
+        ('时间信息', {
+            'fields': ('created_at', 'updated_at')
+        }),
+    )

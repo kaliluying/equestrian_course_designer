@@ -4,6 +4,9 @@ export enum ObstacleType {
   COMBINATION = 'COMBINATION',
   WALL = 'WALL', // 砖墙
   LIVERPOOL = 'LIVERPOOL', // 利物浦
+  WATER = 'WATER', // 水障
+  DECORATION = 'DECORATION', // 装饰物
+  CUSTOM = 'CUSTOM', // 自定义障碍物
 }
 
 export interface Pole {
@@ -34,6 +37,62 @@ export interface LiverpoolProperties {
   railHeight?: number // 横杆高度
 }
 
+export interface WaterProperties {
+  width: number
+  depth: number // 水深
+  color: string // 水的颜色
+  borderColor?: string // 边框颜色
+  borderWidth?: number // 边框宽度
+}
+
+// 装饰物类别
+export enum DecorationCategory {
+  TABLE = 'TABLE', // 裁判桌
+  TREE = 'TREE', // 树
+  ENTRANCE = 'ENTRANCE', // 入口
+  EXIT = 'EXIT', // 出口
+  FLOWER = 'FLOWER', // 花
+  FENCE = 'FENCE', // 围栏
+  CUSTOM = 'CUSTOM', // 自定义装饰
+}
+
+// 装饰物属性
+export interface DecorationProperties {
+  category: DecorationCategory // 装饰物类别
+  width: number // 宽度
+  height: number // 高度
+  color: string // 主色
+  secondaryColor?: string // 次色
+  svgData?: string // 自定义SVG数据
+  imageUrl?: string // 图像URL
+  text?: string // 文本内容
+  textColor?: string // 文本颜色
+  // 特定装饰物属性
+  trunkHeight?: number // 树干高度(树)
+  trunkWidth?: number // 树干宽度(树)
+  foliageRadius?: number // 树冠半径(树)
+  // 其他可能的属性
+  borderColor?: string // 边框颜色
+  borderWidth?: number // 边框宽度
+  rotation?: number // 旋转角度
+  scale?: number // 缩放比例
+}
+
+// 自定义障碍物模板
+export interface CustomObstacleTemplate {
+  id: string
+  name: string
+  baseType: ObstacleType // 基础类型，用于确定渲染方式
+  poles: Pole[]
+  wallProperties?: WallProperties
+  liverpoolProperties?: LiverpoolProperties
+  waterProperties?: WaterProperties
+  decorationProperties?: DecorationProperties // 装饰物属性
+  createdAt: string
+  updatedAt: string
+  isShared?: boolean // 是否共享
+}
+
 export interface Obstacle {
   id: string
   type: ObstacleType
@@ -50,6 +109,9 @@ export interface Obstacle {
   number?: string
   wallProperties?: WallProperties // 砖墙属性
   liverpoolProperties?: LiverpoolProperties // 利物浦属性
+  waterProperties?: WaterProperties // 水障属性
+  decorationProperties?: DecorationProperties // 装饰物属性
+  customId?: string // 如果是自定义障碍物，存储模板ID
 }
 
 export interface CourseDesign {

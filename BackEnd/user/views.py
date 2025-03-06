@@ -9,8 +9,8 @@ from .serializers import UserRegisterSerializer, UserLoginSerializer, ForgotPass
 from rest_framework import serializers
 from rest_framework import viewsets
 from rest_framework.parsers import MultiPartParser, FormParser
-from .models import Design, PasswordResetToken, DesignLike, UserProfile, MembershipPlan
-from .serializers import DesignSerializer, DesignListSerializer
+from .models import Design, PasswordResetToken, DesignLike, UserProfile, MembershipPlan, CustomObstacle
+from .serializers import DesignSerializer, DesignListSerializer, CustomObstacleSerializer
 import uuid
 from django.core.mail import send_mail
 from django.conf import settings
@@ -24,6 +24,8 @@ from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.utils.decorators import method_decorator
 from rest_framework.decorators import action
 from django.db.models import F
+from .utils import get_absolute_media_url  # 导入新的辅助函数
+from rest_framework.exceptions import PermissionDenied
 
 # Create your views here.
 
@@ -414,10 +416,10 @@ class DesignViewSet(viewsets.ModelViewSet):
 
             # 根据文件类型返回不同的下载URL
             if file_type == 'json':
-                download_url = request.build_absolute_uri(design.download.url)
+                download_url = get_absolute_media_url(design.download.url)
                 filename = f"{design.title}.json"
             elif file_type == 'png':
-                download_url = request.build_absolute_uri(design.image.url)
+                download_url = get_absolute_media_url(design.image.url)
                 filename = f"{design.title}.png"
             elif file_type == 'pdf':
                 # 这里需要实现PDF生成逻辑，暂时返回错误
@@ -456,7 +458,7 @@ class DesignViewSet(viewsets.ModelViewSet):
         storage_limit = profile.get_storage_limit()
         if user_designs_count >= storage_limit:
             return Response({
-                'message': f'您已达到存储限制（{storage_limit}个设计）。升级为会员可获得无限存储空间！',
+                'message': f'您已达到存储限制（{storage_limit}个设计）。升级为会员可获得更多存储空间！',
                 'is_limit_reached': True,
                 'current_count': user_designs_count,
                 'limit': storage_limit,
@@ -693,4 +695,98 @@ class UserViewSet(viewsets.ModelViewSet):
             'success': True,
             'message': "邮箱修改成功",
             'email': new_email
+        })
+
+
+class CustomObstacleViewSet(viewsets.ModelViewSet):
+    """
+    自定义障碍物视图集
+    提供自定义障碍物的CRUD操作
+    """
+    serializer_class = CustomObstacleSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """
+        获取当前用户的自定义障碍物
+        """
+        user = self.request.user
+        return CustomObstacle.objects.filter(user=user)
+
+    def perform_create(self, serializer):
+        """
+        创建自定义障碍物时，自动关联当前用户
+        """
+        serializer.save(user=self.request.user)
+
+    def perform_update(self, serializer):
+        """
+        更新自定义障碍物
+        """
+        instance = self.get_object()
+        # 确保用户只能更新自己的障碍物
+        if instance.user != self.request.user:
+            raise PermissionDenied("您无权修改此障碍物")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        """
+        删除自定义障碍物
+        """
+        # 确保用户只能删除自己的障碍物
+        if instance.user != self.request.user:
+            raise PermissionDenied("您无权删除此障碍物")
+        instance.delete()
+
+    @action(detail=False, methods=['get'], url_path='count')
+    def get_obstacle_count(self, request):
+        """
+        获取用户自定义障碍物数量和限制
+        """
+        user = request.user
+        count = CustomObstacle.objects.filter(user=user).count()
+
+        # 获取用户限制
+        max_count = 20  # 默认限制
+        if hasattr(user, 'profile') and user.profile.is_premium_active():
+            max_count = 100  # 会员用户限制
+
+        return Response({
+            'count': count,
+            'max_count': max_count,
+            'is_premium': hasattr(user, 'profile') and user.profile.is_premium_active()
+        })
+
+    @action(detail=False, methods=['get'], url_path='shared')
+    def get_shared_obstacles(self, request):
+        """
+        获取其他用户共享的障碍物
+        """
+        # 获取所有标记为共享的障碍物，但排除当前用户的
+        shared_obstacles = CustomObstacle.objects.filter(
+            is_shared=True
+        ).exclude(user=request.user)
+
+        serializer = self.get_serializer(shared_obstacles, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path='toggle-share')
+    def toggle_share(self, request, pk=None):
+        """
+        切换障碍物的共享状态
+        """
+        obstacle = self.get_object()
+
+        # 确保用户只能操作自己的障碍物
+        if obstacle.user != request.user:
+            raise PermissionDenied("您无权修改此障碍物的共享状态")
+
+        # 切换共享状态
+        obstacle.is_shared = not obstacle.is_shared
+        obstacle.save()
+
+        return Response({
+            'id': obstacle.id,
+            'name': obstacle.name,
+            'is_shared': obstacle.is_shared
         })

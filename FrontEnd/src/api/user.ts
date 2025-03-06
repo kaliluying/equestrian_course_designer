@@ -1,11 +1,12 @@
 import { request } from '@/utils/request'
 import axios from 'axios'
+import apiConfig from '@/config/api'
 
 // 获取CSRF令牌
 export const getCsrfToken = async () => {
   try {
     console.log('正在获取CSRF令牌...')
-    const response = await axios.get('http://127.0.0.1:8000/user/csrf/', {
+    const response = await axios.get(apiConfig.endpoints.user.csrf, {
       withCredentials: true,
       params: { _t: new Date().getTime() },
     })
@@ -32,7 +33,7 @@ export const register = async (data: {
 
     console.log('发送注册请求...')
     // 使用axios直接发送请求，确保包含CSRF令牌
-    const response = await axios.post('http://127.0.0.1:8000/user/register/', data, {
+    const response = await axios.post(apiConfig.endpoints.user.register, data, {
       withCredentials: true,
       headers: {
         'X-CSRFToken': csrfToken || '',
@@ -58,7 +59,7 @@ export const login = async (data: { username: string; password: string }) => {
 
     console.log('发送登录请求...')
     // 使用axios直接发送请求，确保包含CSRF令牌
-    const response = await axios.post('http://127.0.0.1:8000/user/login/', data, {
+    const response = await axios.post(apiConfig.endpoints.user.login, data, {
       withCredentials: true,
       headers: {
         'X-CSRFToken': csrfToken || '',
@@ -76,12 +77,12 @@ export const login = async (data: { username: string; password: string }) => {
 
 // 刷新token
 export const refreshToken = (data: { refresh: string }) => {
-  return request.post('/user/token/refresh/', data)
+  return request.post(apiConfig.endpoints.user.refreshToken, data)
 }
 
 // 忘记密码
 export const forgotPassword = (data: { username: string; email: string }) => {
-  return request.post('/user/forgot-password/', data)
+  return request.post(apiConfig.endpoints.user.forgotPassword, data)
 }
 
 // 重置密码
@@ -90,14 +91,14 @@ export const resetPassword = (data: {
   password: string
   confirmPassword: string
 }) => {
-  return request.post('/user/reset-password/', data)
+  return request.post(apiConfig.endpoints.user.resetPassword, data)
 }
 
 // 获取当前用户资料
 export const getUserProfile = async () => {
   console.log('正在获取用户资料...')
   try {
-    const response = await request.get('/user/users/my_profile/')
+    const response = await request.get(apiConfig.endpoints.user.profile)
     console.log('获取用户资料成功:', response)
     return response
   } catch (error) {
@@ -115,7 +116,7 @@ export const setPremiumStatus = async (
     storage_limit?: number
   },
 ) => {
-  return request.post(`/user/users/${userId}/set_premium/`, data)
+  return request.post(apiConfig.endpoints.user.setPremium(userId), data)
 }
 
 // 修改密码
@@ -126,7 +127,7 @@ export const changePassword = async (data: {
 }) => {
   console.log('正在修改密码...')
   try {
-    const response = await request.post('/user/users/change_password/', data)
+    const response = await request.post(apiConfig.endpoints.user.changePassword, data)
     console.log('修改密码成功:', response)
     return response
   } catch (error) {
@@ -139,7 +140,7 @@ export const changePassword = async (data: {
 export const changeEmail = async (data: { password: string; new_email: string }) => {
   console.log('正在修改邮箱...')
   try {
-    const response = await request.post('/user/users/change_email/', data)
+    const response = await request.post(apiConfig.endpoints.user.changeEmail, data)
     console.log('修改邮箱成功:', response)
     return response
   } catch (error) {

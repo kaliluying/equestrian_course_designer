@@ -2,10 +2,11 @@ import axios from 'axios'
 import type { AxiosRequestConfig, AxiosError } from 'axios'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import apiConfig from '@/config/api'
 
 // 创建 axios 实例
 const axiosInstance = axios.create({
-  baseURL: 'http://127.0.0.1:8000',
+  baseURL: apiConfig.apiBaseUrl,
   timeout: 5000,
   // 添加withCredentials以支持跨域请求时携带cookie
   withCredentials: true,
@@ -16,7 +17,7 @@ const getCsrfToken = async () => {
   try {
     console.log('request.ts: 从服务器获取CSRF令牌')
     // 从Django获取CSRF令牌
-    const response = await axios.get('http://127.0.0.1:8000/user/csrf/', {
+    const response = await axios.get(apiConfig.endpoints.user.csrf, {
       withCredentials: true,
       // 添加时间戳防止缓存
       params: { _t: new Date().getTime() },
@@ -110,7 +111,7 @@ axiosInstance.interceptors.response.use(
       if (refreshToken) {
         try {
           console.log('request.ts: 尝试刷新token...')
-          const response = await axios.post('/user/token/refresh/', {
+          const response = await axios.post(apiConfig.endpoints.user.refreshToken, {
             refresh: refreshToken,
           })
           const { access } = response.data

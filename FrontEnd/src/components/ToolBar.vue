@@ -1,5 +1,6 @@
 <template>
   <div class="toolbar">
+    <!-- 路线名称部分 -->
     <div class="section course-name-section">
       <h2 class="section-title">路线名称</h2>
       <div class="course-name">
@@ -7,102 +8,136 @@
           :prefix-icon="Edit" />
       </div>
     </div>
-    <div class="section obstacle-templates">
-      <h2 class="section-title">障碍物模板</h2>
 
-      <div class="templates-grid">
-        <div v-for="type in obstacleTypes" :key="type" class="obstacle-template" draggable="true"
-          @dragstart="handleDragStart($event, type)">
-          <div class="template-preview">
-            <template v-if="type === 'SINGLE'">
-              <div class="preview-pole"></div>
-            </template>
-            <template v-else-if="type === 'DOUBLE'">
-              <div class="preview-pole"></div>
-              <div class="preview-pole"></div>
-            </template>
-            <template v-else-if="type === 'WALL'">
-              <div class="preview-wall"></div>
-            </template>
-            <template v-else-if="type === 'LIVERPOOL'">
-              <div class="preview-liverpool">
-                <div class="preview-pole"></div>
-                <div class="preview-water"></div>
-              </div>
-            </template>
-            <template v-else>
-              <div class="preview-pole"></div>
-              <div class="preview-pole"></div>
-              <div class="preview-pole"></div>
-            </template>
+    <!-- 可折叠区域导航 -->
+    <div class="section-tabs">
+      <div class="section-tab" :class="{ active: activeSection === 'templates' }" @click="activeSection = 'templates'">
+        障碍物模板
+      </div>
+      <div class="section-tab" :class="{ active: activeSection === 'actions' }" @click="activeSection = 'actions'">
+        操作
+      </div>
+    </div>
+
+    <!-- 障碍物模板部分 - 可滚动区域 -->
+    <div class="scrollable-section" v-show="activeSection === 'templates'">
+      <div class="section obstacle-templates">
+        <!-- 自定义障碍标签导航 -->
+        <div class="obstacle-type-tabs">
+          <div class="obstacle-type-tab" :class="{ active: activeTab === 'basic' }" @click="activeTab = 'basic'">
+            基础障碍物
           </div>
-          <span class="template-name">{{ typeNames[type] }}</span>
+          <div class="obstacle-type-tab" :class="{ active: activeTab === 'custom' }" @click="activeTab = 'custom'">
+            自定义障碍物
+          </div>
+        </div>
+
+        <!-- 基础障碍物内容 -->
+        <div v-show="activeTab === 'basic'" class="obstacle-tab-content">
+          <div class="templates-grid">
+            <div v-for="type in obstacleTypes" :key="type" class="obstacle-template" draggable="true"
+              @dragstart="handleDragStart($event, type)">
+              <div class="template-preview">
+                <template v-if="type === 'SINGLE'">
+                  <div class="preview-pole"></div>
+                </template>
+                <template v-else-if="type === 'DOUBLE'">
+                  <div class="preview-pole"></div>
+                  <div class="preview-pole"></div>
+                </template>
+                <template v-else-if="type === 'WALL'">
+                  <div class="preview-wall"></div>
+                </template>
+                <template v-else-if="type === 'LIVERPOOL'">
+                  <div class="preview-liverpool">
+                    <div class="preview-pole"></div>
+                    <div class="preview-water"></div>
+                  </div>
+                </template>
+                <template v-else-if="type === 'WATER'">
+                  <div class="preview-water-obstacle"></div>
+                </template>
+                <template v-else>
+                  <div class="preview-pole"></div>
+                  <div class="preview-pole"></div>
+                  <div class="preview-pole"></div>
+                </template>
+              </div>
+              <span class="template-name">{{ getTypeName(type) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 自定义障碍物内容 -->
+        <div v-show="activeTab === 'custom'" class="obstacle-tab-content custom-tab">
+          <CustomObstacleManager />
         </div>
       </div>
     </div>
 
-    <div class="section actions">
-      <h2 class="section-title">操作</h2>
-
-      <div class="action-buttons">
-        <el-button @click="handleSaveDesign" type="primary" class="action-button"
-          :title="!userStore.currentUser ? '需要登录才能保存' : '保存设计'">
-          <el-icon>
-            <Download />
-          </el-icon>
-          保存设计
-          <el-icon v-if="!userStore.currentUser" class="lock-icon">
-            <Lock />
-          </el-icon>
-        </el-button>
-
-        <el-dropdown @command="handleExport" trigger="click">
-          <el-button type="primary" class="action-button" :title="!userStore.currentUser ? '需要登录才能导出' : '导出设计'">
+    <!-- 操作部分 -->
+    <div class="scrollable-section" v-show="activeSection === 'actions'">
+      <div class="section actions">
+        <div class="action-buttons">
+          <el-button @click="handleSaveDesign" type="primary" class="action-button"
+            :title="!userStore.currentUser ? '需要登录才能保存' : '保存设计'">
             <el-icon>
-              <Picture />
+              <Download />
             </el-icon>
-            导出设计
-            <el-icon class="el-icon--right">
-              <ArrowDown />
-            </el-icon>
+            保存设计
             <el-icon v-if="!userStore.currentUser" class="lock-icon">
               <Lock />
             </el-icon>
           </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="png">导出为PNG图片</el-dropdown-item>
-              <el-dropdown-item command="pdf">导出为PDF文档</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
 
-        <el-button class="action-button" @click="triggerFileInput"
-          :title="!userStore.currentUser ? '需要登录才能导入' : '导入设计'">
-          <el-icon>
-            <Upload />
-          </el-icon>
-          导入设计
-          <el-icon v-if="!userStore.currentUser" class="lock-icon">
-            <Lock />
-          </el-icon>
-        </el-button>
+          <el-dropdown @command="handleExport" trigger="click" class="export-dropdown">
+            <el-button type="primary" class="action-button" :title="!userStore.currentUser ? '需要登录才能导出' : '导出设计'">
+              <el-icon>
+                <Picture />
+              </el-icon>
+              导出设计
+              <el-icon class="el-icon--right">
+                <ArrowDown />
+              </el-icon>
+              <el-icon v-if="!userStore.currentUser" class="lock-icon">
+                <Lock />
+              </el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="png">导出为PNG图片</el-dropdown-item>
+                <el-dropdown-item command="pdf">导出为PDF文档</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
 
-        <input type="file" ref="fileInput" style="display: none" accept=".json" @change="handleFileChange" />
+          <el-button class="action-button" @click="triggerFileInput"
+            :title="!userStore.currentUser ? '需要登录才能导入' : '导入设计'">
+            <el-icon>
+              <Upload />
+            </el-icon>
+            导入设计
+            <el-icon v-if="!userStore.currentUser" class="lock-icon">
+              <Lock />
+            </el-icon>
+          </el-button>
 
-        <el-button @click="generateCourse" type="success" class="action-button">
-          <el-icon>
-            <Pointer />
-          </el-icon>
-          自动生成路线
-        </el-button>
+          <input type="file" ref="fileInput" style="display: none" accept=".json" @change="handleFileChange" />
 
-        <el-button @click="clearCourse" type="danger" class="action-button">
-          <el-icon>
-            <Delete />
-          </el-icon>
-          清空画布
-        </el-button>
+          <el-button @click="generateCourse" type="success" class="action-button">
+            <el-icon>
+              <Pointer />
+            </el-icon>
+            自动生成路线
+          </el-button>
+
+          <el-button @click="clearCourse" type="danger" class="action-button">
+            <el-icon>
+              <Delete />
+            </el-icon>
+            清空画布
+          </el-button>
+        </div>
       </div>
     </div>
 
@@ -157,6 +192,7 @@ import { saveDesign } from '@/api/design'
 import type { SaveDesignRequest } from '@/types/design'
 import type { CourseDesign } from '@/types/obstacle'
 import { jsPDF } from 'jspdf'
+import CustomObstacleManager from '@/components/CustomObstacleManager.vue'
 
 const courseStore = useCourseStore()
 const userStore = useUserStore()
@@ -168,6 +204,7 @@ const obstacleTypes = [
   ObstacleType.COMBINATION,
   ObstacleType.WALL,
   ObstacleType.LIVERPOOL,
+  ObstacleType.WATER,
 ]
 
 const typeNames = {
@@ -176,6 +213,7 @@ const typeNames = {
   [ObstacleType.COMBINATION]: '组合障碍',
   [ObstacleType.WALL]: '砖墙',
   [ObstacleType.LIVERPOOL]: '利物浦',
+  [ObstacleType.WATER]: '水障',
 }
 
 const courseName = ref(courseStore.currentCourse.name)
@@ -189,8 +227,36 @@ const pdfExportOptions = ref({
   orientation: 'auto'
 })
 
+const activeTab = ref('basic')
+
+const activeSection = ref('templates')
+
 const handleDragStart = (event: DragEvent, type: ObstacleType) => {
   event.dataTransfer?.setData('text/plain', type)
+
+  // 获取拖拽元素
+  const dragElement = event.target as HTMLElement;
+
+  // 创建自定义拖拽图像
+  if (event.dataTransfer) {
+    // 获取预览元素的位置
+    const previewElement = dragElement.querySelector('.template-preview');
+
+    if (previewElement) {
+      // 设置拖拽图像，并调整偏移量以确保鼠标指针位于图像中心
+      const rect = previewElement.getBoundingClientRect();
+      const offsetX = rect.width / 2;
+      const offsetY = rect.height / 2;
+
+      // 设置拖拽图像
+      event.dataTransfer.setDragImage(previewElement, offsetX, offsetY);
+
+      // 设置拖拽效果
+      event.dataTransfer.effectAllowed = 'copy';
+    }
+  }
+
+  console.log('开始拖拽障碍物类型:', type)
 }
 
 const handleSaveDesign = async () => {
@@ -412,7 +478,17 @@ const clearCourse = async () => {
       cancelButtonText: '取消',
       type: 'warning',
     })
-    courseStore.currentCourse.obstacles = []
+    // 使用存储中的resetCourse方法完全重置课程
+    courseStore.resetCourse()
+
+    // 如果在协作模式下，可能需要通知其他用户
+    const canvas = document.querySelector('.course-canvas')
+    if (canvas) {
+      // 触发自定义事件，通知画布组件
+      canvas.dispatchEvent(new CustomEvent('clear-canvas'))
+    }
+
+    ElMessage.success('画布已清空')
   } catch {
     // 用户取消操作
   }
@@ -946,254 +1022,484 @@ const loadDesignData = (designData: Partial<CourseDesign>) => {
 
 // 修改 emit 定义，添加 show-login 事件
 const emit = defineEmits(['show-login'])
+
+// 添加获取类型名称的函数，以确保类型安全
+const getTypeName = (type: string) => {
+  return typeNames[type as keyof typeof typeNames] || type
+}
 </script>
 
-<style scoped lang="scss">
+<style scoped>
 .toolbar {
-  height: 100%;
-  background-color: white;
+  padding: 10px;
   display: flex;
   flex-direction: column;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .section {
-  padding: 20px;
-  border-bottom: 1px solid var(--border-color);
-
-  &.obstacle-templates {
-    flex: 1;
-    overflow-y: auto;
-  }
-
-  &.actions {
-    flex-shrink: 0;
-    background-color: white;
-  }
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 10px;
 }
 
 .section-title {
-  margin: 0 0 16px;
   font-size: 16px;
+  margin: 0;
+  padding: 12px 15px;
+  background-color: var(--bg-color);
+  border-bottom: 1px solid var(--border-color);
   font-weight: 500;
-  color: var(--text-color);
+}
+
+.section-tabs {
+  display: flex;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.1);
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.section-tab {
+  flex: 1;
+  text-align: center;
+  padding: 8px 0;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+  border-bottom: 3px solid transparent;
+  color: var(--el-text-color-secondary);
+}
+
+.section-tab.active {
+  color: var(--el-color-primary);
+  border-bottom-color: var(--el-color-primary);
+  background-color: var(--el-color-primary-light-9);
+}
+
+.scrollable-section {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 10px;
+}
+
+.obstacle-templates {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.obstacle-tabs {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.obstacle-tab-pane {
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .templates-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-  padding-bottom: 16px;
-}
-
-.obstacle-template {
+  grid-template-columns: 1fr;
+  gap: 10px;
   padding: 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  cursor: move;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  transition: all 0.3s ease;
-
-  &:hover {
-    background-color: var(--secondary-color);
-    border-color: var(--primary-color);
-    transform: translateY(-2px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  }
+  overflow-y: auto;
+  flex: 1;
+  max-height: 100%;
+  scrollbar-width: thin;
 }
 
-.template-preview {
-  width: 50px;
-  height: 50px;
-  background-color: white;
-  border-radius: 4px;
+/* 自定义滚动条样式 */
+.templates-grid::-webkit-scrollbar {
+  width: 5px;
+}
+
+.templates-grid::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 5px;
+}
+
+.templates-grid::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 5px;
+}
+
+.templates-grid::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+.actions {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px;
-  border: 1px solid var(--border-color);
-
-  .preview-pole {
-    width: 100%;
-    height: 6px;
-    background: linear-gradient(90deg, #8b4513 0%, #a0522d 100%);
-    border-radius: 2px;
-    box-shadow: 0 1px 2px rgba(139, 69, 19, 0.2);
-  }
-}
-
-.template-name {
-  font-size: 13px;
-  color: var(--text-color);
-  font-weight: 500;
 }
 
 .action-buttons {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-bottom: 20px;
+  gap: 8px;
+  padding: 15px;
+}
+
+/* 小屏幕优化 */
+@media screen and (max-height: 700px) {
+  .action-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    padding: 10px;
+  }
 
   .action-button {
-    width: 100%;
-    justify-content: center;
-    gap: 8px;
-    padding: 12px 20px;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .export-dropdown,
+  .action-button:last-child {
+    grid-column: span 2;
+  }
+
+  .section-title {
+    padding: 8px 12px;
     font-size: 14px;
-    border-radius: 6px;
-    margin-left: 0;
-    position: relative;
+  }
 
-    .lock-icon {
-      position: absolute;
-      right: 12px;
-      font-size: 14px;
-      opacity: 0.7;
-    }
-
-    &:not(.el-button--primary):not(.el-button--danger) {
-      background-color: var(--secondary-color);
-      border-color: var(--border-color);
-      color: var(--text-color);
-
-      &:hover {
-        background-color: #e6f0ff;
-        border-color: var(--primary-color);
-        color: var(--primary-color);
-      }
-    }
+  .section-tab {
+    padding: 8px 0;
+    font-size: 13px;
   }
 }
 
-.preview-wall {
-  width: 100%;
-  height: 24px;
-  background: linear-gradient(90deg, #8b4513 0%, #a0522d 100%);
-  border-radius: 2px;
-  box-shadow: 0 1px 2px rgba(139, 69, 19, 0.2);
-  position: relative;
-
-  &::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-image: repeating-linear-gradient(90deg,
-        rgba(0, 0, 0, 0.1) 0px,
-        rgba(0, 0, 0, 0.1) 3px,
-        transparent 3px,
-        transparent 6px);
-  }
-}
-
-.preview-liverpool {
-  width: 100%;
-  height: 24px;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-
-  .preview-pole {
-    width: 100%;
-    height: 6px;
-    background: linear-gradient(90deg, #8b4513 0%, #a0522d 100%);
-    border-radius: 2px;
-    margin-bottom: 2px;
+/* 超小屏幕优化 */
+@media screen and (max-height: 500px) {
+  .toolbar {
+    padding: 5px;
   }
 
-  .preview-water {
-    width: 100%;
-    height: 12px;
-    background: rgba(0, 100, 255, 0.3);
-    border-radius: 2px;
-  }
-}
-
-.path-template {
-  padding: 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  transition: all 0.3s ease;
-  margin-top: 8px;
-
-  &:hover {
-    background-color: var(--secondary-color);
-    border-color: var(--primary-color);
-    transform: translateY(-2px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  .section {
+    margin-bottom: 5px;
   }
 
-  .template-preview {
-    width: 50px;
-    height: 50px;
-    background-color: white;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--border-color);
+  .section-tabs {
+    margin-bottom: 5px;
+  }
+
+  .action-buttons {
     padding: 8px;
+    gap: 4px;
   }
 
-  .preview-path {
-    width: 100%;
-    height: 100%;
+  .action-button {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .section-tab {
+    padding: 6px 0;
+    font-size: 12px;
   }
 }
 
 .course-name-section {
-  padding: 20px;
-  border-bottom: 1px solid var(--border-color);
-
-  .course-name {
-    display: flex;
-    align-items: center;
-  }
-
-  :deep(.el-input) {
-    .el-input__wrapper {
-      box-shadow: none;
-      background-color: var(--secondary-color);
-      border: 1px solid var(--border-color);
-      transition: all 0.3s ease;
-
-      &:hover {
-        border-color: var(--primary-color);
-      }
-
-      &.is-focus {
-        box-shadow: 0 0 0 1px var(--primary-color);
-        border-color: var(--primary-color);
-      }
-    }
-
-    .el-input__inner {
-      height: 36px;
-      font-size: 14px;
-      color: var(--text-color);
-
-      &::placeholder {
-        color: #909399;
-      }
-    }
-  }
+  flex-shrink: 0;
 }
 
 .course-name {
-  margin: 0;
+  padding: 12px;
 }
 
 .course-name-input {
   width: 100%;
+}
+
+.obstacle-template {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  background-color: white;
+  cursor: grab;
+  transition: all 0.3s ease;
+}
+
+.obstacle-template:hover {
+  background-color: #f0f0f0;
+  border-color: var(--primary-color);
+  transform: translateY(-2px);
+}
+
+.obstacle-template:active {
+  cursor: grabbing;
+  transform: translateY(0);
+  background-color: var(--el-color-primary-light-9);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  transition: all 0.1s;
+}
+
+.action-button {
+  position: relative;
+  border-radius: 6px;
+  padding: 10px 15px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  font-weight: 500;
+  font-size: 14px;
+  text-align: left;
+  height: auto;
+  margin-left: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-button .el-icon {
+  margin-right: 8px;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.action-button.el-button--default {
+  background-color: white;
+  color: var(--el-text-color-primary);
+}
+
+.action-button.el-button--primary {
+  border: none;
+  color: white !important;
+}
+
+.action-button.el-button--success {
+  border: none;
+  color: white !important;
+}
+
+.action-button.el-button--danger {
+  border: none;
+  color: white !important;
+}
+
+.action-button .lock-icon {
+  position: absolute;
+  right: 15px;
+  color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(245, 108, 108, 1);
+  border-radius: 50%;
+  padding: 3px;
+}
+
+.action-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+}
+
+.action-button:active {
+  transform: translateY(0);
+}
+
+.export-dropdown {
+  flex-direction: column;
+}
+
+/* 添加Tab相关样式 */
+:deep(.el-tabs__header) {
+  margin-bottom: 0;
+  padding: 0 10px;
+  flex-shrink: 0;
+}
+
+:deep(.el-tabs__content) {
+  height: auto;
+  overflow: hidden;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+:deep(.el-tab-pane) {
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+:deep(.custom-tab) {
+  padding: 0 !important;
+  height: 100%;
+  overflow: hidden;
+}
+
+:deep(.custom-obstacle-manager) {
+  height: 100%;
+  overflow: hidden;
+}
+
+.template-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+  margin-left: 5px;
+  flex: 1;
+}
+
+.template-preview {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 8px;
+  width: 60px;
+  height: 60px;
+  justify-content: center;
+  background-color: #f9fafc;
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.preview-pole,
+.preview-wall,
+.preview-liverpool,
+.preview-water-obstacle {
+  background-color: var(--obstacle-color);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transform-origin: center;
+  border-radius: 2px;
+  position: relative;
+  pointer-events: none;
+}
+
+.preview-pole {
+  width: 60px;
+  height: 10px;
+  background: linear-gradient(90deg, #8B4513 0%, #A0522D 100%);
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.preview-wall {
+  width: 60px;
+  height: 30px;
+  background-color: #8B4513;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background-image: repeating-linear-gradient(90deg,
+      rgba(0, 0, 0, 0.1) 0px,
+      rgba(0, 0, 0, 0.1) 2px,
+      transparent 2px,
+      transparent 4px),
+    repeating-linear-gradient(0deg,
+      rgba(0, 0, 0, 0.1) 0px,
+      rgba(0, 0, 0, 0.1) 2px,
+      transparent 2px,
+      transparent 4px);
+}
+
+.preview-liverpool {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.preview-water {
+  width: 50px;
+  height: 5px;
+  background-color: rgba(0, 100, 255, 0.3);
+  border-radius: 2px;
+  margin-top: 5px;
+}
+
+.preview-water-obstacle {
+  width: 70px;
+  height: 15px;
+  background-color: rgba(0, 100, 255, 0.4);
+  border: 1px solid rgba(0, 50, 150, 0.5);
+  border-radius: 4px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.obstacle-type-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--el-border-color-light);
+  background-color: #f5f7fa;
+  flex-shrink: 0;
+}
+
+.obstacle-type-tab {
+  padding: 8px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+  color: var(--el-text-color-secondary);
+  position: relative;
+  text-align: center;
+  flex: 1;
+}
+
+.obstacle-type-tab.active {
+  color: var(--el-color-primary);
+  background-color: white;
+}
+
+.obstacle-type-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: var(--el-color-primary);
+}
+
+.obstacle-type-tab:hover {
+  color: var(--el-color-primary);
+}
+
+.obstacle-tab-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.templates-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  padding: 12px;
+  overflow-y: auto;
+  flex: 1;
+  max-height: 100%;
+  scrollbar-width: thin;
+}
+
+.custom-tab {
+  height: 100%;
+  overflow: hidden;
 }
 </style>

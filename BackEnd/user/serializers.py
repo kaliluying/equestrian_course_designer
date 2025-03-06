@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
-from .models import Design, DesignLike, UserProfile, MembershipPlan
+from .models import Design, DesignLike, UserProfile, MembershipPlan, CustomObstacle
+from .utils import get_absolute_media_url
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):
@@ -160,6 +161,8 @@ class DesignSerializer(serializers.ModelSerializer):
     """设计序列化器"""
     author_username = serializers.SerializerMethodField()
     is_liked = serializers.SerializerMethodField()
+    image_url = serializers.SerializerMethodField()
+    download_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Design
@@ -178,15 +181,36 @@ class DesignSerializer(serializers.ModelSerializer):
             return DesignLike.objects.filter(design=obj, user=request.user).exists()
         return False
 
+    def get_image_url(self, obj):
+        """获取正确的图片URL"""
+        if obj.image:
+            return get_absolute_media_url(obj.image.url)
+        return None
+
+    def get_download_url(self, obj):
+        """获取正确的下载URL"""
+        if obj.download:
+            return get_absolute_media_url(obj.download.url)
+        return None
+
+    def to_representation(self, instance):
+        """重写序列化方法，确保使用正确的URL"""
+        ret = super().to_representation(instance)
+        # 确保前端能够正确获取图片和下载地址
+        ret['image'] = self.get_image_url(instance)
+        ret['download'] = self.get_download_url(instance)
+        return ret
+
 
 class DesignListSerializer(serializers.ModelSerializer):
     """设计列表序列化器（用于公开分享列表）"""
     author_username = serializers.SerializerMethodField()
     is_liked = serializers.SerializerMethodField()
+    image_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Design
-        fields = ('id', 'title', 'image', 'create_time', 'update_time',
+        fields = ('id', 'title', 'image', 'image_url', 'create_time', 'update_time',
                   'author', 'author_username', 'likes_count', 'downloads_count',
                   'is_shared', 'description', 'is_liked')
         read_only_fields = fields
@@ -201,6 +225,19 @@ class DesignListSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return DesignLike.objects.filter(design=obj, user=request.user).exists()
         return False
+
+    def get_image_url(self, obj):
+        """获取正确的图片URL"""
+        if obj.image:
+            return get_absolute_media_url(obj.image.url)
+        return None
+
+    def to_representation(self, instance):
+        """重写序列化方法，确保使用正确的URL"""
+        ret = super().to_representation(instance)
+        # 确保前端能够正确获取图片地址
+        ret['image'] = self.get_image_url(instance)
+        return ret
 
 
 class ForgotPasswordSerializer(serializers.Serializer):
@@ -280,3 +317,44 @@ class ResetPasswordSerializer(serializers.Serializer):
             raise serializers.ValidationError({"password": ["密码必须包含字母"]})
 
         return attrs
+
+
+class CustomObstacleSerializer(serializers.ModelSerializer):
+    """自定义障碍物序列化器"""
+    user_username = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CustomObstacle
+        fields = ('id', 'name', 'obstacle_data', 'user',
+                  'user_username', 'created_at', 'updated_at', 'is_shared')
+        read_only_fields = ('user', 'user_username',
+                            'created_at', 'updated_at')
+
+    def get_user_username(self, obj):
+        """获取用户名"""
+        return obj.user.username
+
+    def validate_obstacle_data(self, value):
+        """验证障碍物数据"""
+        # 确保必要的字段存在
+        required_fields = ['type', 'poles', 'width', 'height']
+        for field in required_fields:
+            if field not in value:
+                raise serializers.ValidationError(f"障碍物数据缺少必要字段: {field}")
+        return value
+
+    def create(self, validated_data):
+        """创建自定义障碍物"""
+        user = self.context['request'].user
+        # 检查用户的自定义障碍物数量限制
+        max_obstacles = 20  # 默认限制
+        if hasattr(user, 'profile') and user.profile.is_premium_active():
+            max_obstacles = 100  # 会员用户限制
+
+        current_count = CustomObstacle.objects.filter(user=user).count()
+        if current_count >= max_obstacles:
+            raise serializers.ValidationError(
+                f"您已达到自定义障碍物的最大数量限制: {max_obstacles}")
+
+        validated_data['user'] = user
+        return super().create(validated_data)

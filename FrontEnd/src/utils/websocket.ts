@@ -4,6 +4,8 @@ import { useCourseStore } from '@/stores/course'
 import { ElMessage } from 'element-plus'
 import type { Obstacle, CoursePath } from '@/types/obstacle'
 import { v4 as uuidv4 } from 'uuid'
+// 导入API配置文件
+import apiConfig from '@/config/api'
 
 // WebSocket连接状态
 export enum ConnectionStatus {
@@ -69,6 +71,37 @@ export interface ChatMessage {
 // 定义Path类型
 export type Path = CoursePath
 
+// 创建WebSocket连接
+const createWebSocketConnection = (designId: string): WebSocket | null => {
+  console.log('创建WebSocket连接，设计ID:', designId)
+
+  if (!designId) {
+    console.error('设计ID为空，无法创建WebSocket连接')
+    return null
+  }
+
+  // 确保用户已登录
+  const userStore = useUserStore()
+  if (!userStore.currentUser) {
+    console.error('用户未登录，无法创建WebSocket连接')
+    return null
+  }
+
+  try {
+    // 使用配置文件获取WebSocket URL
+    const wsUrl = apiConfig.websocket.getConnectionUrl(designId)
+    console.log('WebSocket连接URL:', wsUrl)
+
+    // 创建WebSocket实例
+    const ws = new WebSocket(wsUrl)
+    console.log('WebSocket实例已创建，readyState:', ws.readyState)
+    return ws
+  } catch (error) {
+    console.error('创建WebSocket连接失败:', error)
+    return null
+  }
+}
+
 // 创建WebSocket连接并管理状态
 export function useWebSocketConnection(designId: string) {
   const userStore = useUserStore()
@@ -85,10 +118,12 @@ export function useWebSocketConnection(designId: string) {
   const session = ref<CollaborationSession | null>(null)
 
   // 创建消息队列，用于存储WebSocket连接建立前的消息
-  const messageQueue = ref<{
-    type: 'update' | 'add' | 'remove' | 'path';
-    data: Record<string, unknown>;
-  }[]>([])
+  const messageQueue = ref<
+    {
+      type: 'update' | 'add' | 'remove' | 'path'
+      data: Record<string, unknown>
+    }[]
+  >([])
 
   // 处理消息队列
   const processMessageQueue = () => {
@@ -120,7 +155,7 @@ export function useWebSocketConnection(designId: string) {
               sendObstacleUpdate(
                 item.data.obstacleId as string,
                 item.data.updates as Record<string, unknown>,
-                false
+                false,
               )
             } else {
               console.error('队列中的障碍物更新消息格式不正确:', item)
@@ -129,10 +164,7 @@ export function useWebSocketConnection(designId: string) {
           case 'add':
             if (item.data.obstacle) {
               console.log('从队列发送添加障碍物:', item.data.obstacle)
-              sendAddObstacle(
-                item.data.obstacle as Record<string, unknown>,
-                false
-              )
+              sendAddObstacle(item.data.obstacle as Record<string, unknown>, false)
             } else {
               console.error('队列中的添加障碍物消息格式不正确:', item)
             }
@@ -140,10 +172,7 @@ export function useWebSocketConnection(designId: string) {
           case 'remove':
             if (item.data.obstacleId) {
               console.log('从队列发送移除障碍物:', item.data.obstacleId)
-              sendRemoveObstacle(
-                item.data.obstacleId as string,
-                false
-              )
+              sendRemoveObstacle(item.data.obstacleId as string, false)
             } else {
               console.error('队列中的移除障碍物消息格式不正确:', item)
             }
@@ -151,10 +180,7 @@ export function useWebSocketConnection(designId: string) {
           case 'path':
             if (item.data.path) {
               console.log('从队列发送路径更新:', item.data.path)
-              sendPathUpdate(
-                item.data.path as Record<string, unknown>,
-                false
-              )
+              sendPathUpdate(item.data.path as Record<string, unknown>, false)
             } else {
               console.error('队列中的路径更新消息格式不正确:', item)
             }
@@ -189,53 +215,10 @@ export function useWebSocketConnection(designId: string) {
 
   // 连接WebSocket
   const connect = () => {
-    console.log('开始建立WebSocket连接')
-    console.log('当前连接状态:', connectionStatus.value)
-    console.log('当前socket实例:', socket.value ? '存在' : '不存在')
+    console.log('尝试连接WebSocket，设计ID:', designId)
 
-    // 如果已经连接或正在连接，不重复连接
-    if (connectionStatus.value === ConnectionStatus.CONNECTED ||
-        connectionStatus.value === ConnectionStatus.CONNECTING) {
-      console.log('WebSocket已连接或正在连接中，不重复连接')
-
-      // 如果状态是CONNECTED但socket不存在或未打开，修正状态
-      if (connectionStatus.value === ConnectionStatus.CONNECTED &&
-          (!socket.value || socket.value.readyState !== WebSocket.OPEN)) {
-        console.log('连接状态不一致，重置状态并重新连接')
-        connectionStatus.value = ConnectionStatus.DISCONNECTED
-        connectionError.value = '连接状态不一致，已重置'
-      } else {
-        // 如果socket存在且状态是OPEN，确认连接正常
-        if (socket.value && socket.value.readyState === WebSocket.OPEN) {
-          console.log('WebSocket连接正常，无需重新连接')
-
-          // 发送一个ping消息确认连接
-          try {
-            console.log('发送ping消息确认连接')
-            socket.value.send(JSON.stringify({ type: 'ping' }))
-            console.log('ping消息发送成功，连接正常')
-            return
-          } catch (error) {
-            console.error('ping消息发送失败，连接可能已断开:', error)
-            connectionStatus.value = ConnectionStatus.DISCONNECTED
-            connectionError.value = 'ping消息发送失败，连接可能已断开'
-            socket.value = null
-          }
-        } else {
-          return
-        }
-      }
-    }
-
-    // 如果socket实例存在，先关闭
-    if (socket.value) {
-      try {
-        console.log('关闭现有WebSocket连接')
-        socket.value.close()
-      } catch (error) {
-        console.error('关闭现有WebSocket连接失败:', error)
-      }
-    }
+    // 断开现有连接
+    disconnect()
 
     // 更新连接状态
     connectionStatus.value = ConnectionStatus.CONNECTING
@@ -243,14 +226,12 @@ export function useWebSocketConnection(designId: string) {
     console.log('已将连接状态设置为连接中:', connectionStatus.value)
 
     try {
-      // 构建WebSocket URL
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const host = import.meta.env.VITE_API_HOST || '127.0.0.1:8000'
-      const wsUrl = `${protocol}//${host}/ws/collaboration/${designId}/`
-      console.log('WebSocket连接URL:', wsUrl)
+      // 使用createWebSocketConnection创建WebSocket实例
+      const ws = createWebSocketConnection(designId)
+      if (!ws) {
+        throw new Error('创建WebSocket连接失败')
+      }
 
-      // 创建WebSocket实例
-      const ws = new WebSocket(wsUrl)
       socket.value = ws
       console.log('WebSocket实例已创建，readyState:', ws.readyState)
 
@@ -294,7 +275,7 @@ export function useWebSocketConnection(designId: string) {
             }, 1000 * reconnectAttempts.value)
           }
         }
-      }, 10000) // 10秒超时
+      }, apiConfig.websocket.reconnectInterval) // 使用配置文件中的超时设置
 
       // 设置WebSocket事件处理器
       setupWebSocketEvents(ws, connectionTimeout)
@@ -323,7 +304,10 @@ export function useWebSocketConnection(designId: string) {
   }
 
   // 设置WebSocket事件处理器
-  const setupWebSocketEvents = (ws: WebSocket, connectionTimeout?: ReturnType<typeof setTimeout>) => {
+  const setupWebSocketEvents = (
+    ws: WebSocket,
+    connectionTimeout?: ReturnType<typeof setTimeout>,
+  ) => {
     console.log('设置WebSocket事件处理器')
 
     // 连接成功
@@ -405,7 +389,15 @@ export function useWebSocketConnection(designId: string) {
 
         const message = JSON.parse(event.data) as WebSocketMessage
         console.log('解析后的WebSocket消息:', message)
-        console.log('消息类型:', message.type, '发送者:', message.senderName, '(ID:', message.senderId, ')')
+        console.log(
+          '消息类型:',
+          message.type,
+          '发送者:',
+          message.senderName,
+          '(ID:',
+          message.senderId,
+          ')',
+        )
         console.log('消息内容:', message.payload)
 
         // 检查消息格式是否正确
@@ -454,7 +446,7 @@ export function useWebSocketConnection(designId: string) {
 
       // 如果不是主动断开连接，尝试重新连接
       if (
-        connectionStatus.value !== ConnectionStatus.DISCONNECTING &&
+        connectionStatus.value !== 2 && // ConnectionStatus.DISCONNECTING = 2
         reconnectAttempts.value < 5
       ) {
         reconnectAttempts.value++
@@ -503,8 +495,10 @@ export function useWebSocketConnection(designId: string) {
     console.log('当前socket实例:', socket.value ? '存在' : '不存在')
 
     // 如果已经断开连接，不重复操作
-    if (connectionStatus.value === ConnectionStatus.DISCONNECTED ||
-        connectionStatus.value === ConnectionStatus.DISCONNECTING) {
+    if (
+      connectionStatus.value === ConnectionStatus.DISCONNECTED ||
+      connectionStatus.value === ConnectionStatus.DISCONNECTING
+    ) {
       console.log('WebSocket已断开或正在断开连接，不重复操作')
       return
     }
@@ -572,9 +566,11 @@ export function useWebSocketConnection(designId: string) {
 
   // 检查WebSocket连接状态
   const checkConnection = (autoReconnect = true) => {
-    console.log('检查WebSocket连接状态:',
+    console.log(
+      '检查WebSocket连接状态:',
       socket.value ? `实例存在，状态: ${socket.value.readyState}` : '实例不存在',
-      `当前连接状态: ${connectionStatus.value}`)
+      `当前连接状态: ${connectionStatus.value}`,
+    )
 
     // 检查socket实例是否存在
     if (!socket.value) {
@@ -696,8 +692,11 @@ export function useWebSocketConnection(designId: string) {
     console.log('当前socket实例:', socket.value ? '存在' : '不存在')
 
     if (socket.value) {
-      console.log('当前WebSocket readyState:', socket.value.readyState,
-        '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)')
+      console.log(
+        '当前WebSocket readyState:',
+        socket.value.readyState,
+        '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)',
+      )
     }
 
     // 检查socket是否存在
@@ -753,8 +752,10 @@ export function useWebSocketConnection(designId: string) {
               console.error('延迟发送消息失败:', error)
             }
           } else {
-            console.error('延迟发送失败，WebSocket仍未就绪:',
-              socket.value ? socket.value.readyState : '不存在')
+            console.error(
+              '延迟发送失败，WebSocket仍未就绪:',
+              socket.value ? socket.value.readyState : '不存在',
+            )
           }
         }, 500)
 
@@ -762,7 +763,10 @@ export function useWebSocketConnection(designId: string) {
       }
 
       // 如果状态不是CONNECTING，则更新为DISCONNECTED
-      if (socket.value.readyState !== WebSocket.CONNECTING && connectionStatus.value !== ConnectionStatus.DISCONNECTED) {
+      if (
+        socket.value.readyState !== WebSocket.CONNECTING &&
+        connectionStatus.value !== ConnectionStatus.DISCONNECTED
+      ) {
         console.log('状态不一致，更新为DISCONNECTED')
         connectionStatus.value = ConnectionStatus.DISCONNECTED
 
@@ -879,7 +883,7 @@ export function useWebSocketConnection(designId: string) {
     }
 
     // 检查用户是否已在协作者列表中
-    const existingCollaborator = collaborators.value.find(c => c.id === senderId)
+    const existingCollaborator = collaborators.value.find((c) => c.id === senderId)
 
     if (existingCollaborator) {
       // 更新现有协作者的活跃时间
@@ -890,7 +894,7 @@ export function useWebSocketConnection(designId: string) {
       const newCollaborator: CollaboratorInfo = {
         id: senderId,
         username: senderName,
-        color: payload.color as string || generateRandomColor(),
+        color: (payload.color as string) || generateRandomColor(),
         lastActive: new Date(),
       }
 
@@ -915,7 +919,7 @@ export function useWebSocketConnection(designId: string) {
     console.log('收到离开消息:', senderName, senderId)
 
     // 从协作者列表中移除
-    const index = collaborators.value.findIndex(c => c.id === senderId)
+    const index = collaborators.value.findIndex((c) => c.id === senderId)
     if (index !== -1) {
       collaborators.value.splice(index, 1)
       console.log('移除协作者:', senderName, '当前协作者数量:', collaborators.value.length)
@@ -945,7 +949,7 @@ export function useWebSocketConnection(designId: string) {
 
     try {
       // 检查障碍物是否存在
-      const obstacle = courseStore.currentCourse.obstacles.find(o => o.id === payload.obstacleId)
+      const obstacle = courseStore.currentCourse.obstacles.find((o) => o.id === payload.obstacleId)
       if (!obstacle) {
         console.error(`无法更新障碍物，ID不存在: ${payload.obstacleId}`)
         return
@@ -954,9 +958,16 @@ export function useWebSocketConnection(designId: string) {
       console.log('准备更新障碍物:', payload.obstacleId, '更新内容:', payload.updates)
 
       // 更新障碍物
-      courseStore.updateObstacle(payload.obstacleId as string, payload.updates as Record<string, unknown>)
-      console.log('障碍物更新成功:', payload.obstacleId, '更新后状态:',
-        courseStore.currentCourse.obstacles.find(o => o.id === payload.obstacleId))
+      courseStore.updateObstacle(
+        payload.obstacleId as string,
+        payload.updates as Record<string, unknown>,
+      )
+      console.log(
+        '障碍物更新成功:',
+        payload.obstacleId,
+        '更新后状态:',
+        courseStore.currentCourse.obstacles.find((o) => o.id === payload.obstacleId),
+      )
 
       // 添加系统消息通知
       chatMessages.value.push({
@@ -987,7 +998,12 @@ export function useWebSocketConnection(designId: string) {
       if (payload.obstacle && typeof payload.obstacle === 'object') {
         console.log('准备添加障碍物，数据:', payload.obstacle)
         const addedObstacle = courseStore.addObstacle(payload.obstacle as Omit<Obstacle, 'id'>)
-        console.log('障碍物添加成功:', addedObstacle, '当前障碍物列表:', courseStore.currentCourse.obstacles)
+        console.log(
+          '障碍物添加成功:',
+          addedObstacle,
+          '当前障碍物列表:',
+          courseStore.currentCourse.obstacles,
+        )
 
         // 添加系统消息通知
         chatMessages.value.push({
@@ -1019,7 +1035,7 @@ export function useWebSocketConnection(designId: string) {
 
     try {
       // 检查障碍物是否存在
-      const obstacle = courseStore.currentCourse.obstacles.find(o => o.id === payload.obstacleId)
+      const obstacle = courseStore.currentCourse.obstacles.find((o) => o.id === payload.obstacleId)
       if (!obstacle) {
         console.error(`无法移除障碍物，ID不存在: ${payload.obstacleId}`)
         return
@@ -1030,7 +1046,12 @@ export function useWebSocketConnection(designId: string) {
       // 移除障碍物
       if (payload.obstacleId && typeof payload.obstacleId === 'string') {
         courseStore.removeObstacle(payload.obstacleId)
-        console.log('障碍物移除成功:', payload.obstacleId, '当前障碍物列表:', courseStore.currentCourse.obstacles)
+        console.log(
+          '障碍物移除成功:',
+          payload.obstacleId,
+          '当前障碍物列表:',
+          courseStore.currentCourse.obstacles,
+        )
 
         // 添加系统消息通知
         chatMessages.value.push({
@@ -1140,8 +1161,10 @@ export function useWebSocketConnection(designId: string) {
       if (obstacles && Array.isArray(obstacles)) {
         console.log('收到同步障碍物数据:', obstacles.length, '个障碍物')
         // 这里不直接替换，而是合并数据
-        obstacles.forEach(obstacle => {
-          const existingObstacle = courseStore.currentCourse.obstacles.find(o => o.id === obstacle.id)
+        obstacles.forEach((obstacle) => {
+          const existingObstacle = courseStore.currentCourse.obstacles.find(
+            (o) => o.id === obstacle.id,
+          )
           if (!existingObstacle) {
             console.log('添加新同步的障碍物:', obstacle.id)
             courseStore.addObstacle(obstacle)
@@ -1179,7 +1202,7 @@ export function useWebSocketConnection(designId: string) {
     // 检查消息是否已存在（防止重复）
     const messageContent = payload.content as string
     const existingMessage = chatMessages.value.find(
-      (msg) => msg.senderId === senderId && msg.content === messageContent
+      (msg) => msg.senderId === senderId && msg.content === messageContent,
     )
 
     if (existingMessage) {
@@ -1315,7 +1338,11 @@ export function useWebSocketConnection(designId: string) {
   }
 
   // 发送障碍物更新
-  const sendObstacleUpdate = (obstacleId: string, updates: Record<string, unknown>, useQueue = true) => {
+  const sendObstacleUpdate = (
+    obstacleId: string,
+    updates: Record<string, unknown>,
+    useQueue = true,
+  ) => {
     console.log(`准备发送障碍物更新 - ID: ${obstacleId}, 更新内容:`, updates)
 
     // 检查参数有效性
@@ -1338,7 +1365,7 @@ export function useWebSocketConnection(designId: string) {
         console.log('将障碍物更新消息添加到队列:', obstacleId, updates)
         messageQueue.value.push({
           type: 'update',
-          data: { obstacleId, updates }
+          data: { obstacleId, updates },
         })
       }
 
@@ -1355,8 +1382,11 @@ export function useWebSocketConnection(designId: string) {
     console.log('当前socket实例:', socket.value ? '存在' : '不存在')
 
     if (socket.value) {
-      console.log('WebSocket readyState:', socket.value.readyState,
-        '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)')
+      console.log(
+        'WebSocket readyState:',
+        socket.value.readyState,
+        '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)',
+      )
     }
 
     try {
@@ -1370,7 +1400,7 @@ export function useWebSocketConnection(designId: string) {
           obstacleId,
           updates,
         },
-      };
+      }
 
       console.log('构造的障碍物更新消息:', message)
       const result = sendMessage(message)
@@ -1385,7 +1415,7 @@ export function useWebSocketConnection(designId: string) {
           console.log('发送失败，将障碍物更新消息添加到队列:', obstacleId, updates)
           messageQueue.value.push({
             type: 'update',
-            data: { obstacleId, updates }
+            data: { obstacleId, updates },
           })
         }
       }
@@ -1397,7 +1427,7 @@ export function useWebSocketConnection(designId: string) {
         console.log('发送异常，将障碍物更新消息添加到队列:', obstacleId, updates)
         messageQueue.value.push({
           type: 'update',
-          data: { obstacleId, updates }
+          data: { obstacleId, updates },
         })
       }
     }
@@ -1422,7 +1452,7 @@ export function useWebSocketConnection(designId: string) {
         console.log('将添加障碍物消息添加到队列:', obstacle)
         messageQueue.value.push({
           type: 'add',
-          data: { obstacle }
+          data: { obstacle },
         })
       }
 
@@ -1439,21 +1469,26 @@ export function useWebSocketConnection(designId: string) {
     console.log('当前socket实例:', socket.value ? '存在' : '不存在')
 
     if (socket.value) {
-      console.log('WebSocket readyState:', socket.value.readyState,
-        '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)')
+      console.log(
+        'WebSocket readyState:',
+        socket.value.readyState,
+        '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)',
+      )
     }
 
     // 再次检查WebSocket是否已连接
     if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
-      console.error('发送添加障碍物失败: WebSocket未连接或未就绪，当前状态:',
-        socket.value ? socket.value.readyState : '实例不存在')
+      console.error(
+        '发送添加障碍物失败: WebSocket未连接或未就绪，当前状态:',
+        socket.value ? socket.value.readyState : '实例不存在',
+      )
 
       // 如果允许使用队列，将消息添加到队列
       if (useQueue) {
         console.log('将添加障碍物消息添加到队列:', obstacle)
         messageQueue.value.push({
           type: 'add',
-          data: { obstacle }
+          data: { obstacle },
         })
       }
 
@@ -1470,7 +1505,7 @@ export function useWebSocketConnection(designId: string) {
         payload: {
           obstacle,
         },
-      };
+      }
 
       console.log('构造的添加障碍物消息:', message)
       const result = sendMessage(message)
@@ -1485,7 +1520,7 @@ export function useWebSocketConnection(designId: string) {
           console.log('发送失败，将添加障碍物消息添加到队列:', obstacle)
           messageQueue.value.push({
             type: 'add',
-            data: { obstacle }
+            data: { obstacle },
           })
         }
       }
@@ -1497,7 +1532,7 @@ export function useWebSocketConnection(designId: string) {
         console.log('发送异常，将添加障碍物消息添加到队列:', obstacle)
         messageQueue.value.push({
           type: 'add',
-          data: { obstacle }
+          data: { obstacle },
         })
       }
     }
@@ -1522,7 +1557,7 @@ export function useWebSocketConnection(designId: string) {
         console.log('将移除障碍物消息添加到队列:', obstacleId)
         messageQueue.value.push({
           type: 'remove',
-          data: { obstacleId }
+          data: { obstacleId },
         })
       }
 
@@ -1539,21 +1574,26 @@ export function useWebSocketConnection(designId: string) {
     console.log('当前socket实例:', socket.value ? '存在' : '不存在')
 
     if (socket.value) {
-      console.log('WebSocket readyState:', socket.value.readyState,
-        '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)')
+      console.log(
+        'WebSocket readyState:',
+        socket.value.readyState,
+        '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)',
+      )
     }
 
     // 再次检查WebSocket是否已连接
     if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
-      console.error('发送移除障碍物失败: WebSocket未连接或未就绪，当前状态:',
-        socket.value ? socket.value.readyState : '实例不存在')
+      console.error(
+        '发送移除障碍物失败: WebSocket未连接或未就绪，当前状态:',
+        socket.value ? socket.value.readyState : '实例不存在',
+      )
 
       // 如果允许使用队列，将消息添加到队列
       if (useQueue) {
         console.log('将移除障碍物消息添加到队列:', obstacleId)
         messageQueue.value.push({
           type: 'remove',
-          data: { obstacleId }
+          data: { obstacleId },
         })
       }
 
@@ -1570,7 +1610,7 @@ export function useWebSocketConnection(designId: string) {
         payload: {
           obstacleId,
         },
-      };
+      }
 
       console.log('构造的移除障碍物消息:', message)
       const result = sendMessage(message)
@@ -1585,7 +1625,7 @@ export function useWebSocketConnection(designId: string) {
           console.log('发送失败，将移除障碍物消息添加到队列:', obstacleId)
           messageQueue.value.push({
             type: 'remove',
-            data: { obstacleId }
+            data: { obstacleId },
           })
         }
       }
@@ -1597,7 +1637,7 @@ export function useWebSocketConnection(designId: string) {
         console.log('发送异常，将移除障碍物消息添加到队列:', obstacleId)
         messageQueue.value.push({
           type: 'remove',
-          data: { obstacleId }
+          data: { obstacleId },
         })
       }
     }
@@ -1614,7 +1654,7 @@ export function useWebSocketConnection(designId: string) {
         console.log('将路径更新消息添加到队列:', path)
         messageQueue.value.push({
           type: 'path',
-          data: { path }
+          data: { path },
         })
       }
 

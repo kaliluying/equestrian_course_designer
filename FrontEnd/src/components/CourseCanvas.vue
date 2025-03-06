@@ -30,7 +30,8 @@
       }" @click="selectObstacle(obstacle, $event.ctrlKey || $event.metaKey)"
       @mousedown="startDragging($event, obstacle)">
       <div class="obstacle-content">
-        <div class="direction-arrow">
+        <!-- 仅对非装饰物类型显示方向箭头 -->
+        <div v-if="obstacle.type !== ObstacleType.DECORATION" class="direction-arrow">
           <div class="arrow-line"></div>
           <div class="arrow-head"></div>
         </div>
@@ -64,7 +65,230 @@
             }"></div>
           </div>
         </template>
+        <template v-else-if="obstacle.type === ObstacleType.CUSTOM">
+          <!-- 自定义障碍物渲染 -->
+          <template v-if="getCustomTemplate(obstacle) && getCustomTemplate(obstacle).baseType === ObstacleType.WALL">
+            <div class="wall" :style="{
+              width: `${obstacle.wallProperties?.width}px`,
+              height: `${obstacle.wallProperties?.height}px`,
+              background: obstacle.wallProperties?.color,
+            }">
+              <div class="wall-texture"></div>
+            </div>
+          </template>
+          <template
+            v-else-if="getCustomTemplate(obstacle) && getCustomTemplate(obstacle).baseType === ObstacleType.LIVERPOOL">
+            <div class="liverpool" :style="{
+              width: `${obstacle.poles[0]?.width}px`,
+            }">
+              <template v-if="obstacle.liverpoolProperties?.hasRail">
+                <div v-for="(pole, index) in obstacle.poles" :key="index" class="pole" :style="{
+                  width: '100%',
+                  height: `${pole.height}px`,
+                  background: `linear-gradient(90deg, ${pole.color} 0%, ${adjustColor(pole.color, 20)} 100%)`,
+                }">
+                  <div class="pole-shadow"></div>
+                </div>
+              </template>
+              <div class="water" :style="{
+                width: `${obstacle.liverpoolProperties?.width}px`,
+                height: `${obstacle.liverpoolProperties?.waterDepth}px`,
+                background: obstacle.liverpoolProperties?.waterColor,
+                marginLeft: `${(obstacle.poles[0]?.width - (obstacle.liverpoolProperties?.width || 0)) / 2}px`,
+              }"></div>
+            </div>
+          </template>
+          <template v-else>
+            <!-- 默认使用横杆渲染 -->
+            <div v-for="(pole, index) in obstacle.poles" :key="index" class="pole" :style="{
+              width: `${pole.width}px`,
+              height: `${pole.height}px`,
+              background: `linear-gradient(90deg, ${pole.color} 0%, ${adjustColor(pole.color, 20)} 100%)`,
+              marginBottom: pole.spacing ? `${pole.spacing}px` : '0',
+            }">
+              <div class="pole-shadow"></div>
+            </div>
+          </template>
+        </template>
+        <template v-else-if="obstacle.type === ObstacleType.WATER">
+          <div class="water-obstacle" :style="{
+            width: `${obstacle.waterProperties?.width}px`,
+            height: `${obstacle.waterProperties?.depth}px`,
+            background: obstacle.waterProperties?.color,
+            borderColor: obstacle.waterProperties?.borderColor,
+            borderWidth: `${obstacle.waterProperties?.borderWidth}px`,
+            borderStyle: 'solid'
+          }"></div>
+        </template>
+        <template v-else-if="obstacle.type === ObstacleType.DECORATION">
+          <!-- 裁判桌 -->
+          <template v-if="obstacle.decorationProperties?.category === DecorationCategory.TABLE">
+            <div class="decoration-table" :style="{
+              width: `${obstacle.decorationProperties?.width}px`,
+              height: `${obstacle.decorationProperties?.height}px`,
+              backgroundColor: obstacle.decorationProperties?.color,
+              border: obstacle.decorationProperties?.borderWidth
+                ? `${obstacle.decorationProperties.borderWidth}px solid ${obstacle.decorationProperties.borderColor}`
+                : 'none',
+              borderRadius: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+            }">
+              <div v-if="obstacle.decorationProperties?.text" :style="{
+                color: obstacle.decorationProperties?.textColor,
+                fontSize: '14px',
+                fontWeight: 'bold',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '90%',
+                textAlign: 'center'
+              }">
+                {{ obstacle.decorationProperties.text }}
+              </div>
+            </div>
+          </template>
+
+          <!-- 树 -->
+          <template v-else-if="obstacle.decorationProperties?.category === DecorationCategory.TREE">
+            <div class="decoration-tree"
+              style="position: relative; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;">
+              <!-- 树冠 -->
+              <div :style="{
+                width: `${obstacle.decorationProperties?.foliageRadius * 2}px`,
+                height: `${obstacle.decorationProperties?.foliageRadius * 2}px`,
+                borderRadius: '50%',
+                backgroundColor: obstacle.decorationProperties?.secondaryColor,
+                position: 'absolute',
+                top: '0',
+                zIndex: '1'
+              }"></div>
+              <!-- 树干 -->
+              <div :style="{
+                width: `${obstacle.decorationProperties?.trunkWidth}px`,
+                height: `${obstacle.decorationProperties?.trunkHeight}px`,
+                backgroundColor: obstacle.decorationProperties?.color,
+                position: 'absolute',
+                bottom: '0',
+                zIndex: '0'
+              }"></div>
+            </div>
+          </template>
+
+          <!-- 入口/出口 -->
+          <template v-else-if="obstacle.decorationProperties?.category === DecorationCategory.ENTRANCE ||
+            obstacle.decorationProperties?.category === DecorationCategory.EXIT">
+            <div class="decoration-gate" :style="{
+              width: `${obstacle.decorationProperties?.width}px`,
+              height: `${obstacle.decorationProperties?.height}px`,
+              backgroundColor: obstacle.decorationProperties?.color,
+              border: obstacle.decorationProperties?.borderWidth
+                ? `${obstacle.decorationProperties.borderWidth}px solid ${obstacle.decorationProperties.borderColor}`
+                : 'none',
+              borderRadius: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }">
+              <div :style="{
+                color: obstacle.decorationProperties?.textColor,
+                fontSize: '16px',
+                fontWeight: 'bold',
+              }">
+                {{ obstacle.decorationProperties?.text ||
+                  (obstacle.decorationProperties?.category === DecorationCategory.ENTRANCE ? '入口' : '出口') }}
+              </div>
+            </div>
+          </template>
+
+          <!-- 花 -->
+          <template v-else-if="obstacle.decorationProperties?.category === DecorationCategory.FLOWER">
+            <div class="decoration-flower"
+              style="position: relative; height: 100%; display: flex; flex-direction: column; align-items: center;">
+              <!-- 花朵 -->
+              <div :style="{
+                width: `${obstacle.decorationProperties?.width}px`,
+                height: `${obstacle.decorationProperties?.width}px`,
+                borderRadius: '50%',
+                backgroundColor: obstacle.decorationProperties?.color,
+                marginBottom: '-10px'
+              }"></div>
+              <!-- 叶子容器 -->
+              <div style="position: relative; width: 40px; height: 30px;">
+                <!-- 左叶子 -->
+                <div :style="{
+                  width: '20px',
+                  height: '30px',
+                  backgroundColor: obstacle.decorationProperties?.secondaryColor,
+                  borderRadius: '50% 0 50% 50%',
+                  transform: 'rotate(45deg)',
+                  position: 'absolute',
+                  left: '-10px'
+                }"></div>
+                <!-- 右叶子 -->
+                <div :style="{
+                  width: '20px',
+                  height: '30px',
+                  backgroundColor: obstacle.decorationProperties?.secondaryColor,
+                  borderRadius: '0 50% 50% 50%',
+                  transform: 'rotate(-45deg)',
+                  position: 'absolute',
+                  right: '-10px'
+                }"></div>
+              </div>
+            </div>
+          </template>
+
+          <!-- 围栏 -->
+          <template v-else-if="obstacle.decorationProperties?.category === DecorationCategory.FENCE">
+            <div class="decoration-fence" :style="{
+              width: `${obstacle.decorationProperties?.width}px`,
+              height: `${obstacle.decorationProperties?.height}px`,
+              backgroundColor: obstacle.decorationProperties?.color,
+              display: 'flex',
+              justifyContent: 'space-between',
+            }">
+              <!-- 栅栏柱子 -->
+              <template v-for="n in 5" :key="n">
+                <div :style="{
+                  width: '4px',
+                  height: '100%',
+                  backgroundColor: obstacle.decorationProperties?.borderColor
+                }"></div>
+              </template>
+            </div>
+          </template>
+
+          <!-- 自定义 -->
+          <template v-else-if="obstacle.decorationProperties?.category === DecorationCategory.CUSTOM">
+            <div v-if="obstacle.decorationProperties?.imageUrl" class="decoration-custom-image" :style="{
+              width: `${obstacle.decorationProperties?.width}px`,
+              height: `${obstacle.decorationProperties?.height}px`,
+              backgroundImage: `url(${obstacle.decorationProperties.imageUrl})`,
+              backgroundSize: 'contain',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat'
+            }"></div>
+            <div v-else class="decoration-custom-placeholder" :style="{
+              width: `${obstacle.decorationProperties?.width}px`,
+              height: `${obstacle.decorationProperties?.height}px`,
+              backgroundColor: '#f0f0f0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '1px dashed #ccc',
+              fontSize: '12px',
+              color: '#999'
+            }">
+              自定义
+            </div>
+          </template>
+        </template>
+        <!-- 添加对基础横杆障碍物类型(SINGLE、DOUBLE、COMBINATION)的渲染条件 -->
         <template v-else>
+          <!-- 默认使用横杆渲染 -->
           <div v-for="(pole, index) in obstacle.poles" :key="index" class="pole" :style="{
             width: `${pole.width}px`,
             height: `${pole.height}px`,
@@ -216,8 +440,11 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { Plus, Edit, Hide, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useCourseStore } from '@/stores/course'
-import type { Obstacle } from '@/types/obstacle'
-import { ObstacleType, type PathPoint } from '@/types/obstacle'
+import { useObstacleStore } from '@/stores/obstacle'
+import { useUserStore } from '@/stores/user'
+import { useCollaborationStore } from '@/stores/collaboration'
+import { ObstacleType, DecorationCategory } from '@/types/obstacle'
+import type { Obstacle, PathPoint, CoursePathData, CustomObstacleTemplate } from '@/types/obstacle'
 import CollaboratorCursors from './CollaboratorCursors.vue'
 import { useWebSocketConnection, ConnectionStatus } from '@/utils/websocket'
 import { throttle } from 'lodash-es'
@@ -269,6 +496,38 @@ const {
   sendObstacleUpdate, // 添加sendObstacleUpdate方法
   sendRemoveObstacle, // 添加sendRemoveObstacle方法
 } = useWebSocketConnection(courseStore.currentCourse.id)
+
+// 自定义障碍物模板缓存
+const customTemplateCache = ref<Map<string, CustomObstacleTemplate>>(new Map())
+// 获取自定义障碍物模板
+const getCustomTemplate = (obstacle: Obstacle): CustomObstacleTemplate | null => {
+  if (obstacle.type !== ObstacleType.CUSTOM || !obstacle.customId) {
+    return null
+  }
+
+  // 如果缓存中有，直接返回
+  if (customTemplateCache.value.has(obstacle.customId)) {
+    return customTemplateCache.value.get(obstacle.customId)!
+  }
+
+  // 否则从store中获取并缓存
+  try {
+    // 动态导入障碍物store
+    import('@/stores/obstacle').then(({ useObstacleStore }) => {
+      const obstacleStore = useObstacleStore()
+      const template = obstacleStore.getObstacleById(obstacle.customId!)
+
+      if (template) {
+        customTemplateCache.value.set(obstacle.customId!, template)
+      }
+    })
+
+    return null // 第一次调用时可能还没加载完，返回null
+  } catch (error) {
+    console.error('获取自定义障碍物模板失败:', error)
+    return null
+  }
+}
 
 // 处理鼠标移动，同步光标位置
 const handleCollaborationMouseMove = throttle((event: MouseEvent) => {
@@ -735,11 +994,11 @@ const handleDrop = (event: DragEvent) => {
   event.preventDefault()
 
   // 获取拖放的数据
-  const obstacleType = event.dataTransfer?.getData('text/plain')
-  console.log('拖放事件，障碍物类型:', obstacleType)
+  const obstacleData = event.dataTransfer?.getData('text/plain')
+  console.log('拖放事件，障碍物数据:', obstacleData)
 
-  if (!obstacleType) {
-    console.error('拖放事件中没有障碍物类型数据')
+  if (!obstacleData) {
+    console.error('拖放事件中没有障碍物数据')
     return
   }
 
@@ -755,9 +1014,153 @@ const handleDrop = (event: DragEvent) => {
   const y = event.clientY - canvasRect.top
   console.log('拖放位置:', x, y)
 
+  // 检查是否是自定义障碍物
+  if (obstacleData.startsWith('CUSTOM:')) {
+    // 处理自定义障碍物
+    const customId = obstacleData.substring(7) // 移除前缀 "CUSTOM:"
+    console.log('正在添加自定义障碍物:', customId)
+
+    try {
+      // 动态导入障碍物存储
+      import('@/stores/obstacle').then(({ useObstacleStore }) => {
+        const obstacleStore = useObstacleStore()
+        const template = obstacleStore.getObstacleById(customId)
+
+        if (!template) {
+          console.error('未找到自定义障碍物模板:', customId)
+          return
+        }
+
+        // 从模板创建新障碍物
+        const newObstacle: Omit<Obstacle, 'id'> = {
+          type: ObstacleType.CUSTOM,
+          position: { x, y },
+          rotation: 0,
+          poles: JSON.parse(JSON.stringify(template.poles)),
+          customId: template.id,
+        }
+
+        // 根据基础类型添加相应属性
+        if (template.baseType === ObstacleType.WALL && template.wallProperties) {
+          newObstacle.wallProperties = JSON.parse(JSON.stringify(template.wallProperties))
+        } else if (template.baseType === ObstacleType.LIVERPOOL && template.liverpoolProperties) {
+          newObstacle.liverpoolProperties = JSON.parse(JSON.stringify(template.liverpoolProperties))
+        } else if (template.baseType === ObstacleType.DECORATION && template.decorationProperties) {
+          // 添加装饰物属性
+          newObstacle.decorationProperties = JSON.parse(JSON.stringify(template.decorationProperties))
+          // 确保类型正确设置为DECORATION
+          newObstacle.type = ObstacleType.DECORATION
+          console.log('添加装饰物类型的自定义障碍物:', newObstacle)
+        } else if (template.baseType === ObstacleType.WATER && template.waterProperties) {
+          // 添加水障属性
+          newObstacle.waterProperties = JSON.parse(JSON.stringify(template.waterProperties))
+          // 确保类型正确设置
+          newObstacle.type = ObstacleType.WATER
+        }
+
+        // 添加障碍物到本地
+        const addedObstacle = courseStore.addObstacle(newObstacle)
+        console.log('本地添加自定义障碍物成功:', addedObstacle)
+
+        // 立即选中新添加的障碍物
+        if (addedObstacle) {
+          selectObstacle(addedObstacle, false)
+          console.log('已选中新添加的障碍物:', addedObstacle.id)
+        }
+
+        // 如果在协作模式下，发送添加障碍物的消息
+        if (isCollaborating.value) {
+          if (!addedObstacle) {
+            console.error('添加障碍物失败，无法发送消息')
+            return
+          }
+
+          console.log('发送添加障碍物消息，障碍物数据:', addedObstacle)
+          sendAddObstacle(addedObstacle)
+        }
+      })
+    } catch (error) {
+      console.error('处理自定义障碍物时出错:', error)
+    }
+
+    return
+  }
+
+  // 检查是否是共享障碍物
+  if (obstacleData.startsWith('SHARED:')) {
+    // 处理共享障碍物
+    const sharedId = obstacleData.substring(7) // 移除前缀 "SHARED:"
+    console.log('正在添加共享障碍物:', sharedId)
+
+    try {
+      // 动态导入障碍物存储
+      import('@/stores/obstacle').then(({ useObstacleStore }) => {
+        const obstacleStore = useObstacleStore()
+        // 从共享障碍物列表中获取模板
+        const template = obstacleStore.sharedObstacles.find(o => o.id === sharedId)
+
+        if (!template) {
+          console.error('未找到共享障碍物模板:', sharedId)
+          return
+        }
+
+        // 从模板创建新障碍物
+        const newObstacle: Omit<Obstacle, 'id'> = {
+          type: ObstacleType.CUSTOM, // 初始设置为CUSTOM
+          position: { x, y },
+          rotation: 0,
+          poles: JSON.parse(JSON.stringify(template.poles)),
+          // 因为共享障碍物直接使用而不是引用，所以不设置customId
+        }
+
+        // 根据基础类型添加相应属性
+        if (template.baseType === ObstacleType.WALL && template.wallProperties) {
+          newObstacle.wallProperties = JSON.parse(JSON.stringify(template.wallProperties))
+          newObstacle.type = ObstacleType.WALL
+        } else if (template.baseType === ObstacleType.LIVERPOOL && template.liverpoolProperties) {
+          newObstacle.liverpoolProperties = JSON.parse(JSON.stringify(template.liverpoolProperties))
+          newObstacle.type = ObstacleType.LIVERPOOL
+        } else if (template.baseType === ObstacleType.DECORATION && template.decorationProperties) {
+          newObstacle.decorationProperties = JSON.parse(JSON.stringify(template.decorationProperties))
+          newObstacle.type = ObstacleType.DECORATION
+        } else if (template.baseType === ObstacleType.WATER && template.waterProperties) {
+          newObstacle.waterProperties = JSON.parse(JSON.stringify(template.waterProperties))
+          newObstacle.type = ObstacleType.WATER
+        } else {
+          // 对于基础类型，直接使用该类型
+          newObstacle.type = template.baseType
+        }
+
+        // 添加障碍物到本地
+        const addedObstacle = courseStore.addObstacle(newObstacle)
+        console.log('本地添加共享障碍物成功:', addedObstacle)
+
+        // 立即选中新添加的障碍物
+        if (addedObstacle) {
+          selectObstacle(addedObstacle, false)
+          ElMessage.success('已添加共享障碍物到设计中')
+        }
+
+        // 如果在协作模式下，发送添加障碍物的消息
+        if (isCollaborating.value) {
+          if (!addedObstacle) {
+            console.error('添加障碍物失败，无法发送消息')
+            return
+          }
+          sendAddObstacle(addedObstacle)
+        }
+      })
+    } catch (error) {
+      console.error('处理共享障碍物时出错:', error)
+    }
+
+    return
+  }
+
+  // 以下是处理内置障碍物类型
   // 创建新障碍物
   let newObstacle: Omit<Obstacle, 'id'> = {
-    type: obstacleType as ObstacleType,
+    type: obstacleData as ObstacleType,
     position: {
       x: x,
       y: y
@@ -766,9 +1169,12 @@ const handleDrop = (event: DragEvent) => {
     poles: []
   }
 
+  console.log('障碍物类型:', obstacleData, '枚举值:', ObstacleType.DECORATION, '设置的类型:', newObstacle.type)
+
   // 根据障碍物类型设置属性
-  switch (obstacleType) {
+  switch (obstacleData) {
     case ObstacleType.SINGLE:
+    case 'SINGLE':
       newObstacle.poles = [{
         height: 20,
         width: 100,
@@ -776,28 +1182,30 @@ const handleDrop = (event: DragEvent) => {
       }]
       break
     case ObstacleType.DOUBLE:
+    case 'DOUBLE':
       newObstacle.poles = [
-        {
-          height: 20,
-          width: 100,
-          color: '#8B4513',
-          spacing: 0
-        },
         {
           height: 20,
           width: 100,
           color: '#8B4513',
           spacing: 40
-        }
-      ]
-      break
-    case ObstacleType.COMBINATION:
-      newObstacle.poles = [
+        },
         {
           height: 20,
           width: 100,
           color: '#8B4513',
           spacing: 0
+        }
+      ]
+      break
+    case ObstacleType.COMBINATION:
+    case 'COMBINATION':
+      newObstacle.poles = [
+        {
+          height: 20,
+          width: 100,
+          color: '#8B4513',
+          spacing: 20
         },
         {
           height: 20,
@@ -809,11 +1217,12 @@ const handleDrop = (event: DragEvent) => {
           height: 20,
           width: 100,
           color: '#8B4513',
-          spacing: 40
+          spacing: 0
         }
       ]
       break
     case ObstacleType.WALL:
+    case 'WALL':
       newObstacle.wallProperties = {
         height: 60,
         width: 100,
@@ -821,6 +1230,7 @@ const handleDrop = (event: DragEvent) => {
       }
       break
     case ObstacleType.LIVERPOOL:
+    case 'LIVERPOOL':
       newObstacle.liverpoolProperties = {
         height: 20,
         width: 100,
@@ -829,13 +1239,69 @@ const handleDrop = (event: DragEvent) => {
         hasRail: true,
         railHeight: 20
       }
+      // 为利物浦类型添加横杆
+      newObstacle.poles = [{
+        height: 20,
+        width: 100,
+        color: '#8B4513'
+      }]
+      break
+    case ObstacleType.WATER:
+    case 'WATER':
+      newObstacle.waterProperties = {
+        width: 100,
+        depth: 15,
+        color: 'rgba(0, 100, 255, 0.4)',
+        borderColor: 'rgba(0, 50, 150, 0.5)',
+        borderWidth: 1
+      }
+      // 水障不需要横杆
+      newObstacle.poles = []
+      break
+    case ObstacleType.DECORATION:
+    case 'DECORATION':
+      console.log('处理装饰物类型:', obstacleData)
+      // 默认使用裁判桌作为装饰物
+      newObstacle.decorationProperties = {
+        category: DecorationCategory.TABLE,
+        width: 120,
+        height: 80,
+        color: '#8B4513',
+        borderColor: '#593b22',
+        borderWidth: 2,
+        text: '裁判桌',
+        textColor: '#ffffff'
+      }
+      // 装饰物不需要横杆
+      newObstacle.poles = []
+
+      // 确保类型正确设置为DECORATION
+      newObstacle.type = ObstacleType.DECORATION
+      console.log('创建装饰物完成，类型:', newObstacle.type, '属性:', newObstacle.decorationProperties)
+      break
+    default:
+      console.warn('未知的障碍物类型:', obstacleData)
+      // 默认使用单横木
+      newObstacle.poles = [{
+        height: 20,
+        width: 100,
+        color: '#8B4513'
+      }]
       break
   }
 
-  console.log('准备添加新障碍物:', newObstacle)
+  // 添加详细的调试日志
+  console.log('准备添加新障碍物，详细属性:', JSON.stringify(newObstacle, null, 2))
 
   // 添加障碍物到本地
   const addedObstacle = courseStore.addObstacle(newObstacle)
+
+  // 立即选中新添加的障碍物，确保用户可以看到它的选中状态
+  if (addedObstacle) {
+    selectObstacle(addedObstacle, false)
+    console.log('已选中新添加的障碍物:', addedObstacle.id)
+  }
+
   console.log('本地添加障碍物成功:', addedObstacle)
 
   // 如果在协作模式下，发送添加障碍物的消息
@@ -1090,6 +1556,8 @@ onMounted(() => {
   const canvas = document.querySelector('.course-canvas')
   if (canvas) {
     canvas.addEventListener('generate-course-path', handleGenerateCoursePath)
+    // 添加清空画布事件监听
+    canvas.addEventListener('clear-canvas', handleClearCanvas)
   }
 })
 
@@ -1102,6 +1570,8 @@ onUnmounted(() => {
   const canvas = document.querySelector('.course-canvas')
   if (canvas) {
     canvas.removeEventListener('generate-course-path', handleGenerateCoursePath)
+    // 移除清空画布事件监听
+    canvas.removeEventListener('clear-canvas', handleClearCanvas)
   }
 })
 
@@ -1902,6 +2372,13 @@ const totalDistance = computed(() => {
   }
 }
 
+.water-obstacle {
+  border-radius: 4px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-style: solid;
+  transition: all 0.3s ease;
+}
+
 .point-marker {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -2157,5 +2634,171 @@ const totalDistance = computed(() => {
   text-anchor: middle;
   dominant-baseline: middle;
   font-weight: bold;
+}
+
+.decoration {
+  position: relative;
+  border-radius: 4px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+
+  .decoration-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  }
+}
+
+.decoration-poles {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+
+  .pole {
+    position: relative;
+    transition: all 0.3s ease;
+
+    .pole-shadow {
+      position: absolute;
+      bottom: -4px;
+      left: 4px;
+      right: 4px;
+      height: 4px;
+      background-color: rgba(0, 0, 0, 0.1);
+      border-radius: 50%;
+      filter: blur(2px);
+    }
+  }
+}
+
+.decoration-table {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  padding: 10px;
+
+  .decoration-text {
+    color: #333;
+    font-size: 14px;
+    font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 90%;
+    text-align: center;
+  }
+}
+
+.decoration-tree {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+
+  .decoration-foliage {
+    width: 100%;
+    height: 50%;
+    background-color: #4CAF50;
+    border-radius: 50%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1;
+  }
+
+  .decoration-trunk {
+    width: 100%;
+    height: 50%;
+    background-color: #333;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 0;
+  }
+}
+
+.decoration-gate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  padding: 10px;
+
+  .decoration-text {
+    color: #333;
+    font-size: 16px;
+    font-weight: bold;
+  }
+}
+
+.decoration-flower {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  .decoration-petal {
+    width: 100%;
+    height: 50%;
+    background-color: #FFD700;
+    border-radius: 50%;
+    margin-bottom: -10px;
+  }
+
+  .decoration-leaf {
+    width: 40px;
+    height: 30px;
+    background-color: #555;
+    border-radius: 50%;
+    position: absolute;
+    left: -10px;
+    top: 10px;
+  }
+
+  .decoration-leaf:last-child {
+    left: auto;
+    right: -10px;
+    top: 10px;
+  }
+}
+
+.decoration-fence {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+
+  .decoration-post {
+    width: 4px;
+    height: 100%;
+    background-color: #ccc;
+  }
+}
+
+.decoration-custom-image {
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.decoration-custom-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #ccc;
+  font-size: 12px;
+  color: #999;
 }
 </style>

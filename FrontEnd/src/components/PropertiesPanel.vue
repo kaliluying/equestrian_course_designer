@@ -11,23 +11,13 @@
           <div class="form-section">
             <h3 class="section-title">基本信息</h3>
             <el-form-item label="障碍编号">
-              <el-input
-                v-model="selectedObstacle.number"
-                maxlength="3"
-                placeholder="输入编号（如：1, A, 2A）"
-                class="full-width"
-              />
+              <el-input v-model="selectedObstacle.number" maxlength="3" placeholder="输入编号（如：1, A, 2A）"
+                class="full-width" />
             </el-form-item>
 
             <el-form-item label="旋转角度">
-              <el-slider
-                :model-value="selectedObstacle.rotation"
-                :min="0"
-                :max="360"
-                show-input
-                :format-tooltip="formatRotation"
-                @update:model-value="updateRotation"
-              />
+              <el-slider :model-value="selectedObstacle.rotation" :min="0" :max="360" show-input
+                :format-tooltip="formatRotation" @update:model-value="updateRotation" />
             </el-form-item>
           </div>
 
@@ -36,53 +26,67 @@
             <div class="form-section">
               <h3 class="section-title">水障设置</h3>
               <el-form-item label="水障宽度 (m)">
-                <el-input-number
-                  :model-value="
-                    Math.round(
-                      ((selectedObstacle.liverpoolProperties?.width ?? 0) / meterScale) * 10,
-                    ) / 10
-                  "
-                  @update:model-value="updateWaterWidth"
-                  :min="1"
-                  :max="4"
-                  :step="0.1"
-                  :precision="1"
-                  controls-position="right"
-                  class="full-width"
-                />
+                <el-input-number :model-value="Math.round(
+                  ((selectedObstacle.liverpoolProperties?.width ?? 0) / meterScale) * 10,
+                ) / 10
+                  " @update:model-value="updateWaterWidth" :min="1" :max="4" :step="0.1" :precision="1"
+                  controls-position="right" class="full-width" />
               </el-form-item>
 
               <el-form-item label="水深 (cm)">
-                <el-input-number
-                  :model-value="
-                    Math.round(
-                      ((selectedObstacle.liverpoolProperties?.waterDepth ?? 0) / meterScale) * 100,
-                    )
-                  "
-                  @update:model-value="updateWaterDepth"
-                  :min="10"
-                  :max="50"
-                  :step="5"
-                  controls-position="right"
-                  class="full-width"
-                />
+                <el-input-number :model-value="Math.round(
+                  ((selectedObstacle.liverpoolProperties?.waterDepth ?? 0) / meterScale) * 100,
+                )
+                  " @update:model-value="updateWaterDepth" :min="10" :max="50" :step="5" controls-position="right"
+                  class="full-width" />
               </el-form-item>
 
               <el-form-item label="水的颜色">
-                <el-color-picker
-                  v-model="waterColor"
-                  show-alpha
-                  @change="updateWaterColor"
-                />
+                <el-color-picker v-model="waterColor" show-alpha @change="updateWaterColor" />
               </el-form-item>
 
               <el-form-item>
-                <el-checkbox
-                  :model-value="selectedObstacle.liverpoolProperties?.hasRail"
-                  @update:model-value="updateHasRail"
-                >
+                <el-checkbox :model-value="selectedObstacle.liverpoolProperties?.hasRail"
+                  @update:model-value="updateHasRail">
                   显示横杆
                 </el-checkbox>
+              </el-form-item>
+            </div>
+          </template>
+
+          <!-- 水障设置 -->
+          <template v-if="selectedObstacle.type === ObstacleType.WATER">
+            <div class="form-section">
+              <h3 class="section-title">水障设置</h3>
+              <el-form-item label="宽度 (m)">
+                <el-input-number :model-value="Math.round(
+                  ((selectedObstacle.waterProperties?.width ?? 0) / meterScale) * 10,
+                ) / 10
+                  " @update:model-value="updateWaterObstacleWidth" :min="1" :max="4" :step="0.1" :precision="1"
+                  controls-position="right" class="full-width" />
+              </el-form-item>
+
+              <el-form-item label="深度 (cm)">
+                <el-input-number :model-value="Math.round(
+                  ((selectedObstacle.waterProperties?.depth ?? 0) / meterScale) * 100,
+                )
+                  " @update:model-value="updateWaterObstacleDepth" :min="5" :max="30" :step="5"
+                  controls-position="right" class="full-width" />
+              </el-form-item>
+
+              <el-form-item label="水的颜色">
+                <el-color-picker v-model="waterObstacleColor" show-alpha @change="updateWaterObstacleColor" />
+              </el-form-item>
+
+              <el-form-item label="边框颜色">
+                <el-color-picker v-model="waterObstacleBorderColor" show-alpha
+                  @change="updateWaterObstacleBorderColor" />
+              </el-form-item>
+
+              <el-form-item label="边框宽度 (px)">
+                <el-input-number :model-value="selectedObstacle.waterProperties?.borderWidth ?? 1"
+                  @update:model-value="updateWaterObstacleBorderWidth" :min="0" :max="5" :step="1"
+                  controls-position="right" class="full-width" />
               </el-form-item>
             </div>
           </template>
@@ -92,94 +96,51 @@
             <div v-for="(pole, index) in selectedObstacle.poles" :key="index" class="pole-settings">
               <div class="pole-header">
                 <span class="pole-title">横木 {{ index + 1 }}</span>
-                <el-button
-                  v-if="canRemovePole"
-                  type="danger"
-                  circle
-                  size="small"
-                  :icon="Delete"
-                  @click="removePole(index)"
-                />
+                <el-button v-if="canRemovePole" type="danger" circle size="small" :icon="Delete"
+                  @click="removePole(index)" />
               </div>
 
-              <div
-                class="pole-preview"
-                :style="{
-                  background: `linear-gradient(90deg, ${pole.color} 0%, ${adjustColor(pole.color, 20)} 100%)`,
-                  width: `${pole.width * 0.4}px`,
-                  height: `${pole.height * 0.4}px`,
-                }"
-              >
+              <div class="pole-preview" :style="{
+                background: `linear-gradient(90deg, ${pole.color} 0%, ${adjustColor(pole.color, 20)} 100%)`,
+                width: `${pole.width * 0.4}px`,
+                height: `${pole.height * 0.4}px`,
+              }">
                 <div class="pole-shadow"></div>
               </div>
 
               <el-form-item label="编号">
-                <el-input
-                  v-model="pole.number"
-                  maxlength="3"
-                  placeholder="输入编号（如：1, A, 2A）"
-                  class="full-width"
-                />
+                <el-input v-model="pole.number" maxlength="3" placeholder="输入编号（如：1, A, 2A）" class="full-width" />
               </el-form-item>
 
               <el-form-item label="宽度 (cm)">
-                <el-input-number
-                  :model-value="Math.round((pole.height / meterScale) * 100)"
-                  @update:model-value="(val: number) => updatePoleHeight(index, val)"
-                  :min="10"
-                  :max="50"
-                  :step="5"
-                  controls-position="right"
-                  class="full-width"
-                />
+                <el-input-number :model-value="Math.round((pole.height / meterScale) * 100)"
+                  @update:model-value="(val: number) => updatePoleHeight(index, val)" :min="10" :max="50" :step="5"
+                  controls-position="right" class="full-width" />
               </el-form-item>
 
               <el-form-item label="长度 (m)">
-                <el-input-number
-                  :model-value="Math.round((pole.width / meterScale) * 10) / 10"
-                  @update:model-value="(val: number) => updatePoleWidth(index, val)"
-                  :min="2"
-                  :max="6"
-                  :step="0.1"
-                  :precision="1"
-                  controls-position="right"
-                  class="full-width"
-                />
+                <el-input-number :model-value="Math.round((pole.width / meterScale) * 10) / 10"
+                  @update:model-value="(val: number) => updatePoleWidth(index, val)" :min="2" :max="6" :step="0.1"
+                  :precision="1" controls-position="right" class="full-width" />
               </el-form-item>
 
               <el-form-item label="颜色">
                 <el-color-picker v-model="pole.color" show-alpha />
               </el-form-item>
 
-              <template
-                v-if="
-                  selectedObstacle.type === ObstacleType.COMBINATION &&
-                  index < selectedObstacle.poles.length - 1
-                "
-              >
+              <template v-if="
+                selectedObstacle.type === ObstacleType.COMBINATION &&
+                index < selectedObstacle.poles.length - 1
+              ">
                 <el-form-item :label="`与下一个障碍间距 (m)`">
-                  <el-input-number
-                    :model-value="Math.round(((pole.spacing || 0) / meterScale) * 10) / 10"
-                    @update:model-value="(val: number) => updatePoleSpacing(index, val)"
-                    :min="2"
-                    :max="4"
-                    :step="0.1"
-                    :precision="1"
-                    controls-position="right"
-                    class="full-width"
-                  />
+                  <el-input-number :model-value="Math.round(((pole.spacing || 0) / meterScale) * 10) / 10"
+                    @update:model-value="(val: number) => updatePoleSpacing(index, val)" :min="2" :max="4" :step="0.1"
+                    :precision="1" controls-position="right" class="full-width" />
                 </el-form-item>
               </template>
             </div>
 
-            <el-button
-              v-if="canAddPole"
-              type="primary"
-              plain
-              class="add-pole-button"
-              :icon="Plus"
-              @click="addPole"
-            >
+            <el-button v-if="canAddPole" type="primary" plain class="add-pole-button" :icon="Plus" @click="addPole">
               添加横木
             </el-button>
           </div>
@@ -196,26 +157,14 @@
           <div class="form-section">
             <h3 class="section-title">起点设置</h3>
             <el-form-item label="旋转角度">
-              <el-slider
-                v-model="startRotation"
-                :min="0"
-                :max="360"
-                show-input
-                :format-tooltip="formatRotation"
-              />
+              <el-slider v-model="startRotation" :min="0" :max="360" show-input :format-tooltip="formatRotation" />
             </el-form-item>
           </div>
 
           <div class="form-section">
             <h3 class="section-title">终点设置</h3>
             <el-form-item label="旋转角度">
-              <el-slider
-                v-model="endRotation"
-                :min="0"
-                :max="360"
-                show-input
-                :format-tooltip="formatRotation"
-              />
+              <el-slider v-model="endRotation" :min="0" :max="360" show-input :format-tooltip="formatRotation" />
             </el-form-item>
           </div>
         </el-form>
@@ -398,6 +347,80 @@ const waterColor = computed({
   set: (value) => {
     if (selectedObstacle.value?.liverpoolProperties) {
       updateWaterColor(value)
+    }
+  }
+})
+
+// 添加水障设置相关的方法
+const updateWaterObstacleWidth = (widthInMeters: number): void => {
+  if (!selectedObstacle.value || !selectedObstacle.value.waterProperties) return
+  const newProperties = {
+    ...selectedObstacle.value.waterProperties,
+    width: widthInMeters * meterScale.value,
+  }
+  courseStore.updateObstacle(selectedObstacle.value.id, {
+    waterProperties: newProperties,
+  })
+}
+
+const updateWaterObstacleDepth = (depthInCm: number): void => {
+  if (!selectedObstacle.value || !selectedObstacle.value.waterProperties) return
+  const newProperties = {
+    ...selectedObstacle.value.waterProperties,
+    depth: (depthInCm / 100) * meterScale.value,
+  }
+  courseStore.updateObstacle(selectedObstacle.value.id, {
+    waterProperties: newProperties,
+  })
+}
+
+const updateWaterObstacleColor = (color: string): void => {
+  if (!selectedObstacle.value || !selectedObstacle.value.waterProperties) return
+  const newProperties = {
+    ...selectedObstacle.value.waterProperties,
+    color: color,
+  }
+  courseStore.updateObstacle(selectedObstacle.value.id, {
+    waterProperties: newProperties,
+  })
+}
+
+const updateWaterObstacleBorderColor = (color: string): void => {
+  if (!selectedObstacle.value || !selectedObstacle.value.waterProperties) return
+  const newProperties = {
+    ...selectedObstacle.value.waterProperties,
+    borderColor: color,
+  }
+  courseStore.updateObstacle(selectedObstacle.value.id, {
+    waterProperties: newProperties,
+  })
+}
+
+const updateWaterObstacleBorderWidth = (width: number): void => {
+  if (!selectedObstacle.value || !selectedObstacle.value.waterProperties) return
+  const newProperties = {
+    ...selectedObstacle.value.waterProperties,
+    borderWidth: width,
+  }
+  courseStore.updateObstacle(selectedObstacle.value.id, {
+    waterProperties: newProperties,
+  })
+}
+
+const waterObstacleColor = computed({
+  get: () => selectedObstacle.value?.waterProperties?.color ?? '',
+  set: (value) => {
+    if (selectedObstacle.value?.waterProperties) {
+      updateWaterObstacleColor(value)
+    }
+  }
+})
+
+const waterObstacleBorderColor = computed({
+  get: () => selectedObstacle.value?.waterProperties?.borderColor ?? '',
+  set: (value) => {
+    if (selectedObstacle.value?.waterProperties) {
+      updateWaterObstacleBorderColor(value)
     }
   }
 })
