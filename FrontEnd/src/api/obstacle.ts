@@ -102,11 +102,15 @@ export interface ObstacleCountInfo {
 }
 
 /**
- * 获取当前用户的所有自定义障碍物
- * @returns Promise<ObstacleData[]> 障碍物列表
+ * 获取用户的自定义障碍物
+ * @returns Promise<ObstacleData[]> 用户的自定义障碍物列表
  */
-export const fetchUserObstacles = async (): Promise<ObstacleData[]> => {
-  return request.get<ObstacleData[]>(CUSTOM_OBSTACLE_API.FETCH_USER_OBSTACLES)
+export const fetchUserObstacles = async (): Promise<
+  { results: ObstacleData[] } | ObstacleData[]
+> => {
+  return request.get<{ results: ObstacleData[] } | ObstacleData[]>(
+    CUSTOM_OBSTACLE_API.FETCH_USER_OBSTACLES,
+  )
 }
 
 /**
@@ -185,11 +189,15 @@ export const getObstacleCountInfo = async (): Promise<ObstacleCountInfo> => {
 }
 
 /**
- * 获取其他用户共享的障碍物
+ * 获取共享的障碍物
  * @returns Promise<ObstacleData[]> 共享的障碍物列表
  */
-export const getSharedObstacles = async (): Promise<ObstacleData[]> => {
-  return request.get<ObstacleData[]>(CUSTOM_OBSTACLE_API.GET_SHARED_OBSTACLES)
+export const getSharedObstacles = async (): Promise<
+  { results: ObstacleData[] } | ObstacleData[]
+> => {
+  return request.get<{ results: ObstacleData[] } | ObstacleData[]>(
+    CUSTOM_OBSTACLE_API.GET_SHARED_OBSTACLES,
+  )
 }
 
 /**

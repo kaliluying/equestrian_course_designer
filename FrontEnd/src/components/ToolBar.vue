@@ -69,7 +69,7 @@
         </div>
 
         <!-- 自定义障碍物内容 -->
-        <div v-show="activeTab === 'custom'" class="obstacle-tab-content custom-tab">
+        <div v-show="activeTab === 'custom'" class="obstacle-tab-content">
           <CustomObstacleManager />
         </div>
       </div>
@@ -243,16 +243,30 @@ const handleDragStart = (event: DragEvent, type: ObstacleType) => {
     const previewElement = dragElement.querySelector('.template-preview');
 
     if (previewElement) {
-      // 设置拖拽图像，并调整偏移量以确保鼠标指针位于图像中心
-      const rect = previewElement.getBoundingClientRect();
-      const offsetX = rect.width / 2;
-      const offsetY = rect.height / 2;
+      // 克隆预览元素以创建拖拽图像
+      const clone = previewElement.cloneNode(true) as HTMLElement;
+      clone.style.position = 'absolute';
+      clone.style.top = '-1000px';
+      clone.style.left = '-1000px';
+      clone.style.opacity = '0.8';
+      clone.style.transform = 'scale(1.2)'; // 稍微放大以便更好地看到
+      document.body.appendChild(clone);
 
-      // 设置拖拽图像
-      event.dataTransfer.setDragImage(previewElement, offsetX, offsetY);
+      // 计算鼠标相对于预览元素的精确位置
+      const rect = previewElement.getBoundingClientRect();
+      const mouseX = event.clientX - rect.left;
+      const mouseY = event.clientY - rect.top;
+
+      // 设置拖拽图像，使用鼠标在预览元素上的精确位置作为偏移
+      event.dataTransfer.setDragImage(clone, mouseX, mouseY);
 
       // 设置拖拽效果
       event.dataTransfer.effectAllowed = 'copy';
+
+      // 在下一帧移除克隆元素
+      setTimeout(() => {
+        document.body.removeChild(clone);
+      }, 0);
     }
   }
 

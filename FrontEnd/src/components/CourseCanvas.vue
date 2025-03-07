@@ -513,16 +513,26 @@ const getCustomTemplate = (obstacle: Obstacle): CustomObstacleTemplate | null =>
   // 否则从store中获取并缓存
   try {
     // 动态导入障碍物store
-    import('@/stores/obstacle').then(({ useObstacleStore }) => {
-      const obstacleStore = useObstacleStore()
-      const template = obstacleStore.getObstacleById(obstacle.customId!)
+    const obstacleStore = useObstacleStore()
+    const template = obstacleStore.getObstacleById(obstacle.customId)
 
-      if (template) {
-        customTemplateCache.value.set(obstacle.customId!, template)
-      }
-    })
+    if (template) {
+      customTemplateCache.value.set(obstacle.customId, template)
+      return template
+    } else {
+      console.warn(`未找到ID为 ${obstacle.customId} 的自定义障碍物模板，尝试重新加载...`)
+      // 如果没找到模板，尝试重新加载障碍物
+      obstacleStore.initObstacles().then(() => {
+        // 重新尝试获取
+        const reloadedTemplate = obstacleStore.getObstacleById(obstacle.customId!)
+        if (reloadedTemplate) {
+          console.log(`重新加载后找到ID为 ${obstacle.customId} 的自定义障碍物模板`)
+          customTemplateCache.value.set(obstacle.customId!, reloadedTemplate)
+        }
+      })
+    }
 
-    return null // 第一次调用时可能还没加载完，返回null
+    return null // 如果没找到，返回null
   } catch (error) {
     console.error('获取自定义障碍物模板失败:', error)
     return null
@@ -1559,6 +1569,31 @@ onMounted(() => {
     // 添加清空画布事件监听
     canvas.addEventListener('clear-canvas', handleClearCanvas)
   }
+
+  // 确保自定义障碍物已加载
+  import('@/stores/obstacle').then(({ useObstacleStore }) => {
+    const obstacleStore = useObstacleStore()
+    const userStore = useUserStore()
+
+    // 如果用户已登录但自定义障碍物为空，则初始化加载
+    if (userStore.isAuthenticated && obstacleStore.customObstacles.length === 0) {
+      console.log('CourseCanvas挂载时初始化自定义障碍物')
+      obstacleStore.initObstacles()
+      obstacleStore.initSharedObstacles()
+    }
+
+    // 预加载所有自定义障碍物到缓存
+    setTimeout(() => {
+      courseStore.currentCourse.obstacles.forEach(obstacle => {
+        if (obstacle.type === ObstacleType.CUSTOM && obstacle.customId) {
+          const template = obstacleStore.getObstacleById(obstacle.customId)
+          if (template) {
+            customTemplateCache.value.set(obstacle.customId, template)
+          }
+        }
+      })
+    }, 500) // 延迟执行，确保障碍物已加载
+  })
 })
 
 // 组件卸载时移除事件监听
@@ -2164,8 +2199,8 @@ const totalDistance = computed(() => {
 
 .direction-arrow {
   position: absolute;
-  top: -40px;
-  bottom: -40px;
+  top: calc(-3 * v-bind(meterScale) * 1px);
+  bottom: calc(-3 * v-bind(meterScale) * 1px);
   left: 50%;
   width: 40px;
   transform: translateX(-50%);
@@ -2507,8 +2542,8 @@ const totalDistance = computed(() => {
 
   .direction-arrow {
     position: absolute;
-    top: -20px;
-    bottom: -20px;
+    top: calc(-3 * v-bind(meterScale) * 1px);
+    bottom: calc(-3 * v-bind(meterScale) * 1px);
     left: 50%;
     width: 40px;
     transform: translateX(-50%);

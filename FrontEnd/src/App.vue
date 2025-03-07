@@ -15,7 +15,7 @@
       <div class="nav-menu" v-if="userStore.currentUser">
         <router-link to="/" class="nav-link">首页</router-link>
         <router-link to="/my-designs" class="nav-link">我的设计</router-link>
-        <router-link to="/shared-designs" class="nav-link">共享设计</router-link>
+        <router-link to="/shared-designs" class="nav-link">共享</router-link>
         <router-link to="/profile" class="nav-link">
           <el-icon>
             <User />
@@ -35,8 +35,8 @@
           <el-button link @click="handleLogout">退出登录</el-button>
         </template>
         <template v-else>
-          <el-button type="primary" @click="showLoginForm = !showLoginForm">
-            {{ showLoginForm ? '隐藏登录' : '显示登录' }}
+          <el-button type="primary" @click="showLoginDialog">
+            登录
           </el-button>
           <el-button link @click="showRegisterDialog">注册</el-button>
         </template>
@@ -57,27 +57,21 @@
       <!-- 路由视图，用于显示其他页面 -->
       <router-view v-else class="router-view"></router-view>
 
-      <!-- 直接显示登录表单 -->
-      <div v-if="showLoginForm && !userStore.currentUser" class="test-login-form">
-        <h3>登录</h3>
+      <!-- 登录对话框 -->
+      <el-dialog v-model="loginDialogVisible" title="登录" width="400px" :close-on-click-modal="false" destroy-on-close
+        :append-to-body="true" :modal="true" :show-close="true">
         <LoginForm @switch-mode="switchToRegister" @login-success="handleAuthSuccess" />
-      </div>
+      </el-dialog>
+
+      <!-- 注册对话框 -->
+      <el-dialog v-model="registerDialogVisible" title="注册" width="400px" :close-on-click-modal="false" destroy-on-close
+        :append-to-body="true" :modal="true" :show-close="true">
+        <RegisterForm @switch-mode="switchToLogin" @register-success="handleRegisterSuccess" />
+      </el-dialog>
     </div>
 
     <!-- 协作面板 -->
     <CollaborationPanel v-if="isCollaborating" :designId="courseStore.currentCourse.id" />
-
-    <!-- 登录对话框 -->
-    <el-dialog v-model="loginDialogVisible" title="登录" width="400px" :close-on-click-modal="false" destroy-on-close
-      :append-to-body="true" :modal="true" :show-close="true">
-      <LoginForm @switch-mode="switchToRegister" @login-success="handleAuthSuccess" />
-    </el-dialog>
-
-    <!-- 注册对话框 -->
-    <el-dialog v-model="registerDialogVisible" title="注册" width="400px" :close-on-click-modal="false" destroy-on-close
-      :append-to-body="true" :modal="true" :show-close="true">
-      <RegisterForm @switch-mode="switchToLogin" @register-success="handleRegisterSuccess" />
-    </el-dialog>
   </div>
 </template>
 
@@ -104,7 +98,6 @@ const route = useRoute()
 const router = useRouter()
 const loginDialogVisible = ref(false)
 const registerDialogVisible = ref(false)
-const showLoginForm = ref(false)
 
 // 协作状态
 const isCollaborating = ref(false)
@@ -118,6 +111,16 @@ onMounted(() => {
 
   // 初始化面板宽度
   initializePanelWidths()
+
+  // 如果用户已登录，初始化自定义障碍物
+  if (userStore.isAuthenticated) {
+    console.log('用户已登录，初始化自定义障碍物')
+    import('@/stores/obstacle').then(({ useObstacleStore }) => {
+      const obstacleStore = useObstacleStore()
+      obstacleStore.initObstacles()
+      obstacleStore.initSharedObstacles()
+    })
+  }
 
   // 监听 token 过期事件
   const handleTokenExpired = () => {
@@ -607,6 +610,10 @@ const initializePanelWidths = () => {
     }
   }
 }
+
+const showLoginDialog = () => {
+  loginDialogVisible.value = true
+}
 </script>
 
 <style>
@@ -792,18 +799,5 @@ body {
   .el-dialog__body {
     padding: 20px;
   }
-}
-
-.test-login-form {
-  position: absolute;
-  top: 100px;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-  width: 400px;
 }
 </style>

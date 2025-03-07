@@ -1,8 +1,8 @@
 <template>
     <div class="shared-designs-container">
         <div class="header-section">
-            <h1 class="title">分享的路线设计</h1>
-            <p class="subtitle">发现并体验其他用户创建的精彩设计</p>
+            <h1 class="title">共享中心</h1>
+            <p class="subtitle">发现并体验其他用户分享的精彩内容</p>
 
             <!-- 页面导航链接 -->
             <div class="page-navigation">
@@ -19,65 +19,94 @@
             </div>
         </div>
 
-        <!-- 加载状态 -->
-        <div v-if="loading" class="loading-container">
-            <el-skeleton :rows="5" animated />
-        </div>
-
-        <!-- 空状态 -->
-        <div v-else-if="designs.length === 0" class="empty-container">
-            <el-empty description="暂无分享的设计" :image-size="200">
-                <template #description>
-                    <p class="empty-text">暂时没有用户分享的设计</p>
-                    <p class="empty-hint">分享您的第一个设计，让其他用户欣赏吧！</p>
-                </template>
-            </el-empty>
-        </div>
-
-        <!-- 设计列表 -->
-        <div v-else class="designs-grid">
-            <el-card v-for="design in designs" :key="design.id" class="design-card" shadow="hover">
-                <div class="design-image">
-                    <img :src="design.image" :alt="design.title" @click.stop="previewImage(design)"
-                        class="design-preview-image" />
+        <!-- 标签页切换 -->
+        <div class="tabs-container">
+            <div class="tab-header">
+                <div class="tab" :class="{ active: activeTab === 'designs' }" @click="activeTab = 'designs'">
+                    <el-icon>
+                        <Picture />
+                    </el-icon>
+                    共享设计
                 </div>
-                <div class="design-info">
-                    <h3 class="design-title">{{ design.title }}</h3>
-
-                    <div class="author-info">
-                        <el-avatar :size="24" class="author-avatar">{{ design.author_username.charAt(0) }}</el-avatar>
-                        <span class="author-name">{{ design.author_username }}</span>
-                    </div>
-
-                    <p class="design-description" v-if="design.description">{{ design.description }}</p>
-
-                    <div class="design-meta">
-                        <span class="create-time">
-                            <el-icon>
-                                <Clock />
-                            </el-icon>
-                            {{ formatDate(design.create_time) }}
-                        </span>
-                    </div>
-
-                    <div class="design-stats">
-                        <el-button :type="design.is_liked ? 'danger' : 'default'" class="stat-button"
-                            @click="handleLike(design)" :icon="design.is_liked ? 'StarFilled' : 'Star'" size="small">
-                            {{ design.likes_count }} 点赞
-                        </el-button>
-
-                        <el-button type="primary" class="stat-button" @click="handleDownload(design)" :icon="Download"
-                            size="small" plain>
-                            {{ design.downloads_count }} 下载
-                        </el-button>
-                    </div>
+                <div class="tab" :class="{ active: activeTab === 'obstacles' }" @click="activeTab = 'obstacles'">
+                    <el-icon>
+                        <Share />
+                    </el-icon>
+                    共享障碍物
                 </div>
-            </el-card>
-        </div>
+            </div>
 
-        <!-- 分页 -->
-        <el-pagination v-if="totalItems > 0" background layout="prev, pager, next" :total="totalItems"
-            :page-size="pageSize" :current-page="currentPage" @current-change="handlePageChange" class="pagination" />
+            <!-- 设计标签页内容 -->
+            <div v-show="activeTab === 'designs'" class="tab-content">
+                <!-- 加载状态 -->
+                <div v-if="loading" class="loading-container">
+                    <el-skeleton :rows="5" animated />
+                </div>
+
+                <!-- 空状态 -->
+                <div v-else-if="designs.length === 0" class="empty-container">
+                    <el-empty description="暂无分享的设计" :image-size="200">
+                        <template #description>
+                            <p class="empty-text">暂时没有用户分享的设计</p>
+                            <p class="empty-hint">分享您的第一个设计，让其他用户欣赏吧！</p>
+                        </template>
+                    </el-empty>
+                </div>
+
+                <!-- 设计列表 -->
+                <div v-else class="designs-grid">
+                    <el-card v-for="design in designs" :key="design.id" class="design-card" shadow="hover">
+                        <div class="design-image">
+                            <img :src="design.image" :alt="design.title" @click.stop="previewImage(design)"
+                                class="design-preview-image" />
+                        </div>
+                        <div class="design-info">
+                            <h3 class="design-title">{{ design.title }}</h3>
+
+                            <div class="author-info">
+                                <el-avatar :size="24" class="author-avatar">{{ design.author_username.charAt(0)
+                                    }}</el-avatar>
+                                <span class="author-name">{{ design.author_username }}</span>
+                            </div>
+
+                            <p class="design-description" v-if="design.description">{{ design.description }}</p>
+
+                            <div class="design-meta">
+                                <span class="create-time">
+                                    <el-icon>
+                                        <Clock />
+                                    </el-icon>
+                                    {{ formatDate(design.create_time) }}
+                                </span>
+                            </div>
+
+                            <div class="design-stats">
+                                <el-button :type="design.is_liked ? 'danger' : 'default'" class="stat-button"
+                                    @click="handleLike(design)" :icon="design.is_liked ? 'StarFilled' : 'Star'"
+                                    size="small">
+                                    {{ design.likes_count }} 点赞
+                                </el-button>
+
+                                <el-button type="primary" class="stat-button" @click="handleDownload(design)"
+                                    :icon="Download" size="small" plain>
+                                    {{ design.downloads_count }} 下载
+                                </el-button>
+                            </div>
+                        </div>
+                    </el-card>
+                </div>
+
+                <!-- 分页 -->
+                <el-pagination v-if="totalItems > 0" background layout="prev, pager, next" :total="totalItems"
+                    :page-size="pageSize" :current-page="currentPage" @current-change="handlePageChange"
+                    class="pagination" />
+            </div>
+
+            <!-- 障碍物标签页内容 -->
+            <div v-show="activeTab === 'obstacles'" class="tab-content obstacles-tab">
+                <SharedObstaclesView />
+            </div>
+        </div>
 
         <!-- 图片预览组件 -->
         <ImagePreview v-model:visible="previewVisible" :image-url="previewImageUrl" :image-alt="previewImageAlt"
@@ -128,8 +157,9 @@ import { getSharedDesigns, likeDesign, downloadDesign } from '@/api/design'
 import type { DesignResponse } from '@/types/design'
 import { useUserStore } from '@/stores/user'
 import { useCourseStore } from '@/stores/course'
-import { HomeFilled, User, Star, StarFilled, Download, Clock, Document, Picture, Tickets } from '@element-plus/icons-vue'
+import { HomeFilled, User, Star, StarFilled, Download, Clock, Document, Picture, Tickets, Share } from '@element-plus/icons-vue'
 import ImagePreview from '@/components/ImagePreview.vue'
+import SharedObstaclesView from '@/components/SharedObstaclesView.vue'
 import { v4 as uuidv4 } from 'uuid'
 
 // 状态
@@ -141,6 +171,7 @@ const pageSize = ref(9) // 每页显示9条记录
 const router = useRouter()
 const userStore = useUserStore()
 const courseStore = useCourseStore()
+const activeTab = ref('designs') // 默认显示设计标签页
 
 // 图片预览状态
 const previewVisible = ref(false)
@@ -283,11 +314,14 @@ onMounted(() => {
     max-width: 1200px;
     margin: 0 auto;
     padding: 30px 20px;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 110px);
 }
 
 .header-section {
     text-align: center;
-    margin-bottom: 40px;
+    margin-bottom: 30px;
 }
 
 .title {
@@ -334,11 +368,55 @@ onMounted(() => {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
+/* 标签页样式 */
+.tabs-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.tab-header {
+    display: flex;
+    background-color: #f5f7fa;
+    border-bottom: 1px solid #e4e7ed;
+}
+
+.tab {
+    padding: 15px 25px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #606266;
+}
+
+.tab.active {
+    color: #409EFF;
+    background-color: #fff;
+    border-bottom: 2px solid #409EFF;
+}
+
+.tab-content {
+    flex: 1;
+    overflow: auto;
+    padding: 20px;
+}
+
+.obstacles-tab {
+    padding: 0;
+}
+
 .loading-container {
     padding: 40px;
     background-color: #fff;
     border-radius: 8px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
 }
 
 .empty-container {

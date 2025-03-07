@@ -91,6 +91,8 @@ export interface CustomObstacleTemplate {
   createdAt: string
   updatedAt: string
   isShared?: boolean // 是否共享
+  creator?: string // 创建者名称
+  user_username?: string // 用户名，从后端返回
 }
 
 export interface Obstacle {

@@ -765,7 +765,7 @@ class CustomObstacleViewSet(viewsets.ModelViewSet):
         # 获取所有标记为共享的障碍物，但排除当前用户的
         shared_obstacles = CustomObstacle.objects.filter(
             is_shared=True
-        ).exclude(user=request.user)
+        )
 
         serializer = self.get_serializer(shared_obstacles, many=True)
         return Response(serializer.data)

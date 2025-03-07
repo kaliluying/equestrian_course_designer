@@ -41,6 +41,7 @@ const convertApiObstacleToTemplate = (apiObstacle: ObstacleData): CustomObstacle
     createdAt: apiObstacle.created_at || new Date().toISOString(),
     updatedAt: apiObstacle.updated_at || new Date().toISOString(),
     isShared: apiObstacle.is_shared || false,
+    user_username: apiObstacle.user_username || '',
   }
 
   // 转换杆子数据
@@ -210,20 +211,32 @@ export const useObstacleStore = defineStore('obstacle', () => {
 
     try {
       // 从服务器加载障碍物
-      const obstacles = await fetchUserObstacles()
-      customObstacles.value = obstacles.map(convertApiObstacleToTemplate)
-      console.log(
-        '已从服务器加载用户ID',
-        userStore.currentUser?.id,
-        '的自定义障碍物:',
-        customObstacles.value.length,
-        '个',
-      )
+      const response = await fetchUserObstacles()
+      console.log('获取到的障碍物数据:', response)
 
-      // 同时保存一份到本地存储（作为备份）
-      const storageKey = getStorageKey()
-      if (storageKey) {
-        localStorage.setItem(storageKey, JSON.stringify(customObstacles.value))
+      // 检查响应格式，处理分页数据
+      // 使用类型断言处理可能的分页响应
+      const paginatedResponse = response as unknown as { results?: ObstacleData[] }
+      const obstacles = paginatedResponse.results || (response as ObstacleData[])
+
+      if (Array.isArray(obstacles)) {
+        customObstacles.value = obstacles.map(convertApiObstacleToTemplate)
+        console.log(
+          '已从服务器加载用户ID',
+          userStore.currentUser?.id,
+          '的自定义障碍物:',
+          customObstacles.value.length,
+          '个',
+        )
+
+        // 同时保存一份到本地存储（作为备份）
+        const storageKey = getStorageKey()
+        if (storageKey) {
+          localStorage.setItem(storageKey, JSON.stringify(customObstacles.value))
+        }
+      } else {
+        console.error('服务器返回的障碍物数据格式不正确:', obstacles)
+        throw new Error('障碍物数据格式不正确')
       }
 
       // 获取障碍物数量限制信息
@@ -378,9 +391,40 @@ export const useObstacleStore = defineStore('obstacle', () => {
     }
   }
 
-  // 获取特定ID的障碍物
-  const getObstacleById = (id: string) => {
-    return customObstacles.value.find((o) => o.id === id)
+  // 根据ID获取障碍物
+  const getObstacleById = (id: string): CustomObstacleTemplate | null => {
+    // 先在自定义障碍物中查找
+    const customObstacle = customObstacles.value.find((o) => o.id === id)
+    if (customObstacle) {
+      return customObstacle
+    }
+
+    // 如果没找到，在共享障碍物中查找
+    const sharedObstacle = sharedObstacles.value.find((o) => o.id === id)
+    if (sharedObstacle) {
+      return sharedObstacle
+    }
+
+    // 如果都没找到，输出详细日志
+    console.error(
+      `未找到ID为 ${id} 的自定义障碍物，当前自定义障碍物数量: ${customObstacles.value.length}，共享障碍物数量: ${sharedObstacles.value.length}`,
+    )
+
+    // 如果用户已登录但障碍物列表为空，尝试重新加载
+    if (
+      userStore.isAuthenticated &&
+      (customObstacles.value.length === 0 ||
+        (sharedObstacles.value.length === 0 && loadingShared.value === false))
+    ) {
+      console.log('障碍物列表为空，尝试重新加载...')
+      // 异步加载，不阻塞当前操作
+      setTimeout(() => {
+        initObstacles()
+        initSharedObstacles()
+      }, 0)
+    }
+
+    return null
   }
 
   // 按创建时间排序的障碍物（最新的在前面）
@@ -409,9 +453,21 @@ export const useObstacleStore = defineStore('obstacle', () => {
 
     try {
       // 从服务器加载共享障碍物
-      const obstacles = await getSharedObstacles()
-      sharedObstacles.value = obstacles.map(convertApiObstacleToTemplate)
-      console.log('已从服务器加载共享障碍物:', sharedObstacles.value.length, '个')
+      const response = await getSharedObstacles()
+      console.log('获取到的共享障碍物数据:', response)
+
+      // 检查响应格式，处理分页数据
+      // 使用类型断言处理可能的分页响应
+      const paginatedResponse = response as unknown as { results?: ObstacleData[] }
+      const obstacles = paginatedResponse.results || (response as ObstacleData[])
+
+      if (Array.isArray(obstacles)) {
+        sharedObstacles.value = obstacles.map(convertApiObstacleToTemplate)
+        console.log('已从服务器加载共享障碍物:', sharedObstacles.value.length, '个')
+      } else {
+        console.error('服务器返回的共享障碍物数据格式不正确:', obstacles)
+        throw new Error('共享障碍物数据格式不正确')
+      }
     } catch (e) {
       console.error('从服务器加载共享障碍物失败:', e)
       sharedError.value = '加载共享障碍物失败，请重试'
