@@ -40,7 +40,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'channels',
-    "user.apps.UserConfig"
+    "user.apps.UserConfig",
+    'feedback',  # 新增反馈应用
 ]
 
 MIDDLEWARE = [
@@ -130,7 +131,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
 STATIC_URL = 'static/'
-# STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static'),
 ]
@@ -238,14 +239,14 @@ CORS_ALLOW_HEADERS = [
 FRONTEND_URL = 'http://localhost:5173'  # 开发环境
 # FRONTEND_URL = 'https://yourdomain.com'  # 生产环境
 
+
 # 邮件配置
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.example.com'  # 邮件服务器
-EMAIL_PORT = 587  # 邮件服务器端口
-EMAIL_USE_TLS = True  # 是否使用TLS加密
-EMAIL_HOST_USER = 'your-email@example.com'  # 发件人邮箱
-EMAIL_HOST_PASSWORD = 'your-email-password'  # 发件人邮箱密码
-DEFAULT_FROM_EMAIL = 'Your Name <your-email@example.com>'  # 默认发件人
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'  # 默认的SMTP后端
+EMAIL_HOST = 'smtp.gmail.com'            # Gmail SMTP服务器地址
+EMAIL_PORT = 587                         # TLS加密端口
+EMAIL_USE_TLS = True                     # 启用TLS加密
+EMAIL_HOST_USER = 'kaliluying@gmail.com'       # 你的Gmail邮箱地址
+EMAIL_HOST_PASSWORD = 'wzeh vduq wxma zrap' # 应用专用密码（非邮箱登录密码）
 
 # WebSocket配置
 ALLOWED_HOSTS = ['*']  # 允许所有主机访问，生产环境应该限制

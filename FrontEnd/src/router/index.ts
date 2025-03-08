@@ -3,6 +3,7 @@ import ResetPassword from '../views/ResetPassword.vue'
 import SharedDesigns from '../views/SharedDesigns.vue'
 import MyDesigns from '../views/MyDesigns.vue'
 import UserProfile from '../views/UserProfile.vue'
+import Feedback from '../views/Feedback.vue'
 import { useUserStore } from '@/stores/user'
 
 const router = createRouter({
@@ -38,6 +39,11 @@ const router = createRouter({
       path: '/profile',
       name: 'userProfile',
       component: UserProfile,
+    },
+    {
+      path: '/feedback',
+      name: 'feedback',
+      component: Feedback,
     },
   ],
 })

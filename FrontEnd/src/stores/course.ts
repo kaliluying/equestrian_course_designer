@@ -25,6 +25,35 @@ export const useCourseStore = defineStore('course', () => {
   const startPoint = ref({ x: 0, y: 0, rotation: 270 })
   const endPoint = ref({ x: 0, y: 0, rotation: 270 })
 
+  // 初始化函数，检查是否有自动保存的数据
+  const initializeStore = () => {
+    console.log('初始化课程设计存储，检查是否有自动保存的数据')
+    // 这里不直接恢复，而是检查是否有数据
+    const savedCourse = localStorage.getItem('autosaved_course')
+    const savedTimestamp = localStorage.getItem('autosaved_timestamp')
+
+    if (savedCourse && savedTimestamp) {
+      try {
+        // 检查数据是否有效
+        const courseData = JSON.parse(savedCourse)
+        if (courseData && courseData.id) {
+          console.log('找到有效的自动保存数据，等待用户确认是否恢复')
+          return true
+        }
+      } catch (error) {
+        console.error('自动保存数据无效:', error)
+        // 清除无效数据
+        localStorage.removeItem('autosaved_course')
+        localStorage.removeItem('autosaved_timestamp')
+      }
+    }
+
+    return false
+  }
+
+  // 在store创建时执行初始化
+  initializeStore()
+
   // 更新起点旋转角度
   const updateStartRotation = (rotation: number) => {
     startPoint.value.rotation = rotation
@@ -911,6 +940,189 @@ export const useCourseStore = defineStore('course', () => {
 
   function updateCourse() {
     currentCourse.value.updatedAt = new Date().toISOString()
+
+    // 自动保存到localStorage
+    saveToLocalStorage()
+  }
+
+  // 自动保存到localStorage
+  function saveToLocalStorage() {
+    try {
+      // 创建包含路线信息的完整数据对象
+      const courseDataWithPath = {
+        ...currentCourse.value,
+        path: {
+          visible: coursePath.value.visible,
+          points: coursePath.value.points,
+          startPoint: startPoint.value,
+          endPoint: endPoint.value,
+        },
+      }
+
+      // 检查是否有实际内容需要保存
+      if (
+        currentCourse.value.obstacles.length === 0 &&
+        (!coursePath.value.visible || coursePath.value.points.length === 0)
+      ) {
+        // 如果没有障碍物且没有路径，则不保存
+        console.log('没有内容需要自动保存')
+        return
+      }
+
+      // 保存到localStorage
+      try {
+        const courseJson = JSON.stringify(courseDataWithPath)
+        localStorage.setItem('autosaved_course', courseJson)
+        localStorage.setItem('autosaved_timestamp', new Date().toISOString())
+
+        // 验证保存是否成功
+        const savedData = localStorage.getItem('autosaved_course')
+        if (!savedData) {
+          throw new Error('保存后无法读取数据')
+        }
+
+        // 显示自动保存提示（使用自定义事件，避免直接依赖UI库）
+        const autoSaveEvent = new CustomEvent('course-autosaved', {
+          detail: { timestamp: new Date().toISOString() },
+        })
+        document.dispatchEvent(autoSaveEvent)
+
+        console.log('路线设计已自动保存到localStorage', {
+          obstacles: currentCourse.value.obstacles.length,
+          pathPoints: coursePath.value.points.length,
+          dataSize: courseJson.length,
+        })
+      } catch (storageError) {
+        console.error('localStorage存储失败，可能是存储空间不足:', storageError)
+        // 尝试清理一些不必要的数据
+        try {
+          // 移除一些可能不必要的大型属性
+          const simplifiedData = {
+            ...courseDataWithPath,
+            // 移除可能的大型数据
+            obstacles: courseDataWithPath.obstacles.map((o) => ({
+              id: o.id,
+              type: o.type,
+              position: o.position,
+              rotation: o.rotation,
+              // 保留基本属性，移除可能的大型数据
+            })),
+          }
+          const simplifiedJson = JSON.stringify(simplifiedData)
+          localStorage.setItem('autosaved_course', simplifiedJson)
+          localStorage.setItem('autosaved_timestamp', new Date().toISOString())
+          console.log('已保存简化版路线设计')
+        } catch (fallbackError) {
+          console.error('即使简化数据后仍然无法保存:', fallbackError)
+        }
+      }
+    } catch (error) {
+      console.error('自动保存到localStorage失败:', error)
+    }
+  }
+
+  // 从localStorage恢复
+  function restoreFromLocalStorage(): boolean {
+    try {
+      console.log('尝试从localStorage恢复路线设计')
+      const savedCourse = localStorage.getItem('autosaved_course')
+      const savedTimestamp = localStorage.getItem('autosaved_timestamp')
+
+      if (!savedCourse || !savedTimestamp) {
+        console.log('没有找到自动保存的数据', { savedCourse, savedTimestamp })
+        return false
+      }
+
+      console.log('找到自动保存的数据', {
+        timestamp: savedTimestamp,
+        dataSize: savedCourse.length,
+      })
+
+      // 检查自动保存的时间是否在24小时内
+      const timestamp = new Date(savedTimestamp)
+      const now = new Date()
+      const hoursDiff = (now.getTime() - timestamp.getTime()) / (1000 * 60 * 60)
+
+      if (hoursDiff > 24) {
+        // 如果自动保存的时间超过24小时，则清除localStorage
+        localStorage.removeItem('autosaved_course')
+        localStorage.removeItem('autosaved_timestamp')
+        console.log('自动保存数据已过期（超过24小时）')
+        return false
+      }
+
+      let courseData: any
+      try {
+        courseData = JSON.parse(savedCourse)
+      } catch (parseError) {
+        console.error('解析自动保存数据失败:', parseError)
+        return false
+      }
+
+      // 验证数据完整性
+      if (!courseData || !courseData.id || !Array.isArray(courseData.obstacles)) {
+        console.error('自动保存的数据格式不正确', courseData)
+        return false
+      }
+
+      console.log('解析自动保存数据成功', {
+        id: courseData.id,
+        name: courseData.name,
+        obstacles: courseData.obstacles.length,
+        hasPath: !!courseData.path,
+      })
+
+      // 加载基本课程数据
+      currentCourse.value = {
+        id: courseData.id || uuidv4(),
+        name: courseData.name || '马术路线设计',
+        obstacles: Array.isArray(courseData.obstacles) ? courseData.obstacles : [],
+        createdAt: courseData.createdAt || new Date().toISOString(),
+        updatedAt: courseData.updatedAt || new Date().toISOString(),
+        fieldWidth: courseData.fieldWidth || 80,
+        fieldHeight: courseData.fieldHeight || 60,
+      }
+
+      // 如果存在路线数据，则加载路线
+      if (courseData.path) {
+        coursePath.value = {
+          visible: Boolean(courseData.path.visible),
+          points: Array.isArray(courseData.path.points) ? courseData.path.points : [],
+        }
+
+        if (courseData.path.startPoint) {
+          startPoint.value = {
+            x: Number(courseData.path.startPoint.x) || 0,
+            y: Number(courseData.path.startPoint.y) || 0,
+            rotation: Number(courseData.path.startPoint.rotation) || 270,
+          }
+        }
+
+        if (courseData.path.endPoint) {
+          endPoint.value = {
+            x: Number(courseData.path.endPoint.x) || 0,
+            y: Number(courseData.path.endPoint.y) || 0,
+            rotation: Number(courseData.path.endPoint.rotation) || 270,
+          }
+        }
+      }
+
+      console.log('已从localStorage恢复路线设计', {
+        obstacles: currentCourse.value.obstacles.length,
+        pathPoints: coursePath.value.points.length,
+      })
+      return true
+    } catch (error) {
+      console.error('从localStorage恢复失败:', error)
+      return false
+    }
+  }
+
+  // 清除localStorage中的自动保存数据
+  function clearAutosave() {
+    localStorage.removeItem('autosaved_course')
+    localStorage.removeItem('autosaved_timestamp')
+    console.log('已清除自动保存的路线设计')
   }
 
   function saveCourse() {
@@ -945,6 +1157,9 @@ export const useCourseStore = defineStore('course', () => {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
+
+    // 保存成功后清除自动保存数据
+    clearAutosave()
   }
 
   async function loadCourse(file: File) {
@@ -1302,5 +1517,7 @@ export const useCourseStore = defineStore('course', () => {
     importCourse,
     setCurrentCourseId,
     resetCourse,
+    restoreFromLocalStorage,
+    clearAutosave,
   }
 })

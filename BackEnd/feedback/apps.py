@@ -1,7 +1,7 @@
 from django.apps import AppConfig
 
 
-class UserConfig(AppConfig):
+class FeedbackConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'user'
-    verbose_name = '用户管理'
+    name = 'feedback'
+    verbose_name = '反馈管理'

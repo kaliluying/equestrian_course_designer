@@ -22,23 +22,56 @@
           </el-icon>
           我的资料
         </router-link>
+        <router-link to="/feedback" class="feedback-link">
+          <el-icon class="feedback-icon">
+            <ChatDotRound />
+          </el-icon>
+          反馈
+        </router-link>
       </div>
+
+      <!-- 反馈入口 - 无论是否登录都显示 -->
+
 
       <div class="user-info">
         <template v-if="userStore.currentUser">
-          <el-button type="primary" size="small" :disabled="!userStore.currentUser" @click="toggleCollaboration">
+          <div class="user-profile">
+            <span class="username-display">
+              <el-avatar :size="28" class="user-avatar">
+                {{ userStore.currentUser.username.charAt(0).toUpperCase() }}
+              </el-avatar>
+              {{ userStore.currentUser.username }}
+            </span>
+          </div>
+          <el-button type="primary" size="small" :disabled="!userStore.currentUser" @click="toggleCollaboration"
+            class="collab-button" :class="{ 'is-active': isCollaborating }">
+            <el-icon>
+              <Connection />
+            </el-icon>
             {{ isCollaborating ? '退出协作' : '协作' }}
           </el-button>
-          <span class="username-display">
-            {{ userStore.currentUser.username }}
-          </span>
-          <el-button link @click="handleLogout">退出登录</el-button>
+          <el-button class="logout-button" @click="handleLogout">
+            <el-icon>
+              <SwitchButton />
+            </el-icon>
+            退出登录
+          </el-button>
         </template>
         <template v-else>
-          <el-button type="primary" @click="showLoginDialog">
-            登录
-          </el-button>
-          <el-button link @click="showRegisterDialog">注册</el-button>
+          <div class="auth-buttons">
+            <el-button type="primary" class="login-button" @click="showLoginDialog">
+              <el-icon>
+                <Key />
+              </el-icon>
+              登录
+            </el-button>
+            <el-button class="register-button" @click="showRegisterDialog">
+              <el-icon>
+                <UserFilled />
+              </el-icon>
+              注册
+            </el-button>
+          </div>
         </template>
       </div>
     </div>
@@ -56,6 +89,30 @@
 
       <!-- 路由视图，用于显示其他页面 -->
       <router-view v-else class="router-view"></router-view>
+
+      <!-- 自动保存恢复提示 -->
+      <el-dialog v-model="showRestoreDialog" title="恢复未完成的设计" width="400px" :close-on-click-modal="false"
+        :show-close="false" :append-to-body="true" :destroy-on-close="false" :modal="true">
+        <div class="restore-dialog-content">
+          <p>检测到您有一个未完成的路线设计，是否恢复？</p>
+          <p class="restore-time">保存时间: {{ formatSavedTime }}</p>
+        </div>
+        <template #footer>
+          <span class="dialog-footer">
+            <el-button @click="discardAutosave">放弃</el-button>
+            <el-button type="primary" @click="restoreAutosave">恢复</el-button>
+          </span>
+        </template>
+      </el-dialog>
+
+      <!-- 自动保存提示 -->
+      <div class="autosave-notification" v-if="showAutosaveNotification">
+        <el-icon>
+          <Check />
+        </el-icon>
+        <span>已自动保存</span>
+      </div>
+
 
       <!-- 登录对话框 -->
       <el-dialog v-model="loginDialogVisible" title="登录" width="400px" :close-on-click-modal="false" destroy-on-close
@@ -76,7 +133,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { useUserStore } from '@/stores/user'
 import ToolBar from '@/components/ToolBar.vue'
 import CourseCanvas from '@/components/CourseCanvas.vue'
@@ -84,7 +141,7 @@ import PropertiesPanel from '@/components/PropertiesPanel.vue'
 import LoginForm from '@/components/LoginForm.vue'
 import RegisterForm from '@/components/RegisterForm.vue'
 import CollaborationPanel from '@/components/CollaborationPanel.vue'
-import { Position, User } from '@element-plus/icons-vue'
+import { Position, User, ChatDotRound, SwitchButton, Connection, Key, UserFilled, Check } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { useCourseStore } from '@/stores/course'
@@ -104,6 +161,141 @@ const isCollaborating = ref(false)
 const collaborationSession = ref<CollaborationSession | null>(null)
 const canvasRef = ref<InstanceType<typeof CourseCanvas> | null>(null)
 let isTogglingCollaboration = false
+
+// 判断是否为开发环境
+const isDevelopment = import.meta.env.MODE === 'development'
+
+// 自动保存相关变量
+const showRestoreDialog = ref(false)
+const savedTimestamp = ref('')
+const showAutosaveNotification = ref(false)
+let autosaveNotificationTimer: number | null = null
+
+// 格式化保存时间
+const formatSavedTime = computed(() => {
+  if (!savedTimestamp.value) return ''
+
+  try {
+    const date = new Date(savedTimestamp.value)
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    })
+  } catch {
+    return savedTimestamp.value
+  }
+})
+
+// 显示自动保存提示
+const showAutosaveNotificationHandler = () => {
+  // 显示自动保存提示
+  showAutosaveNotification.value = true
+
+  // 清除之前的定时器
+  if (autosaveNotificationTimer !== null) {
+    window.clearTimeout(autosaveNotificationTimer)
+  }
+
+  // 3秒后自动隐藏提示
+  autosaveNotificationTimer = window.setTimeout(() => {
+    showAutosaveNotification.value = false
+    autosaveNotificationTimer = null
+  }, 3000)
+}
+
+// 检查是否有自动保存的路线设计
+const checkAutosave = () => {
+  // 如果不是在首页，不检查自动保存
+  if (route.path !== '/') return
+
+  console.log('检查是否有自动保存的路线设计')
+  const timestamp = localStorage.getItem('autosaved_timestamp')
+  const savedCourse = localStorage.getItem('autosaved_course')
+
+  if (!timestamp || !savedCourse) {
+    console.log('没有找到自动保存的数据', { timestamp, hasSavedCourse: !!savedCourse })
+    return
+  }
+
+  console.log('找到自动保存的数据', {
+    timestamp,
+    dataSize: savedCourse.length,
+    savedAt: new Date(timestamp).toLocaleString()
+  })
+
+  try {
+    // 验证数据是否有效
+    const courseData = JSON.parse(savedCourse)
+    if (!courseData || !courseData.id) {
+      console.error('自动保存数据无效')
+      clearLocalStorage()
+      return
+    }
+  } catch (error) {
+    console.error('解析自动保存数据失败:', error)
+    clearLocalStorage()
+    return
+  }
+
+  // 检查自动保存的时间是否在24小时内
+  const savedDate = new Date(timestamp)
+  const now = new Date()
+  const hoursDiff = (now.getTime() - savedDate.getTime()) / (1000 * 60 * 60)
+  console.log('自动保存时间距现在:', { hoursDiff: hoursDiff.toFixed(2) + '小时' })
+
+  if (hoursDiff <= 24) {
+    savedTimestamp.value = timestamp
+    // 确保对话框显示
+    console.log('显示恢复对话框')
+    showRestoreDialog.value = true
+  } else {
+    // 如果自动保存的时间超过24小时，则清除localStorage
+    console.log('自动保存数据已过期（超过24小时）')
+    clearLocalStorage()
+  }
+}
+
+// 恢复自动保存的路线设计
+const restoreAutosave = () => {
+  console.log('尝试恢复自动保存的路线设计')
+  const courseStore = useCourseStore()
+  const success = courseStore.restoreFromLocalStorage()
+  if (success) {
+    ElMessage.success('已恢复未完成的路线设计')
+    console.log('恢复成功')
+  } else {
+    ElMessage.error('恢复失败，可能是数据已损坏')
+    console.error('恢复失败')
+  }
+  showRestoreDialog.value = false
+}
+
+// 放弃自动保存的路线设计
+const discardAutosave = () => {
+  console.log('放弃恢复自动保存的路线设计')
+  clearLocalStorage()
+  showRestoreDialog.value = false
+  ElMessage.info('已放弃恢复')
+}
+
+// 手动显示对话框（用于调试）
+const manualShowDialog = () => {
+  const timestamp = localStorage.getItem('autosaved_timestamp') || new Date().toISOString()
+  savedTimestamp.value = timestamp
+  showRestoreDialog.value = true
+  console.log('手动显示对话框，状态:', showRestoreDialog.value)
+}
+
+// 清除localStorage（用于调试）
+const clearLocalStorage = () => {
+  localStorage.removeItem('autosaved_course')
+  localStorage.removeItem('autosaved_timestamp')
+  console.log('已清除自动保存数据')
+}
 
 onMounted(() => {
   userStore.initializeAuth()
@@ -263,12 +455,53 @@ onMounted(() => {
     }
   }
 
+  // 监听自动保存事件
+  document.addEventListener('course-autosaved', showAutosaveNotificationHandler as EventListener)
+
+  // 检查是否有自动保存的路线设计
+  if (route.path === '/') {
+    console.log('准备检查自动保存数据')
+
+    // 使用多种方法尝试显示对话框
+    // 1. 立即检查
+    checkAutosave()
+
+    // 2. 使用nextTick
+    nextTick(() => {
+      checkAutosave()
+    })
+
+    // 3. 使用setTimeout
+    setTimeout(() => {
+      checkAutosave()
+
+      // 4. 如果还是没有显示，尝试直接设置
+      if (!showRestoreDialog.value) {
+        const timestamp = localStorage.getItem('autosaved_timestamp')
+        const savedCourse = localStorage.getItem('autosaved_course')
+
+        if (timestamp && savedCourse) {
+          try {
+            JSON.parse(savedCourse) // 验证JSON格式
+            savedTimestamp.value = timestamp
+            console.log('直接设置对话框显示')
+            showRestoreDialog.value = true
+          } catch (e) {
+            console.error('解析失败', e)
+          }
+        }
+      }
+    }, 500)
+  }
+
   // 在组件卸载时移除事件监听
   onUnmounted(() => {
     console.log('App.vue即将卸载，移除事件监听器')
     window.removeEventListener('token-expired', handleTokenExpired)
     document.removeEventListener('collaboration-stopped', handleCollaborationStopped as EventListener)
     document.removeEventListener('collaboration-connected', handleCollaborationConnected as EventListener)
+    // 移除自动保存事件监听
+    document.removeEventListener('course-autosaved', showAutosaveNotificationHandler as EventListener)
     console.log('已移除所有事件监听器')
   })
 })
@@ -618,12 +851,26 @@ const showLoginDialog = () => {
 
 <style>
 :root {
-  --primary-color: #2b5ce7;
-  --secondary-color: #f0f5ff;
-  --border-color: #e4e7ed;
-  --text-color: #303133;
-  --bg-color: #f5f7fa;
-  --background-color: #f5f7fa;
+  --primary-color: #3a6af8;
+  --primary-dark: #2d54c5;
+  --primary-light: #eef2ff;
+  --secondary-color: #2c3e50;
+  --accent-color: #00c6a2;
+  --border-color: #e0e7ff;
+  --text-color: #1a202c;
+  --text-light: #6b7280;
+  --bg-color: #f8fafc;
+  --card-bg: #ffffff;
+  --danger-color: #ef4444;
+  --warning-color: #f59e0b;
+  --success-color: #10b981;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --radius-sm: 0.25rem;
+  --radius: 0.5rem;
+  --radius-lg: 0.75rem;
+  --transition: all 0.2s ease;
 }
 
 html,
@@ -632,9 +879,13 @@ body {
   padding: 0;
   height: 100vh;
   overflow: hidden;
-  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+  font-family: 'Inter', 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
     '微软雅黑', Arial, sans-serif;
   color: var(--text-color);
+  background-color: var(--bg-color);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
 }
 
 #app {
@@ -642,10 +893,77 @@ body {
   width: 100vw;
 }
 
-.username-display {
-  color: #fff;
-  margin-right: 16px;
+/* 全局头像样式 */
+.el-avatar {
+  --el-avatar-bg-color: var(--primary-color);
+  --el-avatar-text-color: white;
+  font-weight: 600;
+}
+
+/* 全局按钮样式优化 */
+.el-button {
+  border-radius: var(--radius-sm);
   font-weight: 500;
+  transition: var(--transition);
+}
+
+.el-button--primary {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.el-button--primary:hover,
+.el-button--primary:focus {
+  background-color: var(--primary-dark);
+  border-color: var(--primary-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(58, 106, 248, 0.2);
+}
+
+.el-button--success {
+  background-color: var(--success-color);
+  border-color: var(--success-color);
+}
+
+.el-button--danger {
+  background-color: var(--danger-color);
+  border-color: var(--danger-color);
+}
+
+.el-button--warning {
+  background-color: var(--warning-color);
+  border-color: var(--warning-color);
+}
+
+/* 全局输入框优化 */
+.el-input__inner {
+  border-radius: var(--radius-sm);
+  border-color: var(--border-color);
+  transition: var(--transition);
+}
+
+.el-input__inner:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(58, 106, 248, 0.1);
+}
+
+/* 分割线优化 */
+.el-divider {
+  margin: 24px 0;
+  border-color: var(--border-color);
+}
+
+/* 卡片优化 */
+.el-card {
+  border-radius: var(--radius);
+  border-color: var(--border-color);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  transition: var(--transition);
+}
+
+.el-card:hover {
+  box-shadow: var(--shadow);
 }
 </style>
 
@@ -657,15 +975,17 @@ body {
 }
 
 .header {
-  height: 50px;
-  background: linear-gradient(135deg, var(--primary-color) 0%, #1890ff 100%);
+  height: 60px;
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
   color: white;
   display: flex;
   align-items: center;
-  padding: 0 20px;
+  padding: 0 24px;
   justify-content: space-between;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow);
   flex-shrink: 0;
+  position: relative;
+  z-index: 10;
 
   .header-left {
     display: flex;
@@ -674,13 +994,14 @@ body {
 
     .header-icon {
       color: white;
-      opacity: 0.9;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
     }
 
     h1 {
       margin: 0;
       font-size: 20px;
-      font-weight: 500;
+      font-weight: 600;
+      letter-spacing: -0.5px;
     }
 
     .logo-link {
@@ -689,9 +1010,11 @@ body {
       gap: 16px;
       text-decoration: none;
       color: white;
+      transition: var(--transition);
 
       &:hover {
-        opacity: 0.9;
+        opacity: 0.95;
+        transform: translateY(-1px);
       }
     }
   }
@@ -699,33 +1022,38 @@ body {
 
 .nav-menu {
   display: flex;
-  gap: 24px;
+  gap: 32px;
   margin: 0 20px;
 
   .nav-link {
-    color: white;
+    color: rgba(255, 255, 255, 0.85);
     text-decoration: none;
-    font-size: 16px;
+    font-size: 15px;
     position: relative;
-    padding: 4px 0;
-    transition: opacity 0.3s;
+    padding: 6px 0;
+    transition: var(--transition);
+    font-weight: 500;
 
     &:hover {
-      opacity: 0.8;
+      color: white;
+      border-radius: 30px;
+      padding: 6px;
     }
 
     &.router-link-active {
-      font-weight: 500;
+      color: white;
+      font-weight: 600;
 
       &:after {
         content: '';
         position: absolute;
-        bottom: -4px;
+        bottom: -5px;
         left: 0;
         right: 0;
         height: 2px;
         background-color: white;
-        border-radius: 2px;
+        border-radius: 3px;
+        box-shadow: 0 1px 3px rgba(255, 255, 255, 0.3);
       }
     }
   }
@@ -734,14 +1062,122 @@ body {
 .user-info {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
 
-  :deep(.el-button--text) {
+  .user-profile {
+    display: flex;
+    align-items: center;
+  }
+
+  .auth-buttons {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .user-avatar {
+    background-color: var(--accent-color);
     color: white;
-    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  }
+
+  .username-display {
+    color: white;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px 4px 4px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 30px;
+  }
+
+  .collab-button {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background-color: rgba(255, 255, 255, 0.15);
+    border-color: transparent;
+    font-weight: 500;
+
+    .el-icon {
+      font-size: 14px;
+    }
 
     &:hover {
-      color: var(--secondary-color);
+      background-color: rgba(255, 255, 255, 0.25);
+      transform: translateY(-1px);
+    }
+
+    &.is-active,
+    &.is-active:hover {
+      background-color: var(--accent-color);
+      border-color: var(--accent-color);
+      box-shadow: 0 2px 8px rgba(0, 198, 162, 0.3);
+    }
+  }
+
+  .login-button {
+    padding: 8px 20px;
+    font-weight: 600;
+    background-color: var(--accent-color);
+    border-color: var(--accent-color);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    .el-icon {
+      font-size: 15px;
+    }
+
+    &:hover {
+      background-color: #00b090;
+      border-color: #00b090;
+      box-shadow: 0 3px 8px rgba(0, 198, 162, 0.3);
+    }
+  }
+
+  .register-button {
+    padding: 8px 20px;
+    font-weight: 600;
+    color: white;
+    border: 2px solid rgba(255, 255, 255, 0.65);
+    background-color: transparent;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    .el-icon {
+      font-size: 15px;
+    }
+
+    &:hover {
+      border-color: white;
+      background-color: rgba(255, 255, 255, 0.1);
+      transform: translateY(-1px);
+    }
+  }
+
+  .logout-button {
+    padding: 6px 14px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background-color: rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: var(--transition);
+
+    .el-icon {
+      font-size: 14px;
+    }
+
+    &:hover {
+      color: white;
+      border-color: rgba(255, 255, 255, 0.4);
+      background-color: rgba(255, 255, 255, 0.15);
     }
   }
 }
@@ -751,53 +1187,211 @@ body {
   display: flex;
   overflow: hidden;
   background-color: var(--bg-color);
-  height: calc(100vh - 50px);
+  height: calc(100vh - 60px);
+  position: relative;
+  justify-content: space-around;
 
   .router-view {
     flex: 1;
     overflow: auto;
-    background-color: white;
+    background-color: var(--card-bg);
+    border-radius: var(--radius) var(--radius) 0 0;
+    box-shadow: var(--shadow-sm);
+    margin: 0 1px;
   }
 }
 
 .toolbar {
   width: 400px;
-  background-color: white;
+  background-color: var(--card-bg);
   border-right: 1px solid var(--border-color);
   overflow-y: auto;
   min-width: 220px;
   max-width: 500px;
-  transition: width 0.1s ease;
+  transition: width 0.2s ease;
+  box-shadow: var(--shadow-sm);
+  z-index: 5;
 }
 
 .canvas {
   flex: 1;
-  background-color: white;
+  background-color: var(--card-bg);
   overflow: hidden;
   min-width: 300px;
+  box-shadow: var(--shadow-sm);
+  z-index: 1;
 }
 
 .properties-panel {
   width: 300px;
-  background-color: white;
+  background-color: var(--card-bg);
   border-left: 1px solid var(--border-color);
   overflow-y: auto;
   min-width: 220px;
   max-width: 600px;
-  transition: width 0.1s ease;
+  transition: width 0.2s ease;
+  box-shadow: var(--shadow-sm);
+  z-index: 5;
 }
 
 :deep(.el-dialog) {
-  border-radius: 8px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
 
   .el-dialog__header {
     margin: 0;
-    padding: 20px;
+    padding: 16px 24px;
     border-bottom: 1px solid var(--border-color);
+    background-color: var(--primary-light);
+  }
+
+  .el-dialog__title {
+    font-weight: 600;
+    color: var(--secondary-color);
+    font-size: 18px;
+  }
+
+  .el-dialog__headerbtn {
+    top: 16px;
+    right: 20px;
   }
 
   .el-dialog__body {
-    padding: 20px;
+    padding: 24px;
+  }
+}
+
+.feedback-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: var(--accent-color);
+  color: white;
+  text-decoration: none;
+  padding: 8px 16px;
+  font-size: 14px;
+  border-radius: var(--radius);
+  font-weight: 600;
+  transition: var(--transition);
+  box-shadow: 0 2px 10px rgba(0, 198, 162, 0.3);
+  margin: 0 16px;
+  height: 36px;
+  border: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.feedback-link:before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: all 0.6s ease;
+}
+
+.feedback-link:hover {
+  background-color: #00b090;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 198, 162, 0.4);
+}
+
+.feedback-link:hover:before {
+  left: 100%;
+}
+
+.feedback-icon {
+  font-size: 16px;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+
+  100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+}
+
+.feedback-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background-color: var(--danger-color);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  animation: pulse 2s infinite;
+}
+
+.restore-dialog-content {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.restore-time {
+  font-size: 14px;
+  color: #909399;
+  margin-top: 10px;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.autosave-notification {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background-color: rgba(25, 190, 107, 0.9);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  z-index: 9999;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.debug-buttons {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 9999;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 </style>

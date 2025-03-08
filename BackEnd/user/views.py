@@ -581,6 +581,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 available_plans.append({
                     'id': plan.id,
                     'name': plan.name,
+                    'code': plan.code,
                     'monthly_price': plan.monthly_price,
                     'yearly_price': plan.yearly_price,
                     'storage_limit': plan.storage_limit,

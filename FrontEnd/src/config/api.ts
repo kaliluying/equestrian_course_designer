@@ -7,6 +7,7 @@
 type EnvType = 'development' | 'production' | 'test' | 'staging'
 
 // 环境变量，可以根据实际部署环境修改
+console.log(import.meta.env.MODE)
 const ENV = {
   // 当前环境：development, production, test, staging
   NODE_ENV: (import.meta.env.MODE || 'development') as EnvType,
@@ -125,6 +126,11 @@ export default {
       changePassword: getApiUrl('/user/users/change_password/'),
       changeEmail: getApiUrl('/user/users/change_email/'),
       setPremium: (userId: number) => getApiUrl(`/user/users/${userId}/set_premium/`),
+    },
+
+    // 反馈相关
+    feedback: {
+      submit: getApiUrl('/api/feedback/'),
     },
 
     // 课程设计相关

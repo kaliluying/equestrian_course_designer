@@ -4,8 +4,6 @@
       <template #header>
         <div class="card-header">
           <h2>用户资料</h2>
-          <el-tag v-if="userProfile.is_premium_active" type="success">会员</el-tag>
-          <el-tag v-else type="info">免费用户</el-tag>
         </div>
       </template>
 
@@ -80,49 +78,232 @@
 
     <!-- 升级对话框 -->
     <el-dialog v-model="upgradeDialogVisible" :title="userProfile.is_premium_active ? '续费/升级会员' : '升级到会员'"
-      width="600px">
-      <div class="upgrade-dialog-content">
-        <h3>会员特权</h3>
-        <ul>
-          <li>更大的设计存储空间</li>
-          <li>支持更多高级功能</li>
-          <li><strong>独家协作功能</strong> - 与团队成员实时协作设计</li>
-          <li>优先获取新功能</li>
-        </ul>
-
-        <div class="plans-section">
-          <div v-for="plan in availablePlans" :key="plan.id" class="plan-item"
-            :class="{ 'selected-plan': selectedPlan && selectedPlan.id === plan.id }">
-            <div class="plan-header">
-              <h4>{{ plan.name }}</h4>
-              <p v-if="plan.description">{{ plan.description }}</p>
-            </div>
-
-            <div class="plan-details">
-              <div class="storage-info">
-                <i class="el-icon-folder"></i>
-                <span>{{ plan.storage_limit }}个设计</span>
+      class="membership-dialog" destroy-on-close width="850px">
+      <div class="membership-dialog-content">
+        <div class="membership-benefits">
+          <h3 class="section-title">会员特权</h3>
+          <div class="benefits-list">
+            <div class="benefit-item">
+              <el-icon>
+                <Document />
+              </el-icon>
+              <div class="benefit-content">
+                <div class="benefit-title">更大的设计存储空间</div>
+                <div class="benefit-desc">存储更多的设计作品，不必担心空间限制</div>
               </div>
-
-              <div class="price-options">
-                <div class="price-option" @click="selectPlan(plan, 'month')"
-                  :class="{ 'selected': selectedPlan && selectedPlan.id === plan.id && billingCycle === 'month' }">
-                  <div class="price">¥{{ plan.monthly_price }}/月</div>
-                </div>
-
-                <div class="price-option" @click="selectPlan(plan, 'year')"
-                  :class="{ 'selected': selectedPlan && selectedPlan.id === plan.id && billingCycle === 'year' }">
-                  <div class="price">¥{{ plan.yearly_price }}/年</div>
-                  <div class="discount">相当于¥{{ (plan.yearly_price / 12).toFixed(2) }}/月</div>
-                </div>
+            </div>
+            <div class="benefit-item">
+              <el-icon>
+                <SetUp />
+              </el-icon>
+              <div class="benefit-content">
+                <div class="benefit-title">支持更多高级功能</div>
+                <div class="benefit-desc">获得更多高级设计工具和编辑选项</div>
+              </div>
+            </div>
+            <div class="benefit-item">
+              <el-icon>
+                <Connection />
+              </el-icon>
+              <div class="benefit-content">
+                <div class="benefit-title">独家协作功能</div>
+                <div class="benefit-desc">与团队成员实时协作设计，提高工作效率</div>
+              </div>
+            </div>
+            <div class="benefit-item">
+              <el-icon>
+                <Star />
+              </el-icon>
+              <div class="benefit-content">
+                <div class="benefit-title">优先获取新功能</div>
+                <div class="benefit-desc">抢先体验平台新推出的功能和工具</div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="action-buttons">
+        <h3 class="section-title plans-title">选择会员计划</h3>
+
+        <!-- 加载中提示 -->
+        <div v-if="loading" class="loading-placeholder">
+          <el-skeleton :rows="3" animated style="width: 100%" />
+        </div>
+
+        <!-- 会员计划加载失败提示 -->
+        <div v-else-if="!loading && availablePlans.length === 0" class="empty-plans">
+          <el-empty description="未能获取会员计划信息">
+            <el-button type="primary" @click="fetchUserProfile">重新加载</el-button>
+          </el-empty>
+        </div>
+
+        <div class="pricing-grid" v-else>
+          <!-- 免费用户卡片 -->
+          <div class="pricing-card" :class="{ 'is-active': !userProfile.is_premium }">
+            <div class="pricing-header">
+              <h4>免费用户</h4>
+              <div v-if="!userProfile.is_premium" class="active-badge">当前方案</div>
+            </div>
+            <div class="pricing-price">
+              <div class="price-value">¥0/月</div>
+              <div class="price-period">¥0/年</div>
+            </div>
+            <div class="pricing-features">
+              <div class="feature-item">
+                <el-icon>
+                  <Check />
+                </el-icon>
+                <span>基础设计功能</span>
+              </div>
+              <div class="feature-item muted">
+                <el-icon>
+                  <Close />
+                </el-icon>
+                <span>协作功能</span>
+              </div>
+              <div class="feature-item muted">
+                <el-icon>
+                  <Close />
+                </el-icon>
+                <span>5个存储空间</span>
+              </div>
+              <div class="feature-item muted">
+                <el-icon>
+                  <Close />
+                </el-icon>
+                <span>10个自定义障碍</span>
+              </div>
+            </div>
+            <div class="pricing-cta">
+              <span class="current-plan-label" v-if="!userProfile.is_premium">当前方案</span>
+            </div>
+          </div>
+
+          <!-- 标准会员卡片 -->
+          <div class="pricing-card"
+            :class="{ 'is-selected': selectedPlan && selectedPlan.code === 'standard', 'is-active': userProfile.membership_plan && userProfile.membership_plan.code === 'standard' }"
+            @click="selectStandardPlan()">
+            <div class="pricing-header">
+              <h4>标准会员</h4>
+              <div v-if="userProfile.membership_plan && userProfile.membership_plan.code === 'standard'"
+                class="active-badge">当前方案</div>
+            </div>
+            <div class="pricing-price">
+              <div class="price-value"
+                :class="{ 'selected': selectedPlan?.code === 'standard' && billingCycle === 'month' }"
+                @click.stop="() => selectStandardPlan('month')">
+                ¥{{ getStandardPlan()?.monthly_price || 39 }}/月
+              </div>
+              <div class="price-period"
+                :class="{ 'selected': selectedPlan?.code === 'standard' && billingCycle === 'year' }"
+                @click.stop="() => selectStandardPlan('year')">
+                ¥{{ getStandardPlan()?.yearly_price || 399 }}/年
+                <div class="price-savings">
+                  相当于¥{{ getStandardPlan() ? (getStandardPlan()!.yearly_price / 12).toFixed(2) : '33.25' }}/月
+                </div>
+              </div>
+            </div>
+            <div class="pricing-features">
+              <div class="feature-item">
+                <el-icon>
+                  <Check />
+                </el-icon>
+                <span>全部设计功能</span>
+              </div>
+              <div class="feature-item">
+                <el-icon>
+                  <Check />
+                </el-icon>
+                <span>100个设计存储空间</span>
+              </div>
+              <div class="feature-item">
+                <el-icon>
+                  <Check />
+                </el-icon>
+                <span>不限量个自定义障碍</span>
+              </div>
+              <div class="feature-item">
+                <el-icon>
+                  <Check />
+                </el-icon>
+                <span>优先支持</span>
+              </div>
+            </div>
+            <div class="pricing-cta">
+              <button class="select-plan-btn" :class="{ 'selected': selectedPlan && selectedPlan.code === 'standard' }">
+                {{ userProfile.membership_plan && userProfile.membership_plan.code === 'standard' ? '续费' : '选择' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- 高级会员卡片 -->
+          <div class="pricing-card premium"
+            :class="{ 'is-selected': selectedPlan && selectedPlan.code === 'premium', 'is-active': userProfile.membership_plan && userProfile.membership_plan.code === 'premium' }"
+            @click="selectPremiumPlan()">
+            <div class="pricing-badge">推荐</div>
+            <div class="pricing-header">
+              <h4>高级会员</h4>
+              <div v-if="userProfile.membership_plan && userProfile.membership_plan.code === 'premium'"
+                class="active-badge">当前方案</div>
+            </div>
+            <div class="pricing-price">
+              <div class="price-value"
+                :class="{ 'selected': selectedPlan?.code === 'premium' && billingCycle === 'month' }"
+                @click.stop="() => selectPremiumPlan('month')">
+                ¥{{ getPremiumPlan()?.monthly_price || 69 }}/月
+              </div>
+              <div class="price-period"
+                :class="{ 'selected': selectedPlan?.code === 'premium' && billingCycle === 'year' }"
+                @click.stop="() => selectPremiumPlan('year')">
+                ¥{{ getPremiumPlan()?.yearly_price || 699 }}/年
+                <div class="price-savings">
+                  相当于¥{{ getPremiumPlan() ? (getPremiumPlan()!.yearly_price / 12).toFixed(2) : '58.25' }}/月
+                </div>
+              </div>
+            </div>
+            <div class="pricing-features">
+              <div class="feature-item">
+                <el-icon>
+                  <Check />
+                </el-icon>
+                <span>全部设计功能</span>
+              </div>
+              <div class="feature-item">
+                <el-icon>
+                  <Check />
+                </el-icon>
+                <span>协作功能（无限人数）</span>
+              </div>
+              <div class="feature-item">
+                <el-icon>
+                  <Check />
+                </el-icon>
+                <span>500个设计存储空间</span>
+              </div>
+              <div class="feature-item">
+                <el-icon>
+                  <Check />
+                </el-icon>
+                <span>不限量个自定义障碍</span>
+              </div>
+              <div class="feature-item">
+                <el-icon>
+                  <Check />
+                </el-icon>
+                <span>优先支持</span>
+              </div>
+            </div>
+            <div class="pricing-cta">
+              <button class="select-plan-btn premium"
+                :class="{ 'selected': selectedPlan && selectedPlan.code === 'premium' }">
+                {{ userProfile.membership_plan && userProfile.membership_plan.code === 'premium' ? '续费' : '选择' }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="dialog-footer">
           <el-button @click="upgradeDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="upgradeMembership" :disabled="!selectedPlan">
+          <el-button type="primary" @click="upgradeMembership" :disabled="!selectedPlan" :loading="upgradeLoading">
             {{ getActionButtonText() }}
           </el-button>
         </div>
@@ -171,11 +352,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getUserProfile, changePassword, changeEmail } from '@/api/user'
 import { useUserStore } from '@/stores/user'
 import type { FormInstance } from 'element-plus'
+import { Document, SetUp, Connection, Star, Check, Close } from '@element-plus/icons-vue'
 
 // 定义会员计划类型
 interface MembershipPlan {
@@ -269,6 +451,9 @@ const emailForm = ref({
   password: ''
 })
 
+// 其他状态
+const upgradeLoading = ref(false)
+
 // 表单验证规则
 const passwordRules = {
   old_password: [
@@ -338,6 +523,11 @@ const fetchUserProfile = async () => {
       userProfile.value = response as unknown as UserProfile
       if (response.available_plans && Array.isArray(response.available_plans)) {
         availablePlans.value = response.available_plans.filter((plan: MembershipPlan) => plan.code !== 'free')
+
+        // 如果没有获取到计划数据，显示提示
+        if (availablePlans.value.length === 0) {
+          ElMessage.warning('未能获取会员计划信息，请刷新页面重试')
+        }
       }
 
       // 更新用户存储中的会员状态
@@ -360,15 +550,73 @@ const fetchUserProfile = async () => {
 
 // 显示升级对话框
 const showUpgradeDialog = () => {
-  selectedPlan.value = null
-  billingCycle.value = 'month'
-  upgradeDialogVisible.value = true
+  selectedPlan.value = null; // 确保初始没有选中任何计划
+  billingCycle.value = 'month';
+  upgradeDialogVisible.value = true;
 }
 
-// 选择会员计划
-const selectPlan = (plan: MembershipPlan, cycle: 'month' | 'year') => {
-  selectedPlan.value = plan
-  billingCycle.value = cycle
+// 获取标准会员计划
+const getStandardPlan = () => {
+  return availablePlans.value.find(plan => plan.code === 'standard')
+}
+
+// 获取高级会员计划
+const getPremiumPlan = () => {
+  return availablePlans.value.find(plan => plan.code === 'premium')
+}
+
+// 选择标准会员计划
+const selectStandardPlan = (cycle?: 'month' | 'year') => {
+  // 获取标准会员计划
+  const plan = getStandardPlan();
+  if (plan) {
+    selectedPlan.value = plan;
+    if (cycle) {
+      billingCycle.value = cycle;
+    }
+  } else {
+    // 如果没有获取到标准会员计划数据，创建一个默认计划
+    const defaultStandardPlan: MembershipPlan = {
+      id: 1,
+      name: '标准会员',
+      code: 'standard',
+      monthly_price: 39,
+      yearly_price: 399,
+      storage_limit: 30,
+      description: '适合个人用户的标准会员计划'
+    };
+    selectedPlan.value = defaultStandardPlan;
+    if (cycle) {
+      billingCycle.value = cycle;
+    }
+  }
+}
+
+// 选择高级会员计划
+const selectPremiumPlan = (cycle?: 'month' | 'year') => {
+  // 获取高级会员计划
+  const plan = getPremiumPlan();
+  if (plan) {
+    selectedPlan.value = plan;
+    if (cycle) {
+      billingCycle.value = cycle;
+    }
+  } else {
+    // 如果没有获取到高级会员计划数据，创建一个默认计划
+    const defaultPremiumPlan: MembershipPlan = {
+      id: 2,
+      name: '高级会员',
+      code: 'premium',
+      monthly_price: 69,
+      yearly_price: 699,
+      storage_limit: 100,
+      description: '适合专业用户的高级会员计划'
+    };
+    selectedPlan.value = defaultPremiumPlan;
+    if (cycle) {
+      billingCycle.value = cycle;
+    }
+  }
 }
 
 // 升级会员
@@ -383,10 +631,17 @@ const upgradeMembership = () => {
     ? selectedPlan.value.monthly_price
     : selectedPlan.value.yearly_price
 
-  // 这里应该跳转到支付页面或调用支付API
-  const actionText = userProfile.value.is_premium_active ? '续费/升级' : '开通'
-  ElMessage.info(`正在开发${billingCycle.value === 'month' ? '月度' : '年度'}${selectedPlan.value.name}${actionText}支付功能，价格：¥${price}，敬请期待！`)
-  upgradeDialogVisible.value = false
+  upgradeLoading.value = true
+
+  // 模拟支付处理
+  setTimeout(() => {
+    // 这里应该跳转到支付页面或调用支付API
+    const actionText = userProfile.value.is_premium_active ? '续费/升级' : '开通'
+    const planName = selectedPlan.value ? selectedPlan.value.name : ''
+    ElMessage.info(`正在开发${billingCycle.value === 'month' ? '月度' : '年度'}${planName}${actionText}支付功能，价格：¥${price}，敬请期待！`)
+    upgradeDialogVisible.value = false
+    upgradeLoading.value = false
+  }, 1000)
 }
 
 // 获取操作按钮文本
@@ -487,179 +742,585 @@ const submitChangeEmail = async () => {
   })
 }
 
+// 监听会员计划列表变化
+watch(availablePlans, (newPlans) => {
+  // 如果已选择了计划，但该计划不在新的计划列表中，则重置选择
+  if (selectedPlan.value && !newPlans.some(plan => plan.id === selectedPlan.value?.id)) {
+    selectedPlan.value = null
+  }
+}, { deep: true })
+
 onMounted(() => {
   fetchUserProfile()
 })
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .user-profile-container {
-  max-width: 800px;
-  margin: 20px auto;
-  padding: 0 20px;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 40px 24px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+  background-color: var(--bg-color, #f5f7fa);
+
+  @media (min-width: 992px) {
+    grid-template-columns: 1fr;
+    max-width: 1200px;
+  }
 }
 
 .profile-card {
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius, 12px);
+  box-shadow: var(--shadow, 0 4px 12px rgba(0, 0, 0, 0.05));
+  border: none;
+  overflow: hidden;
+  transition: var(--transition, all 0.3s ease);
+  width: 100%;
+  background-color: var(--card-bg, #fff);
+
+  &:hover {
+    box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.08));
+    transform: translateY(-2px);
+  }
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
+  position: relative;
 
-.card-header h2 {
-  margin: 0;
-  font-size: 20px;
-  color: #333;
+  h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-color, #333);
+    letter-spacing: -0.5px;
+    background: linear-gradient(90deg, var(--primary-color, #3a6af8) 0%, var(--primary-dark, #2a4db7) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
 }
 
 .loading-container {
-  padding: 20px 0;
+  padding: 32px 0;
+  display: flex;
+  justify-content: center;
 }
 
 .profile-content {
-  padding: 10px 0;
+  padding: 16px 0;
 }
 
 .info-item {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  padding: 16px;
+  border-radius: var(--radius, 12px);
+  transition: var(--transition, all 0.3s ease);
+  background-color: var(--card-bg, #fff);
+  border: 1px solid transparent;
+
+  &:hover {
+    background-color: var(--primary-light, #f0f4ff);
+    border-color: var(--primary-color, #3a6af8);
+    transform: translateX(4px);
+  }
 }
 
 .label {
-  width: 120px;
-  color: #606266;
-  font-weight: 500;
+  width: 140px;
+  color: var(--text-light, #666);
+  font-weight: 600;
+  font-size: 14px;
+  position: relative;
+  padding-left: 16px;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 16px;
+    background-color: var(--primary-color, #3a6af8);
+    border-radius: 2px;
+  }
 }
 
 .value {
   flex: 1;
-  color: #333;
+  color: var(--text-color, #333);
+  font-weight: 500;
+  font-size: 15px;
+}
+
+.edit-button {
+  margin-left: 16px;
 }
 
 .storage-progress {
-  margin-top: 8px;
+  margin-top: 12px;
   width: 100%;
-}
 
-.upgrade-section {
-  margin-top: 30px;
-  padding-top: 20px;
-  border-top: 1px solid #eee;
-  text-align: center;
-}
+  :deep(.el-progress-bar__inner) {
+    background: linear-gradient(90deg, var(--primary-color, #3a6af8) 0%, var(--primary-dark, #2a4db7) 100%);
+    transition: all 0.3s ease;
+  }
 
-.upgrade-section h3 {
-  margin-bottom: 10px;
-  color: #333;
-}
-
-.upgrade-section p {
-  margin-bottom: 20px;
-  color: #606266;
-}
-
-.upgrade-dialog-content h3 {
-  margin-bottom: 16px;
-  color: #333;
-}
-
-.upgrade-dialog-content ul {
-  margin-bottom: 24px;
-  padding-left: 20px;
-}
-
-.upgrade-dialog-content li {
-  margin-bottom: 8px;
-  color: #606266;
-}
-
-.plans-section {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  margin-top: 20px;
-}
-
-.plan-item {
-  border: 1px solid #eee;
-  border-radius: 8px;
-  padding: 20px;
-  transition: all 0.3s;
-}
-
-.plan-item:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.selected-plan {
-  border-color: #409EFF;
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.2);
-}
-
-.plan-header h4 {
-  margin: 0 0 10px 0;
-  color: #333;
-  font-size: 18px;
-}
-
-.plan-header p {
-  margin: 0 0 15px 0;
-  color: #606266;
-  font-size: 14px;
-}
-
-.plan-details {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  :deep(.el-progress-bar__outer) {
+    background-color: var(--primary-light, #f0f4ff);
+    border-radius: 8px;
+  }
 }
 
 .storage-info {
   display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--text-light, #666);
+}
+
+.upgrade-section {
+  margin-top: 30px;
+  padding: 24px;
+  border-top: 1px solid var(--border-color, #eaeaea);
+  background-color: var(--primary-light, #f0f4ff);
+  border-radius: var(--radius, 12px);
+  text-align: center;
+
+  h3 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--primary-color, #3a6af8);
+    margin-bottom: 12px;
+  }
+
+  p {
+    color: var(--text-light, #666);
+    margin-bottom: 20px;
+    font-size: 15px;
+  }
+
+  .el-button {
+    padding: 12px 24px;
+    font-weight: 600;
+  }
+}
+
+.upgrade-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-color);
+  margin-bottom: 16px;
+  display: flex;
   align-items: center;
   gap: 8px;
-  color: #606266;
+
+  .el-icon {
+    color: var(--primary-color);
+  }
 }
 
-.price-options {
+.premium-benefits {
+  margin: 20px 0;
+}
+
+.benefits-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.benefit-item {
   display: flex;
-  gap: 15px;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+  background-color: var(--primary-light);
+  border-radius: var(--radius);
+
+  .el-icon {
+    font-size: 18px;
+    color: var(--primary-color);
+    margin-top: 3px;
+    flex-shrink: 0;
+  }
+
+  .benefit-content {
+    flex: 1;
+    min-width: 0;
+    /* 防止文本溢出 */
+  }
+
+  .benefit-title {
+    font-weight: 600;
+    color: var(--text-color);
+    margin-bottom: 4px;
+    font-size: 14px;
+  }
+
+  .benefit-desc {
+    font-size: 12px;
+    color: var(--text-light);
+    line-height: 1.4;
+  }
 }
 
-.price-option {
-  padding: 10px 15px;
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.price-option:hover,
-.price-option.selected {
-  border-color: #409EFF;
-  background-color: #ecf5ff;
-}
-
-.price {
+.section-title {
   font-size: 16px;
-  font-weight: bold;
-  color: #409EFF;
+  font-weight: 600;
+  color: var(--text-color);
+  margin: 0 0 12px;
+  position: relative;
 }
 
-.discount {
+.plans-title {
+  margin-top: 20px;
+  margin-bottom: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.loading-placeholder,
+.empty-plans {
+  margin-bottom: 30px;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-bottom: 30px;
+  width: 100%;
+}
+
+.pricing-card {
+  border-radius: var(--radius, 12px);
+  box-shadow: var(--shadow, 0 4px 12px rgba(0, 0, 0, 0.05));
+  overflow: hidden;
+  transition: var(--transition, all 0.3s ease);
+  position: relative;
+  padding: 24px;
+  background-color: var(--card-bg, #fff);
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 2px solid transparent;
+
+  &:hover {
+    box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.08));
+    transform: translateY(-5px);
+  }
+
+  &.is-selected {
+    border-color: var(--primary-color, #3a6af8);
+    box-shadow: 0 0 0 2px rgba(58, 106, 248, 0.2);
+  }
+
+  &.is-active {
+    background-color: var(--primary-light, #f0f4ff);
+    border-color: var(--primary-color, #3a6af8);
+  }
+
+  &.premium {
+    box-shadow: var(--shadow, 0 4px 12px rgba(0, 0, 0, 0.05));
+
+    &:hover {
+      box-shadow: var(--shadow-lg, 0 8px 24px rgba(58, 106, 248, 0.2));
+    }
+
+    &.is-selected {
+      border-color: var(--primary-color, #3a6af8);
+      box-shadow: 0 0 0 2px rgba(58, 106, 248, 0.2);
+    }
+  }
+}
+
+.pricing-badge {
+  position: absolute;
+  top: 0;
+  right: 24px;
+  background: linear-gradient(90deg, rgba(255, 126, 95, 0.85), rgba(254, 180, 123, 0.85));
+  color: white;
+  padding: 6px 12px;
   font-size: 12px;
-  color: #67C23A;
-  margin-top: 5px;
+  font-weight: 600;
+  border-radius: 0 0 12px 12px;
+  box-shadow: 0 4px 8px rgba(255, 126, 95, 0.25);
+  z-index: 1;
 }
 
-.action-buttons {
-  margin-top: 30px;
+.pricing-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+
+  h4 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-color, #333);
+    margin: 0;
+    background: linear-gradient(90deg, var(--primary-color, #3a6af8) 0%, var(--primary-dark, #2a4db7) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+}
+
+.active-badge {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 20px;
+  background: linear-gradient(90deg, rgba(54, 209, 220, 0.85) 0%, rgba(91, 134, 229, 0.85) 100%);
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(54, 209, 220, 0.25);
+}
+
+.pricing-price {
+  margin-bottom: 20px;
+  background-color: var(--primary-light, #f0f4ff);
+  border-radius: var(--radius, 12px);
+  padding: 16px;
+
+  .price-value,
+  .price-period {
+    padding: 10px;
+    border-radius: var(--radius-sm, 8px);
+    cursor: pointer;
+    transition: var(--transition, all 0.3s ease);
+    border: 1px solid transparent;
+    margin-bottom: 8px;
+    text-align: center;
+
+    &:hover {
+      background-color: rgba(255, 255, 255, 0.8);
+    }
+
+    &.selected {
+      background-color: white;
+      border-color: var(--primary-color, #3a6af8);
+      font-weight: 600;
+      box-shadow: 0 2px 8px rgba(58, 106, 248, 0.15);
+    }
+  }
+
+  .price-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--primary-color, #3a6af8);
+  }
+
+  .price-period {
+    font-size: 15px;
+    color: var(--text-color, #333);
+
+    .price-savings {
+      font-size: 12px;
+      color: var(--accent-color, #f56c6c);
+      margin-top: 4px;
+      font-weight: 600;
+    }
+  }
+}
+
+.pricing-features {
+  margin-bottom: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color, #eaeaea);
+
+  .feature-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    font-size: 14px;
+
+    .el-icon {
+      font-size: 16px;
+      color: var(--success-color, #67c23a);
+      background-color: rgba(103, 194, 58, 0.1);
+      padding: 4px;
+      border-radius: 50%;
+    }
+
+    &.muted {
+      opacity: 0.6;
+
+      .el-icon {
+        color: var(--text-light, #909399);
+        background-color: rgba(144, 147, 153, 0.1);
+      }
+    }
+  }
+}
+
+.pricing-cta {
+  margin-top: auto;
+
+  .select-plan-btn {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    background: linear-gradient(90deg, rgba(58, 106, 248, 0.85) 0%, rgba(42, 77, 183, 0.85) 100%);
+    color: white;
+    border-radius: var(--radius, 12px);
+    font-weight: 600;
+    font-size: 15px;
+    cursor: pointer;
+    transition: var(--transition, all 0.3s ease);
+    box-shadow: 0 4px 12px rgba(58, 106, 248, 0.15);
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(58, 106, 248, 0.2);
+      background: linear-gradient(90deg, rgba(58, 106, 248, 0.95) 0%, rgba(42, 77, 183, 0.95) 100%);
+    }
+
+    &.selected {
+      background: linear-gradient(90deg, rgba(42, 77, 183, 0.85) 0%, rgba(58, 106, 248, 0.85) 100%);
+    }
+
+    &.premium {
+      background: linear-gradient(90deg, rgba(54, 209, 220, 0.85) 0%, rgba(91, 134, 229, 0.85) 100%);
+
+      &:hover {
+        background: linear-gradient(90deg, rgba(91, 134, 229, 0.95) 0%, rgba(54, 209, 220, 0.95) 100%);
+      }
+    }
+  }
+
+  .current-plan-label {
+    display: block;
+    text-align: center;
+    color: var(--primary-color, #3a6af8);
+    font-weight: 600;
+    margin-top: 8px;
+    font-size: 14px;
+  }
+}
+
+.dialog-footer {
   display: flex;
   justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-color);
+}
+
+@media (max-width: 992px) {
+  .membership-dialog {
+    width: 90% !important;
+  }
+
+  .benefits-list {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .pricing-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .benefits-list {
+    grid-template-columns: 1fr;
+  }
+
+  .pricing-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pricing-card {
+    padding: 16px;
+  }
+
+  .membership-dialog {
+    width: 95% !important;
+  }
+
+  .info-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .label {
+    width: 100%;
+    margin-bottom: 8px;
+    padding-left: 12px;
+
+    &::before {
+      height: 12px;
+    }
+  }
+
+  .value {
+    width: 100%;
+    padding-left: 12px;
+  }
+}
+
+@media (max-width: 576px) {
+  .membership-dialog-content {
+    padding: 16px;
+  }
+
+  .benefit-item {
+    padding: 10px;
+  }
+
+  .pricing-card {
+    padding: 12px;
+  }
+}
+
+/* 会员对话框样式 */
+.membership-dialog {
+  :deep(.el-dialog__body) {
+    padding: 0;
+  }
+
+  :deep(.el-dialog__header) {
+    padding: 20px 24px;
+    margin: 0;
+    border-bottom: 1px solid var(--border-color, #eaeaea);
+    background: linear-gradient(90deg, var(--primary-light, #f0f4ff) 0%, #ffffff 100%);
+  }
+
+  :deep(.el-dialog__title) {
+    font-weight: 700;
+    font-size: 20px;
+    color: var(--primary-color, #3a6af8);
+  }
+}
+
+.membership-dialog-content {
+  padding: 20px;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* 链接按钮样式 */
+:deep(.el-button--primary.is-link) {
+  color: rgba(58, 106, 248, 0.85);
+
+  &:hover {
+    color: rgba(42, 77, 183, 0.95);
+    transform: none;
+    box-shadow: none;
+  }
 }
 </style>
