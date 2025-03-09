@@ -131,7 +131,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
 STATIC_URL = 'static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+# STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static'),
 ]
@@ -141,7 +141,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
 
 # 站点域名配置，用于媒体文件URL生成
-SITE_DOMAIN = os.environ.get('SITE_DOMAIN', '127.0.0.1:8000')
+SITE_DOMAIN = os.environ.get('SITE_DOMAIN', '192.168.1.6:8000')
 USE_HTTPS = os.environ.get('USE_HTTPS', 'False').lower() == 'true'
 
 # Default primary key field type
@@ -199,6 +199,8 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://localhost:8080",
     "http://127.0.0.1:8080",
+    "http://192.168.1.6:5173",
+    "http://192.168.1.6:8080",
 ]
 
 # CORS配置
@@ -207,6 +209,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://localhost:8080",
     "http://127.0.0.1:8080",
+    "http://192.168.1.6:5173",
+    "http://192.168.1.6:8080",
 ]
 
 # 允许跨域请求携带cookie
@@ -236,7 +240,7 @@ CORS_ALLOW_HEADERS = [
 ]
 
 # 前端URL配置
-FRONTEND_URL = 'http://localhost:5173'  # 开发环境
+FRONTEND_URL = 'http://192.168.1.6:5173'  # 开发环境
 # FRONTEND_URL = 'https://yourdomain.com'  # 生产环境
 
 

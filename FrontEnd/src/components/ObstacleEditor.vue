@@ -19,7 +19,7 @@
       <div class="section-title">通用属性</div>
 
       <!-- 装饰物配置 -->
-      <template v-if="obstacleData.baseType === ObstacleType.DECORATION">
+      <template v-if="obstacleData.baseType === ObstacleType.DECORATION && obstacleData.decorationProperties">
         <div class="decoration-container">
           <div class="form-group">
             <label>装饰物类别</label>
@@ -31,15 +31,18 @@
           </div>
 
           <div class="form-group">
-            <label>宽度 (px)</label>
-            <el-input-number v-model="obstacleData.decorationProperties.width" :min="20" :max="500" :step="10"
-              class="full-width" />
+            <label>宽度 (m)</label>
+            <el-input-number v-model="decorationWidthM" :min="0.02" :max="5" :step="0.01" class="full-width" />
           </div>
 
           <div class="form-group">
-            <label>高度 (px)</label>
-            <el-input-number v-model="obstacleData.decorationProperties.height" :min="20" :max="500" :step="10"
-              class="full-width" />
+            <label>高度 (m)</label>
+            <el-input-number v-model="decorationHeightM" :min="0.02" :max="5" :step="0.01" class="full-width" />
+          </div>
+
+          <div class="form-group">
+            <label>显示方向箭头</label>
+            <el-switch v-model="obstacleData.decorationProperties.showDirectionArrow" />
           </div>
 
           <div class="form-group">
@@ -55,8 +58,8 @@
               <el-color-picker v-model="obstacleData.decorationProperties.borderColor" class="color-picker" />
             </div>
             <div class="form-group">
-              <label>边框宽度 (px)</label>
-              <el-input-number v-model="obstacleData.decorationProperties.borderWidth" :min="0" :max="10" :step="1"
+              <label>边框宽度 (cm)</label>
+              <el-input-number v-model="decorationBorderWidthCM" :min="0" :max="10" :step="0.1" :precision="1"
                 class="full-width" />
             </div>
             <div class="form-group">
@@ -72,19 +75,16 @@
           <!-- 树特有属性 -->
           <template v-if="obstacleData.decorationProperties.category === DecorationCategory.TREE">
             <div class="form-group">
-              <label>树干高度 (px)</label>
-              <el-input-number v-model="obstacleData.decorationProperties.trunkHeight" :min="20" :max="200" :step="5"
-                class="full-width" />
+              <label>树干高度 (cm)</label>
+              <el-input-number v-model="treeTrunkHeightCM" :min="20" :max="200" :step="5" class="full-width" />
             </div>
             <div class="form-group">
-              <label>树干宽度 (px)</label>
-              <el-input-number v-model="obstacleData.decorationProperties.trunkWidth" :min="5" :max="50" :step="1"
-                class="full-width" />
+              <label>树干宽度 (cm)</label>
+              <el-input-number v-model="treeTrunkWidthCM" :min="5" :max="50" :step="1" class="full-width" />
             </div>
             <div class="form-group">
-              <label>树冠半径 (px)</label>
-              <el-input-number v-model="obstacleData.decorationProperties.foliageRadius" :min="20" :max="150" :step="5"
-                class="full-width" />
+              <label>树冠半径 (cm)</label>
+              <el-input-number v-model="treeFoliageRadiusCM" :min="20" :max="150" :step="5" class="full-width" />
             </div>
             <div class="form-group">
               <label>树干颜色</label>
@@ -108,8 +108,8 @@
               <el-color-picker v-model="obstacleData.decorationProperties.borderColor" class="color-picker" />
             </div>
             <div class="form-group">
-              <label>边框宽度 (px)</label>
-              <el-input-number v-model="obstacleData.decorationProperties.borderWidth" :min="0" :max="10" :step="1"
+              <label>边框宽度 (cm)</label>
+              <el-input-number v-model="decorationBorderWidthCM" :min="0" :max="10" :step="0.1" :precision="1"
                 class="full-width" />
             </div>
             <div class="form-group">
@@ -150,20 +150,26 @@
             </div>
 
             <div class="pole-form">
-              <el-form-item label="高度 (px)">
-                <el-input-number v-model="pole.height" :min="5" :max="100" :step="5" />
+              <el-form-item label="高度 (cm)">
+                <el-input-number :model-value="getPoleHeightValue(index)"
+                  @update:model-value="(val: number) => updatePoleHeight(index, val)" :min="1" :max="150" :step="1"
+                  controls-position="right" />
               </el-form-item>
 
-              <el-form-item label="宽度 (px)">
-                <el-input-number v-model="pole.width" :min="50" :max="300" :step="10" />
+              <el-form-item label="长度 (m)">
+                <el-input-number :model-value="getPoleWidthValue(index)"
+                  @update:model-value="(val: number) => updatePoleWidth(index, val)" :min="0.1" :max="5" :step="0.1"
+                  :precision="1" controls-position="right" />
               </el-form-item>
 
               <el-form-item label="颜色">
                 <el-color-picker v-model="pole.color" />
               </el-form-item>
 
-              <el-form-item label="间距 (px)" v-if="index < obstacleData.poles.length - 1">
-                <el-input-number v-model="pole.spacing" :min="0" :max="100" :step="5" />
+              <el-form-item label="间距 (cm)" v-if="index < obstacleData.poles.length - 1">
+                <el-input-number :model-value="getPoleSpacingValue(index)"
+                  @update:model-value="(val: number) => updatePoleSpacing(index, val)" :min="10" :max="200" :step="5"
+                  controls-position="right" />
               </el-form-item>
             </div>
           </div>
@@ -175,14 +181,14 @@
       </template>
 
       <!-- 墙壁属性 -->
-      <template v-if="obstacleData.baseType === 'WALL'">
+      <template v-if="obstacleData.baseType === 'WALL' && obstacleData.wallProperties">
         <div class="wall-properties">
-          <el-form-item label="高度 (px)">
-            <el-input-number v-model="obstacleData.wallProperties.height" :min="20" :max="200" :step="10" />
+          <el-form-item label="高度 (cm)">
+            <el-input-number v-model="wallHeightCM" :min="20" :max="200" :step="5" />
           </el-form-item>
 
-          <el-form-item label="宽度 (px)">
-            <el-input-number v-model="obstacleData.wallProperties.width" :min="50" :max="300" :step="10" />
+          <el-form-item label="宽度 (m)">
+            <el-input-number v-model="wallWidthM" :min="0.5" :max="5" :step="0.1" :precision="1" />
           </el-form-item>
 
           <el-form-item label="颜色">
@@ -192,14 +198,14 @@
       </template>
 
       <!-- 利物浦属性 -->
-      <template v-if="obstacleData.baseType === 'LIVERPOOL'">
+      <template v-if="obstacleData.baseType === 'LIVERPOOL' && obstacleData.liverpoolProperties">
         <div class="liverpool-properties">
-          <el-form-item label="水深 (px)">
-            <el-input-number v-model="obstacleData.liverpoolProperties.waterDepth" :min="5" :max="50" :step="5" />
+          <el-form-item label="水深 (cm)">
+            <el-input-number v-model="liverpoolWaterDepthCM" :min="5" :max="50" :step="1" />
           </el-form-item>
 
-          <el-form-item label="水宽 (px)">
-            <el-input-number v-model="obstacleData.liverpoolProperties.width" :min="50" :max="300" :step="10" />
+          <el-form-item label="宽度 (m)">
+            <el-input-number v-model="liverpoolWidthM" :min="0.5" :max="5" :step="0.1" :precision="1" />
           </el-form-item>
 
           <el-form-item label="水颜色">
@@ -210,21 +216,21 @@
             <el-checkbox v-model="obstacleData.liverpoolProperties.hasRail">包含横杆</el-checkbox>
           </el-form-item>
 
-          <el-form-item v-if="obstacleData.liverpoolProperties.hasRail" label="横杆高度 (px)">
-            <el-input-number v-model="obstacleData.liverpoolProperties.railHeight" :min="5" :max="50" :step="5" />
+          <el-form-item v-if="obstacleData.liverpoolProperties.hasRail" label="横杆高度 (cm)">
+            <el-input-number v-model="liverpoolRailHeightCM" :min="5" :max="50" :step="1" />
           </el-form-item>
         </div>
       </template>
 
       <!-- 水障属性 -->
-      <template v-if="obstacleData.baseType === 'WATER'">
+      <template v-if="obstacleData.baseType === 'WATER' && obstacleData.waterProperties">
         <div class="water-properties">
-          <el-form-item label="宽度 (px)">
-            <el-input-number v-model="obstacleData.waterProperties.width" :min="50" :max="300" :step="10" />
+          <el-form-item label="宽度 (m)">
+            <el-input-number v-model="waterWidthM" :min="0.5" :max="5" :step="0.1" :precision="1" />
           </el-form-item>
 
-          <el-form-item label="深度 (px)">
-            <el-input-number v-model="obstacleData.waterProperties.depth" :min="5" :max="50" :step="5" />
+          <el-form-item label="深度 (cm)">
+            <el-input-number v-model="waterDepthCM" :min="5" :max="50" :step="1" />
           </el-form-item>
 
           <el-form-item label="水颜色">
@@ -235,8 +241,8 @@
             <el-color-picker v-model="obstacleData.waterProperties.borderColor" show-alpha />
           </el-form-item>
 
-          <el-form-item label="边框宽度 (px)">
-            <el-input-number v-model="obstacleData.waterProperties.borderWidth" :min="0" :max="5" :step="1" />
+          <el-form-item label="边框宽度 (cm)">
+            <el-input-number v-model="waterBorderWidthCM" :min="0" :max="5" :step="0.1" :precision="1" />
           </el-form-item>
         </div>
       </template>
@@ -247,7 +253,7 @@
       <div class="obstacle-preview">
         <!-- 障碍物预览 -->
         <div class="obstacle-content">
-          <template v-if="obstacleData.baseType === 'WALL'">
+          <template v-if="obstacleData.baseType === 'WALL' && obstacleData.wallProperties">
             <div class="wall" :style="{
               width: `${obstacleData.wallProperties.width}px`,
               height: `${obstacleData.wallProperties.height}px`,
@@ -256,7 +262,7 @@
               <div class="wall-texture"></div>
             </div>
           </template>
-          <template v-else-if="obstacleData.baseType === 'LIVERPOOL'">
+          <template v-else-if="obstacleData.baseType === 'LIVERPOOL' && obstacleData.liverpoolProperties">
             <div class="liverpool" :style="{
               width: `${obstacleData.poles[0]?.width || 100}px`,
             }">
@@ -277,7 +283,7 @@
               }"></div>
             </div>
           </template>
-          <template v-else-if="obstacleData.baseType === 'WATER'">
+          <template v-else-if="obstacleData.baseType === 'WATER' && obstacleData.waterProperties">
             <div class="water-obstacle" :style="{
               width: `${obstacleData.waterProperties.width}px`,
               height: `${obstacleData.waterProperties.depth}px`,
@@ -288,7 +294,7 @@
             }"></div>
           </template>
           <!-- 添加装饰物预览 -->
-          <template v-else-if="obstacleData.baseType === 'DECORATION'">
+          <template v-else-if="obstacleData.baseType === 'DECORATION' && obstacleData.decorationProperties">
             <!-- 裁判桌预览 -->
             <template v-if="obstacleData.decorationProperties.category === DecorationCategory.TABLE">
               <div class="decoration-table" :style="{
@@ -318,8 +324,8 @@
                 style="position: relative; display: flex; flex-direction: column; align-items: center;">
                 <!-- 树冠 -->
                 <div :style="{
-                  width: `${obstacleData.decorationProperties.foliageRadius * 2}px`,
-                  height: `${obstacleData.decorationProperties.foliageRadius * 2}px`,
+                  width: `${obstacleData.decorationProperties.foliageRadius || 50}px`,
+                  height: `${obstacleData.decorationProperties.foliageRadius || 50}px`,
                   borderRadius: '50%',
                   backgroundColor: obstacleData.decorationProperties.secondaryColor,
                   marginBottom: '-10px',
@@ -327,8 +333,8 @@
                 }"></div>
                 <!-- 树干 -->
                 <div :style="{
-                  width: `${obstacleData.decorationProperties.trunkWidth}px`,
-                  height: `${obstacleData.decorationProperties.trunkHeight}px`,
+                  width: `${obstacleData.decorationProperties.trunkWidth || 20}px`,
+                  height: `${obstacleData.decorationProperties.trunkHeight || 60}px`,
                   backgroundColor: obstacleData.decorationProperties.color,
                   zIndex: '0'
                 }"></div>
@@ -466,11 +472,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, computed, onMounted, nextTick } from 'vue'
-import { Delete, Plus } from '@element-plus/icons-vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { Delete } from '@element-plus/icons-vue'
 import { ObstacleType, DecorationCategory } from '@/types/obstacle'
-import type { Pole, WallProperties, LiverpoolProperties, CustomObstacleTemplate, DecorationProperties } from '@/types/obstacle'
+import type { CustomObstacleTemplate } from '@/types/obstacle'
 import { useObstacleStore } from '@/stores/obstacle'
+import { useCourseStore } from '@/stores/course'
 import { ElMessage } from 'element-plus'
 import { cloneDeep } from 'lodash'
 
@@ -481,7 +488,186 @@ const props = defineProps<{
 const emit = defineEmits(['save', 'cancel'])
 
 const obstacleStore = useObstacleStore()
+const courseStore = useCourseStore()
 const isEditing = computed(() => !!props.template)
+
+/**
+ * 计算米到像素的比例
+ * 根据画布宽度和场地实际宽度计算
+ */
+const meterScale = computed(() => {
+  const canvas = document.querySelector('.course-canvas')
+  if (!canvas) return 100 // 默认值
+  return canvas.clientWidth / courseStore.currentCourse.fieldWidth
+})
+
+// 装饰物宽度(米)计算属性
+const decorationWidthM = computed({
+  get: () => {
+    if (!obstacleData.decorationProperties) return 0
+    return Math.round((obstacleData.decorationProperties.width / meterScale.value) * 10) / 10
+  },
+  set: (value: number) => {
+    if (!obstacleData.decorationProperties) return
+    obstacleData.decorationProperties.width = Math.round(value * meterScale.value)
+  }
+})
+
+// 装饰物高度(米)计算属性
+const decorationHeightM = computed({
+  get: () => {
+    if (!obstacleData.decorationProperties) return 0
+    return Math.round((obstacleData.decorationProperties.height / meterScale.value) * 10) / 10
+  },
+  set: (value: number) => {
+    if (!obstacleData.decorationProperties) return
+    obstacleData.decorationProperties.height = Math.round(value * meterScale.value)
+  }
+})
+
+// 装饰物边框宽度(厘米)计算属性
+const decorationBorderWidthCM = computed({
+  get: () => {
+    if (!obstacleData.decorationProperties || obstacleData.decorationProperties.borderWidth === undefined) return 0
+    return Math.round((obstacleData.decorationProperties.borderWidth / meterScale.value) * 100)
+  },
+  set: (value: number) => {
+    if (!obstacleData.decorationProperties) return
+    obstacleData.decorationProperties.borderWidth = Math.round((value / 100) * meterScale.value)
+  }
+})
+
+// 树干高度(厘米)计算属性
+const treeTrunkHeightCM = computed({
+  get: () => {
+    if (!obstacleData.decorationProperties || obstacleData.decorationProperties.trunkHeight === undefined) return 0
+    return Math.round((obstacleData.decorationProperties.trunkHeight / meterScale.value) * 100)
+  },
+  set: (value: number) => {
+    if (!obstacleData.decorationProperties) return
+    obstacleData.decorationProperties.trunkHeight = Math.round((value / 100) * meterScale.value)
+  }
+})
+
+// 树干宽度(厘米)计算属性
+const treeTrunkWidthCM = computed({
+  get: () => {
+    if (!obstacleData.decorationProperties || obstacleData.decorationProperties.trunkWidth === undefined) return 0
+    return Math.round((obstacleData.decorationProperties.trunkWidth / meterScale.value) * 100)
+  },
+  set: (value: number) => {
+    if (!obstacleData.decorationProperties) return
+    obstacleData.decorationProperties.trunkWidth = Math.round((value / 100) * meterScale.value)
+  }
+})
+
+// 树冠半径(厘米)计算属性
+const treeFoliageRadiusCM = computed({
+  get: () => {
+    if (!obstacleData.decorationProperties || obstacleData.decorationProperties.foliageRadius === undefined) return 0
+    return Math.round((obstacleData.decorationProperties.foliageRadius / meterScale.value) * 100)
+  },
+  set: (value: number) => {
+    if (!obstacleData.decorationProperties) return
+    obstacleData.decorationProperties.foliageRadius = Math.round((value / 100) * meterScale.value)
+  }
+})
+
+// 墙高度(厘米)计算属性
+const wallHeightCM = computed({
+  get: () => {
+    if (!obstacleData.wallProperties) return 0
+    return Math.round((obstacleData.wallProperties.height / meterScale.value) * 100)
+  },
+  set: (value: number) => {
+    if (!obstacleData.wallProperties) return
+    obstacleData.wallProperties.height = Math.round((value / 100) * meterScale.value)
+  }
+})
+
+// 墙宽度(米)计算属性
+const wallWidthM = computed({
+  get: () => {
+    if (!obstacleData.wallProperties) return 0
+    return Math.round((obstacleData.wallProperties.width / meterScale.value) * 10) / 10
+  },
+  set: (value: number) => {
+    if (!obstacleData.wallProperties) return
+    obstacleData.wallProperties.width = Math.round(value * meterScale.value)
+  }
+})
+
+// 利物浦水深(厘米)计算属性
+const liverpoolWaterDepthCM = computed({
+  get: () => {
+    if (!obstacleData.liverpoolProperties) return 0
+    return Math.round((obstacleData.liverpoolProperties.waterDepth / meterScale.value) * 100)
+  },
+  set: (value: number) => {
+    if (!obstacleData.liverpoolProperties) return
+    obstacleData.liverpoolProperties.waterDepth = Math.round((value / 100) * meterScale.value)
+  }
+})
+
+// 利物浦宽度(米)计算属性
+const liverpoolWidthM = computed({
+  get: () => {
+    if (!obstacleData.liverpoolProperties) return 0
+    return Math.round((obstacleData.liverpoolProperties.width / meterScale.value) * 10) / 10
+  },
+  set: (value: number) => {
+    if (!obstacleData.liverpoolProperties) return
+    obstacleData.liverpoolProperties.width = Math.round(value * meterScale.value)
+  }
+})
+
+// 利物浦横杆高度(厘米)计算属性
+const liverpoolRailHeightCM = computed({
+  get: () => {
+    if (!obstacleData.liverpoolProperties || !obstacleData.liverpoolProperties.railHeight) return 0
+    return Math.round((obstacleData.liverpoolProperties.railHeight / meterScale.value) * 100)
+  },
+  set: (value: number) => {
+    if (!obstacleData.liverpoolProperties) return
+    obstacleData.liverpoolProperties.railHeight = Math.round((value / 100) * meterScale.value)
+  }
+})
+
+// 水障宽度(米)计算属性
+const waterWidthM = computed({
+  get: () => {
+    if (!obstacleData.waterProperties) return 0
+    return Math.round((obstacleData.waterProperties.width / meterScale.value) * 10) / 10
+  },
+  set: (value: number) => {
+    if (!obstacleData.waterProperties) return
+    obstacleData.waterProperties.width = Math.round(value * meterScale.value)
+  }
+})
+
+// 水障深度(厘米)计算属性
+const waterDepthCM = computed({
+  get: () => {
+    if (!obstacleData.waterProperties) return 0
+    return Math.round((obstacleData.waterProperties.depth / meterScale.value) * 100)
+  },
+  set: (value: number) => {
+    if (!obstacleData.waterProperties) return
+    obstacleData.waterProperties.depth = Math.round((value / 100) * meterScale.value)
+  }
+})
+
+// 水障边框宽度(厘米)计算属性
+const waterBorderWidthCM = computed({
+  get: () => {
+    if (!obstacleData.waterProperties || !obstacleData.waterProperties.borderWidth) return 0
+    return Math.round((obstacleData.waterProperties.borderWidth / meterScale.value) * 100 * 10) / 10
+  },
+  set: (value: number) => {
+    if (!obstacleData.waterProperties) return
+    obstacleData.waterProperties.borderWidth = Math.round((value / 100) * meterScale.value)
+  }
+})
 
 // 障碍物类型映射
 const typeNames = {
@@ -546,7 +732,8 @@ const obstacleData = reactive<CustomObstacleTemplate>({
     borderColor: '#593b22',
     borderWidth: 2,
     text: '裁判桌',
-    textColor: '#ffffff'
+    textColor: '#ffffff',
+    showDirectionArrow: false
   },
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString()
@@ -574,6 +761,60 @@ onMounted(() => {
     if (templateData.liverpoolProperties) obstacleData.liverpoolProperties = cloneDeep(templateData.liverpoolProperties)
     if (templateData.waterProperties) obstacleData.waterProperties = cloneDeep(templateData.waterProperties)
     if (templateData.decorationProperties) obstacleData.decorationProperties = cloneDeep(templateData.decorationProperties)
+  } else {
+    // 创建新障碍物时初始化合理的默认尺寸
+    // 获取当前meterScale
+    const scale = meterScale.value
+
+    // 使用物理单位设置默认值
+    // 单杆设置为20厘米高，3.5米宽
+    obstacleData.poles = [
+      {
+        height: Math.round(0.2 * scale), // 20厘米
+        width: Math.round(3.5 * scale),  // 3.5米
+        color: '#8B4513',
+        spacing: 0
+      }
+    ]
+
+    // 墙设置为60厘米高，1米宽
+    obstacleData.wallProperties = {
+      height: Math.round(0.6 * scale), // 60厘米
+      width: Math.round(1 * scale),    // 1米
+      color: '#8B4513'
+    }
+
+    // 利物浦设置为20厘米高，1米宽，水深10厘米
+    obstacleData.liverpoolProperties = {
+      height: Math.round(0.2 * scale),      // 20厘米
+      width: Math.round(1 * scale),         // 1米
+      waterDepth: Math.round(0.1 * scale),  // 10厘米
+      waterColor: 'rgba(0, 100, 255, 0.3)',
+      hasRail: true,
+      railHeight: Math.round(0.2 * scale)   // 20厘米
+    }
+
+    // 水障设置为1米宽，10厘米深
+    obstacleData.waterProperties = {
+      width: Math.round(1 * scale),        // 1米
+      depth: Math.round(0.1 * scale),      // 10厘米
+      color: 'rgba(0, 100, 255, 0.3)',
+      borderColor: 'rgba(0, 70, 180, 0.5)',
+      borderWidth: Math.round(0.02 * scale) // 2厘米
+    }
+
+    // 裁判桌设置为1.2米宽，0.8米高
+    obstacleData.decorationProperties = {
+      category: DecorationCategory.TABLE,
+      width: Math.round(1.2 * scale),      // 1.2米
+      height: Math.round(0.8 * scale),     // 0.8米高
+      color: '#8B4513',
+      borderColor: '#593b22',
+      borderWidth: Math.round(0.02 * scale), // 2厘米
+      text: '裁判桌',
+      textColor: '#ffffff',
+      showDirectionArrow: false
+    }
   }
 
   // 不再需要初始化装饰物预览
@@ -593,106 +834,78 @@ const handleTypeChange = (newType: ObstacleType) => {
       borderColor: '#593b22',
       borderWidth: 2,
       text: '裁判桌',
-      textColor: '#ffffff'
+      textColor: '#ffffff',
+      showDirectionArrow: false
     }
   }
 
   // 不再需要更新装饰物预览
 }
 
-// 处理装饰物类别变更
+// 修改处理装饰物类别变更函数，使用物理单位
 const handleDecorationCategoryChange = (newCategory: DecorationCategory) => {
-  // 根据新类别设置默认属性
-  switch (newCategory) {
-    case DecorationCategory.TABLE:
-      obstacleData.decorationProperties = {
-        ...obstacleData.decorationProperties,
-        category: newCategory,
-        width: 120,
-        height: 80,
-        color: '#8B4513',
-        borderColor: '#593b22',
-        borderWidth: 2,
-        text: '裁判桌',
-        textColor: '#ffffff'
-      }
-      break;
-    case DecorationCategory.TREE:
-      obstacleData.decorationProperties = {
-        ...obstacleData.decorationProperties,
-        category: newCategory,
-        width: 80,
-        height: 120,
-        color: '#8B4513', // 树干颜色
-        secondaryColor: '#2E8B57', // 树冠颜色
-        trunkHeight: 60,
-        trunkWidth: 15,
-        foliageRadius: 40
-      }
-      break;
-    case DecorationCategory.ENTRANCE:
-      obstacleData.decorationProperties = {
-        ...obstacleData.decorationProperties,
-        category: newCategory,
-        width: 150,
-        height: 100,
-        color: '#4169E1',
-        borderColor: '#1E3C72',
-        borderWidth: 2,
-        text: '入口',
-        textColor: '#ffffff'
-      }
-      break;
-    case DecorationCategory.EXIT:
-      obstacleData.decorationProperties = {
-        ...obstacleData.decorationProperties,
-        category: newCategory,
-        width: 150,
-        height: 100,
-        color: '#FF6347',
-        borderColor: '#8B3E2F',
-        borderWidth: 2,
-        text: '出口',
-        textColor: '#ffffff'
-      }
-      break;
-    case DecorationCategory.FLOWER:
-      obstacleData.decorationProperties = {
-        ...obstacleData.decorationProperties,
-        category: newCategory,
-        width: 60,
-        height: 60,
-        color: '#FF69B4', // 花朵颜色
-        secondaryColor: '#32CD32', // 叶子颜色
-      }
-      break;
-    case DecorationCategory.FENCE:
-      obstacleData.decorationProperties = {
-        ...obstacleData.decorationProperties,
-        category: newCategory,
-        width: 200,
-        height: 40,
-        color: '#D2B48C',
-        borderColor: '#8B7355',
-        borderWidth: 1,
-      }
-      break;
-    case DecorationCategory.CUSTOM:
-      obstacleData.decorationProperties = {
-        ...obstacleData.decorationProperties,
-        category: newCategory,
-        width: 100,
-        height: 100,
-        color: '#FFFFFF',
-        imageUrl: '',
-      }
-      imagePreview.value = null
-      break;
+  if (!obstacleData.decorationProperties) {
+    obstacleData.decorationProperties = {
+      category: newCategory,
+      width: 100,
+      height: 80,
+      color: '#8B4513'
+    }
+    return
+  }
+
+  obstacleData.decorationProperties.category = newCategory
+
+  // 根据不同类别设置默认属性
+  if (newCategory === DecorationCategory.TABLE) {
+    // 裁判桌默认属性
+    obstacleData.decorationProperties.width = Math.round(1.2 * meterScale.value) // 1.2米宽
+    obstacleData.decorationProperties.height = Math.round(0.8 * meterScale.value) // 0.8米高
+    obstacleData.decorationProperties.color = '#8B4513' // 棕色
+    obstacleData.decorationProperties.borderWidth = Math.round(0.02 * meterScale.value) // 2厘米边框
+    obstacleData.decorationProperties.borderColor = '#593b22'
+    obstacleData.decorationProperties.text = '裁判桌'
+    obstacleData.decorationProperties.textColor = '#ffffff'
+  } else if (newCategory === DecorationCategory.TREE) {
+    // 树默认属性
+    obstacleData.decorationProperties.width = Math.round(1.5 * meterScale.value) // 1.5米宽
+    obstacleData.decorationProperties.height = Math.round(2 * meterScale.value) // 2米高
+    obstacleData.decorationProperties.color = '#228B22' // 绿色树冠
+    obstacleData.decorationProperties.secondaryColor = '#8B4513' // 棕色树干
+    obstacleData.decorationProperties.trunkHeight = Math.round(1 * meterScale.value) // 1米树干高度
+    obstacleData.decorationProperties.trunkWidth = Math.round(0.2 * meterScale.value) // 20厘米树干宽度
+    obstacleData.decorationProperties.foliageRadius = Math.round(0.75 * meterScale.value) // 75厘米树冠半径
+  } else if (newCategory === DecorationCategory.FENCE) {
+    // 围栏默认属性
+    obstacleData.decorationProperties.width = Math.round(2 * meterScale.value) // 2米宽
+    obstacleData.decorationProperties.height = Math.round(1 * meterScale.value) // 1米高
+    obstacleData.decorationProperties.color = '#8B4513' // 棕色
+    obstacleData.decorationProperties.borderWidth = Math.round(0.02 * meterScale.value) // 2厘米边框
+    obstacleData.decorationProperties.borderColor = '#593b22'
+  } else if (newCategory === DecorationCategory.FLOWER) {
+    // 花默认属性
+    obstacleData.decorationProperties.width = Math.round(0.5 * meterScale.value) // 0.5米宽
+    obstacleData.decorationProperties.height = Math.round(0.5 * meterScale.value) // 0.5米高
+    obstacleData.decorationProperties.color = '#FF69B4' // 粉色
+  } else if (newCategory === DecorationCategory.ENTRANCE || newCategory === DecorationCategory.EXIT) {
+    // 入口/出口默认属性
+    obstacleData.decorationProperties.width = Math.round(1.5 * meterScale.value) // 1.5米宽
+    obstacleData.decorationProperties.height = Math.round(0.8 * meterScale.value) // 0.8米高
+    obstacleData.decorationProperties.color = '#000000' // 黑色
+    obstacleData.decorationProperties.text = newCategory === DecorationCategory.ENTRANCE ? '入口' : '出口'
+    obstacleData.decorationProperties.textColor = '#ffffff'
+  }
+
+  // 清除不相关的属性
+  if (newCategory !== DecorationCategory.TREE) {
+    obstacleData.decorationProperties.trunkHeight = undefined
+    obstacleData.decorationProperties.trunkWidth = undefined
+    obstacleData.decorationProperties.foliageRadius = undefined
   }
 }
 
 // 处理图片上传
-const handleImageUpload = (file: any) => {
+const handleImageUpload = (file: { raw: File }) => {
   const reader = new FileReader()
   reader.onload = (e) => {
     const result = e.target?.result
@@ -706,7 +919,71 @@ const handleImageUpload = (file: any) => {
   reader.readAsDataURL(file.raw)
 }
 
-// 添加横木
+// 添加横木相关的计算方法
+/**
+ * 获取横木高度(厘米)值
+ * @param index 横木索引
+ */
+const getPoleHeightValue = (index: number): number => {
+  const pole = obstacleData.poles[index]
+  if (!pole) return 0
+  return Math.round((pole.height / meterScale.value) * 100)
+}
+
+/**
+ * 更新横木高度
+ * @param index 横木索引
+ * @param value 高度(厘米)
+ */
+const updatePoleHeight = (index: number, value: number): void => {
+  const pole = obstacleData.poles[index]
+  if (!pole) return
+  pole.height = Math.round((value / 100) * meterScale.value)
+}
+
+/**
+ * 获取横木宽度(米)值
+ * @param index 横木索引
+ */
+const getPoleWidthValue = (index: number): number => {
+  const pole = obstacleData.poles[index]
+  if (!pole) return 0
+  return Math.round((pole.width / meterScale.value) * 10) / 10
+}
+
+/**
+ * 更新横木宽度
+ * @param index 横木索引
+ * @param value 宽度(米)
+ */
+const updatePoleWidth = (index: number, value: number): void => {
+  const pole = obstacleData.poles[index]
+  if (!pole) return
+  pole.width = Math.round(value * meterScale.value)
+}
+
+/**
+ * 获取横木间距(厘米)值
+ * @param index 横木索引
+ */
+const getPoleSpacingValue = (index: number): number => {
+  const pole = obstacleData.poles[index]
+  if (!pole) return 0
+  return Math.round(((pole.spacing || 0) / meterScale.value) * 100)
+}
+
+/**
+ * 更新横木间距
+ * @param index 横木索引
+ * @param value 间距(厘米)
+ */
+const updatePoleSpacing = (index: number, value: number): void => {
+  const pole = obstacleData.poles[index]
+  if (!pole) return
+  pole.spacing = Math.round((value / 100) * meterScale.value)
+}
+
+// 当添加横木时，使用实际物理尺寸
 const addPole = () => {
   // 复制最后一个横木的属性
   const lastPole = obstacleData.poles[obstacleData.poles.length - 1]
@@ -714,7 +991,7 @@ const addPole = () => {
 
   // 如果上一个横木有间距，将其复制
   if (obstacleData.poles.length > 0) {
-    obstacleData.poles[obstacleData.poles.length - 1].spacing = 20
+    obstacleData.poles[obstacleData.poles.length - 1].spacing = Math.round(0.2 * meterScale.value) // 20厘米
   }
 
   obstacleData.poles.push(newPole)

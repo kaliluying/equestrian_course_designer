@@ -153,7 +153,7 @@ import { ElMessage } from 'element-plus'
 import { getSharedDesigns, likeDesign, downloadDesign } from '@/api/design'
 import type { DesignResponse } from '@/types/design'
 import { useUserStore } from '@/stores/user'
-import { HomeFilled, User,Download, Clock, Document, Picture, Tickets, Share } from '@element-plus/icons-vue'
+import { HomeFilled, User, Download, Clock, Document, Picture, Tickets, Share } from '@element-plus/icons-vue'
 import ImagePreview from '@/components/ImagePreview.vue'
 import SharedObstaclesView from '@/components/SharedObstaclesView.vue'
 // 状态
@@ -258,7 +258,6 @@ const confirmDownload = async () => {
       currentDesign.value.id,
       selectedDownloadType.value as 'json' | 'png' | 'pdf'
     )
-    console.log('下载响应:', response)
 
     // 更新下载计数
     if (currentDesign.value) {
@@ -269,8 +268,6 @@ const confirmDownload = async () => {
     if (!response.download_url) {
       throw new Error('服务器未返回有效的下载链接')
     }
-
-    console.log('下载URL:', response.download_url)
 
     // 创建一个临时链接并点击它来下载文件
     const link = document.createElement('a')
@@ -488,6 +485,17 @@ onMounted(() => {
   height: 200px;
   overflow: hidden;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  @media (max-width: 768px) {
+    height: 160px;
+  }
+
+  @media (max-width: 480px) {
+    height: 140px;
+  }
 
   &:before {
     content: '';
@@ -505,12 +513,23 @@ onMounted(() => {
 .design-preview-image {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  max-height: 100%;
+  max-width: 100%;
   transition: transform 0.5s ease;
   cursor: pointer;
+  background-color: #f8f9fa;
 
   &:hover {
     transform: scale(1.05);
+  }
+
+  @media (max-width: 768px) {
+    max-height: 160px;
+  }
+
+  @media (max-width: 480px) {
+    max-height: 140px;
   }
 }
 
@@ -782,6 +801,26 @@ onMounted(() => {
       font-size: 14px;
       color: var(--text-light);
     }
+  }
+}
+
+.design-stats {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+
+  .stat-button {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+.design-action {
+  margin-top: 12px;
+  text-align: center;
+
+  .use-button {
+    width: 100%;
   }
 }
 </style>

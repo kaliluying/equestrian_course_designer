@@ -47,13 +47,13 @@ const BASE_CONFIG: Record<EnvType, EnvConfig> = {
   // 开发环境配置
   development: {
     // 后端API基础URL，支持环境变量覆盖
-    apiBaseUrl: `http://${getEnvValue('API_HOST', 'localhost:8000')}`,
+    apiBaseUrl: `http://${getEnvValue('API_HOST', '192.168.1.6:8000')}`,
 
     // WebSocket基础URL，支持环境变量覆盖
-    wsBaseUrl: `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${getEnvValue('API_HOST', 'localhost:8000')}/ws`,
+    wsBaseUrl: `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${getEnvValue('API_HOST', '192.168.1.6:8000')}/ws`,
 
     // 前端应用URL，支持环境变量覆盖
-    appBaseUrl: getEnvValue('APP_URL', 'http://localhost:5173'),
+    appBaseUrl: getEnvValue('APP_URL', 'http://192.168.1.6:5173'),
   },
 
   // 生产环境配置

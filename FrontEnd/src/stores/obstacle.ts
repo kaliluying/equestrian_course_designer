@@ -92,6 +92,7 @@ const convertApiObstacleToTemplate = (apiObstacle: ObstacleData): CustomObstacle
       borderWidth: apiDecoration.borderWidth,
       rotation: apiDecoration.rotation,
       scale: apiDecoration.scale,
+      showDirectionArrow: (apiDecoration.showDirectionArrow as boolean) || false,
     }
   }
 

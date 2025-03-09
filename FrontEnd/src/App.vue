@@ -11,68 +11,72 @@
         </router-link>
       </div>
 
-      <!-- 导航菜单 -->
-      <div class="nav-menu" v-if="userStore.currentUser">
-        <router-link to="/" class="nav-link">首页</router-link>
-        <router-link to="/my-designs" class="nav-link">我的设计</router-link>
-        <router-link to="/shared-designs" class="nav-link">共享</router-link>
-        <router-link to="/profile" class="nav-link">
-          <el-icon>
-            <User />
-          </el-icon>
-          我的资料
-        </router-link>
+      <!-- 导航菜单 - 将导航菜单放在中间容器内 -->
+      <div class="header-center">
+        <div class="nav-menu" v-if="userStore.currentUser">
+          <router-link to="/" class="nav-link">首页</router-link>
+          <router-link to="/my-designs" class="nav-link">我的设计</router-link>
+          <router-link to="/shared-designs" class="nav-link">共享</router-link>
+          <router-link to="/profile" class="nav-link">
+            <el-icon>
+              <User />
+            </el-icon>
+            我的资料
+          </router-link>
+        </div>
+      </div>
+
+      <!-- 右侧区域 - 将反馈和用户信息放在一个容器内 -->
+      <div class="header-right">
+        <!-- 反馈入口 - 无论是否登录都显示 -->
         <router-link to="/feedback" class="feedback-link">
           <el-icon class="feedback-icon">
             <ChatDotRound />
           </el-icon>
           反馈
         </router-link>
-      </div>
 
-      <!-- 反馈入口 - 无论是否登录都显示 -->
-
-
-      <div class="user-info">
-        <template v-if="userStore.currentUser">
-          <div class="user-profile">
-            <span class="username-display">
-              <el-avatar :size="28" class="user-avatar">
-                {{ userStore.currentUser.username.charAt(0).toUpperCase() }}
-              </el-avatar>
-              {{ userStore.currentUser.username }}
-            </span>
-          </div>
-          <el-button type="primary" size="small" :disabled="!userStore.currentUser" @click="toggleCollaboration"
-            class="collab-button" :class="{ 'is-active': isCollaborating }">
-            <el-icon>
-              <Connection />
-            </el-icon>
-            {{ isCollaborating ? '退出协作' : '协作' }}
-          </el-button>
-          <el-button class="logout-button" @click="handleLogout">
-            <el-icon>
-              <SwitchButton />
-            </el-icon>
-            退出登录
-          </el-button>
-        </template>
-        <template v-else>
-          <div class="auth-buttons">
-            <el-button type="primary" class="login-button" @click="showLoginDialog">
+        <div class="user-info">
+          <template v-if="userStore.currentUser">
+            <div class="user-profile">
+              <span class="username-display">
+                <el-avatar :size="28" class="user-avatar">
+                  {{ userStore.currentUser.username.charAt(0).toUpperCase() }}
+                </el-avatar>
+                {{ userStore.currentUser.username }}
+              </span>
+            </div>
+            <el-button type="primary" size="small" :disabled="!userStore.currentUser" @click="toggleCollaboration"
+              class="collab-button" :class="{ 'is-active': isCollaborating }">
               <el-icon>
-                <Key />
+                <Connection />
               </el-icon>
-              登录
+              {{ isCollaborating ? '退出协作' : '协作' }}
             </el-button>
-            <el-button class="register-button" @click="showRegisterDialog">
+            <el-button class="logout-button" @click="handleLogout">
               <el-icon>
-                <UserFilled />
+                <SwitchButton />
               </el-icon>
-              注册
+              退出登录
             </el-button>
-          </div>
-        </template>
+          </template>
+          <template v-else>
+            <div class="auth-buttons">
+              <el-button type="primary" class="login-button" @click="showLoginDialog">
+                <el-icon>
+                  <Key />
+                </el-icon>
+                登录
+              </el-button>
+              <el-button class="register-button" @click="showRegisterDialog">
+                <el-icon>
+                  <UserFilled />
+                </el-icon>
+                注册
+              </el-button>
+            </div>
+          </template>
+        </div>
       </div>
     </div>
 
@@ -80,7 +84,7 @@
     <div class="main">
       <!-- 只在主页显示这些组件 -->
       <template v-if="$route.path === '/'">
-        <ToolBar class="toolbar" :style="{ width: `${leftPanelWidth}px` }" />
+        <ToolBar class="toolbar" :style="{ width: `${leftPanelWidth}px` }" @show-login="showLoginDialog" />
         <ResizableDivider direction="vertical" @resize="handleLeftPanelResize" />
         <CourseCanvas class="canvas" ref="canvasRef" />
         <ResizableDivider direction="vertical" @resize="handleRightPanelResize" />
@@ -99,7 +103,7 @@
         </div>
         <template #footer>
           <span class="dialog-footer">
-            <el-button @click="discardAutosave">放弃</el-button>
+            <el-button @click="rejectRestore">放弃</el-button>
             <el-button type="primary" @click="restoreAutosave">恢复</el-button>
           </span>
         </template>
@@ -161,9 +165,6 @@ const isCollaborating = ref(false)
 const collaborationSession = ref<CollaborationSession | null>(null)
 const canvasRef = ref<InstanceType<typeof CourseCanvas> | null>(null)
 let isTogglingCollaboration = false
-
-// 判断是否为开发环境
-const isDevelopment = import.meta.env.MODE === 'development'
 
 // 自动保存相关变量
 const showRestoreDialog = ref(false)
@@ -274,20 +275,11 @@ const restoreAutosave = () => {
   showRestoreDialog.value = false
 }
 
-// 放弃自动保存的路线设计
-const discardAutosave = () => {
-  console.log('放弃恢复自动保存的路线设计')
-  clearLocalStorage()
+// 拒绝恢复自动保存
+const rejectRestore = () => {
+  courseStore.clearAutosave()
   showRestoreDialog.value = false
   ElMessage.info('已放弃恢复')
-}
-
-// 手动显示对话框（用于调试）
-const manualShowDialog = () => {
-  const timestamp = localStorage.getItem('autosaved_timestamp') || new Date().toISOString()
-  savedTimestamp.value = timestamp
-  showRestoreDialog.value = true
-  console.log('手动显示对话框，状态:', showRestoreDialog.value)
 }
 
 // 清除localStorage（用于调试）
@@ -1018,38 +1010,55 @@ body {
       }
     }
   }
+
+  .header-center {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    justify-content: center;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
 }
 
 .nav-menu {
   display: flex;
-  gap: 32px;
-  margin: 0 20px;
+  gap: 20px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 6px 16px;
+  margin: 0;
 
   .nav-link {
     color: rgba(255, 255, 255, 0.85);
     text-decoration: none;
     font-size: 15px;
     position: relative;
-    padding: 6px 0;
+    padding: 6px 10px;
     transition: var(--transition);
     font-weight: 500;
+    border-radius: 6px;
 
     &:hover {
       color: white;
-      border-radius: 30px;
-      padding: 6px;
+      background-color: rgba(255, 255, 255, 0.15);
     }
 
     &.router-link-active {
       color: white;
       font-weight: 600;
+      background-color: rgba(255, 255, 255, 0.2);
 
       &:after {
         content: '';
         position: absolute;
-        bottom: -5px;
-        left: 0;
-        right: 0;
+        bottom: 2px;
+        left: 10px;
+        right: 10px;
         height: 2px;
         background-color: white;
         border-radius: 3px;
@@ -1231,7 +1240,7 @@ body {
   max-width: 600px;
   transition: width 0.2s ease;
   box-shadow: var(--shadow-sm);
-  z-index: 5;
+  z-index: 4;
 }
 
 :deep(.el-dialog) {
@@ -1265,79 +1274,23 @@ body {
 .feedback-link {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background-color: var(--accent-color);
-  color: white;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.85);
   text-decoration: none;
-  padding: 8px 16px;
   font-size: 14px;
-  border-radius: var(--radius);
-  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
   transition: var(--transition);
-  box-shadow: 0 2px 10px rgba(0, 198, 162, 0.3);
-  margin: 0 16px;
-  height: 36px;
-  border: none;
-  position: relative;
-  overflow: hidden;
-}
+  background-color: rgba(255, 255, 255, 0.1);
 
-.feedback-link:before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: all 0.6s ease;
-}
-
-.feedback-link:hover {
-  background-color: #00b090;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 198, 162, 0.4);
-}
-
-.feedback-link:hover:before {
-  left: 100%;
-}
-
-.feedback-icon {
-  font-size: 16px;
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0% {
-    opacity: 0.8;
-    transform: scale(1);
+  &:hover {
+    color: white;
+    background-color: rgba(255, 255, 255, 0.15);
   }
 
-  50% {
-    opacity: 1;
-    transform: scale(1.1);
+  .feedback-icon {
+    font-size: 16px;
   }
-
-  100% {
-    opacity: 0.8;
-    transform: scale(1);
-  }
-}
-
-.feedback-badge {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  background-color: var(--danger-color);
-  color: white;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 10px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
-  animation: pulse 2s infinite;
 }
 
 .restore-dialog-content {

@@ -76,6 +76,7 @@ export interface DecorationProperties {
   borderWidth?: number // 边框宽度
   rotation?: number // 旋转角度
   scale?: number // 缩放比例
+  showDirectionArrow?: boolean // 是否显示方向箭头
 }
 
 // 自定义障碍物模板
@@ -125,6 +126,13 @@ export interface CourseDesign {
   fieldWidth: number // 场地宽度（米）
   fieldHeight: number // 场地高度（米）
   path?: CoursePathData
+  viewportInfo?: {
+    width: number // 导出时的视口宽度
+    height: number // 导出时的视口高度
+    canvasWidth: number // 导出时的画布宽度
+    canvasHeight: number // 导出时的画布高度
+    aspectRatio: number // 导出时的宽高比
+  }
 }
 
 export interface PathPoint {

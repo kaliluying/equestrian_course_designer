@@ -107,6 +107,7 @@
               <el-dropdown-menu>
                 <el-dropdown-item command="png">导出为PNG图片</el-dropdown-item>
                 <el-dropdown-item command="pdf">导出为PDF文档</el-dropdown-item>
+                <el-dropdown-item command="json">导出为JSON数据</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -301,28 +302,94 @@ const handleSaveDesign = async () => {
       ; (point as HTMLElement).style.display = 'none'
     })
 
-    // 使用 html2canvas 将画布转换为图片
+    // 获取画布的原始尺寸
+    const canvasRect = canvas.getBoundingClientRect()
+    const originalWidth = canvasRect.width
+    const originalHeight = canvasRect.height
+
+    // 计算适合保存的尺寸（保持纵横比但限制最大尺寸）
+    const maxWidth = 1920 // 最大宽度
+    const maxHeight = 1080 // 最大高度
+    const minWidth = 800 // 最小宽度
+    const minHeight = 600 // 最小高度
+
+    let saveWidth = originalWidth
+    let saveHeight = originalHeight
+
+    // 确保尺寸不小于最小值
+    if (saveWidth < minWidth) {
+      saveWidth = minWidth
+      saveHeight = (originalHeight / originalWidth) * minWidth
+    }
+
+    if (saveHeight < minHeight) {
+      saveHeight = minHeight
+      saveWidth = (originalWidth / originalHeight) * minHeight
+    }
+
+    // 确保尺寸不超过最大值
+    if (saveWidth > maxWidth) {
+      saveWidth = maxWidth
+      saveHeight = (originalHeight / originalWidth) * maxWidth
+    }
+
+    if (saveHeight > maxHeight) {
+      saveHeight = maxHeight
+      saveWidth = (originalWidth / originalHeight) * maxHeight
+    }
+
+    console.log('原始尺寸:', originalWidth, 'x', originalHeight)
+    console.log('保存尺寸:', saveWidth, 'x', saveHeight)
+
+    // 使用 html2canvas 将画布转换为图片，并指定宽高
     console.log('开始转换画布为图片...')
     const imageCanvas = await html2canvas(canvas, {
       backgroundColor: '#ffffff',
-      scale: 2,
+      scale: 2, // 使用2倍缩放以获得更高质量的图像
       useCORS: true,
+      width: originalWidth,
+      height: originalHeight,
+      // 确保捕获整个画布内容，即使部分内容不在视口中
+      scrollX: 0,
+      scrollY: 0,
+      x: 0,
+      y: 0,
+      allowTaint: true,
+      foreignObjectRendering: true,
+      // 设置更大的虚拟窗口尺寸，确保能捕获所有内容
+      windowWidth: Math.max(document.documentElement.clientWidth, originalWidth),
+      windowHeight: Math.max(document.documentElement.clientHeight, originalHeight)
     })
     // 恢复控制点的显示
     controlPoints.forEach((point) => {
       ; (point as HTMLElement).style.display = ''
     })
 
-    // 将 canvas 转换为 blob
+    // 创建一个新的canvas用于导出，确保尺寸合适，无论屏幕大小如何
+    const exportCanvas = document.createElement('canvas')
+    exportCanvas.width = saveWidth
+    exportCanvas.height = saveHeight
+    const ctx = exportCanvas.getContext('2d')
+
+    if (!ctx) {
+      throw new Error('无法获取导出canvas的上下文')
+    }
+
+    // 在新画布上绘制原始画布内容（缩放以适应）
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, saveWidth, saveHeight)
+    ctx.drawImage(imageCanvas, 0, 0, originalWidth, originalHeight, 0, 0, saveWidth, saveHeight)
+
+    // 将优化后的画布转换为blob
     const imageBlob = await new Promise<Blob>((resolve, reject) => {
       try {
-        imageCanvas.toBlob((blob) => {
+        exportCanvas.toBlob((blob) => {
           if (blob) {
             resolve(blob)
           } else {
             reject(new Error('转换为 blob 失败'))
           }
-        }, 'image/png')
+        }, 'image/png', 0.9) // 使用0.9的质量来减小文件大小
       } catch (error) {
         reject(error)
       }
@@ -582,6 +649,42 @@ const handleExport = async (command: string) => {
     return
   }
 
+  if (command === 'json') {
+    try {
+      // 获取当前日期时间格式化字符串
+      const date = new Date()
+      const formattedDateTime = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`
+      const fileName = `${courseStore.currentCourse.name}-${formattedDateTime}.json`
+
+      // 导出设计数据为JSON
+      const designData = courseStore.exportCourse()
+
+      // 创建Blob对象
+      const jsonBlob = new Blob([JSON.stringify(designData, null, 2)], { type: 'application/json' })
+
+      // 创建下载链接
+      const url = URL.createObjectURL(jsonBlob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+
+      // 清理
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+
+      ElMessage.success('JSON数据导出成功！')
+      return
+    } catch (error) {
+      ElMessageBox.alert('导出JSON失败：' + (error as Error).message, '错误', {
+        confirmButtonText: '确定',
+        type: 'error',
+      })
+      return
+    }
+  }
+
   try {
     // 获取画布元素
     const canvas = document.querySelector('.course-canvas') as HTMLElement
@@ -615,7 +718,15 @@ const handleExport = async (command: string) => {
       logging: false, // 关闭日志
       allowTaint: true, // 允许跨域图片
       removeContainer: true, // 移除临时容器
-      foreignObjectRendering: false // 禁用foreignObject渲染，使用canvas渲染
+      foreignObjectRendering: false, // 禁用foreignObject渲染，使用canvas渲染
+      // 确保捕获整个画布内容，即使部分内容不在视口中
+      scrollX: 0,
+      scrollY: 0,
+      x: 0,
+      y: 0,
+      // 设置更大的虚拟窗口尺寸，确保能捕获所有内容
+      windowWidth: Math.max(document.documentElement.clientWidth, canvas.scrollWidth),
+      windowHeight: Math.max(document.documentElement.clientHeight, canvas.scrollHeight)
     })
 
     // 恢复控制点的显示
@@ -636,9 +747,46 @@ const handleExport = async (command: string) => {
     const formattedDateTime = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`
     const fileName = `${courseStore.currentCourse.name}-${formattedDateTime}`
 
+    // 获取画布宽高
+    const canvasWidth = imageCanvas.width
+    const canvasHeight = imageCanvas.height
+
+    // 确保导出的图像尺寸不小于最小值
+    const minExportWidth = 800
+    const minExportHeight = 600
+
+    // 如果画布尺寸小于最小值，创建一个新的画布并进行缩放
+    let finalCanvas = imageCanvas
+    if (canvasWidth < minExportWidth || canvasHeight < minExportHeight) {
+      console.log('画布尺寸小于最小值，进行缩放')
+
+      // 计算缩放比例
+      const scaleRatio = Math.max(
+        minExportWidth / canvasWidth,
+        minExportHeight / canvasHeight
+      )
+
+      // 创建新画布
+      const scaledCanvas = document.createElement('canvas')
+      const scaledWidth = Math.round(canvasWidth * scaleRatio)
+      const scaledHeight = Math.round(canvasHeight * scaleRatio)
+
+      scaledCanvas.width = scaledWidth
+      scaledCanvas.height = scaledHeight
+
+      // 绘制缩放后的图像
+      const ctx = scaledCanvas.getContext('2d')
+      if (ctx) {
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, scaledWidth, scaledHeight)
+        ctx.drawImage(imageCanvas, 0, 0, canvasWidth, canvasHeight, 0, 0, scaledWidth, scaledHeight)
+        finalCanvas = scaledCanvas
+      }
+    }
+
     if (command === 'png') {
       // 导出为PNG图片
-      const imageUrl = imageCanvas.toDataURL('image/png')
+      const imageUrl = finalCanvas.toDataURL('image/png')
 
       // 创建下载链接
       const link = document.createElement('a')
@@ -693,7 +841,15 @@ const exportPDF = async () => {
       logging: false, // 关闭日志
       allowTaint: true, // 允许跨域图片
       removeContainer: true, // 移除临时容器
-      foreignObjectRendering: false // 禁用foreignObject渲染，使用canvas渲染
+      foreignObjectRendering: false, // 禁用foreignObject渲染，使用canvas渲染
+      // 确保捕获整个画布内容，即使部分内容不在视口中
+      scrollX: 0,
+      scrollY: 0,
+      x: 0,
+      y: 0,
+      // 设置更大的虚拟窗口尺寸，确保能捕获所有内容
+      windowWidth: Math.max(document.documentElement.clientWidth, canvas.scrollWidth),
+      windowHeight: Math.max(document.documentElement.clientHeight, canvas.scrollHeight)
     })
 
     // 恢复控制点的显示
@@ -717,6 +873,39 @@ const exportPDF = async () => {
     // 获取画布宽高
     const canvasWidth = imageCanvas.width
     const canvasHeight = imageCanvas.height
+
+    // 确保导出的图像尺寸不小于最小值
+    const minExportWidth = 800
+    const minExportHeight = 600
+
+    // 如果画布尺寸小于最小值，创建一个新的画布并进行缩放
+    let finalCanvas = imageCanvas
+    if (canvasWidth < minExportWidth || canvasHeight < minExportHeight) {
+      console.log('画布尺寸小于最小值，进行缩放')
+
+      // 计算缩放比例
+      const scaleRatio = Math.max(
+        minExportWidth / canvasWidth,
+        minExportHeight / canvasHeight
+      )
+
+      // 创建新画布
+      const scaledCanvas = document.createElement('canvas')
+      const scaledWidth = Math.round(canvasWidth * scaleRatio)
+      const scaledHeight = Math.round(canvasHeight * scaleRatio)
+
+      scaledCanvas.width = scaledWidth
+      scaledCanvas.height = scaledHeight
+
+      // 绘制缩放后的图像
+      const ctx = scaledCanvas.getContext('2d')
+      if (ctx) {
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, scaledWidth, scaledHeight)
+        ctx.drawImage(imageCanvas, 0, 0, canvasWidth, canvasHeight, 0, 0, scaledWidth, scaledHeight)
+        finalCanvas = scaledCanvas
+      }
+    }
 
     // 计算适合的PDF尺寸和方向
     // 标准A4尺寸为 210mm x 297mm，转换为像素约为 595 x 842 (at 72 dpi)
@@ -744,7 +933,7 @@ const exportPDF = async () => {
     // 确定方向
     let orientation: 'landscape' | 'portrait'
     if (pdfExportOptions.value.orientation === 'auto') {
-      orientation = canvasWidth > canvasHeight ? 'landscape' : 'portrait'
+      orientation = finalCanvas.width > finalCanvas.height ? 'landscape' : 'portrait'
     } else {
       orientation = pdfExportOptions.value.orientation as 'landscape' | 'portrait'
     }
@@ -773,17 +962,17 @@ const exportPDF = async () => {
       const availableWidth = pdfHeight - 40 // 留出边距
       const availableHeight = pdfWidth - 80 // 留出标题和边距空间
 
-      const ratio = Math.min(availableWidth / canvasWidth, availableHeight / canvasHeight)
-      imgWidth = canvasWidth * ratio
-      imgHeight = canvasHeight * ratio
+      const ratio = Math.min(availableWidth / finalCanvas.width, availableHeight / finalCanvas.height)
+      imgWidth = finalCanvas.width * ratio
+      imgHeight = finalCanvas.height * ratio
     } else {
       // 纵向
       const availableWidth = pdfWidth - 40 // 留出边距
       const availableHeight = pdfHeight - 80 // 留出标题和边距空间
 
-      const ratio = Math.min(availableWidth / canvasWidth, availableHeight / canvasHeight)
-      imgWidth = canvasWidth * ratio
-      imgHeight = canvasHeight * ratio
+      const ratio = Math.min(availableWidth / finalCanvas.width, availableHeight / finalCanvas.height)
+      imgWidth = finalCanvas.width * ratio
+      imgHeight = finalCanvas.height * ratio
     }
 
     // 计算居中位置
@@ -792,18 +981,8 @@ const exportPDF = async () => {
       : (pdfWidth - imgWidth) / 2
     const y = 60 // 标题下方位置
 
-    // 添加标题 - 使用安全的字符串
-    // pdf.setFont('MicrosoftYaHei', 'bold')
-    // pdf.setFontSize(16)
-    // pdf.text(safeCourseName, orientation === 'landscape' ? 30 : 30, 30)
-
-    // 添加日期
-    // pdf.setFont('MicrosoftYaHei', 'normal')
-    // pdf.setFontSize(10)
-    // pdf.text(`创建日期: ${formattedDateTime}`, orientation === 'landscape' ? 30 : 30, 45)
-
     // 添加图片到PDF
-    const imgData = imageCanvas.toDataURL('image/jpeg', pdfExportOptions.value.quality)
+    const imgData = finalCanvas.toDataURL('image/jpeg', pdfExportOptions.value.quality)
     pdf.addImage(imgData, 'JPEG', x, y, imgWidth, imgHeight)
 
     // 添加页脚

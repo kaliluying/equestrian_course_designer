@@ -200,6 +200,15 @@ const openDesign = async (design: DesignResponse) => {
 
     // 加载设计到课程存储 - 将JSON对象转换为CourseDesign类型
     try {
+      // 处理视口信息
+      const viewportInfo = designData.viewportInfo || {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        canvasWidth: 800,
+        canvasHeight: 600,
+        aspectRatio: (designData.fieldWidth || 80) / (designData.fieldHeight || 60)
+      }
+
       // 确保数据中包含所有必要的字段
       const courseData = {
         id: designData.id || design.id.toString() || uuidv4(),
@@ -208,13 +217,46 @@ const openDesign = async (design: DesignResponse) => {
         createdAt: designData.createdAt || design.create_time || new Date().toISOString(),
         updatedAt: designData.updatedAt || design.update_time || new Date().toISOString(),
         fieldWidth: designData.fieldWidth || 80,
-        fieldHeight: designData.fieldHeight || 60
+        fieldHeight: designData.fieldHeight || 60,
+        viewportInfo // 添加视口信息用于屏幕适配
       }
 
       console.log('处理后的课程数据:', courseData)
+      console.log('视口信息:', viewportInfo)
 
       // 将处理后的数据加载到课程存储
       courseStore.currentCourse = courseData
+
+      // 加载路径数据(如果存在)
+      if (designData.path) {
+        console.log('发现路径数据，正在加载，路径点数量:', designData.path.points?.length || 0)
+
+        // 更新路径数据
+        courseStore.coursePath = {
+          visible: designData.path.visible || false,
+          points: Array.isArray(designData.path.points) ? designData.path.points : []
+        }
+
+        // 更新起点数据
+        if (designData.path.startPoint) {
+          courseStore.startPoint = {
+            x: designData.path.startPoint.x || 0,
+            y: designData.path.startPoint.y || 0,
+            rotation: designData.path.startPoint.rotation || 270
+          }
+        }
+
+        // 更新终点数据
+        if (designData.path.endPoint) {
+          courseStore.endPoint = {
+            x: designData.path.endPoint.x || 0,
+            y: designData.path.endPoint.y || 0,
+            rotation: designData.path.endPoint.rotation || 270
+          }
+        }
+      } else {
+        console.log('未找到路径数据')
+      }
 
       // 导航到主页
       router.push('/')
@@ -421,6 +463,17 @@ onMounted(() => {
   height: 200px;
   overflow: hidden;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  @media (max-width: 768px) {
+    height: 160px;
+  }
+
+  @media (max-width: 480px) {
+    height: 140px;
+  }
 
   &:before {
     content: '';
@@ -438,12 +491,23 @@ onMounted(() => {
 .design-preview-image {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  max-height: 100%;
+  max-width: 100%;
   transition: transform 0.5s ease;
   cursor: pointer;
+  background-color: #f8f9fa;
 
   &:hover {
     transform: scale(1.05);
+  }
+
+  @media (max-width: 768px) {
+    max-height: 160px;
+  }
+
+  @media (max-width: 480px) {
+    max-height: 140px;
   }
 }
 

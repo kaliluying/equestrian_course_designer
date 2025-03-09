@@ -30,8 +30,10 @@
       }" @click="selectObstacle(obstacle, $event.ctrlKey || $event.metaKey)"
       @mousedown="startDragging($event, obstacle)">
       <div class="obstacle-content">
-        <!-- 仅对非装饰物类型显示方向箭头 -->
-        <div v-if="obstacle.type !== ObstacleType.DECORATION" class="direction-arrow">
+        <!-- 仅对非装饰物类型显示方向箭头，或装饰物但设置了showDirectionArrow属性 -->
+        <div v-if="obstacle.type !== ObstacleType.DECORATION ||
+          (obstacle.type === ObstacleType.DECORATION && obstacle.decorationProperties?.showDirectionArrow)"
+          class="direction-arrow">
           <div class="arrow-line"></div>
           <div class="arrow-head"></div>
         </div>
@@ -305,8 +307,9 @@
     </div>
 
     <template v-for="obstacle in courseStore.currentCourse.obstacles" :key="`numbers-${obstacle.id}`">
-      <div v-for="(pole, index) in obstacle.poles.filter((p) => p.number)" :key="`number-${index}`" class="pole-number"
-        @mousedown.stop="startDraggingPoleNumber($event, obstacle, index)" :style="{
+      <div v-for="(pole, filteredIndex) in obstacle.poles.filter((p) => p.number)" :key="`number-${filteredIndex}`"
+        class="pole-number"
+        @mousedown.stop="startDraggingPoleNumber($event, obstacle, obstacle.poles.findIndex(p => p === pole))" :style="{
           position: 'absolute',
           left: `${obstacle.position.x + (pole.numberPosition?.x ?? 0)}px`,
           top: `${obstacle.position.y + (pole.numberPosition?.y ?? 50)}px`,
@@ -1169,7 +1172,7 @@ const handleDrop = (event: DragEvent) => {
 
   // 以下是处理内置障碍物类型
   // 创建新障碍物
-  let newObstacle: Omit<Obstacle, 'id'> = {
+  const newObstacle: Omit<Obstacle, 'id'> = {
     type: obstacleData as ObstacleType,
     position: {
       x: x,
@@ -1181,13 +1184,19 @@ const handleDrop = (event: DragEvent) => {
 
   console.log('障碍物类型:', obstacleData, '枚举值:', ObstacleType.DECORATION, '设置的类型:', newObstacle.type)
 
+  const meterScale = computed(() => {
+    const canvas = document.querySelector('.course-canvas')
+    if (!canvas) return 1
+    return canvas.clientWidth / courseStore.currentCourse.fieldWidth
+  })
+
   // 根据障碍物类型设置属性
   switch (obstacleData) {
     case ObstacleType.SINGLE:
     case 'SINGLE':
       newObstacle.poles = [{
-        height: 20,
-        width: 100,
+        height: (50 * meterScale.value) / 100,
+        width: 3.5 * meterScale.value,
         color: '#8B4513'
       }]
       break
@@ -1195,14 +1204,14 @@ const handleDrop = (event: DragEvent) => {
     case 'DOUBLE':
       newObstacle.poles = [
         {
-          height: 20,
-          width: 100,
+          height: (50 * meterScale.value) / 100,
+          width: 3.5 * meterScale.value,
           color: '#8B4513',
-          spacing: 40
+          spacing: 0.5 * meterScale.value,
         },
         {
-          height: 20,
-          width: 100,
+          height: (50 * meterScale.value) / 100,
+          width: 3.5 * meterScale.value,
           color: '#8B4513',
           spacing: 0
         }
@@ -1212,20 +1221,20 @@ const handleDrop = (event: DragEvent) => {
     case 'COMBINATION':
       newObstacle.poles = [
         {
-          height: 20,
-          width: 100,
+          height: (50 * meterScale.value) / 100,
+          width: 3.5 * meterScale.value,
           color: '#8B4513',
-          spacing: 20
+          spacing: 0.5 * meterScale.value,
         },
         {
-          height: 20,
-          width: 100,
+          height: (50 * meterScale.value) / 100,
+          width: 3.5 * meterScale.value,
           color: '#8B4513',
-          spacing: 20
+          spacing: 0.5 * meterScale.value,
         },
         {
-          height: 20,
-          width: 100,
+          height: (50 * meterScale.value) / 100,
+          width: 3.5 * meterScale.value,
           color: '#8B4513',
           spacing: 0
         }
@@ -1234,33 +1243,33 @@ const handleDrop = (event: DragEvent) => {
     case ObstacleType.WALL:
     case 'WALL':
       newObstacle.wallProperties = {
-        height: 60,
-        width: 100,
+        height: (50 * meterScale.value) / 100,
+        width: 3.5 * meterScale.value,
         color: '#8B4513'
       }
       break
     case ObstacleType.LIVERPOOL:
     case 'LIVERPOOL':
       newObstacle.liverpoolProperties = {
-        height: 20,
-        width: 100,
-        waterDepth: 10,
+        height: (50 * meterScale.value) / 100,
+        width: 3.5 * meterScale.value,
+        waterDepth: (50 * meterScale.value) / 100,
         waterColor: 'rgba(0, 100, 255, 0.3)',
         hasRail: true,
         railHeight: 20
       }
       // 为利物浦类型添加横杆
       newObstacle.poles = [{
-        height: 20,
-        width: 100,
+        height: (50 * meterScale.value) / 100,
+        width: 3.5 * meterScale.value,
         color: '#8B4513'
       }]
       break
     case ObstacleType.WATER:
     case 'WATER':
       newObstacle.waterProperties = {
-        width: 100,
-        depth: 15,
+        width: 3.5 * meterScale.value,
+        depth: (50 * meterScale.value) / 100,
         color: 'rgba(0, 100, 255, 0.4)',
         borderColor: 'rgba(0, 50, 150, 0.5)',
         borderWidth: 1
@@ -1293,8 +1302,8 @@ const handleDrop = (event: DragEvent) => {
       console.warn('未知的障碍物类型:', obstacleData)
       // 默认使用单横木
       newObstacle.poles = [{
-        height: 20,
-        width: 100,
+        height: (50 * meterScale.value) / 100,
+        width: 3.5 * meterScale.value,
         color: '#8B4513'
       }]
       break
@@ -1359,9 +1368,73 @@ const scaleWidth = computed(() => {
 })
 
 // 计算画布样式
-const canvasStyle = computed(() => ({
-  aspectRatio: `${courseStore.currentCourse.fieldWidth}/${courseStore.currentCourse.fieldHeight}`,
-}))
+const canvasStyle = computed(() => {
+  // 获取视口宽度和高度
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
+
+  // 计算理想的宽高比
+  const idealRatio = courseStore.currentCourse.fieldWidth / courseStore.currentCourse.fieldHeight
+
+  // 获取原始设计的视口信息
+  const originalViewportInfo = courseStore.currentCourse.viewportInfo
+
+  // 计算比例调整因子
+  let scaleFactor = 1
+  if (originalViewportInfo) {
+    // 计算当前视口和原始视口的宽度比例
+    const widthRatio = viewportWidth / originalViewportInfo.width
+    // 计算当前视口和原始视口的高度比例
+    const heightRatio = viewportHeight / originalViewportInfo.height
+    // 使用较小的比例作为缩放因子，确保内容完全显示
+    scaleFactor = Math.min(widthRatio, heightRatio)
+    console.log('画布比例调整因子:', scaleFactor)
+  }
+
+  // 最大宽度是视口的95%，预留一些空间给边距和滚动条
+  const maxWidth = viewportWidth * 0.95
+
+  // 根据当前视口和场地比例，确定最合适的尺寸
+  let width = maxWidth
+  let height = width / idealRatio
+
+  // 如果高度超出了视口高度的80%，调整宽度以适应高度
+  if (height > viewportHeight * 0.8) {
+    height = viewportHeight * 0.8
+    width = height * idealRatio
+  }
+
+  // 如果有原始视口信息并且缩放因子不为1，调整画布大小
+  if (originalViewportInfo && scaleFactor !== 1 && originalViewportInfo.canvasWidth > 0) {
+    // 基于原始画布尺寸和缩放因子计算新尺寸
+    const adjustedWidth = Math.min(originalViewportInfo.canvasWidth * scaleFactor, width)
+    // 确保维持原始宽高比
+    const adjustedHeight = adjustedWidth / idealRatio
+
+    // 确保画布尺寸不会太小或太大
+    width = Math.max(Math.min(adjustedWidth, maxWidth), viewportWidth * 0.5)
+    height = width / idealRatio
+
+    // 调整后的尺寸不应超过视口高度的80%
+    if (height > viewportHeight * 0.8) {
+      height = viewportHeight * 0.8
+      width = height * idealRatio
+    }
+
+    console.log('画布尺寸调整:', {
+      original: { width: originalViewportInfo.canvasWidth, height: originalViewportInfo.canvasHeight },
+      adjusted: { width, height }
+    })
+  }
+
+  // 返回最终的样式
+  return {
+    width: `${width}px`,
+    height: `${height}px`,
+    aspectRatio: `${courseStore.currentCourse.fieldWidth}/${courseStore.currentCourse.fieldHeight}`,
+    margin: '0 auto' // 居中显示
+  }
+})
 
 // 根据场地尺寸计算网格大小
 const gridSize = computed(() => ({
@@ -2071,7 +2144,7 @@ const totalDistance = computed(() => {
   --obstacle-rotation: 0deg;
 
   &.selected {
-    z-index: 100;
+    z-index: 4;
 
     .obstacle-content {
       outline: 2px solid var(--primary-color);
@@ -2143,7 +2216,7 @@ const totalDistance = computed(() => {
   font-size: 14px;
   font-weight: 500;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
+  z-index: 4;
   transform-origin: center center;
   pointer-events: auto;
 }
@@ -2246,7 +2319,7 @@ const totalDistance = computed(() => {
   color: var(--text-color);
   font-weight: 500;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  z-index: 10;
+  // z-index: 10;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -2275,7 +2348,7 @@ const totalDistance = computed(() => {
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
-  z-index: 10;
+  // z-index: 10;
   background-color: rgba(255, 255, 255, 0.9);
   padding: 8px;
   border-radius: 4px;
@@ -2585,7 +2658,8 @@ const totalDistance = computed(() => {
   width: 100%;
   height: 100%;
   pointer-events: none;
-  z-index: 50;
+  z-index: 4;
+  /* 降低路线的z-index，确保低于障碍物 */
 }
 
 .course-path-line {

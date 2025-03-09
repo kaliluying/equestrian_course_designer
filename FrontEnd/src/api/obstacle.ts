@@ -66,6 +66,7 @@ export interface ApiDecorationProperties {
   borderWidth?: number
   rotation?: number
   scale?: number
+  showDirectionArrow?: boolean
   [key: string]: unknown
 }
 
