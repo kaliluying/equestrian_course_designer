@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
-from .views import RegisterView, LoginView, DesignViewSet, ForgotPasswordView, ResetPasswordView, CSRFTokenView, UserViewSet, CustomObstacleViewSet
+from .views import RegisterView, LoginView, DesignViewSet, ForgotPasswordView, ResetPasswordView, CSRFTokenView, UserViewSet, CustomObstacleViewSet, create_membership_order, get_user_orders, get_order_status, alipay_notify, PaymentSuccessView
 
 # 创建路由器并注册视图集
 router = DefaultRouter()
@@ -21,4 +21,13 @@ urlpatterns = [
     # JWT token刷新
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('', include(router.urls)),  # 包含自动生成的路由
+
+    # 支付相关路由
+    path('api/payment/create-order/', create_membership_order,
+         name='create_membership_order'),
+    path('api/payment/orders/', get_user_orders, name='get_user_orders'),
+    path('api/payment/order-status/<str:order_id>/',
+         get_order_status, name='get_order_status'),
+    path('api/payment/alipay/notify/', alipay_notify, name='alipay_notify'),
+    path('payment/success/', PaymentSuccessView.as_view(), name='payment_success'),
 ]

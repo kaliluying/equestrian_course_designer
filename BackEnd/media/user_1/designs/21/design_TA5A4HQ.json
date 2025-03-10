@@ -1,0 +1,145 @@
+{
+  "id": "3a9f7382-92c2-496f-a69a-39ddd9a34a0b",
+  "name": "马术路线设计",
+  "obstacles": [
+    {
+      "type": "SINGLE",
+      "position": {
+        "x": 193.5,
+        "y": 295
+      },
+      "rotation": 0,
+      "poles": [
+        {
+          "height": 8.14375,
+          "width": 57.00625000000001,
+          "color": "#8B4513"
+        }
+      ],
+      "id": "bb5419d6-bc81-4032-a635-5628d3dfb842"
+    },
+    {
+      "type": "SINGLE",
+      "position": {
+        "x": 948.5,
+        "y": 321
+      },
+      "rotation": 0,
+      "poles": [
+        {
+          "height": 8.14375,
+          "width": 57.00625000000001,
+          "color": "#8B4513"
+        }
+      ],
+      "id": "d235ceeb-8ec0-4acc-8be0-76e7d1d2ebe3"
+    },
+    {
+      "type": "SINGLE",
+      "position": {
+        "x": 377.5,
+        "y": 1118
+      },
+      "rotation": 0,
+      "poles": [
+        {
+          "height": 8.14375,
+          "width": 57.00625000000001,
+          "color": "#8B4513"
+        }
+      ],
+      "id": "1ab61d08-121a-4181-83a7-45c70366c378"
+    },
+    {
+      "type": "SINGLE",
+      "position": {
+        "x": 1057.5,
+        "y": 1124
+      },
+      "rotation": 0,
+      "poles": [
+        {
+          "height": 8.14375,
+          "width": 57.00625000000001,
+          "color": "#8B4513"
+        }
+      ],
+      "id": "066cdeef-153a-4bdf-9c1a-49ebe92530d2"
+    },
+    {
+      "type": "SINGLE",
+      "position": {
+        "x": 275.5,
+        "y": 790
+      },
+      "rotation": 0,
+      "poles": [
+        {
+          "height": 8.14375,
+          "width": 57.00625000000001,
+          "color": "#8B4513"
+        }
+      ],
+      "id": "6ab72fc8-72b3-4f76-9bbd-6af5f3e08c5a"
+    },
+    {
+      "type": "SINGLE",
+      "position": {
+        "x": 608.5,
+        "y": 812
+      },
+      "rotation": 0,
+      "poles": [
+        {
+          "height": 8.14375,
+          "width": 57.00625000000001,
+          "color": "#8B4513"
+        }
+      ],
+      "id": "6c045c4f-2e9a-4097-a418-114345f9a644"
+    },
+    {
+      "type": "SINGLE",
+      "position": {
+        "x": 213.5,
+        "y": 707
+      },
+      "rotation": 0,
+      "poles": [
+        {
+          "height": 8.14375,
+          "width": 57.00625000000001,
+          "color": "#8B4513"
+        }
+      ],
+      "id": "1deab58c-5d99-45dd-8ef0-d869cfa21053"
+    },
+    {
+      "type": "SINGLE",
+      "position": {
+        "x": 395.5,
+        "y": 675
+      },
+      "rotation": 0,
+      "poles": [
+        {
+          "height": 8.14375,
+          "width": 57.00625000000001,
+          "color": "#8B4513"
+        }
+      ],
+      "id": "12b3200a-e6c1-4d13-b5c8-007a1d856592"
+    }
+  ],
+  "createdAt": "2025-03-10T12:29:51.936Z",
+  "updatedAt": "2025-03-10T12:35:42.519Z",
+  "fieldWidth": 80,
+  "fieldHeight": 60,
+  "viewportInfo": {
+    "width": 2560,
+    "height": 1305,
+    "canvasWidth": 1305,
+    "canvasHeight": 1245,
+    "aspectRatio": 1.3333333333333333
+  }
+}

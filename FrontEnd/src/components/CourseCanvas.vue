@@ -377,14 +377,6 @@
           </g>
         </template>
 
-        <!-- 显示总距离 -->
-        <g v-if="showDistanceLabels && Number(totalDistance) > 0" :transform="`translate(20, 20)`">
-          <rect x="0" y="0" width="120" height="30" rx="5" ry="5" class="total-distance-bg" />
-          <text x="60" y="20" class="total-distance-text">
-            总长度: {{ totalDistance }}m
-          </text>
-        </g>
-
         <!-- 渲染控制点 -->
         <template v-for="(point, pointIndex) in courseStore.coursePath.points" :key="`points-${pointIndex}`">
           <circle v-if="point.controlPoint1" :cx="point.controlPoint1.x" :cy="point.controlPoint1.y"
@@ -404,7 +396,7 @@
 
     <!-- 添加距离标签显示控制按钮 -->
     <div v-if="courseStore.coursePath.visible" class="distance-toggle">
-      <el-tooltip content="显示/隐藏距离标签" placement="left">
+      <el-tooltip content="显示/隐藏距离标签和控制点" placement="left">
         <el-button type="primary" circle size="small" :icon="showDistanceLabels ? 'Hide' : 'View'"
           @click="toggleDistanceLabels">
           <el-icon v-if="showDistanceLabels">
@@ -722,6 +714,20 @@ const handleClearCanvas = () => {
 // 切换距离标签显示
 const toggleDistanceLabels = () => {
   showDistanceLabels.value = !showDistanceLabels.value
+
+  // 获取所有控制点和控制线元素
+  const controlElements = document.querySelectorAll('.control-point, .control-line')
+
+  // 更新控制点和控制线的可见性
+  controlElements.forEach(element => {
+    if (showDistanceLabels.value) {
+      // 显示控制点和控制线
+      element.classList.remove('hidden-control')
+    } else {
+      // 隐藏控制点和控制线
+      element.classList.add('hidden-control')
+    }
+  })
 }
 
 // 暴露协作控制方法
@@ -1635,6 +1641,7 @@ onMounted(() => {
   window.addEventListener('mousemove', handleGlobalMouseMove)
   window.addEventListener('mouseup', handleGlobalMouseUp)
   window.addEventListener('keydown', handleKeyDown)
+
   // 添加生成路线事件监听
   const canvas = document.querySelector('.course-canvas')
   if (canvas) {
@@ -1643,30 +1650,15 @@ onMounted(() => {
     canvas.addEventListener('clear-canvas', handleClearCanvas)
   }
 
-  // 确保自定义障碍物已加载
-  import('@/stores/obstacle').then(({ useObstacleStore }) => {
-    const obstacleStore = useObstacleStore()
-    const userStore = useUserStore()
-
-    // 如果用户已登录但自定义障碍物为空，则初始化加载
-    if (userStore.isAuthenticated && obstacleStore.customObstacles.length === 0) {
-      console.log('CourseCanvas挂载时初始化自定义障碍物')
-      obstacleStore.initObstacles()
-      obstacleStore.initSharedObstacles()
-    }
-
-    // 预加载所有自定义障碍物到缓存
+  // 初始化控制点和控制线的显示状态
+  if (!showDistanceLabels.value) {
     setTimeout(() => {
-      courseStore.currentCourse.obstacles.forEach(obstacle => {
-        if (obstacle.type === ObstacleType.CUSTOM && obstacle.customId) {
-          const template = obstacleStore.getObstacleById(obstacle.customId)
-          if (template) {
-            customTemplateCache.value.set(obstacle.customId, template)
-          }
-        }
+      const controlElements = document.querySelectorAll('.control-point, .control-line')
+      controlElements.forEach(element => {
+        element.classList.add('hidden-control')
       })
-    }, 500) // 延迟执行，确保障碍物已加载
-  })
+    }, 100) // 短暂延迟确保DOM已更新
+  }
 })
 
 // 组件卸载时移除事件监听
@@ -2677,6 +2669,10 @@ const totalDistance = computed(() => {
     fill: var(--primary-color-light);
     r: 8;
   }
+
+  &.hidden-control {
+    display: none;
+  }
 }
 
 .control-line {
@@ -2685,6 +2681,10 @@ const totalDistance = computed(() => {
   stroke-dasharray: 4, 4;
   opacity: 0.3;
   pointer-events: none;
+
+  &.hidden-control {
+    display: none;
+  }
 }
 
 .distance-label-bg {
@@ -2712,7 +2712,8 @@ const totalDistance = computed(() => {
 .total-distance {
   position: absolute;
   top: 20px;
-  right: 20px;
+  left: 50%;
+  transform: translateX(-50%);
   background-color: white;
   border: 1px solid var(--primary-color);
   border-radius: 4px;
@@ -2729,20 +2730,6 @@ const totalDistance = computed(() => {
   text-anchor: middle;
   fill: var(--primary-color);
   font-weight: 500;
-}
-
-.total-distance-bg {
-  fill: rgba(0, 0, 0, 0.7);
-  stroke: var(--primary-color);
-  stroke-width: 1;
-}
-
-.total-distance-text {
-  fill: white;
-  font-size: 14px;
-  text-anchor: middle;
-  dominant-baseline: middle;
-  font-weight: bold;
 }
 
 .decoration {

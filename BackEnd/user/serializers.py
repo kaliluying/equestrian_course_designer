@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
-from .models import Design, DesignLike, UserProfile, MembershipPlan, CustomObstacle
+from .models import Design, DesignLike, UserProfile, MembershipPlan, CustomObstacle, MembershipOrder
 from .utils import get_absolute_media_url
 
 
@@ -341,6 +341,8 @@ class CustomObstacleSerializer(serializers.ModelSerializer):
         for field in required_fields:
             if field not in value:
                 raise serializers.ValidationError(f"障碍物数据缺少必要字段: {field}")
+
+
         return value
 
     def create(self, validated_data):
@@ -356,5 +358,68 @@ class CustomObstacleSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 f"您已达到自定义障碍物的最大数量限制: {max_obstacles}")
 
+        # 检查障碍物名称是否重复
+        if CustomObstacle.objects.filter(name=validated_data['name'], user=user).exists():
+            raise serializers.ValidationError("障碍物名称已存在")
+
         validated_data['user'] = user
         return super().create(validated_data)
+
+
+# 会员订单序列化器
+class MembershipOrderSerializer(serializers.ModelSerializer):
+    plan_name = serializers.SerializerMethodField()
+    user_username = serializers.SerializerMethodField()
+    status_display = serializers.SerializerMethodField()
+    payment_channel_display = serializers.SerializerMethodField()
+    billing_cycle_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MembershipOrder
+        fields = [
+            'id', 'order_id', 'user', 'user_username', 'membership_plan', 'plan_name',
+            'amount', 'payment_channel', 'payment_channel_display', 'status', 'status_display',
+            'trade_no', 'billing_cycle', 'billing_cycle_display', 'payment_url',
+            'payment_time', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'order_id', 'trade_no',
+                            'payment_time', 'created_at', 'updated_at']
+
+    def get_plan_name(self, obj):
+        return obj.membership_plan.name if obj.membership_plan else '未知计划'
+
+    def get_user_username(self, obj):
+        return obj.user.username
+
+    def get_status_display(self, obj):
+        return obj.get_status_display()
+
+    def get_payment_channel_display(self, obj):
+        return obj.get_payment_channel_display()
+
+    def get_billing_cycle_display(self, obj):
+        return obj.get_billing_cycle_display()
+
+
+# 创建会员订单请求序列化器
+class CreateMembershipOrderSerializer(serializers.Serializer):
+    plan_id = serializers.IntegerField(required=True)
+    billing_cycle = serializers.ChoiceField(
+        choices=['month', 'year'], required=True)
+
+    def validate_plan_id(self, value):
+        try:
+            plan = MembershipPlan.objects.get(id=value, is_active=True)
+            return value
+        except MembershipPlan.DoesNotExist:
+            raise serializers.ValidationError("指定的会员计划不存在或已停用")
+
+    def validate(self, data):
+        # 获取计划
+        plan = MembershipPlan.objects.get(id=data['plan_id'])
+        # 根据计费周期获取价格
+        if data['billing_cycle'] == 'month':
+            data['amount'] = plan.monthly_price
+        else:
+            data['amount'] = plan.yearly_price
+        return data

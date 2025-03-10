@@ -65,7 +65,7 @@
 
               <div class="author-info">
                 <el-avatar :size="24" class="author-avatar">{{ design.author_username.charAt(0)
-                }}</el-avatar>
+                  }}</el-avatar>
                 <span class="author-name">{{ design.author_username }}</span>
               </div>
 
@@ -488,6 +488,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  background-color: #f8f9fa;
+  padding: 8px;
 
   @media (max-width: 768px) {
     height: 160px;
@@ -511,14 +513,13 @@ onMounted(() => {
 }
 
 .design-preview-image {
-  width: 100%;
-  height: 100%;
+  width: auto;
+  height: auto;
   object-fit: contain;
   max-height: 100%;
   max-width: 100%;
   transition: transform 0.5s ease;
   cursor: pointer;
-  background-color: #f8f9fa;
 
   &:hover {
     transform: scale(1.05);

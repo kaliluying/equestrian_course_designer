@@ -9,23 +9,26 @@ from .serializers import UserRegisterSerializer, UserLoginSerializer, ForgotPass
 from rest_framework import serializers
 from rest_framework import viewsets
 from rest_framework.parsers import MultiPartParser, FormParser
-from .models import Design, PasswordResetToken, DesignLike, UserProfile, MembershipPlan, CustomObstacle
-from .serializers import DesignSerializer, DesignListSerializer, CustomObstacleSerializer
+from .models import Design, PasswordResetToken, DesignLike, UserProfile, MembershipPlan, CustomObstacle, MembershipOrder
+from .serializers import DesignSerializer, DesignListSerializer, CustomObstacleSerializer, MembershipOrderSerializer, CreateMembershipOrderSerializer
 import uuid
 from django.core.mail import send_mail
 from django.conf import settings
 from django.urls import reverse
 from django.utils import timezone
-from datetime import timedelta
+from datetime import timedelta, datetime
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 from django.middleware.csrf import get_token
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.utils.decorators import method_decorator
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from django.db.models import F
-from .utils import get_absolute_media_url  # 导入新的辅助函数
+from .utils import get_absolute_media_url, create_alipay_order, verify_alipay_callback, query_alipay_order
 from rest_framework.exceptions import PermissionDenied
+from django.views.generic import TemplateView
+import logging
+from django.contrib.auth import authenticate
 
 # Create your views here.
 
@@ -127,6 +130,10 @@ class LoginView(APIView):
         serializer = UserLoginSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.validated_data['user']
+
+            # 添加会员状态检查
+            self.check_and_update_membership(user)
+
             refresh = RefreshToken.for_user(user)
             return Response({
                 'message': '登录成功',
@@ -136,6 +143,48 @@ class LoginView(APIView):
                 'refresh_token': str(refresh)
             })
         return Response({'code': 400, 'message': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    def check_and_update_membership(self, user):
+        """检查并更新用户的会员状态"""
+        try:
+            profile = user.profile
+            now = timezone.now()
+
+            # 检查会员是否已过期
+            if profile.is_premium and profile.premium_expire_date and profile.premium_expire_date <= now:
+                logger.info(f"用户 {user.username} 的会员已过期，检查是否有待生效的会员计划")
+
+                # 检查是否有待生效的会员计划
+                if profile.pending_membership_plan:
+                    logger.info(f"用户 {user.username} 有待生效的会员计划，将其激活")
+
+                    # 激活待生效的会员计划
+                    profile.membership_plan = profile.pending_membership_plan
+                    profile.premium_expire_date = profile.pending_membership_expire_date
+
+                    # 更新存储限制
+                    if profile.membership_plan and profile.membership_plan.storage_limit:
+                        profile.storage_limit = profile.membership_plan.storage_limit
+
+                    # 清除待生效的会员计划信息
+                    profile.pending_membership_plan = None
+                    profile.pending_membership_start_date = None
+                    profile.pending_membership_expire_date = None
+
+                    profile.save()
+                    logger.info(
+                        f"用户 {user.username} 的待生效会员计划已激活，新会员类型：{profile.membership_plan.name}")
+
+                elif not profile.is_premium_active():  # 调用方法而不是访问属性
+                    # 会员已过期且没有待生效的计划，重置会员状态
+                    logger.info(
+                        f"用户 {user.username} 的会员已过期，没有待生效的会员计划，重置为非会员状态")
+                    # 不重置会员计划，保留历史信息，只通过is_premium_active判断会员状态
+
+            return True
+        except Exception as e:
+            logger.error(f"检查用户会员状态时出错: {str(e)}")
+            return False
 
 
 class ForgotPasswordView(APIView):
@@ -462,7 +511,8 @@ class DesignViewSet(viewsets.ModelViewSet):
                 'is_limit_reached': True,
                 'current_count': user_designs_count,
                 'limit': storage_limit,
-                'is_premium': profile.is_premium_active()
+                'is_premium': profile.is_premium,
+                'is_premium_active': profile.is_premium_active()
             }, status=status.HTTP_403_FORBIDDEN)
 
         # 继续正常的创建流程
@@ -549,62 +599,67 @@ class UserViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def my_profile(self, request):
-        """获取当前用户的资料，包括会员状态"""
+        """获取当前用户资料"""
         user = request.user
-        if not user.is_authenticated:
-            return Response({
-                'success': False,
-                'message': "用户未登录"
-            }, status=status.HTTP_401_UNAUTHORIZED)
+        # 获取或创建用户资料
+        profile, created = UserProfile.objects.get_or_create(user=user)
 
-        try:
-            profile, created = UserProfile.objects.get_or_create(user=user)
+        # 获取用户设计数量
+        design_count = Design.objects.filter(author=user).count()
 
-            # 检查会员状态
-            is_premium_active = profile.is_premium_active()
+        # 获取可用的会员计划
+        plans = MembershipPlan.objects.filter(is_active=True)
 
-            # 获取会员计划信息
-            membership_data = None
-            if profile.membership_plan:
-                membership_data = {
-                    'id': profile.membership_plan.id,
-                    'name': profile.membership_plan.name,
-                    'monthly_price': profile.membership_plan.monthly_price,
-                    'yearly_price': profile.membership_plan.yearly_price,
-                    'storage_limit': profile.membership_plan.storage_limit,
-                    'description': profile.membership_plan.description
-                }
+        # 构建响应数据
+        data = {
+            'success': True,
+            'username': user.username,
+            'email': user.email,
+            'is_premium': profile.is_premium,
+            'is_premium_active': profile.is_premium_active(),
+            'design_count': design_count,
+            'design_storage_limit': profile.storage_limit,
+            'available_plans': []
+        }
 
-            # 获取所有可用的会员计划
-            available_plans = []
-            for plan in MembershipPlan.objects.filter(is_active=True):
-                available_plans.append({
-                    'id': plan.id,
-                    'name': plan.name,
-                    'code': plan.code,
-                    'monthly_price': plan.monthly_price,
-                    'yearly_price': plan.yearly_price,
-                    'storage_limit': plan.storage_limit,
-                    'description': plan.description
-                })
+        # 添加当前会员计划
+        if profile.membership_plan:
+            data['membership_plan'] = {
+                'id': profile.membership_plan.id,
+                'name': profile.membership_plan.name,
+                'code': profile.membership_plan.code,
+                'monthly_price': float(profile.membership_plan.monthly_price),
+                'yearly_price': float(profile.membership_plan.yearly_price),
+                'storage_limit': profile.membership_plan.storage_limit
+            }
+            data['premium_expire_date'] = profile.premium_expire_date
 
-            return Response({
-                'success': True,
-                'username': user.username,
-                'email': user.email,
-                'is_premium': profile.is_premium,
-                'is_premium_active': is_premium_active,
-                'premium_expiry': profile.premium_expiry,
-                'design_storage_limit': profile.get_storage_limit(),
-                'design_count': Design.objects.filter(author=user).count(),
-                'membership_plan': membership_data,
-                'available_plans': available_plans
+        # 添加待生效的会员计划信息
+        if profile.pending_membership_plan:
+            data['pending_membership_plan'] = {
+                'id': profile.pending_membership_plan.id,
+                'name': profile.pending_membership_plan.name,
+                'code': profile.pending_membership_plan.code,
+                'monthly_price': float(profile.pending_membership_plan.monthly_price),
+                'yearly_price': float(profile.pending_membership_plan.yearly_price),
+                'storage_limit': profile.pending_membership_plan.storage_limit,
+                'start_date': profile.pending_membership_start_date,
+                'expire_date': profile.pending_membership_expire_date
+            }
+
+        # 添加可用的会员计划
+        for plan in plans:
+            data['available_plans'].append({
+                'id': plan.id,
+                'name': plan.name,
+                'code': plan.code,
+                'monthly_price': float(plan.monthly_price),
+                'yearly_price': float(plan.yearly_price),
+                'storage_limit': plan.storage_limit,
+                'description': plan.description
             })
-        except Exception as e:
-            return Response({
-                'success': False,
-                'message': f"获取用户资料失败: {str(e)}"
-            }, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(data)
 
     @action(detail=False, methods=['post'])
     def change_password(self, request):
@@ -791,3 +846,290 @@ class CustomObstacleViewSet(viewsets.ModelViewSet):
             'name': obstacle.name,
             'is_shared': obstacle.is_shared
         })
+
+
+# 支付相关视图
+logger = logging.getLogger(__name__)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_membership_order(request):
+    """创建会员订单并返回支付链接"""
+    serializer = CreateMembershipOrderSerializer(data=request.data)
+    if serializer.is_valid():
+        # 获取会员计划
+        plan = MembershipPlan.objects.get(
+            id=serializer.validated_data['plan_id'])
+        # 获取用户
+        user = request.user
+
+        # 创建订单
+        order = MembershipOrder(
+            user=user,
+            membership_plan=plan,
+            amount=serializer.validated_data['amount'],
+            billing_cycle=serializer.validated_data['billing_cycle'],
+            payment_channel='alipay',
+            status='pending'
+        )
+        order.save()
+
+        # 创建支付链接
+        subject = f"{order.get_billing_cycle_display()}-{plan.name}"
+        # 生成支付宝订单
+        try:
+            pay_url = create_alipay_order(
+                order_id=order.order_id,
+                subject=subject,
+                total_amount=float(order.amount)
+            )
+            # 保存支付链接
+            order.payment_url = pay_url
+            order.save()
+
+            # 返回订单信息和支付链接
+            return Response({
+                'success': True,
+                'message': '订单创建成功',
+                'order': MembershipOrderSerializer(order).data,
+                'payment_url': pay_url
+            })
+        except Exception as e:
+            # 记录错误并返回
+            logger.error(f"创建支付宝订单失败: {str(e)}")
+            order.status = 'failed'
+            order.save()
+            return Response({
+                'success': False,
+                'message': f'创建支付订单失败: {str(e)}',
+            }, status=500)
+    else:
+        return Response({
+            'success': False,
+            'message': '参数错误',
+            'errors': serializer.errors
+        }, status=400)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_user_orders(request):
+    """获取用户的所有订单"""
+    orders = MembershipOrder.objects.filter(
+        user=request.user).order_by('-created_at')
+    serializer = MembershipOrderSerializer(orders, many=True)
+    return Response({
+        'success': True,
+        'orders': serializer.data
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_order_status(request, order_id):
+    """查询订单状态"""
+    try:
+        order = MembershipOrder.objects.get(
+            order_id=order_id, user=request.user)
+    except MembershipOrder.DoesNotExist:
+        return Response({
+            'success': False,
+            'message': '订单不存在'
+        }, status=404)
+
+    # 如果订单已经支付完成，直接返回状态
+    if order.status == 'paid':
+        return Response({
+            'success': True,
+            'order': MembershipOrderSerializer(order).data
+        })
+
+    # 如果未支付，查询支付宝订单状态
+    try:
+        query_result = query_alipay_order(order.order_id)
+        logger.info(f"支付宝查询结果: {query_result}")
+
+        # 处理查询结果
+        if query_result.get('trade_status') == 'TRADE_SUCCESS':
+            # 更新订单状态
+            order.status = 'paid'
+            order.trade_no = query_result.get('trade_no')
+            order.payment_time = datetime.now()
+            order.save()
+
+            # 更新用户会员状态
+            update_user_membership(request.user, order)
+
+            return Response({
+                'success': True,
+                'message': '支付成功',
+                'order': MembershipOrderSerializer(order).data
+            })
+        else:
+            return Response({
+                'success': True,
+                'message': '订单未支付或支付处理中',
+                'order': MembershipOrderSerializer(order).data,
+                'alipay_status': query_result.get('trade_status')
+            })
+    except Exception as e:
+        logger.error(f"查询支付宝订单状态失败: {str(e)}")
+        return Response({
+            'success': False,
+            'message': f'查询订单状态失败: {str(e)}',
+            'order': MembershipOrderSerializer(order).data
+        }, status=500)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def alipay_notify(request):
+    """支付宝异步通知处理"""
+    # 获取所有参数
+    data = request.data.dict() if hasattr(request.data, 'dict') else request.data
+    signature = data.pop('sign', None)
+
+    try:
+        # 验证签名
+        if not signature or not verify_alipay_callback(data, signature):
+            logger.warning(f"支付宝回调签名验证失败: {data}")
+            return Response({'message': 'FAIL', 'detail': '签名验证失败'})
+
+        # 验证接收的信息
+        out_trade_no = data.get('out_trade_no')
+        trade_status = data.get('trade_status')
+
+        if not out_trade_no or not trade_status:
+            return Response({'message': 'FAIL', 'detail': '参数不完整'})
+
+        # 查找订单
+        try:
+            order = MembershipOrder.objects.get(order_id=out_trade_no)
+        except MembershipOrder.DoesNotExist:
+            logger.warning(f"支付宝回调：找不到订单 {out_trade_no}")
+            return Response({'message': 'FAIL', 'detail': '订单不存在'})
+
+        # 处理不同的交易状态
+        if trade_status == 'TRADE_SUCCESS' or trade_status == 'TRADE_FINISHED':
+            # 如果订单已处理，防止重复更新
+            if order.status == 'paid':
+                return Response({'message': 'SUCCESS', 'detail': '订单已处理'})
+
+            # 更新订单状态
+            order.status = 'paid'
+            order.trade_no = data.get('trade_no')
+            order.payment_time = datetime.now()
+            order.save()
+
+            # 更新用户会员状态
+            update_user_membership(order.user, order)
+
+            logger.info(f"订单 {out_trade_no} 支付成功，交易号: {data.get('trade_no')}")
+            return Response({'message': 'SUCCESS'})
+        else:
+            # 其他状态不处理
+            return Response({'message': 'SUCCESS', 'detail': '等待交易完成'})
+    except Exception as e:
+        logger.error(f"处理支付宝回调时出错: {str(e)}")
+        return Response({'message': 'FAIL', 'detail': str(e)})
+
+
+def update_user_membership(user, order):
+    """更新用户会员状态"""
+    # 获取用户资料
+    profile = user.profile
+
+    # 获取当前时间
+    now = datetime.now()
+
+    # 会员计划等级映射（数字越大等级越高）
+    plan_level = {
+        'standard': 1,
+        'premium': 2,
+        # 未来可能添加的其他计划
+    }
+
+    # 设置会员到期时间
+    if order.billing_cycle == 'month':
+        duration = timedelta(days=30)
+    else:  # year
+        duration = timedelta(days=365)
+
+    # 判断是否已经是会员
+    if profile.is_premium_active():
+        current_plan_code = profile.membership_plan.code if profile.membership_plan else 'free'
+        new_plan_code = order.membership_plan.code if order.membership_plan else 'free'
+
+        # 获取当前和新计划的等级
+        current_level = plan_level.get(current_plan_code, 0)
+        new_level = plan_level.get(new_plan_code, 0)
+
+        # 1. 升级会员（立即生效，重置到期时间）
+        if new_level > current_level:
+            logger.info(
+                f"用户 {user.username} 升级会员: {current_plan_code} -> {new_plan_code}")
+            profile.membership_plan = order.membership_plan
+            profile.premium_expire_date = now + duration
+
+        # 2. 同等级续费（延长到期时间）
+        elif new_level == current_level:
+            logger.info(f"用户 {user.username} 续费相同等级会员: {current_plan_code}")
+            # 从当前到期时间起延长
+            if profile.premium_expire_date and profile.premium_expire_date > now:
+                profile.premium_expire_date = profile.premium_expire_date + duration
+            else:
+                profile.premium_expire_date = now + duration
+
+        # 3. 降级会员（当前会员到期后生效）
+        else:
+            logger.info(
+                f"用户 {user.username} 降级会员: {current_plan_code} -> {new_plan_code}，将在当前会员到期后生效")
+
+            # 创建会员变更记录(可选，如果需要记录变更历史)
+            # MembershipChangeLog.objects.create(...)
+
+            # 存储降级信息，但暂不更新当前会员
+            profile.pending_membership_plan = order.membership_plan
+            profile.pending_membership_start_date = profile.premium_expire_date
+            profile.pending_membership_expire_date = profile.premium_expire_date + duration
+
+            # 注意：此处不修改当前会员计划和到期时间
+            # 需要添加一个定时任务或登录检查来处理会员到期后的降级
+    else:
+        # 用户之前不是会员，直接激活
+        logger.info(f"用户 {user.username} 首次开通会员: {order.membership_plan.name}")
+        profile.membership_plan = order.membership_plan
+        profile.premium_expire_date = now + duration
+
+    # 更新存储限制
+    if order.membership_plan:
+        # 如果是降级但还没生效，不降低存储限制
+        if not hasattr(profile, 'pending_membership_plan') or profile.pending_membership_plan is None:
+            profile.storage_limit = order.membership_plan.storage_limit
+
+    # 保存更改
+    profile.save()
+
+    logger.info(
+        f"用户 {user.username} 的会员状态已更新，当前会员类型：{profile.membership_plan.name if profile.membership_plan else '无'}")
+
+    # 返回更新后的用户资料
+    return profile
+
+# 支付成功页面重定向
+
+
+class PaymentSuccessView(TemplateView):
+    template_name = 'payment_success.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        order_id = self.request.GET.get('out_trade_no')
+        if order_id:
+            try:
+                order = MembershipOrder.objects.get(order_id=order_id)
+                context['order'] = order
+            except MembershipOrder.DoesNotExist:
+                pass
+        return context

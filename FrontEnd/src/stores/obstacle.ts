@@ -27,6 +27,13 @@ import type {
   ApiDecorationProperties,
 } from '@/api/obstacle'
 import { ElMessage } from 'element-plus'
+import {
+  ErrorCode,
+  ErrorSeverity,
+  type ErrorResponse,
+  createErrorResponse,
+  extractErrorFromResponse,
+} from '@/types/error'
 
 // 将API返回的ObstacleData转换为CustomObstacleTemplate
 const convertApiObstacleToTemplate = (apiObstacle: ObstacleData): CustomObstacleTemplate => {
@@ -181,9 +188,9 @@ export const useObstacleStore = defineStore('obstacle', () => {
   // 共享障碍物加载状态
   const loadingShared = ref(false)
   // 错误信息
-  const error = ref<string | null>(null)
+  const error = ref<ErrorResponse | null>(null)
   // 共享障碍物错误信息
-  const sharedError = ref<string | null>(null)
+  const sharedError = ref<ErrorResponse | null>(null)
   // 障碍物数量限制信息
   const obstacleCountInfo = ref<ObstacleCountInfo | null>(null)
 
@@ -248,7 +255,7 @@ export const useObstacleStore = defineStore('obstacle', () => {
       }
     } catch (e) {
       console.error('从服务器加载自定义障碍物失败:', e)
-      error.value = '加载障碍物失败，请重试'
+      error.value = createErrorResponse(ErrorCode.LOAD_OBSTACLE_FAILED, '加载障碍物失败，请重试')
 
       // 尝试从本地存储加载（作为备份方案）
       const storageKey = getStorageKey()
@@ -270,11 +277,44 @@ export const useObstacleStore = defineStore('obstacle', () => {
   }
 
   // 保存自定义障碍物
-  const saveCustomObstacle = async (obstacle: CustomObstacleTemplate) => {
+  const saveCustomObstacle = async (obstacle: CustomObstacleTemplate, showMessage = true) => {
     // 如果用户未登录，则不保存
     if (!userStore.isAuthenticated) {
       console.error('用户未登录，无法保存自定义障碍物')
-      ElMessage.warning('请先登录后再创建或编辑自定义障碍物')
+      error.value = createErrorResponse(
+        ErrorCode.USER_NOT_LOGGED_IN,
+        '请先登录后再创建或编辑自定义障碍物',
+        ErrorSeverity.WARNING,
+      )
+      if (showMessage) {
+        ElMessage.warning(error.value.message)
+      }
+      return obstacle
+    }
+
+    // 检查非会员用户数量限制
+    if (
+      !userStore.currentUser?.is_premium_active &&
+      !obstacle.id &&
+      customObstacles.value.length >= 10
+    ) {
+      error.value = createErrorResponse(
+        ErrorCode.USER_LIMIT_EXCEEDED,
+        '普通用户最多创建10个自定义障碍，请升级会员享受无限创建特权',
+        ErrorSeverity.WARNING,
+        {
+          solutions: ['删除一些不需要的障碍物以释放空间', '升级为会员，享受无限创建特权'],
+        },
+      )
+      if (showMessage) {
+        ElMessage({
+          message: error.value.message,
+          type: 'warning',
+          duration: 5000,
+          showClose: true,
+          grouping: true,
+        })
+      }
       return obstacle
     }
 
@@ -332,12 +372,79 @@ export const useObstacleStore = defineStore('obstacle', () => {
         console.error('获取障碍物数量限制信息失败:', countError)
       }
 
-      ElMessage.success(index >= 0 ? '障碍物已更新' : '障碍物已创建')
+      // 明确标记操作成功
+      error.value = null
+      if (showMessage) {
+        ElMessage.success(index >= 0 ? '障碍物已更新' : '障碍物已创建')
+      }
       return savedTemplate
     } catch (e) {
       console.error('保存自定义障碍物到服务器失败:', e)
-      error.value = '保存障碍物失败，请重试'
-      ElMessage.error('保存障碍物失败，请重试')
+
+      // 特殊处理常见错误情况
+      if (e && typeof e === 'object' && 'response' in e) {
+        interface ErrorResponseData {
+          data?: {
+            code?: string
+            detail?: string
+            message?: string
+            name?: string
+            errors?: string[]
+          }
+          status?: number
+        }
+
+        const response = (e as { response?: ErrorResponseData }).response
+
+        // 名称重复错误
+        if (
+          response?.data?.name &&
+          Array.isArray(response.data.errors) &&
+          response.data.errors.some((err) => err.includes('already exists'))
+        ) {
+          error.value = createErrorResponse(
+            ErrorCode.DUPLICATE_NAME,
+            '障碍物名称已存在，请使用其他名称',
+            ErrorSeverity.ERROR,
+          )
+          return obstacle
+        }
+
+        // 超出限制错误
+        if (response?.status === 403 && response.data?.detail?.includes('limit')) {
+          error.value = createErrorResponse(
+            ErrorCode.USER_LIMIT_EXCEEDED,
+            response.data.detail || '您已达到障碍物数量上限',
+            ErrorSeverity.WARNING,
+          )
+          return obstacle
+        }
+
+        // 其他API错误
+        if (response?.data?.message) {
+          error.value = createErrorResponse(
+            ErrorCode.API_ERROR,
+            response.data.message,
+            ErrorSeverity.ERROR,
+          )
+          return obstacle
+        }
+      }
+
+      // 设置错误
+      error.value = createErrorResponse(ErrorCode.SAVE_OBSTACLE_FAILED, '保存障碍物失败，请重试')
+
+      // 显示错误消息
+      if (showMessage) {
+        ElMessage({
+          message: error.value.message,
+          type: error.value.severity as 'error' | 'warning' | 'info' | 'success',
+          duration: 5000,
+          showClose: true,
+          grouping: true,
+        })
+      }
+
       return obstacle
     } finally {
       loading.value = false
@@ -384,7 +491,7 @@ export const useObstacleStore = defineStore('obstacle', () => {
       return false
     } catch (e) {
       console.error('从服务器删除自定义障碍物失败:', e)
-      error.value = '删除障碍物失败，请重试'
+      error.value = createErrorResponse(ErrorCode.DELETE_OBSTACLE_FAILED, '删除障碍物失败，请重试')
       ElMessage.error('删除障碍物失败，请重试')
       return false
     } finally {
@@ -428,13 +535,6 @@ export const useObstacleStore = defineStore('obstacle', () => {
     return null
   }
 
-  // 按创建时间排序的障碍物（最新的在前面）
-  const sortedObstacles = computed(() => {
-    return [...customObstacles.value].sort((a, b) => {
-      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    })
-  })
-
   // 正在加载中的计算属性
   const isLoading = computed(() => loading.value)
 
@@ -443,9 +543,11 @@ export const useObstacleStore = defineStore('obstacle', () => {
 
   // 初始化加载共享障碍物
   const initSharedObstacles = async () => {
-    // 如果用户未登录，则不加载共享障碍物
+    // 如果用户未登录，则不加载共享障碍物但不抛出错误
     if (!userStore.isAuthenticated) {
       console.log('用户未登录，不加载共享障碍物')
+      // 清空共享障碍物列表，避免显示旧数据
+      sharedObstacles.value = []
       return
     }
 
@@ -459,6 +561,12 @@ export const useObstacleStore = defineStore('obstacle', () => {
 
       // 检查响应格式，处理分页数据
       // 使用类型断言处理可能的分页响应
+      if (!response) {
+        // 处理空响应情况
+        sharedObstacles.value = []
+        return
+      }
+
       const paginatedResponse = response as unknown as { results?: ObstacleData[] }
       const obstacles = paginatedResponse.results || (response as ObstacleData[])
 
@@ -467,11 +575,18 @@ export const useObstacleStore = defineStore('obstacle', () => {
         console.log('已从服务器加载共享障碍物:', sharedObstacles.value.length, '个')
       } else {
         console.error('服务器返回的共享障碍物数据格式不正确:', obstacles)
-        throw new Error('共享障碍物数据格式不正确')
+        sharedObstacles.value = [] // 设置为空数组避免引用错误
+        sharedError.value = createErrorResponse(
+          ErrorCode.LOAD_SHARED_OBSTACLE_FAILED,
+          '共享障碍物数据格式不正确',
+        )
       }
     } catch (e) {
       console.error('从服务器加载共享障碍物失败:', e)
-      sharedError.value = '加载共享障碍物失败，请重试'
+      sharedError.value = createErrorResponse(
+        ErrorCode.LOAD_SHARED_OBSTACLE_FAILED,
+        '加载共享障碍物失败，请重试',
+      )
     } finally {
       loadingShared.value = false
     }
@@ -508,7 +623,7 @@ export const useObstacleStore = defineStore('obstacle', () => {
       return false
     } catch (e) {
       console.error('修改障碍物共享状态失败:', e)
-      error.value = '操作失败，请重试'
+      error.value = createErrorResponse(ErrorCode.TOGGLE_SHARING_FAILED, '操作失败，请重试')
       ElMessage.error('修改共享状态失败，请重试')
       return false
     } finally {
@@ -529,6 +644,13 @@ export const useObstacleStore = defineStore('obstacle', () => {
   // 共享障碍物是否有错误
   const hasSharedError = computed(() => sharedError.value !== null)
 
+  // 按创建时间排序的障碍物（最新的在前面）
+  const sortedObstacles = computed(() => {
+    return [...customObstacles.value].sort((a, b) => {
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    })
+  })
+
   // 监听用户登录状态变化
   if (import.meta.env.SSR === false) {
     // 在组件挂载时加载共享障碍物
@@ -537,21 +659,26 @@ export const useObstacleStore = defineStore('obstacle', () => {
 
   return {
     customObstacles,
-    sortedObstacles,
     sharedObstacles,
-    sortedSharedObstacles,
-    saveCustomObstacle,
-    removeCustomObstacle,
-    getObstacleById,
-    initObstacles,
-    initSharedObstacles,
-    toggleSharing,
-    isLoading,
-    isLoadingShared,
-    hasError,
-    hasSharedError,
+    loading,
+    loadingShared,
     error,
     sharedError,
     obstacleCountInfo,
+    initObstacles,
+    initSharedObstacles,
+    saveCustomObstacle,
+    removeCustomObstacle,
+    getObstacleById,
+    toggleSharing,
+    clearError: () => {
+      error.value = null
+    },
+    isLoading,
+    hasError,
+    isLoadingShared,
+    hasSharedError,
+    sortedObstacles,
+    sortedSharedObstacles,
   }
 })

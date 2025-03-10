@@ -126,6 +126,9 @@ export default {
       changePassword: getApiUrl('/user/users/change_password/'),
       changeEmail: getApiUrl('/user/users/change_email/'),
       setPremium: (userId: number) => getApiUrl(`/user/users/${userId}/set_premium/`),
+      createOrder: `${config.apiBaseUrl}/user/api/payment/create-order/`,
+      orders: `${config.apiBaseUrl}/user/api/payment/orders/`,
+      orderStatus: (orderId: string) => `${config.apiBaseUrl}/user/api/payment/order-status/${orderId}/`,
     },
 
     // 反馈相关

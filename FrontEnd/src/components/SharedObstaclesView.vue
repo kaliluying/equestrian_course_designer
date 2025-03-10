@@ -38,7 +38,7 @@
 
     <!-- 加载错误 -->
     <div v-else-if="obstacleStore.hasSharedError && !obstacleStore.sharedObstacles.length" class="error-state">
-      <el-empty :description="obstacleStore.sharedError || '加载失败，请重试'">
+      <el-empty :description="obstacleStore.sharedError?.message || '加载失败，请重试'">
         <el-button type="primary" @click="refreshSharedObstacles">重试</el-button>
       </el-empty>
     </div>

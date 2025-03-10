@@ -232,31 +232,54 @@ const checkAutosave = () => {
     // 验证数据是否有效
     const courseData = JSON.parse(savedCourse)
     if (!courseData || !courseData.id) {
-      console.error('自动保存数据无效')
+      console.error('自动保存数据无效：缺少必要字段')
       clearLocalStorage()
       return
+    }
+
+    // 进一步验证数据结构
+    if (!Array.isArray(courseData.obstacles)) {
+      console.error('自动保存数据无效：obstacles不是数组')
+      clearLocalStorage()
+      return
+    }
+
+    // 验证路径数据（如果存在）
+    if (courseData.path) {
+      if (courseData.path.points && !Array.isArray(courseData.path.points)) {
+        console.error('自动保存数据无效：path.points不是数组')
+        clearLocalStorage()
+        return
+      }
+    }
+
+    console.log('自动保存数据验证通过', {
+      id: courseData.id,
+      name: courseData.name,
+      obstacles: courseData.obstacles.length,
+      hasPath: !!courseData.path
+    })
+
+    // 检查自动保存的时间是否在24小时内
+    const savedDate = new Date(timestamp)
+    const now = new Date()
+    const hoursDiff = (now.getTime() - savedDate.getTime()) / (1000 * 60 * 60)
+    console.log('自动保存时间距现在:', { hoursDiff: hoursDiff.toFixed(2) + '小时' })
+
+    if (hoursDiff <= 24) {
+      savedTimestamp.value = timestamp
+      // 确保对话框显示
+      console.log('显示恢复对话框')
+      showRestoreDialog.value = true
+    } else {
+      // 如果自动保存的时间超过24小时，则清除localStorage
+      console.log('自动保存数据已过期（超过24小时）')
+      clearLocalStorage()
     }
   } catch (error) {
     console.error('解析自动保存数据失败:', error)
     clearLocalStorage()
     return
-  }
-
-  // 检查自动保存的时间是否在24小时内
-  const savedDate = new Date(timestamp)
-  const now = new Date()
-  const hoursDiff = (now.getTime() - savedDate.getTime()) / (1000 * 60 * 60)
-  console.log('自动保存时间距现在:', { hoursDiff: hoursDiff.toFixed(2) + '小时' })
-
-  if (hoursDiff <= 24) {
-    savedTimestamp.value = timestamp
-    // 确保对话框显示
-    console.log('显示恢复对话框')
-    showRestoreDialog.value = true
-  } else {
-    // 如果自动保存的时间超过24小时，则清除localStorage
-    console.log('自动保存数据已过期（超过24小时）')
-    clearLocalStorage()
   }
 }
 
@@ -956,6 +979,43 @@ body {
 
 .el-card:hover {
   box-shadow: var(--shadow);
+}
+
+/* 确保所有主要容器允许滚动 */
+html,
+body,
+.app {
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* 修复了可能影响滚动的问题 */
+.app {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 确保主要内容区可以滚动和自动增长 */
+.container {
+  flex: 1;
+  min-height: 0;
+  /* 允许内容区收缩 */
+  overflow-y: auto;
+  /* 允许垂直滚动 */
+  padding-bottom: 40px;
+  /* 底部留出空间，确保最下面的内容可见 */
+}
+
+/* 移动设备上的额外优化 */
+@media (max-width: 768px) {
+  body {
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .app {
+    min-height: 100vh;
+  }
 }
 </style>
 

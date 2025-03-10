@@ -472,7 +472,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { Delete } from '@element-plus/icons-vue'
 import { ObstacleType, DecorationCategory } from '@/types/obstacle'
 import type { CustomObstacleTemplate } from '@/types/obstacle'
@@ -1046,6 +1046,13 @@ const saveObstacle = async () => {
     // 错误处理由store内部完成，这里不需要额外处理
   }
 }
+
+// 当输入变化时清除错误
+watch(() => props.template, () => {
+  if (obstacleStore.hasError) {
+    obstacleStore.clearError()
+  }
+}, { deep: true })
 </script>
 
 <style scoped lang="scss">

@@ -250,7 +250,7 @@ EMAIL_HOST = 'smtp.gmail.com'            # Gmail SMTP服务器地址
 EMAIL_PORT = 587                         # TLS加密端口
 EMAIL_USE_TLS = True                     # 启用TLS加密
 EMAIL_HOST_USER = 'kaliluying@gmail.com'       # 你的Gmail邮箱地址
-EMAIL_HOST_PASSWORD = 'wzeh vduq wxma zrap' # 应用专用密码（非邮箱登录密码）
+EMAIL_HOST_PASSWORD = 'wzeh vduq wxma zrap'  # 应用专用密码（非邮箱登录密码）
 
 # WebSocket配置
 ALLOWED_HOSTS = ['*']  # 允许所有主机访问，生产环境应该限制
@@ -285,3 +285,13 @@ LOGGING = {
         },
     },
 }
+
+# 支付宝配置
+ALIPAY_APPID = '9021000144617885'  # 替换为实际的支付宝应用ID
+ALIPAY_APP_PRIVATE_KEY_PATH = os.path.join(
+    BASE_DIR, 'equestrian/keys/app_private_key.pem')
+ALIPAY_ALIPAY_PUBLIC_KEY_PATH = os.path.join(
+    BASE_DIR, 'equestrian/keys/alipay_public_key.pem')
+ALIPAY_NOTIFY_URL = f"{SITE_DOMAIN}/api/payment/alipay/notify/"
+ALIPAY_RETURN_URL = f"{SITE_DOMAIN}/payment/success/"
+ALIPAY_DEBUG = True  # 开发环境使用沙箱模式

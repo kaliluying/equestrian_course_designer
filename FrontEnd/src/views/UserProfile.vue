@@ -1,5 +1,5 @@
 <template>
-  <div class="user-profile-container">
+  <div class="user-profile-container" style="padding-bottom: 100px;">
     <el-card class="profile-card">
       <template #header>
         <div class="card-header">
@@ -45,7 +45,22 @@
 
         <div v-if="userProfile.is_premium" class="info-item">
           <span class="label">会员到期时间：</span>
-          <span class="value">{{ formatDate(userProfile.premium_expiry) }}</span>
+          <span class="value">{{ formatDate(userProfile.premium_expire_date) }}</span>
+        </div>
+
+        <!-- 待生效会员计划信息 -->
+        <div v-if="userProfile.pending_membership_plan" class="info-item pending-plan">
+          <span class="label">待生效会员：</span>
+          <span class="value">
+            <el-tag type="warning">{{ userProfile.pending_membership_plan.name }}</el-tag>
+            <div class="pending-plan-details">
+              将在当前会员到期后自动生效
+              <div class="pending-dates">
+                <span>生效时间：{{ formatDate(userProfile.pending_membership_plan.start_date) }}</span>
+                <span>到期时间：{{ formatDate(userProfile.pending_membership_plan.expire_date) }}</span>
+              </div>
+            </div>
+          </span>
         </div>
 
         <div class="info-item">
@@ -71,7 +86,8 @@
 
       <div v-else class="upgrade-section">
         <h3>会员管理</h3>
-        <p>您当前的会员计划: {{ userProfile.membership_plan?.name }} (到期时间: {{ formatDate(userProfile.premium_expiry) }})</p>
+        <p>您当前的会员计划: {{ userProfile.membership_plan?.name }} (到期时间: {{ formatDate(userProfile.premium_expire_date) }})
+        </p>
         <el-button type="primary" @click="showUpgradeDialog">续费/升级</el-button>
       </div>
     </el-card>
@@ -354,7 +370,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getUserProfile, changePassword, changeEmail } from '@/api/user'
+import { getUserProfile, changePassword, changeEmail, createMembershipOrder, getOrderStatus } from '@/api/user'
 import { useUserStore } from '@/stores/user'
 import type { FormInstance } from 'element-plus'
 import { Document, SetUp, Connection, Star, Check, Close } from '@element-plus/icons-vue'
@@ -376,11 +392,12 @@ interface UserProfile {
   email: string;
   is_premium: boolean;
   is_premium_active: boolean;
-  premium_expiry: string | null;
+  premium_expire_date: string | null;
   design_storage_limit: number;
   design_count: number;
   membership_plan: MembershipPlan | null;
   available_plans: MembershipPlan[];
+  pending_membership_plan?: MembershipPlan;
 }
 
 // 定义API响应类型
@@ -391,11 +408,12 @@ interface ApiResponse {
   email?: string;
   is_premium?: boolean;
   is_premium_active?: boolean;
-  premium_expiry?: string | null;
+  premium_expire_date?: string | null;
   design_storage_limit?: number;
   design_count?: number;
   membership_plan?: MembershipPlan | null;
   available_plans?: MembershipPlan[];
+  pending_membership_plan?: MembershipPlan;
 }
 
 // 定义密码修改响应类型
@@ -419,7 +437,7 @@ const userProfile = ref<UserProfile>({
   email: '',
   is_premium: false,
   is_premium_active: false,
-  premium_expiry: null,
+  premium_expire_date: null,
   design_storage_limit: 5,
   design_count: 0,
   membership_plan: null,
@@ -620,7 +638,7 @@ const selectPremiumPlan = (cycle?: 'month' | 'year') => {
 }
 
 // 升级会员
-const upgradeMembership = () => {
+const upgradeMembership = async () => {
   if (!selectedPlan.value) {
     ElMessage.warning('请选择会员计划')
     return
@@ -633,15 +651,52 @@ const upgradeMembership = () => {
 
   upgradeLoading.value = true
 
-  // 模拟支付处理
-  setTimeout(() => {
-    // 这里应该跳转到支付页面或调用支付API
-    const actionText = userProfile.value.is_premium_active ? '续费/升级' : '开通'
-    const planName = selectedPlan.value ? selectedPlan.value.name : ''
-    ElMessage.info(`正在开发${billingCycle.value === 'month' ? '月度' : '年度'}${planName}${actionText}支付功能，价格：¥${price}，敬请期待！`)
-    upgradeDialogVisible.value = false
+  try {
+    // 创建订单
+    const response = await createMembershipOrder({
+      plan_id: selectedPlan.value.id,
+      billing_cycle: billingCycle.value
+    })
+
+    if (response.success) {
+      // 关闭对话框
+      upgradeDialogVisible.value = false
+
+      // 使用支付宝支付链接
+      ElMessage.success('订单创建成功，即将跳转到支付页面')
+
+      // 创建一个轮询任务，用于检查支付状态
+      const orderId = response.order.order_id
+
+      // 使用定时器每5秒查询一次订单状态
+      const checkPaymentStatus = async () => {
+        try {
+          const statusResponse = await getOrderStatus(orderId)
+          if (statusResponse.success && statusResponse.order.status === 'paid') {
+            // 支付成功，刷新用户资料
+            await fetchUserProfile()
+            clearInterval(pollingInterval)
+            ElMessage.success('支付成功！您现在已经是我们的会员了')
+          }
+        } catch (error) {
+          console.error('检查支付状态时出错:', error)
+        }
+      }
+
+      // 设置定时器，在用户离开页面后会自动停止
+      const pollingInterval = setInterval(checkPaymentStatus, 5000)
+
+      // 打开新窗口进行支付
+      window.open(response.payment_url, '_blank')
+    } else {
+      ElMessage.error(response.message || '创建订单失败')
+    }
+  } catch (error) {
+    console.error('升级会员时出错:', error)
+    ElMessage.error('创建订单失败，请稍后再试')
+  } finally {
     upgradeLoading.value = false
-  }, 1000)
+  }
 }
 
 // 获取操作按钮文本
@@ -764,6 +819,12 @@ onMounted(() => {
   grid-template-columns: 1fr;
   gap: 24px;
   background-color: var(--bg-color, #f5f7fa);
+  min-height: 100vh;
+  /* 确保容器至少有视口高度 */
+  height: auto;
+  /* 允许容器高度自适应内容 */
+  overflow-y: auto;
+  /* 允许垂直滚动 */
 
   @media (min-width: 992px) {
     grid-template-columns: 1fr;
@@ -775,10 +836,15 @@ onMounted(() => {
   border-radius: var(--radius, 12px);
   box-shadow: var(--shadow, 0 4px 12px rgba(0, 0, 0, 0.05));
   border: none;
-  overflow: hidden;
+  overflow: visible;
+  /* 改为visible，确保内容不被截断 */
   transition: var(--transition, all 0.3s ease);
   width: 100%;
   background-color: var(--card-bg, #fff);
+  height: auto;
+  /* 确保卡片高度自适应内容 */
+  max-height: none;
+  /* 移除最大高度限制 */
 
   &:hover {
     box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.08));
@@ -812,6 +878,10 @@ onMounted(() => {
 
 .profile-content {
   padding: 16px 0;
+  overflow-y: visible;
+  /* 确保内容可见且可滚动 */
+  height: auto;
+  /* 高度自适应内容 */
 }
 
 .info-item {
@@ -857,6 +927,26 @@ onMounted(() => {
   color: var(--text-color, #333);
   font-weight: 500;
   font-size: 15px;
+}
+
+.pending-plan {
+  background-color: rgba(250, 236, 216, 0.5);
+  border-left: 3px solid #e6a23c;
+}
+
+.pending-plan-details {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #8c6c3e;
+}
+
+.pending-dates {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #a78052;
 }
 
 .edit-button {
@@ -1322,5 +1412,18 @@ onMounted(() => {
     transform: none;
     box-shadow: none;
   }
+}
+
+/* 确保页面的根元素允许滚动 */
+:deep(html),
+:deep(body) {
+  height: 100%;
+  overflow-y: auto !important;
+}
+
+:deep(.el-card__body) {
+  padding: 20px;
+  overflow: visible;
+  height: auto;
 }
 </style>

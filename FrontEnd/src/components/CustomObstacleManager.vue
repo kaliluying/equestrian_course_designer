@@ -301,6 +301,22 @@
     <!-- 编辑器对话框 -->
     <el-dialog v-model="editorVisible" :title="currentObstacle ? '编辑障碍物' : '创建自定义障碍物'" width="80%"
       :close-on-click-modal="false" :before-close="closeEditor">
+      <!-- 编辑器内的错误提示 -->
+      <div v-if="obstacleStore.hasError && obstacleStore.error" class="editor-error-tips">
+        <el-alert :type="obstacleStore.error.severity" show-icon :closable="true" @close="obstacleStore.clearError"
+          :title="obstacleStore.error.message">
+          <template v-if="obstacleStore.error.solutions && obstacleStore.error.solutions.length > 0">
+            <div class="solution-list">
+              <p><strong>解决方法:</strong></p>
+              <ol>
+                <li v-for="(solution, index) in obstacleStore.error.solutions" :key="index">
+                  {{ solution }}
+                </li>
+              </ol>
+            </div>
+          </template>
+        </el-alert>
+      </div>
       <ObstacleEditor v-if="editorVisible" :template="currentObstacle || undefined" @save="handleSave"
         @cancel="closeEditor" />
     </el-dialog>
@@ -384,10 +400,27 @@ const closeEditor = () => {
 }
 
 // 处理保存
-const handleSave = (obstacle: CustomObstacleTemplate) => {
-  editorVisible.value = false
-  currentObstacle.value = null
-  ElMessage.success(obstacle.id ? '障碍物已更新' : '障碍物已创建')
+const handleSave = async (obstacle: CustomObstacleTemplate) => {
+  try {
+    // 保存障碍物，并获取保存结果，不使用全局提示，而是在编辑器中显示错误
+    await obstacleStore.saveCustomObstacle(obstacle, false)
+
+    // 检查是否存在错误
+    if (obstacleStore.hasError) {
+      // 保存失败，保持编辑器打开状态
+      console.log('保存失败，错误信息:', obstacleStore.error)
+      // 不关闭编辑器，允许用户修改后重试
+      return
+    }
+
+    // 保存成功，关闭编辑器并显示成功消息
+    editorVisible.value = false
+    currentObstacle.value = null
+    ElMessage.success(obstacle.id ? '障碍物已更新' : '障碍物已创建')
+  } catch (error) {
+    console.error('保存障碍物时出错:', error)
+    // 保存出错时不关闭编辑器
+  }
 }
 
 // 确认删除
@@ -862,6 +895,29 @@ const toggleShare = async (obstacle: CustomObstacleTemplate) => {
   font-size: 24px;
   color: var(--el-color-primary);
   animation: rotating 2s linear infinite;
+}
+
+/* 编辑器内的错误提示样式 */
+.editor-error-tips {
+  margin-bottom: 16px;
+}
+
+.solution-list {
+  padding: 8px 0;
+  font-size: 13px;
+}
+
+.solution-list p {
+  margin: 4px 0;
+}
+
+.solution-list ol {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+.solution-list li {
+  margin: 3px 0;
 }
 
 @keyframes rotating {

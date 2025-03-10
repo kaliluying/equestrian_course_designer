@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { CourseDesign, Obstacle, PathPoint, CoursePath } from '@/types/obstacle'
+import type { CourseDesign, Obstacle, PathPoint, CoursePath, Pole } from '@/types/obstacle'
 import { ObstacleType } from '@/types/obstacle'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -1035,86 +1035,61 @@ export const useCourseStore = defineStore('course', () => {
    */
   function restoreFromLocalStorage(): boolean {
     try {
-      console.log('尝试从localStorage恢复路线设计')
       const savedCourse = localStorage.getItem('autosaved_course')
-      const savedTimestamp = localStorage.getItem('autosaved_timestamp')
-
-      if (!savedCourse || !savedTimestamp) {
-        console.log('没有找到自动保存的数据')
+      if (!savedCourse) {
+        console.log('本地存储中没有保存的路线设计')
         return false
       }
 
-      console.log('找到自动保存的数据', {
-        timestamp: savedTimestamp,
-        dataSize: savedCourse.length,
-      })
-
-      // 检查自动保存的时间是否在24小时内
-      const timestamp = new Date(savedTimestamp)
-      const now = new Date()
-      const hoursDiff = (now.getTime() - timestamp.getTime()) / (1000 * 60 * 60)
-
-      if (hoursDiff > 24) {
-        localStorage.removeItem('autosaved_course')
-        localStorage.removeItem('autosaved_timestamp')
-        console.log('自动保存数据已过期（超过24小时）')
-        return false
-      }
-
-      // 解析并验证数据
-      const courseData = JSON.parse(savedCourse)
-      if (!courseData || !courseData.id || !Array.isArray(courseData.obstacles)) {
-        console.error('自动保存的数据格式不正确')
-        return false
-      }
-
-      console.log('解析自动保存数据成功', {
-        id: courseData.id,
-        name: courseData.name,
-        obstacles: courseData.obstacles.length,
-        hasPath: !!courseData.path,
-      })
-
-      // 恢复课程基本数据
-      currentCourse.value = {
-        id: courseData.id || uuidv4(),
-        name: courseData.name || '马术路线设计',
-        obstacles: Array.isArray(courseData.obstacles) ? courseData.obstacles : [],
-        createdAt: courseData.createdAt || new Date().toISOString(),
-        updatedAt: courseData.updatedAt || new Date().toISOString(),
-        fieldWidth: courseData.fieldWidth || 80,
-        fieldHeight: courseData.fieldHeight || 60,
-      }
-
-      // 恢复路径数据
-      if (courseData.path) {
-        coursePath.value = {
-          visible: Boolean(courseData.path.visible),
-          points: Array.isArray(courseData.path.points) ? courseData.path.points : [],
+      try {
+        const courseData = JSON.parse(savedCourse)
+        if (!courseData || !courseData.id) {
+          console.error('自动保存数据无效')
+          return false
         }
 
-        if (courseData.path.startPoint) {
-          startPoint.value = {
-            x: Number(courseData.path.startPoint.x) || 0,
-            y: Number(courseData.path.startPoint.y) || 0,
-            rotation: Number(courseData.path.startPoint.rotation) || 270,
+        console.log('正在恢复自动保存的路线设计', {
+          id: courseData.id,
+          name: courseData.name,
+          obstacles: courseData.obstacles?.length || 0,
+          hasPath: !!courseData.path,
+        })
+
+        // 恢复课程基本信息
+        currentCourse.value = {
+          id: courseData.id,
+          name: courseData.name || '未命名设计',
+          obstacles: courseData.obstacles || [],
+          createdAt: courseData.createdAt || new Date().toISOString(),
+          updatedAt: courseData.updatedAt || new Date().toISOString(),
+          fieldWidth: courseData.fieldWidth || 80,
+          fieldHeight: courseData.fieldHeight || 60,
+          viewportInfo: courseData.viewportInfo || null,
+        }
+
+        // 恢复路径信息（如果存在）
+        if (courseData.path) {
+          coursePath.value.visible = courseData.path.visible || false
+          coursePath.value.points = courseData.path.points || []
+
+          // 恢复起点和终点
+          if (courseData.path.startPoint) {
+            startPoint.value = courseData.path.startPoint
+          }
+
+          if (courseData.path.endPoint) {
+            endPoint.value = courseData.path.endPoint
           }
         }
 
-        if (courseData.path.endPoint) {
-          endPoint.value = {
-            x: Number(courseData.path.endPoint.x) || 0,
-            y: Number(courseData.path.endPoint.y) || 0,
-            rotation: Number(courseData.path.endPoint.rotation) || 270,
-          }
-        }
-      }
+        // 清除自动保存数据，防止重复恢复
+        clearAutosave()
 
-      console.log('已从localStorage恢复路线设计', {
-        obstacles: currentCourse.value.obstacles.length,
-        pathPoints: coursePath.value.points.length,
-      })
-      return true
+        return true
+      } catch (error) {
+        console.error('解析自动保存数据失败:', error)
+        return false
+      }
     } catch (error) {
       console.error('从localStorage恢复失败:', error)
       return false
@@ -1183,8 +1158,24 @@ export const useCourseStore = defineStore('course', () => {
       const text = await file.text()
       const courseData = JSON.parse(text)
 
+      // 添加日志帮助调试
+      console.log(
+        '导入的原始课程数据:',
+        JSON.stringify({
+          name: courseData.name,
+          obstacles: courseData.obstacles ? courseData.obstacles.length : 0,
+          hasPath: !!courseData.path,
+          hasViewportInfo: !!courseData.viewportInfo,
+        }),
+      )
+
+      // 检查第一个障碍物的数据结构
+      if (courseData.obstacles && courseData.obstacles.length > 0) {
+        console.log('原始障碍物结构示例:', JSON.stringify(courseData.obstacles[0]))
+      }
+
       // 处理视口信息
-      const viewportInfo = courseData.viewportInfo || {
+      const originalViewport = courseData.viewportInfo || {
         width: window.innerWidth,
         height: window.innerHeight,
         canvasWidth: 800,
@@ -1192,37 +1183,279 @@ export const useCourseStore = defineStore('course', () => {
         aspectRatio: (courseData.fieldWidth || 80) / (courseData.fieldHeight || 60),
       }
 
+      // 确保canvas已经渲染，才能获取准确的尺寸
+      // 需要等待一会，确保DOM已经更新
+      await new Promise((resolve) => setTimeout(resolve, 100))
+
+      // 获取当前画布元素
+      const canvasElement = document.querySelector('.course-canvas')
+      let currentCanvasWidth = 800
+      let currentCanvasHeight = 600
+
+      if (canvasElement) {
+        const rect = canvasElement.getBoundingClientRect()
+        currentCanvasWidth = rect.width
+        currentCanvasHeight = rect.height
+        console.log('当前画布实际尺寸:', currentCanvasWidth, 'x', currentCanvasHeight)
+      } else {
+        console.warn('未找到画布元素，使用默认尺寸')
+      }
+
+      // 当前设备的视口信息
+      const currentViewport = {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        canvasWidth: currentCanvasWidth,
+        canvasHeight: currentCanvasHeight,
+        aspectRatio: (courseData.fieldWidth || 80) / (courseData.fieldHeight || 60),
+      }
+
+      console.log('原始设计视口信息:', originalViewport)
+      console.log('当前设备视口信息:', currentViewport)
+
+      // 计算缩放系数 - 使用画布大小比例
+      const scaleFactorWidth = currentViewport.canvasWidth / (originalViewport.canvasWidth || 800)
+      const scaleFactorHeight =
+        currentViewport.canvasHeight / (originalViewport.canvasHeight || 600)
+      // 使用一个统一的缩放因子，防止宽高比例不同导致的变形
+      const scaleFactor = Math.min(scaleFactorWidth, scaleFactorHeight)
+
+      console.log('计算的缩放系数:', {
+        width: scaleFactorWidth,
+        height: scaleFactorHeight,
+        unified: scaleFactor,
+      })
+
+      // 检查是否需要进行缩放调整
+      const needsScaling = Math.abs(scaleFactor - 1) > 0.1
+      console.log('是否需要进行缩放调整:', needsScaling)
+
+      // 调整障碍物位置和尺寸来适应当前屏幕
+      const scaledObstacles = courseData.obstacles.map((obstacle: Obstacle, index: number) => {
+        const scaledObstacle = JSON.parse(JSON.stringify(obstacle)) // 深拷贝确保所有嵌套属性都能被修改
+
+        // 确保对象有position属性
+        if (!scaledObstacle.position) {
+          console.warn(`障碍物 #${index} 缺少position属性，设置默认值`, obstacle)
+          scaledObstacle.position = { x: 10, y: 10 }
+        }
+
+        if (needsScaling) {
+          // 记录原始位置用于调试
+          const originalPosition = { ...scaledObstacle.position }
+
+          // 缩放位置 - 使用统一的缩放因子确保等比例缩放
+          scaledObstacle.position = {
+            x: scaledObstacle.position.x * scaleFactor,
+            y: scaledObstacle.position.y * scaleFactor,
+          }
+
+          // 如果有编号位置，也要缩放
+          if (scaledObstacle.numberPosition) {
+            scaledObstacle.numberPosition = {
+              x: scaledObstacle.numberPosition.x * scaleFactor,
+              y: scaledObstacle.numberPosition.y * scaleFactor,
+            }
+          }
+
+          // 缩放障碍物的大小 - 根据障碍物类型处理不同属性
+          // 1. 缩放横杆（poles）
+          if (scaledObstacle.poles && Array.isArray(scaledObstacle.poles)) {
+            scaledObstacle.poles = scaledObstacle.poles.map((pole: Pole) => ({
+              ...pole,
+              width: pole.width * scaleFactor,
+              height: pole.height * scaleFactor,
+              spacing: pole.spacing ? pole.spacing * scaleFactor : undefined,
+            }))
+          }
+
+          // 2. 缩放墙属性
+          if (scaledObstacle.wallProperties) {
+            scaledObstacle.wallProperties = {
+              ...scaledObstacle.wallProperties,
+              width: scaledObstacle.wallProperties.width * scaleFactor,
+              height: scaledObstacle.wallProperties.height * scaleFactor,
+            }
+          }
+
+          // 3. 缩放利物浦属性
+          if (scaledObstacle.liverpoolProperties) {
+            scaledObstacle.liverpoolProperties = {
+              ...scaledObstacle.liverpoolProperties,
+              width: scaledObstacle.liverpoolProperties.width * scaleFactor,
+              height: scaledObstacle.liverpoolProperties.height * scaleFactor,
+              railHeight: scaledObstacle.liverpoolProperties.railHeight
+                ? scaledObstacle.liverpoolProperties.railHeight * scaleFactor
+                : undefined,
+            }
+          }
+
+          // 4. 缩放水障属性
+          if (scaledObstacle.waterProperties) {
+            scaledObstacle.waterProperties = {
+              ...scaledObstacle.waterProperties,
+              width: scaledObstacle.waterProperties.width * scaleFactor,
+              depth: scaledObstacle.waterProperties.depth * scaleFactor,
+              borderWidth: scaledObstacle.waterProperties.borderWidth
+                ? scaledObstacle.waterProperties.borderWidth * scaleFactor
+                : undefined,
+            }
+          }
+
+          // 5. 缩放装饰物属性
+          if (scaledObstacle.decorationProperties) {
+            scaledObstacle.decorationProperties = {
+              ...scaledObstacle.decorationProperties,
+              width: scaledObstacle.decorationProperties.width * scaleFactor,
+              height: scaledObstacle.decorationProperties.height * scaleFactor,
+              trunkHeight: scaledObstacle.decorationProperties.trunkHeight
+                ? scaledObstacle.decorationProperties.trunkHeight * scaleFactor
+                : undefined,
+              trunkWidth: scaledObstacle.decorationProperties.trunkWidth
+                ? scaledObstacle.decorationProperties.trunkWidth * scaleFactor
+                : undefined,
+              foliageRadius: scaledObstacle.decorationProperties.foliageRadius
+                ? scaledObstacle.decorationProperties.foliageRadius * scaleFactor
+                : undefined,
+              borderWidth: scaledObstacle.decorationProperties.borderWidth
+                ? scaledObstacle.decorationProperties.borderWidth * scaleFactor
+                : undefined,
+              scale: scaledObstacle.decorationProperties.scale
+                ? scaledObstacle.decorationProperties.scale * scaleFactor
+                : undefined,
+            }
+          }
+
+          // 确保障碍物在场地范围内
+          const fieldWidth = courseData.fieldWidth || 80
+          const fieldHeight = courseData.fieldHeight || 60
+
+          // 设置边界限制
+          const minX = 0
+          const maxX = fieldWidth
+          const minY = 0
+          const maxY = fieldHeight
+
+          if (scaledObstacle.position.x < minX) scaledObstacle.position.x = minX
+          if (scaledObstacle.position.x > maxX) scaledObstacle.position.x = maxX
+          if (scaledObstacle.position.y < minY) scaledObstacle.position.y = minY
+          if (scaledObstacle.position.y > maxY) scaledObstacle.position.y = maxY
+
+          console.log(`障碍物 #${index} 完整调整:`, {
+            id: scaledObstacle.id,
+            type: scaledObstacle.type,
+            position: {
+              before: originalPosition,
+              after: scaledObstacle.position,
+            },
+            scaled: true,
+            factor: scaleFactor,
+          })
+        }
+
+        return scaledObstacle
+      })
+
+      // 同样以等比例缩放调整路径点
+      let scaledPath = null
+      if (courseData.path) {
+        scaledPath = { ...courseData.path }
+
+        if (needsScaling && courseData.path.points) {
+          // 缩放路径点 - 使用统一缩放因子
+          scaledPath.points = courseData.path.points.map((point: PathPoint, index: number) => {
+            const originalPoint = { ...point }
+            const scaledPoint = {
+              ...point,
+              x: point.x * scaleFactor,
+              y: point.y * scaleFactor,
+            }
+
+            // 处理控制点
+            if (point.controlPoint1) {
+              scaledPoint.controlPoint1 = {
+                x: point.controlPoint1.x * scaleFactor,
+                y: point.controlPoint1.y * scaleFactor,
+              }
+            }
+
+            if (point.controlPoint2) {
+              scaledPoint.controlPoint2 = {
+                x: point.controlPoint2.x * scaleFactor,
+                y: point.controlPoint2.y * scaleFactor,
+              }
+            }
+
+            console.log(`路径点 #${index} 缩放:`, {
+              before: { x: originalPoint.x, y: originalPoint.y },
+              after: { x: scaledPoint.x, y: scaledPoint.y },
+            })
+
+            return scaledPoint
+          })
+
+          // 缩放起点和终点
+          if (scaledPath.startPoint) {
+            const originalStart = { ...scaledPath.startPoint }
+            scaledPath.startPoint = {
+              ...scaledPath.startPoint,
+              x: scaledPath.startPoint.x * scaleFactor,
+              y: scaledPath.startPoint.y * scaleFactor,
+            }
+            console.log('起点位置调整:', {
+              before: originalStart,
+              after: scaledPath.startPoint,
+            })
+          }
+
+          if (scaledPath.endPoint) {
+            const originalEnd = { ...scaledPath.endPoint }
+            scaledPath.endPoint = {
+              ...scaledPath.endPoint,
+              x: scaledPath.endPoint.x * scaleFactor,
+              y: scaledPath.endPoint.y * scaleFactor,
+            }
+            console.log('终点位置调整:', {
+              before: originalEnd,
+              after: scaledPath.endPoint,
+            })
+          }
+        }
+      }
+
       // 加载基本课程数据
       currentCourse.value = {
         id: courseData.id,
         name: courseData.name,
-        obstacles: courseData.obstacles,
+        obstacles: scaledObstacles || courseData.obstacles,
         createdAt: courseData.createdAt,
         updatedAt: courseData.updatedAt,
         fieldWidth: courseData.fieldWidth,
         fieldHeight: courseData.fieldHeight,
-        viewportInfo, // 确保保留视口信息用于屏幕适配
+        viewportInfo: currentViewport, // 更新为当前设备的视口信息
       }
-
-      console.log('加载课程数据，包含视口信息:', viewportInfo)
 
       // 如果存在路线数据，则加载路线
-      if (courseData.path) {
+      if (scaledPath) {
         coursePath.value = {
-          visible: courseData.path.visible,
-          points: courseData.path.points,
+          visible: scaledPath.visible,
+          points: scaledPath.points,
         }
 
-        if (courseData.path.startPoint) {
-          startPoint.value = courseData.path.startPoint
+        if (scaledPath.startPoint) {
+          startPoint.value = scaledPath.startPoint
         }
 
-        if (courseData.path.endPoint) {
-          endPoint.value = courseData.path.endPoint
+        if (scaledPath.endPoint) {
+          endPoint.value = scaledPath.endPoint
         }
       }
 
+      console.log('加载课程数据完成，包含障碍物数量:', scaledObstacles.length)
+
+      // 更新课程
       updateCourse()
+      return true
     } catch (error) {
       console.error('加载课程设计失败:', error)
       throw new Error('文件格式错误')

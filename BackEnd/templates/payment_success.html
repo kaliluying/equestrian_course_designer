@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>支付成功 - 马术课程设计器</title>
+    <style>
+      body {
+        font-family: "PingFang SC", "Helvetica Neue", "Microsoft YaHei",
+          sans-serif;
+        background-color: #f8f9fa;
+        color: #333;
+        line-height: 1.6;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+      }
+
+      .container {
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        padding: 40px;
+        max-width: 600px;
+        width: 90%;
+        text-align: center;
+      }
+
+      .success-icon {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 30px;
+      }
+
+      .success-icon svg {
+        width: 80px;
+        height: 80px;
+      }
+
+      .circle {
+        fill: #52c41a;
+      }
+
+      .check {
+        fill: none;
+        stroke: #fff;
+        stroke-width: 6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-dasharray: 100;
+        stroke-dashoffset: 100;
+        animation: check 1s ease-in-out forwards;
+      }
+
+      @keyframes check {
+        to {
+          stroke-dashoffset: 0;
+        }
+      }
+
+      h1 {
+        color: #333;
+        font-size: 28px;
+        margin-bottom: 20px;
+      }
+
+      p {
+        margin-bottom: 15px;
+        color: #666;
+      }
+
+      .order-info {
+        background-color: #f5f7f9;
+        padding: 20px;
+        border-radius: 6px;
+        margin: 30px 0;
+        text-align: left;
+      }
+
+      .order-info p {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 10px;
+        border-bottom: 1px dashed #eee;
+        padding-bottom: 10px;
+      }
+
+      .order-info p:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+      }
+
+      .btn {
+        display: inline-block;
+        background-color: #1890ff;
+        color: #fff;
+        padding: 12px 24px;
+        border-radius: 4px;
+        text-decoration: none;
+        font-weight: 500;
+        margin-top: 20px;
+        transition: all 0.3s ease;
+      }
+
+      .btn:hover {
+        background-color: #0c74d8;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(24, 144, 255, 0.2);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="success-icon">
+        <svg viewBox="0 0 100 100">
+          <circle class="circle" cx="50" cy="50" r="40" />
+          <path class="check" d="M30 50 L 45 65 L 70 35" />
+        </svg>
+      </div>
+
+      <h1>支付成功</h1>
+      <p>您的会员订单已成功支付，感谢您的支持！</p>
+
+      {% if order %}
+      <div class="order-info">
+        <p><span>订单编号：</span><span>{{ order.order_id }}</span></p>
+        <p>
+          <span>会员计划：</span><span>{{ order.membership_plan.name }}</span>
+        </p>
+        <p><span>支付金额：</span><span>¥{{ order.amount }}</span></p>
+        <p>
+          <span>支付时间：</span
+          ><span>{{ order.payment_time|date:"Y-m-d H:i:s" }}</span>
+        </p>
+        <p>
+          <span>会员期限：</span
+          ><span>{{ order.get_billing_cycle_display() }}</span>
+        </p>
+      </div>
+      {% endif %}
+
+      <p>
+        您现已成为我们的{{ order.membership_plan.name }}，可以享受更多优质服务。
+      </p>
+      <a href="/" class="btn">返回首页</a>
+    </div>
+  </body>
+</html>

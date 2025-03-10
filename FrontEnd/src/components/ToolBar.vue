@@ -187,7 +187,7 @@ import { ObstacleType } from '@/types/obstacle'
 import { useCourseStore } from '@/stores/course'
 import { useUserStore } from '@/stores/user'
 import { Download, Upload, Delete, Pointer, Edit, Lock, Picture, ArrowDown } from '@element-plus/icons-vue'
-import { ElMessageBox, ElMessage } from 'element-plus'
+import { ElMessageBox, ElMessage, ElLoading } from 'element-plus'
 import html2canvas from 'html2canvas'
 import { saveDesign } from '@/api/design'
 import type { SaveDesignRequest } from '@/types/design'
@@ -288,7 +288,14 @@ const handleSaveDesign = async () => {
   try {
     console.log('开始保存设计...')
 
-    // 获取画布数据
+    // 显示加载提示
+    const loadingInstance = ElLoading.service({
+      lock: true,
+      text: '正在生成设计图片...',
+      background: 'rgba(0, 0, 0, 0.7)'
+    })
+
+    // 获取画布元素
     const canvas = document.querySelector('.course-canvas') as HTMLElement
     console.log('画布元素:', canvas)
 
@@ -296,221 +303,198 @@ const handleSaveDesign = async () => {
       throw new Error('获取画布元素失败')
     }
 
-    // 临时隐藏控制路线弧度的控制点
-    const controlPoints = canvas.querySelectorAll('.control-point, .control-line, .path-indicator .rotation-handle')
-    controlPoints.forEach((point) => {
-      ; (point as HTMLElement).style.display = 'none'
+    // 1. 预处理：保存元素的原始状态
+    // 保存需要临时隐藏的元素的状态
+    const hiddenElements = [
+      ...Array.from(canvas.querySelectorAll('.control-point')),
+      ...Array.from(canvas.querySelectorAll('.control-line')),
+      ...Array.from(canvas.querySelectorAll('.path-indicator .rotation-handle')),
+      ...Array.from(canvas.querySelectorAll('.el-button')),
+      ...Array.from(canvas.querySelectorAll('.toolbar')),
+      ...Array.from(canvas.querySelectorAll('.settings-panel'))
+    ]
+
+    const originalStyles: { element: HTMLElement, display: string, visibility: string }[] = []
+
+    // 临时隐藏干扰元素
+    hiddenElements.forEach(element => {
+      const el = element as HTMLElement
+      originalStyles.push({
+        element: el,
+        display: el.style.display,
+        visibility: el.style.visibility
+      })
+      el.style.display = 'none'
+      el.style.visibility = 'hidden'
     })
 
-    // 获取画布的原始尺寸
-    const canvasRect = canvas.getBoundingClientRect()
-    const originalWidth = canvasRect.width
-    const originalHeight = canvasRect.height
+    // 2. 创建一个临时的包装容器，避免被父元素样式影响
+    const tempWrapper = document.createElement('div')
+    tempWrapper.style.position = 'absolute'
+    tempWrapper.style.left = '-9999px'
+    tempWrapper.style.top = '-9999px'
+    tempWrapper.style.width = '100%'
+    tempWrapper.style.height = '100%'
+    document.body.appendChild(tempWrapper)
 
-    // 计算适合保存的尺寸（保持纵横比但限制最大尺寸）
-    const maxWidth = 1920 // 最大宽度
-    const maxHeight = 1080 // 最大高度
-    const minWidth = 800 // 最小宽度
-    const minHeight = 600 // 最小高度
+    // 3. 保存原始画布尺寸和位置
+    const originalRect = canvas.getBoundingClientRect()
+    const originalWidth = originalRect.width
+    const originalHeight = originalRect.height
 
-    let saveWidth = originalWidth
-    let saveHeight = originalHeight
+    console.log('原始画布尺寸:', originalWidth, 'x', originalHeight)
 
-    // 确保尺寸不小于最小值
-    if (saveWidth < minWidth) {
-      saveWidth = minWidth
-      saveHeight = (originalHeight / originalWidth) * minWidth
-    }
+    try {
+      // 4. 使用html2canvas时的处理
+      console.log('开始转换画布为图片...')
 
-    if (saveHeight < minHeight) {
-      saveHeight = minHeight
-      saveWidth = (originalWidth / originalHeight) * minHeight
-    }
+      // 首先尝试使用更可靠的方式捕获画布内容
+      const imageCanvas = await html2canvas(canvas, {
+        backgroundColor: '#ffffff',
+        scale: 3,                    // 高清图像
+        useCORS: true,               // 处理跨域资源
+        allowTaint: true,
+        logging: false,
+        width: originalWidth,
+        height: originalHeight,
+        x: 0,
+        y: 0,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: Math.max(document.documentElement.clientWidth, window.innerWidth, originalWidth * 2),
+        windowHeight: Math.max(document.documentElement.clientHeight, window.innerHeight, originalHeight * 2),
+        onclone: (documentClone) => {
+          const clonedCanvas = documentClone.querySelector('.course-canvas') as HTMLElement
+          if (clonedCanvas) {
+            // 确保克隆的画布没有被截断或限制
+            clonedCanvas.style.width = `${originalWidth}px`
+            clonedCanvas.style.height = `${originalHeight}px`
+            clonedCanvas.style.maxWidth = 'none'
+            clonedCanvas.style.maxHeight = 'none'
+            clonedCanvas.style.overflow = 'visible'
+            clonedCanvas.style.position = 'absolute'
+            clonedCanvas.style.padding = '30px'  // 增加更大的内边距确保边缘内容可见
+            clonedCanvas.style.margin = '0'
+            clonedCanvas.style.transformOrigin = 'top left'
+            clonedCanvas.style.boxSizing = 'content-box'
 
-    // 确保尺寸不超过最大值
-    if (saveWidth > maxWidth) {
-      saveWidth = maxWidth
-      saveHeight = (originalHeight / originalWidth) * maxWidth
-    }
+            // 处理克隆的画布中的所有嵌套元素
+            const allElements = clonedCanvas.querySelectorAll('*')
+            allElements.forEach((element) => {
+              const el = element as HTMLElement
+              if (el.style.position === 'fixed') {
+                el.style.position = 'absolute'  // 避免fixed定位导致元素丢失
+              }
 
-    if (saveHeight > maxHeight) {
-      saveHeight = maxHeight
-      saveWidth = (originalWidth / originalHeight) * maxHeight
-    }
+              // 确保元素不被overflow截断
+              if (getComputedStyle(el).overflow !== 'visible') {
+                el.style.overflow = 'visible'
+              }
+            })
+          }
+          return documentClone
+        }
+      })
 
-    console.log('原始尺寸:', originalWidth, 'x', originalHeight)
-    console.log('保存尺寸:', saveWidth, 'x', saveHeight)
+      console.log('html2canvas生成完成，尺寸:', imageCanvas.width, 'x', imageCanvas.height)
 
-    // 使用 html2canvas 将画布转换为图片，并指定宽高
-    console.log('开始转换画布为图片...')
-    const imageCanvas = await html2canvas(canvas, {
-      backgroundColor: '#ffffff',
-      scale: 2, // 使用2倍缩放以获得更高质量的图像
-      useCORS: true,
-      width: originalWidth,
-      height: originalHeight,
-      // 确保捕获整个画布内容，即使部分内容不在视口中
-      scrollX: 0,
-      scrollY: 0,
-      x: 0,
-      y: 0,
-      allowTaint: true,
-      foreignObjectRendering: true,
-      // 设置更大的虚拟窗口尺寸，确保能捕获所有内容
-      windowWidth: Math.max(document.documentElement.clientWidth, originalWidth),
-      windowHeight: Math.max(document.documentElement.clientHeight, originalHeight)
-    })
-    // 恢复控制点的显示
-    controlPoints.forEach((point) => {
-      ; (point as HTMLElement).style.display = ''
-    })
+      // 5. 处理生成的图像，确保合适的尺寸
+      const finalWidth = Math.max(800, imageCanvas.width)
+      const finalHeight = Math.max(600, imageCanvas.height)
 
-    // 创建一个新的canvas用于导出，确保尺寸合适，无论屏幕大小如何
-    const exportCanvas = document.createElement('canvas')
-    exportCanvas.width = saveWidth
-    exportCanvas.height = saveHeight
-    const ctx = exportCanvas.getContext('2d')
+      // 创建最终输出画布
+      const outputCanvas = document.createElement('canvas')
+      outputCanvas.width = finalWidth
+      outputCanvas.height = finalHeight
+      const ctx = outputCanvas.getContext('2d')
 
-    if (!ctx) {
-      throw new Error('无法获取导出canvas的上下文')
-    }
+      if (!ctx) {
+        throw new Error('无法获取画布上下文')
+      }
 
-    // 在新画布上绘制原始画布内容（缩放以适应）
-    ctx.fillStyle = '#ffffff'
-    ctx.fillRect(0, 0, saveWidth, saveHeight)
-    ctx.drawImage(imageCanvas, 0, 0, originalWidth, originalHeight, 0, 0, saveWidth, saveHeight)
+      // 填充白色背景
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, finalWidth, finalHeight)
 
-    // 将优化后的画布转换为blob
-    const imageBlob = await new Promise<Blob>((resolve, reject) => {
-      try {
-        exportCanvas.toBlob((blob) => {
+      // 居中绘制图像
+      const x = (finalWidth - imageCanvas.width) / 2
+      const y = (finalHeight - imageCanvas.height) / 2
+      ctx.drawImage(imageCanvas, 0, 0, imageCanvas.width, imageCanvas.height,
+        x, y, imageCanvas.width, imageCanvas.height)
+
+      // 6. 转换为高质量Blob
+      const imageBlob = await new Promise<Blob>((resolve, reject) => {
+        outputCanvas.toBlob((blob) => {
           if (blob) {
             resolve(blob)
           } else {
-            reject(new Error('转换为 blob 失败'))
+            reject(new Error('转换为图片失败'))
           }
-        }, 'image/png', 0.9) // 使用0.9的质量来减小文件大小
-      } catch (error) {
-        reject(error)
+        }, 'image/png', 1.0)  // 使用最高质量
+      })
+
+      console.log('图片生成完成，大小:', imageBlob.size)
+
+      // 7. 导出设计数据
+      const designData = courseStore.exportCourse()
+      const designBlob = new Blob([JSON.stringify(designData, null, 2)], { type: 'application/json' })
+
+      // 8. 检查是否是更新现有设计
+      const designIdToUpdate = localStorage.getItem('design_id_to_update')
+      console.log('设计ID (从localStorage):', designIdToUpdate)
+
+      // 构建保存请求数据
+      const saveData: SaveDesignRequest = {
+        title: courseName.value || '未命名设计',
+        image: new File([imageBlob], 'design.png', { type: 'image/png' }),
+        download: new File([designBlob], 'design.json', { type: 'application/json' })
       }
-    })
 
-    console.log('图片转换完成，大小:', imageBlob.size)
-
-    // 创建设计文件
-    const designData = courseStore.exportCourse()
-    console.log('设计数据:', designData)
-
-    // 检查是否包含路线数据
-    if (designData.path) {
-      console.log('包含路线数据，路线点数量:', designData.path.points.length)
-    } else {
-      console.log('没有路线数据或路线为空')
-    }
-
-    const designBlob = new Blob([JSON.stringify(designData)], { type: 'application/json' })
-    console.log('设计文件大小:', designBlob.size)
-
-    // 检查是否是更新现有设计
-    const designIdToUpdate = localStorage.getItem('design_id_to_update')
-    console.log('设计ID (从localStorage):', designIdToUpdate)
-
-    // 构建保存请求数据
-    const saveData: SaveDesignRequest = {
-      title: courseName.value || '未命名设计',
-      image: new File([imageBlob], 'design.png', { type: 'image/png' }),
-      download: new File([designBlob], 'design.json', { type: 'application/json' })
-    }
-
-    // 如果是更新现有设计，添加设计ID
-    if (designIdToUpdate) {
-      const designId = parseInt(designIdToUpdate)
-      if (isNaN(designId)) {
-        console.error('设计ID无效:', designIdToUpdate)
-        throw new Error('设计ID无效，无法更新')
+      if (designIdToUpdate) {
+        const designId = parseInt(designIdToUpdate)
+        if (isNaN(designId)) {
+          console.error('设计ID无效:', designIdToUpdate)
+          throw new Error('设计ID无效，无法更新')
+        }
+        saveData.id = designId
+        console.log('更新设计，ID:', designId)
+      } else {
+        console.log('创建新设计')
       }
-      saveData.id = designId
-      console.log('更新设计，ID:', designId)
-    } else {
-      console.log('创建新设计')
-    }
 
-    console.log('准备发送保存请求:', saveData)
-    // 发送保存请求
-    try {
+      // 9. 发送保存请求
       const response = await saveDesign(saveData)
       console.log('保存响应:', response)
 
-      // 如果是从管理界面打开的编辑，保存成功后清除设计ID
-      if (designIdToUpdate) {
-        // 向父窗口发送更新消息
-        try {
-          if (window.opener && !window.opener.closed) {
-            window.opener.postMessage({
-              type: 'design_updated',
-              designId: designIdToUpdate
-            }, '*');
-            console.log('已向父窗口发送更新消息');
-          }
-        } catch (e) {
-          console.error('发送窗口消息失败', e);
-        }
-
-        localStorage.removeItem('design_id_to_update')
-
-        // 提示用户设计已更新
-        ElMessage.success('设计已更新')
-
-        // 如果是从管理界面打开的，可以添加一个提示询问是否关闭当前页面
-        ElMessageBox.confirm('设计已成功更新，是否关闭编辑页面？', '提示', {
-          confirmButtonText: '是',
-          cancelButtonText: '否',
-          type: 'info',
-        }).then(() => {
-          // 关闭当前页面
-          window.close()
-        }).catch(() => {
-          // 用户选择继续编辑，不做操作
-        })
+      if (response.id) {
+        // 保存新ID到localStorage
+        localStorage.setItem('design_id_to_update', response.id.toString())
+        console.log('设计已保存，ID:', response.id)
+        ElMessage.success('设计保存成功！')
       } else {
-        ElMessage.success('保存成功')
+        throw new Error('保存响应中没有ID')
       }
-    } catch (error: unknown) {
-      console.error('API请求失败:', error)
+    } finally {
+      // 10. 恢复元素原始状态
+      originalStyles.forEach(({ element, display, visibility }) => {
+        element.style.display = display
+        element.style.visibility = visibility
+      })
 
-      // 尝试提取详细错误信息
-      let errorMessage = '保存失败，请重试'
-      if (error instanceof Error) {
-        errorMessage = error.message
-      }
-
-      // 尝试从响应中提取更详细的错误信息
-      if (typeof error === 'object' && error !== null && 'response' in error) {
-        const responseError = error as { response?: { data?: unknown } }
-        if (responseError.response?.data) {
-          const data = responseError.response.data
-          if (typeof data === 'string') {
-            errorMessage = data
-          } else if (typeof data === 'object' && data !== null) {
-            const errorData = data as Record<string, unknown>
-            if ('detail' in errorData && typeof errorData.detail === 'string') {
-              errorMessage = errorData.detail
-            } else if ('message' in errorData && typeof errorData.message === 'string') {
-              errorMessage = errorData.message
-            } else {
-              // 尝试将整个对象转为字符串
-              errorMessage = JSON.stringify(data)
-            }
-          }
-        }
+      // 删除临时包装容器
+      if (tempWrapper && tempWrapper.parentNode) {
+        tempWrapper.parentNode.removeChild(tempWrapper)
       }
 
-      ElMessage.error(`保存失败: ${errorMessage}`)
-      throw new Error(`API请求失败: ${errorMessage}`)
+      // 关闭加载提示
+      loadingInstance.close()
     }
   } catch (error) {
-    console.error('保存失败，详细错误:', error)
-    ElMessage.error(error instanceof Error ? error.message : '保存失败，请重试')
+    console.error('保存设计失败:', error)
+    ElMessageBox.alert('保存设计失败：' + (error as Error).message, '错误', {
+      confirmButtonText: '确定',
+      type: 'error',
+    })
   }
 }
 
@@ -698,6 +682,11 @@ const handleExport = async (command: string) => {
       ; (point as HTMLElement).style.display = 'none'
     })
 
+    // 获取画布的原始尺寸
+    const canvasRect = canvas.getBoundingClientRect()
+    const originalWidth = canvasRect.width
+    const originalHeight = canvasRect.height
+
     // 临时隐藏可能导致乱码的元素
     const textElements = canvas.querySelectorAll('.course-title, .course-info')
     const originalDisplays: { el: HTMLElement, display: string }[] = []
@@ -710,23 +699,52 @@ const handleExport = async (command: string) => {
     // 清理画布中的特殊字符
     const restoreTexts = cleanupCanvasForExport(canvas)
 
-    // 使用 html2canvas 将画布转换为图片，添加更多配置以解决乱码问题
+    // 使用 html2canvas 将画布转换为图片，并指定宽高
+    console.log('开始转换画布为图片...')
     const imageCanvas = await html2canvas(canvas, {
       backgroundColor: '#ffffff',
-      scale: 2, // 提高导出图片的清晰度
-      useCORS: true, // 允许跨域图片
-      logging: false, // 关闭日志
-      allowTaint: true, // 允许跨域图片
-      removeContainer: true, // 移除临时容器
-      foreignObjectRendering: false, // 禁用foreignObject渲染，使用canvas渲染
+      scale: 3, // 使用3倍缩放以获得更高质量的图像
+      useCORS: true,
+      width: originalWidth,
+      height: originalHeight,
       // 确保捕获整个画布内容，即使部分内容不在视口中
       scrollX: 0,
       scrollY: 0,
       x: 0,
       y: 0,
+      allowTaint: true,
+      foreignObjectRendering: true,
       // 设置更大的虚拟窗口尺寸，确保能捕获所有内容
-      windowWidth: Math.max(document.documentElement.clientWidth, canvas.scrollWidth),
-      windowHeight: Math.max(document.documentElement.clientHeight, canvas.scrollHeight)
+      windowWidth: Math.max(document.documentElement.clientWidth, window.innerWidth, originalWidth * 2),
+      windowHeight: Math.max(document.documentElement.clientHeight, window.innerHeight, originalHeight * 2),
+      logging: true,
+      onclone: (documentClone) => {
+        // 在复制的DOM中确保所有内容都可见
+        const clonedCanvas = documentClone.querySelector('.course-canvas');
+        if (clonedCanvas) {
+          // 添加填充以确保边缘内容都被包含
+          (clonedCanvas as HTMLElement).style.padding = '20px';
+          // 确保克隆的画布显示所有内容
+          (clonedCanvas as HTMLElement).style.overflow = 'visible';
+          // 移除可能限制尺寸的属性
+          (clonedCanvas as HTMLElement).style.maxWidth = 'none';
+          (clonedCanvas as HTMLElement).style.maxHeight = 'none';
+        }
+        return documentClone;
+      },
+      ignoreElements: (element) => {
+        // 忽略一些UI元素，只捕获设计内容
+        return element.classList && (
+          element.classList.contains('control-point') ||
+          element.classList.contains('control-line') ||
+          element.classList.contains('rotation-handle') ||
+          element.classList.contains('el-button') ||
+          element.classList.contains('toolbar') ||
+          element.tagName === 'BUTTON' ||
+          element.classList.contains('el-dropdown') ||
+          element.classList.contains('settings-panel')
+        );
+      }
     })
 
     // 恢复控制点的显示
@@ -821,6 +839,11 @@ const exportPDF = async () => {
       ; (point as HTMLElement).style.display = 'none'
     })
 
+    // 获取画布的原始尺寸
+    const canvasRect = canvas.getBoundingClientRect()
+    const originalWidth = canvasRect.width
+    const originalHeight = canvasRect.height
+
     // 临时隐藏可能导致乱码的元素
     const textElements = canvas.querySelectorAll('.course-title, .course-info')
     const originalDisplays: { el: HTMLElement, display: string }[] = []
@@ -833,23 +856,52 @@ const exportPDF = async () => {
     // 清理画布中的特殊字符
     const restoreTexts = cleanupCanvasForExport(canvas)
 
-    // 使用 html2canvas 将画布转换为图片，添加更多配置以解决乱码问题
+    // 使用 html2canvas 将画布转换为图片，并指定宽高
+    console.log('开始转换画布为图片...')
     const imageCanvas = await html2canvas(canvas, {
       backgroundColor: '#ffffff',
-      scale: 2, // 提高导出图片的清晰度
-      useCORS: true, // 允许跨域图片
-      logging: false, // 关闭日志
-      allowTaint: true, // 允许跨域图片
-      removeContainer: true, // 移除临时容器
-      foreignObjectRendering: false, // 禁用foreignObject渲染，使用canvas渲染
+      scale: 3, // 使用3倍缩放以获得更高质量的图像
+      useCORS: true,
+      width: originalWidth,
+      height: originalHeight,
       // 确保捕获整个画布内容，即使部分内容不在视口中
       scrollX: 0,
       scrollY: 0,
       x: 0,
       y: 0,
+      allowTaint: true,
+      foreignObjectRendering: true,
       // 设置更大的虚拟窗口尺寸，确保能捕获所有内容
-      windowWidth: Math.max(document.documentElement.clientWidth, canvas.scrollWidth),
-      windowHeight: Math.max(document.documentElement.clientHeight, canvas.scrollHeight)
+      windowWidth: Math.max(document.documentElement.clientWidth, window.innerWidth, originalWidth * 2),
+      windowHeight: Math.max(document.documentElement.clientHeight, window.innerHeight, originalHeight * 2),
+      logging: true,
+      onclone: (documentClone) => {
+        // 在复制的DOM中确保所有内容都可见
+        const clonedCanvas = documentClone.querySelector('.course-canvas');
+        if (clonedCanvas) {
+          // 添加填充以确保边缘内容都被包含
+          (clonedCanvas as HTMLElement).style.padding = '20px';
+          // 确保克隆的画布显示所有内容
+          (clonedCanvas as HTMLElement).style.overflow = 'visible';
+          // 移除可能限制尺寸的属性
+          (clonedCanvas as HTMLElement).style.maxWidth = 'none';
+          (clonedCanvas as HTMLElement).style.maxHeight = 'none';
+        }
+        return documentClone;
+      },
+      ignoreElements: (element) => {
+        // 忽略一些UI元素，只捕获设计内容
+        return element.classList && (
+          element.classList.contains('control-point') ||
+          element.classList.contains('control-line') ||
+          element.classList.contains('rotation-handle') ||
+          element.classList.contains('el-button') ||
+          element.classList.contains('toolbar') ||
+          element.tagName === 'BUTTON' ||
+          element.classList.contains('el-dropdown') ||
+          element.classList.contains('settings-panel')
+        );
+      }
     })
 
     // 恢复控制点的显示

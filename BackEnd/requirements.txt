@@ -9,3 +9,5 @@ python-dotenv==1.0.1
 channels==3.0.5
 channels-redis==4.1.0  # 用于生产环境中的Channel Layer
 daphne==3.0.2  # ASGI服务器，用于生产环境 
+python-alipay-sdk==3.3.0  # 支付宝SDK
+pycryptodome==3.19.1  # 加密库，支付宝SDK依赖 

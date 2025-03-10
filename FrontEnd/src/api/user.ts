@@ -148,3 +148,45 @@ export const changeEmail = async (data: { password: string; new_email: string })
     throw error
   }
 }
+
+// 创建会员订单
+export const createMembershipOrder = async (data: {
+  plan_id: number
+  billing_cycle: 'month' | 'year'
+}) => {
+  console.log('正在创建会员订单...')
+  try {
+    const response = await request.post(apiConfig.endpoints.user.createOrder, data)
+    console.log('创建会员订单成功:', response)
+    return response
+  } catch (error) {
+    console.error('创建会员订单失败:', error)
+    throw error
+  }
+}
+
+// 获取用户订单列表
+export const getUserOrders = async () => {
+  console.log('正在获取用户订单列表...')
+  try {
+    const response = await request.get(apiConfig.endpoints.user.orders)
+    console.log('获取用户订单列表成功:', response)
+    return response
+  } catch (error) {
+    console.error('获取用户订单列表失败:', error)
+    throw error
+  }
+}
+
+// 获取订单状态
+export const getOrderStatus = async (orderId: string) => {
+  console.log('正在获取订单状态...')
+  try {
+    const response = await request.get(apiConfig.endpoints.user.orderStatus(orderId))
+    console.log('获取订单状态成功:', response)
+    return response
+  } catch (error) {
+    console.error('获取订单状态失败:', error)
+    throw error
+  }
+}
