@@ -328,7 +328,8 @@
     <div v-show="isSelecting" class="selection-box" :style="selectionStyle"></div>
 
     <div v-if="courseStore.coursePath.visible" class="course-path">
-      <div class="path-indicator start-indicator" :style="startStyle"
+      <div class="path-indicator start-indicator"
+        :class="{ 'selected': draggingPoint === 'start' || draggingPoint === 'start-rotate' }" :style="startStyle"
         @mousedown.stop="startDraggingPoint('start', $event)">
         <div class="direction-arrow">
           <div class="arrow-line"></div>
@@ -338,7 +339,9 @@
         <div class="rotation-handle" @mousedown.stop="startRotatingPoint('start', $event)"></div>
       </div>
 
-      <div class="path-indicator end-indicator" :style="endStyle" @mousedown.stop="startDraggingPoint('end', $event)">
+      <div class="path-indicator end-indicator"
+        :class="{ 'selected': draggingPoint === 'end' || draggingPoint === 'end-rotate' }" :style="endStyle"
+        @mousedown.stop="startDraggingPoint('end', $event)">
         <div class="direction-arrow">
           <div class="arrow-line"></div>
           <div class="arrow-head"></div>
@@ -351,9 +354,9 @@
       <svg class="course-path-svg">
         <!-- 先渲染控制线 -->
         <template v-for="(point, pointIndex) in courseStore.coursePath.points" :key="`lines-${pointIndex}`">
-          <line v-if="point.controlPoint1" :x1="point.x" :y1="point.y" :x2="point.controlPoint1.x"
+          <line v-if="point.controlPoint1 && showDistanceLabels" :x1="point.x" :y1="point.y" :x2="point.controlPoint1.x"
             :y2="point.controlPoint1.y" class="control-line" />
-          <line v-if="point.controlPoint2" :x1="point.x" :y1="point.y" :x2="point.controlPoint2.x"
+          <line v-if="point.controlPoint2 && showDistanceLabels" :x1="point.x" :y1="point.y" :x2="point.controlPoint2.x"
             :y2="point.controlPoint2.y" class="control-line" />
         </template>
 
@@ -379,10 +382,13 @@
 
         <!-- 渲染控制点 -->
         <template v-for="(point, pointIndex) in courseStore.coursePath.points" :key="`points-${pointIndex}`">
-          <circle v-if="point.controlPoint1" :cx="point.controlPoint1.x" :cy="point.controlPoint1.y"
+          <!-- 只在非直线部分显示控制点 -->
+          <circle v-if="point.controlPoint1 && showDistanceLabels" :cx="point.controlPoint1.x"
+            :cy="point.controlPoint1.y"
             :r="draggingControlPoint?.pointIndex === pointIndex && draggingControlPoint?.controlPointNumber === 1 ? 8 : 6"
             class="control-point" @mousedown.stop="startDraggingControlPoint(pointIndex, 1, $event)" />
-          <circle v-if="point.controlPoint2" :cx="point.controlPoint2.x" :cy="point.controlPoint2.y"
+          <circle v-if="point.controlPoint2 && showDistanceLabels" :cx="point.controlPoint2.x"
+            :cy="point.controlPoint2.y"
             :r="draggingControlPoint?.pointIndex === pointIndex && draggingControlPoint?.controlPointNumber === 2 ? 8 : 6"
             class="control-point" @mousedown.stop="startDraggingControlPoint(pointIndex, 2, $event)" />
         </template>
@@ -436,10 +442,8 @@ import { Plus, Edit, Hide, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useCourseStore } from '@/stores/course'
 import { useObstacleStore } from '@/stores/obstacle'
-import { useUserStore } from '@/stores/user'
-import { useCollaborationStore } from '@/stores/collaboration'
 import { ObstacleType, DecorationCategory } from '@/types/obstacle'
-import type { Obstacle, PathPoint, CoursePathData, CustomObstacleTemplate } from '@/types/obstacle'
+import type { Obstacle, PathPoint, CustomObstacleTemplate } from '@/types/obstacle'
 import CollaboratorCursors from './CollaboratorCursors.vue'
 import { useWebSocketConnection, ConnectionStatus } from '@/utils/websocket'
 import { throttle } from 'lodash-es'
@@ -1289,8 +1293,8 @@ const handleDrop = (event: DragEvent) => {
       // 默认使用裁判桌作为装饰物
       newObstacle.decorationProperties = {
         category: DecorationCategory.TABLE,
-        width: 120,
-        height: 80,
+        width: 4 * meterScale.value,
+        height: 3 * meterScale.value,
         color: '#8B4513',
         borderColor: '#593b22',
         borderWidth: 2,
@@ -1452,8 +1456,8 @@ const gridSize = computed(() => ({
 const handleKeyDown = (event: KeyboardEvent) => {
   if ((event.target as HTMLElement)?.tagName === 'INPUT') return
 
+  // 如果按下Delete键，删除选中的障碍物
   if ((event.key === 'Delete' || event.key === 'Backspace') && selectedObstacles.value.length > 0) {
-    // 删除所有的障碍物
     selectedObstacles.value.forEach((obstacle) => {
       // 先从本地移除障碍物
       courseStore.removeObstacle(obstacle.id)
@@ -1466,10 +1470,27 @@ const handleKeyDown = (event: KeyboardEvent) => {
       }
     })
     clearSelection()
-  } else if (event.ctrlKey || event.metaKey) {
-    if (event.key === 'c') {
+  }
+
+  // 如果按下Escape键，取消所有选择
+  if (event.key === 'Escape') {
+    // 清除障碍物选择
+    clearSelection()
+
+    // 清除起终点选择
+    draggingPoint.value = null
+
+    // 如果正在框选，取消框选
+    if (isSelecting.value) {
+      isSelecting.value = false
+    }
+  }
+
+  // 复制粘贴和全选功能
+  if (event.ctrlKey || event.metaKey) {
+    if (event.key === 'c' && selectedObstacles.value.length > 0) {
       copyObstacle()
-    } else if (event.key === 'v') {
+    } else if (event.key === 'v' && copiedObstacles.value.length > 0) {
       pasteObstacle()
     } else if (event.key === 'a') {
       // 全选
@@ -1560,9 +1581,70 @@ const endSelection = () => {
     )
   })
 
+  // 检查起点是否在选择域内
+  let startSelected = false
+  if (courseStore.coursePath.visible) {
+    const startEl = document.querySelector('.start-indicator')
+    if (startEl) {
+      const startRect = startEl.getBoundingClientRect()
+      const canvas = document.querySelector('.course-canvas')?.getBoundingClientRect()
+      if (canvas) {
+        const relativeRect = {
+          left: startRect.left - canvas.left,
+          top: startRect.top - canvas.top,
+          right: startRect.right - canvas.left,
+          bottom: startRect.bottom - canvas.top,
+        }
+
+        startSelected = !(
+          relativeRect.right < left ||
+          relativeRect.left > right ||
+          relativeRect.bottom < top ||
+          relativeRect.top > bottom
+        )
+      }
+    }
+  }
+
+  // 检查终点是否在选择域内
+  let endSelected = false
+  if (courseStore.coursePath.visible) {
+    const endEl = document.querySelector('.end-indicator')
+    if (endEl) {
+      const endRect = endEl.getBoundingClientRect()
+      const canvas = document.querySelector('.course-canvas')?.getBoundingClientRect()
+      if (canvas) {
+        const relativeRect = {
+          left: endRect.left - canvas.left,
+          top: endRect.top - canvas.top,
+          right: endRect.right - canvas.left,
+          bottom: endRect.bottom - canvas.top,
+        }
+
+        endSelected = !(
+          relativeRect.right < left ||
+          relativeRect.left > right ||
+          relativeRect.bottom < top ||
+          relativeRect.top > bottom
+        )
+      }
+    }
+  }
+
   // 更新选中态
   selectedObstacles.value = newSelectedObstacles
   courseStore.selectedObstacle = newSelectedObstacles[0] || null
+
+  // 如果起点或终点被选中，设置拖拽状态
+  if (startSelected) {
+    draggingPoint.value = 'start'
+    // 设置鼠标位置偏移为0，以便下次拖拽时计算正确的位置
+    startMousePos.value = { x: 0, y: 0 }
+  } else if (endSelected) {
+    draggingPoint.value = 'end'
+    // 设置鼠标位置偏移为0，以便下次拖拽时计算正确的位置
+    startMousePos.value = { x: 0, y: 0 }
+  }
 
   isSelecting.value = false
 }
@@ -1630,10 +1712,53 @@ const handleGlobalMouseMove = (event: MouseEvent) => {
   }
 }
 
-const handleGlobalMouseUp = () => {
-  handleMouseUp()
-  endSelection()
-  draggingPoint.value = null
+// 修改全局鼠标抬起事件处理
+const handleGlobalMouseUp = (event: MouseEvent) => {
+  // 结束框选
+  if (isSelecting.value) {
+    endSelection()
+    return; // 如果是框选结束，则不清除拖拽状态，因为可能刚选中了起点或终点
+  }
+
+  // 结束障碍物拖拽
+  if (isDragging.value) {
+    isDragging.value = false
+    draggingObstacle.value = null
+  }
+
+  // 结束障碍物旋转
+  if (isRotating.value) {
+    isRotating.value = false
+    draggingObstacle.value = null
+  }
+
+  // 结束控制点拖拽
+  if (draggingControlPoint.value) {
+    draggingControlPoint.value = null
+  }
+
+  // 结束杆号拖拽
+  if (isDraggingNumber.value) {
+    isDraggingNumber.value = false
+    draggingNumberObstacle.value = null
+    draggingPoleIndex.value = null
+  }
+
+  // 如果不是框选结束，且没有按下Shift键，则清除起终点的拖拽状态
+  if (!isSelecting.value && !event.shiftKey) {
+    // 如果是起点或终点的旋转状态，转换为普通选中状态
+    if (draggingPoint.value === 'start-rotate') {
+      draggingPoint.value = 'start';
+    } else if (draggingPoint.value === 'end-rotate') {
+      draggingPoint.value = 'end';
+    } else if (!event.ctrlKey && !event.metaKey) {
+      // 如果没有按下Ctrl/Command键，则完全清除拖拽状态
+      draggingPoint.value = null;
+    }
+  }
+
+  // 重置鼠标位置
+  startMousePos.value = { x: 0, y: 0 };
 }
 
 // 组件挂载时添加事件监听
@@ -1725,41 +1850,45 @@ const pasteObstacle = () => {
   })
 }
 
-// 开始拖拽起终点
+// 开始拖拽起点或终点
 const startDraggingPoint = (point: 'start' | 'end', event: MouseEvent) => {
   draggingPoint.value = point
-  const canvas = document.querySelector('.course-canvas')
-  if (!canvas) return
 
-  const rect = canvas.getBoundingClientRect()
+  // 记录鼠标点击位置相对于起点/终点的偏移
   const pointPos = point === 'start' ? courseStore.startPoint : courseStore.endPoint
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  const canvas = document.querySelector('.course-canvas')?.getBoundingClientRect()
 
-  // 记录鼠标相对于起终点中心的偏移
-  startMousePos.value = {
-    x: event.clientX - rect.left - pointPos.x,
-    y: event.clientY - rect.top - pointPos.y,
+  if (canvas) {
+    // 计算鼠标点击位置相对于起点/终点的偏移
+    startMousePos.value = {
+      x: event.clientX - canvas.left - pointPos.x,
+      y: event.clientY - canvas.top - pointPos.y
+    }
   }
 
   event.stopPropagation()
 }
 
-// 修改旋转处理函数
+// 开始旋转起点或终点
 const startRotatingPoint = (point: 'start' | 'end', event: MouseEvent) => {
-  draggingPoint.value = `${point}-rotate` as 'start-rotate' | 'end-rotate'
+  draggingPoint.value = point === 'start' ? 'start-rotate' : 'end-rotate'
+
+  const pointPos = point === 'start' ? courseStore.startPoint : courseStore.endPoint
   const canvas = document.querySelector('.course-canvas')
   if (!canvas) return
 
   const rect = canvas.getBoundingClientRect()
-  const pointPos = point === 'start' ? courseStore.startPoint : courseStore.endPoint
   const centerX = rect.left + pointPos.x
   const centerY = rect.top + pointPos.y
 
-  // 计算初始角度
-  const currentAngle =
-    (Math.atan2(event.clientY - centerY, event.clientX - centerX) * 180) / Math.PI
+  // 计算当前角度
+  const currentAngle = (Math.atan2(event.clientY - centerY, event.clientX - centerX) * 180) / Math.PI
+
+  // 记录当前角度和当前旋转值
   startMousePos.value = {
     x: currentAngle,
-    y: point === 'start' ? courseStore.startPoint.rotation : courseStore.endPoint.rotation,
+    y: point === 'start' ? courseStore.startPoint.rotation : courseStore.endPoint.rotation
   }
 
   event.stopPropagation()
@@ -1960,14 +2089,59 @@ const obstacleDistances = computed(() => {
     // 转换为米
     const distanceInMeters = (distanceInPixels / scale).toFixed(1)
 
-    // 计算标签位置（起点和第一个障碍物中心点的中间位置）
-    const labelX = (startPoint.x + firstObstacleCenter.x) / 2
-    const labelY = (startPoint.y + firstObstacleCenter.y) / 2
+    // 计算标签位置（起点和第一个障碍物之间的路径中点）
+    // 使用贝塞尔曲线的中点计算，以便标签跟随曲线
+    let labelX, labelY
+
+    if (startPoint.controlPoint2 && firstObstaclePoint1.controlPoint1) {
+      // 如果有控制点，计算贝塞尔曲线的中点
+      const t = 0.5 // 参数t=0.5表示曲线的中点
+      labelX = bezierPoint(
+        startPoint.x,
+        startPoint.controlPoint2.x,
+        firstObstaclePoint1.controlPoint1.x,
+        firstObstaclePoint1.x,
+        t
+      )
+      labelY = bezierPoint(
+        startPoint.y,
+        startPoint.controlPoint2.y,
+        firstObstaclePoint1.controlPoint1.y,
+        firstObstaclePoint1.y,
+        t
+      )
+    } else {
+      // 如果没有控制点，使用直线的中点
+      labelX = (startPoint.x + firstObstacleCenter.x) / 2
+      labelY = (startPoint.y + firstObstacleCenter.y) / 2
+    }
 
     // 计算角度，使标签沿着路径方向
-    const dx = firstObstacleCenter.x - startPoint.x
-    const dy = firstObstacleCenter.y - startPoint.y
-    const angle = Math.atan2(dy, dx) * (180 / Math.PI)
+    let angle
+    if (startPoint.controlPoint2 && firstObstaclePoint1.controlPoint1) {
+      // 如果有控制点，计算贝塞尔曲线在中点处的切线角度
+      const t = 0.5
+      const dx = bezierTangent(
+        startPoint.x,
+        startPoint.controlPoint2.x,
+        firstObstaclePoint1.controlPoint1.x,
+        firstObstaclePoint1.x,
+        t
+      )
+      const dy = bezierTangent(
+        startPoint.y,
+        startPoint.controlPoint2.y,
+        firstObstaclePoint1.controlPoint1.y,
+        firstObstaclePoint1.y,
+        t
+      )
+      angle = Math.atan2(dy, dx) * (180 / Math.PI)
+    } else {
+      // 如果没有控制点，使用直线的角度
+      const dx = firstObstacleCenter.x - startPoint.x
+      const dy = firstObstacleCenter.y - startPoint.y
+      angle = Math.atan2(dy, dx) * (180 / Math.PI)
+    }
 
     // 获取第一个障碍物的编号
     const firstObstacleNumber = obstacles[0]?.number || '1'
@@ -1988,6 +2162,8 @@ const obstacleDistances = computed(() => {
     if (i + 5 < points.length) {
       const currentCenter = points[i]
       const nextCenter = points[i + 5]
+      const exitPoint = points[i + 2] // 当前障碍物的出口点
+      const entryPoint = points[i + 3] // 下一个障碍物的入口点
 
       // 计算两个障碍物之间的路径长度（像素）
       let distanceInPixels = 0
@@ -2002,14 +2178,58 @@ const obstacleDistances = computed(() => {
       // 转换为米
       const distanceInMeters = (distanceInPixels / scale).toFixed(1)
 
-      // 计算标签位置（两个障碍物中心点的中间位置）
-      const labelX = (currentCenter.x + nextCenter.x) / 2
-      const labelY = (currentCenter.y + nextCenter.y) / 2
+      // 计算标签位置（两个障碍物之间的路径中点）
+      let labelX, labelY
+
+      if (exitPoint.controlPoint2 && entryPoint.controlPoint1) {
+        // 如果有控制点，计算贝塞尔曲线的中点
+        const t = 0.5
+        labelX = bezierPoint(
+          exitPoint.x,
+          exitPoint.controlPoint2.x,
+          entryPoint.controlPoint1.x,
+          entryPoint.x,
+          t
+        )
+        labelY = bezierPoint(
+          exitPoint.y,
+          exitPoint.controlPoint2.y,
+          entryPoint.controlPoint1.y,
+          entryPoint.y,
+          t
+        )
+      } else {
+        // 如果没有控制点，使用直线的中点
+        labelX = (currentCenter.x + nextCenter.x) / 2
+        labelY = (currentCenter.y + nextCenter.y) / 2
+      }
 
       // 计算角度，使标签沿着路径方向
-      const dx = nextCenter.x - currentCenter.x
-      const dy = nextCenter.y - currentCenter.y
-      const angle = Math.atan2(dy, dx) * (180 / Math.PI)
+      let angle
+      if (exitPoint.controlPoint2 && entryPoint.controlPoint1) {
+        // 如果有控制点，计算贝塞尔曲线在中点处的切线角度
+        const t = 0.5
+        const dx = bezierTangent(
+          exitPoint.x,
+          exitPoint.controlPoint2.x,
+          entryPoint.controlPoint1.x,
+          entryPoint.x,
+          t
+        )
+        const dy = bezierTangent(
+          exitPoint.y,
+          exitPoint.controlPoint2.y,
+          entryPoint.controlPoint1.y,
+          entryPoint.y,
+          t
+        )
+        angle = Math.atan2(dy, dx) * (180 / Math.PI)
+      } else {
+        // 如果没有控制点，使用直线的角度
+        const dx = nextCenter.x - currentCenter.x
+        const dy = nextCenter.y - currentCenter.y
+        angle = Math.atan2(dy, dx) * (180 / Math.PI)
+      }
 
       // 计算当前障碍物和下一个障碍物的索引
       const currentObstacleIndex = Math.floor((i - 3) / 5)
@@ -2035,6 +2255,7 @@ const obstacleDistances = computed(() => {
     if (lastObstacleIndex < points.length) {
       const lastObstacleCenter = points[lastObstacleIndex]
       const endPoint = points[points.length - 1]
+      const exitPoint = points[lastObstacleIndex + 2] // 最后一个障碍物的出口点
 
       // 计算最后一个障碍物到终点的路径长度（像素）
       let distanceInPixels = 0
@@ -2047,14 +2268,58 @@ const obstacleDistances = computed(() => {
       // 转换为米
       const distanceInMeters = (distanceInPixels / scale).toFixed(1)
 
-      // 计算标签位置（最后一个障碍物中心点和终点的中间位置）
-      const labelX = (lastObstacleCenter.x + endPoint.x) / 2
-      const labelY = (lastObstacleCenter.y + endPoint.y) / 2
+      // 计算标签位置（最后一个障碍物和终点之间的路径中点）
+      let labelX, labelY
+
+      if (exitPoint.controlPoint2 && endPoint.controlPoint1) {
+        // 如果有控制点，计算贝塞尔曲线的中点
+        const t = 0.5
+        labelX = bezierPoint(
+          exitPoint.x,
+          exitPoint.controlPoint2.x,
+          endPoint.controlPoint1.x,
+          endPoint.x,
+          t
+        )
+        labelY = bezierPoint(
+          exitPoint.y,
+          exitPoint.controlPoint2.y,
+          endPoint.controlPoint1.y,
+          endPoint.y,
+          t
+        )
+      } else {
+        // 如果没有控制点，使用直线的中点
+        labelX = (lastObstacleCenter.x + endPoint.x) / 2
+        labelY = (lastObstacleCenter.y + endPoint.y) / 2
+      }
 
       // 计算角度，使标签沿着路径方向
-      const dx = endPoint.x - lastObstacleCenter.x
-      const dy = endPoint.y - lastObstacleCenter.y
-      const angle = Math.atan2(dy, dx) * (180 / Math.PI)
+      let angle
+      if (exitPoint.controlPoint2 && endPoint.controlPoint1) {
+        // 如果有控制点，计算贝塞尔曲线在中点处的切线角度
+        const t = 0.5
+        const dx = bezierTangent(
+          exitPoint.x,
+          exitPoint.controlPoint2.x,
+          endPoint.controlPoint1.x,
+          endPoint.x,
+          t
+        )
+        const dy = bezierTangent(
+          exitPoint.y,
+          exitPoint.controlPoint2.y,
+          endPoint.controlPoint1.y,
+          endPoint.y,
+          t
+        )
+        angle = Math.atan2(dy, dx) * (180 / Math.PI)
+      } else {
+        // 如果没有控制点，使用直线的角度
+        const dx = endPoint.x - lastObstacleCenter.x
+        const dy = endPoint.y - lastObstacleCenter.y
+        angle = Math.atan2(dy, dx) * (180 / Math.PI)
+      }
 
       // 计算最后一个障碍物的索引
       const lastObstacleArrayIndex = Math.floor((lastObstacleIndex - 3) / 5)
@@ -2087,6 +2352,35 @@ const totalDistance = computed(() => {
   // 保留一位小数
   return total.toFixed(1)
 })
+
+// 计算贝塞尔曲线上的点
+const bezierPoint = (
+  x0: number,
+  x1: number,
+  x2: number,
+  x3: number,
+  t: number
+) => {
+  const t1 = 1 - t
+  return t1 * t1 * t1 * x0 +
+    3 * t1 * t1 * t * x1 +
+    3 * t1 * t * t * x2 +
+    t * t * t * x3
+}
+
+// 计算贝塞尔曲线在某点的切线
+const bezierTangent = (
+  x0: number,
+  x1: number,
+  x2: number,
+  x3: number,
+  t: number
+) => {
+  const t1 = 1 - t
+  return 3 * t1 * t1 * (x1 - x0) +
+    6 * t1 * t * (x2 - x1) +
+    3 * t * t * (x3 - x2)
+}
 </script>
 
 <style scoped lang="scss">
@@ -2395,7 +2689,7 @@ const totalDistance = computed(() => {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 5;
+  z-index: 4;
 
   .width-label {
     position: absolute;
@@ -2532,13 +2826,16 @@ const totalDistance = computed(() => {
 
 .path-indicator {
   position: absolute;
-  width: 100px;
+  /* 设置宽度为6米（障碍物前3米+后3米），并转换为像素 */
+  /* 这确保了路径指示器的宽度与实际路径的直线部分长度一致 */
+  width: calc(6 * v-bind(meterScale) * 1px);
   height: 40px;
   transform-origin: center center;
   cursor: move;
   pointer-events: auto;
   user-select: none;
   -webkit-user-select: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 
   .rotation-handle {
     position: absolute;
@@ -2576,6 +2873,12 @@ const totalDistance = computed(() => {
         border-top-color: currentColor;
       }
     }
+
+    &.selected,
+    &:active {
+      color: #ff6b6b;
+      box-shadow: 0 0 0 4px rgba(255, 107, 107, 0.3);
+    }
   }
 
   &.end-indicator {
@@ -2594,45 +2897,62 @@ const totalDistance = computed(() => {
         border-top-color: currentColor;
       }
     }
+
+    &.selected,
+    &:active {
+      color: #ff6b6b;
+      box-shadow: 0 0 0 4px rgba(255, 107, 107, 0.3);
+    }
   }
 
   .path-line {
     position: absolute;
     top: 50%;
-    left: 0;
-    width: 100%;
+    /* 将线条放置在指示器的中心 */
+    left: 50%;
+    /* 设置宽度为6米（障碍物前3米+后3米），并转换为像素 */
+    /* 这确保了虚线的长度与实际路径的直线部分长度一致 */
+    width: calc(6 * v-bind(meterScale) * 1px);
     height: 0;
-    transform: translateY(-50%);
+    /* 使线条在指示器中居中显示 */
+    transform: translate(-50%, -50%);
   }
 
   .direction-arrow {
     position: absolute;
-    top: calc(-3 * v-bind(meterScale) * 1px);
-    bottom: calc(-3 * v-bind(meterScale) * 1px);
+    /* 设置高度为6米（障碍物前3米+后3米），并转换为像素 */
+    /* 这确保了箭头的长度与实际路径的直线部分长度一致 */
+    height: calc(6 * v-bind(meterScale) * 1px);
+    /* 将箭头放置在指示器的中心 */
+    top: 50%;
     left: 50%;
-    width: 40px;
-    transform: translateX(-50%);
+    width: 2px;
+    /* 使箭头在指示器中居中显示 */
+    transform: translate(-50%, -50%);
     display: flex;
     flex-direction: column;
     align-items: center;
     pointer-events: none;
 
     .arrow-line {
-      flex: 1;
-      width: 2px;
-      position: relative;
+      /* 箭头线条占据整个高度 */
+      height: 100%;
+      width: 100%;
+      background: currentColor;
     }
 
     .arrow-head {
+      /* 箭头头部位于线条底部 */
       position: absolute;
       bottom: -8px;
       left: 50%;
       transform: translateX(-50%);
       width: 0;
       height: 0;
+      /* 创建三角形形状的箭头头部 */
       border-left: 8px solid transparent;
       border-right: 8px solid transparent;
-      border-top: 12px solid;
+      border-top: 12px solid currentColor;
     }
   }
 

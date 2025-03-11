@@ -3,93 +3,104 @@
     <el-card class="profile-card">
       <template #header>
         <div class="card-header">
-          <h2>用户资料</h2>
+          <h2>个人中心</h2>
         </div>
       </template>
 
-      <div v-if="loading" class="loading-container">
-        <el-skeleton :rows="5" animated />
-      </div>
+      <!-- 添加标签页导航 -->
+      <el-tabs v-model="activeTab" class="profile-tabs">
+        <el-tab-pane label="个人资料" name="profile">
+          <div v-if="loading" class="loading-container">
+            <el-skeleton :rows="5" animated />
+          </div>
 
-      <div v-else class="profile-content">
-        <div class="info-item">
-          <span class="label">用户名：</span>
-          <span class="value">{{ userProfile.username }}</span>
-        </div>
-
-        <div class="info-item">
-          <span class="label">邮箱：</span>
-          <span class="value">{{ userProfile.email }}</span>
-          <el-button type="primary" link @click="showChangeEmailDialog">修改</el-button>
-        </div>
-
-        <div class="info-item">
-          <span class="label">密码：</span>
-          <span class="value">********</span>
-          <el-button type="primary" link @click="showChangePasswordDialog">修改</el-button>
-        </div>
-
-        <div class="info-item">
-          <span class="label">会员状态：</span>
-          <span class="value">
-            <el-tag v-if="userProfile.is_premium_active" type="success">有效</el-tag>
-            <el-tag v-else-if="userProfile.is_premium && !userProfile.is_premium_active" type="warning">已过期</el-tag>
-            <el-tag v-else type="info">未开通</el-tag>
-          </span>
-        </div>
-
-        <div v-if="userProfile.membership_plan" class="info-item">
-          <span class="label">当前会员计划：</span>
-          <span class="value">{{ userProfile.membership_plan.name }}</span>
-        </div>
-
-        <div v-if="userProfile.is_premium" class="info-item">
-          <span class="label">会员到期时间：</span>
-          <span class="value">{{ formatDate(userProfile.premium_expire_date) }}</span>
-        </div>
-
-        <!-- 待生效会员计划信息 -->
-        <div v-if="userProfile.pending_membership_plan" class="info-item pending-plan">
-          <span class="label">待生效会员：</span>
-          <span class="value">
-            <el-tag type="warning">{{ userProfile.pending_membership_plan.name }}</el-tag>
-            <div class="pending-plan-details">
-              将在当前会员到期后自动生效
-              <div class="pending-dates">
-                <span>生效时间：{{ formatDate(userProfile.pending_membership_plan.start_date) }}</span>
-                <span>到期时间：{{ formatDate(userProfile.pending_membership_plan.expire_date) }}</span>
-              </div>
+          <div v-else class="profile-content">
+            <div class="info-item">
+              <span class="label">用户名：</span>
+              <span class="value">{{ userProfile.username }}</span>
             </div>
-          </span>
-        </div>
 
-        <div class="info-item">
-          <span class="label">设计存储限制：</span>
-          <span class="value">{{ userProfile.design_storage_limit }} 个</span>
-        </div>
+            <div class="info-item">
+              <span class="label">邮箱：</span>
+              <span class="value">{{ userProfile.email }}</span>
+              <el-button type="primary" link @click="showChangeEmailDialog">修改</el-button>
+            </div>
 
-        <div class="info-item">
-          <span class="label">当前设计数量：</span>
-          <span class="value">
-            {{ userProfile.design_count }} / {{ userProfile.design_storage_limit }}
-            <el-progress :percentage="(userProfile.design_count / userProfile.design_storage_limit) * 100"
-              :status="storageStatus" :stroke-width="10" class="storage-progress" />
-          </span>
-        </div>
-      </div>
+            <div class="info-item">
+              <span class="label">密码：</span>
+              <span class="value">********</span>
+              <el-button type="primary" link @click="showChangePasswordDialog">修改</el-button>
+            </div>
 
-      <div v-if="!userProfile.is_premium_active" class="upgrade-section">
-        <h3>升级到会员</h3>
-        <p>成为会员，享受更多存储空间和高级功能！</p>
-        <el-button type="primary" @click="showUpgradeDialog">立即升级</el-button>
-      </div>
+            <div class="info-item">
+              <span class="label">会员状态：</span>
+              <span class="value">
+                <el-tag v-if="userProfile.is_premium_active" type="success">有效</el-tag>
+                <el-tag v-else-if="userProfile.is_premium && !userProfile.is_premium_active" type="warning">已过期</el-tag>
+                <el-tag v-else type="info">未开通</el-tag>
+              </span>
+            </div>
 
-      <div v-else class="upgrade-section">
-        <h3>会员管理</h3>
-        <p>您当前的会员计划: {{ userProfile.membership_plan?.name }} (到期时间: {{ formatDate(userProfile.premium_expire_date) }})
-        </p>
-        <el-button type="primary" @click="showUpgradeDialog">续费/升级</el-button>
-      </div>
+            <div v-if="userProfile.membership_plan" class="info-item">
+              <span class="label">当前会员计划：</span>
+              <span class="value">{{ userProfile.membership_plan.name }}</span>
+            </div>
+
+            <div v-if="userProfile.is_premium" class="info-item">
+              <span class="label">会员到期时间：</span>
+              <span class="value">{{ formatDate(userProfile.premium_expire_date) }}</span>
+            </div>
+
+            <!-- 待生效会员计划信息 -->
+            <div v-if="userProfile.pending_membership_plan" class="info-item pending-plan">
+              <span class="label">待生效会员：</span>
+              <span class="value">
+                <el-tag type="warning">{{ userProfile.pending_membership_plan.name }}</el-tag>
+                <div class="pending-plan-details">
+                  将在当前会员到期后自动生效
+                  <div class="pending-dates">
+                    <span>生效时间：{{ formatDate(userProfile.pending_membership_plan.start_date) }}</span>
+                    <span>到期时间：{{ formatDate(userProfile.pending_membership_plan.expire_date) }}</span>
+                  </div>
+                </div>
+              </span>
+            </div>
+
+            <div class="info-item">
+              <span class="label">设计存储限制：</span>
+              <span class="value">{{ userProfile.design_storage_limit }} 个</span>
+            </div>
+
+            <div class="info-item">
+              <span class="label">当前设计数量：</span>
+              <span class="value">
+                {{ userProfile.design_count }} / {{ userProfile.design_storage_limit }}
+                <el-progress :percentage="(userProfile.design_count / userProfile.design_storage_limit) * 100"
+                  :status="storageStatus" :stroke-width="10" class="storage-progress" />
+              </span>
+            </div>
+          </div>
+
+          <div v-if="!userProfile.is_premium_active" class="upgrade-section">
+            <h3>升级到会员</h3>
+            <p>成为会员，享受更多存储空间和高级功能！</p>
+            <el-button type="primary" @click="showUpgradeDialog">立即升级</el-button>
+          </div>
+
+          <div v-else class="upgrade-section">
+            <h3>会员管理</h3>
+            <p>您当前的会员计划: {{ userProfile.membership_plan?.name }} (到期时间: {{ formatDate(userProfile.premium_expire_date)
+            }})
+            </p>
+            <el-button type="primary" @click="showUpgradeDialog">续费/升级</el-button>
+          </div>
+        </el-tab-pane>
+
+        <!-- 添加订单标签页 -->
+        <el-tab-pane label="我的订单" name="orders">
+          <OrderList :embedded="true" />
+        </el-tab-pane>
+      </el-tabs>
     </el-card>
 
     <!-- 升级对话框 -->
@@ -98,6 +109,7 @@
       <div class="membership-dialog-content">
         <div class="membership-benefits">
           <h3 class="section-title">会员特权</h3>
+
           <div class="benefits-list">
             <div class="benefit-item">
               <el-icon>
@@ -139,6 +151,7 @@
         </div>
 
         <h3 class="section-title plans-title">选择会员计划</h3>
+        <span>当前会员价格表仅供参考，以实际为准，并且支付处于测试阶段，请勿支付</span>
 
         <!-- 加载中提示 -->
         <div v-if="loading" class="loading-placeholder">
@@ -374,6 +387,7 @@ import { getUserProfile, changePassword, changeEmail, createMembershipOrder, get
 import { useUserStore } from '@/stores/user'
 import type { FormInstance } from 'element-plus'
 import { Document, SetUp, Connection, Star, Check, Close } from '@element-plus/icons-vue'
+import OrderList from '@/views/OrderList.vue'
 
 // 定义会员计划类型
 interface MembershipPlan {
@@ -804,6 +818,9 @@ watch(availablePlans, (newPlans) => {
     selectedPlan.value = null
   }
 }, { deep: true })
+
+// 添加活动标签页状态
+const activeTab = ref('profile')
 
 onMounted(() => {
   fetchUserProfile()
@@ -1425,5 +1442,13 @@ onMounted(() => {
   padding: 20px;
   overflow: visible;
   height: auto;
+}
+
+.profile-tabs {
+  width: 100%;
+
+  :deep(.el-tabs__content) {
+    padding-top: 20px;
+  }
 }
 </style>

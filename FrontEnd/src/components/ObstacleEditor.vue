@@ -770,7 +770,7 @@ onMounted(() => {
     // 单杆设置为20厘米高，3.5米宽
     obstacleData.poles = [
       {
-        height: Math.round(0.2 * scale), // 20厘米
+        height: Math.round(0.5 * scale), // 20厘米
         width: Math.round(3.5 * scale),  // 3.5米
         color: '#8B4513',
         spacing: 0
@@ -779,16 +779,16 @@ onMounted(() => {
 
     // 墙设置为60厘米高，1米宽
     obstacleData.wallProperties = {
-      height: Math.round(0.6 * scale), // 60厘米
-      width: Math.round(1 * scale),    // 1米
+      height: Math.round(0.5 * scale), // 60厘米
+      width: Math.round(3.5 * scale),    // 1米
       color: '#8B4513'
     }
 
     // 利物浦设置为20厘米高，1米宽，水深10厘米
     obstacleData.liverpoolProperties = {
-      height: Math.round(0.2 * scale),      // 20厘米
-      width: Math.round(1 * scale),         // 1米
-      waterDepth: Math.round(0.1 * scale),  // 10厘米
+      height: Math.round(0.5 * scale),      // 20厘米
+      width: Math.round(3.5 * scale),         // 1米
+      waterDepth: Math.round(0.5 * scale),  // 10厘米
       waterColor: 'rgba(0, 100, 255, 0.3)',
       hasRail: true,
       railHeight: Math.round(0.2 * scale)   // 20厘米
@@ -796,8 +796,8 @@ onMounted(() => {
 
     // 水障设置为1米宽，10厘米深
     obstacleData.waterProperties = {
-      width: Math.round(1 * scale),        // 1米
-      depth: Math.round(0.1 * scale),      // 10厘米
+      width: Math.round(3.5 * scale),        // 1米
+      depth: Math.round(0.5 * scale),      // 10厘米
       color: 'rgba(0, 100, 255, 0.3)',
       borderColor: 'rgba(0, 70, 180, 0.5)',
       borderWidth: Math.round(0.02 * scale) // 2厘米
@@ -806,8 +806,8 @@ onMounted(() => {
     // 裁判桌设置为1.2米宽，0.8米高
     obstacleData.decorationProperties = {
       category: DecorationCategory.TABLE,
-      width: Math.round(1.2 * scale),      // 1.2米
-      height: Math.round(0.8 * scale),     // 0.8米高
+      width: Math.round(4 * scale),      // 1.2米
+      height: Math.round(3 * scale),     // 0.8米高
       color: '#8B4513',
       borderColor: '#593b22',
       borderWidth: Math.round(0.02 * scale), // 2厘米
@@ -859,8 +859,8 @@ const handleDecorationCategoryChange = (newCategory: DecorationCategory) => {
   // 根据不同类别设置默认属性
   if (newCategory === DecorationCategory.TABLE) {
     // 裁判桌默认属性
-    obstacleData.decorationProperties.width = Math.round(1.2 * meterScale.value) // 1.2米宽
-    obstacleData.decorationProperties.height = Math.round(0.8 * meterScale.value) // 0.8米高
+    obstacleData.decorationProperties.width = Math.round(4 * meterScale.value) // 1.2米宽
+    obstacleData.decorationProperties.height = Math.round(3 * meterScale.value) // 0.8米高
     obstacleData.decorationProperties.color = '#8B4513' // 棕色
     obstacleData.decorationProperties.borderWidth = Math.round(0.02 * meterScale.value) // 2厘米边框
     obstacleData.decorationProperties.borderColor = '#593b22'
@@ -872,28 +872,33 @@ const handleDecorationCategoryChange = (newCategory: DecorationCategory) => {
     obstacleData.decorationProperties.height = Math.round(2 * meterScale.value) // 2米高
     obstacleData.decorationProperties.color = '#228B22' // 绿色树冠
     obstacleData.decorationProperties.secondaryColor = '#8B4513' // 棕色树干
-    obstacleData.decorationProperties.trunkHeight = Math.round(1 * meterScale.value) // 1米树干高度
+    obstacleData.decorationProperties.trunkHeight = Math.round(2 * meterScale.value) // 1米树干高度
     obstacleData.decorationProperties.trunkWidth = Math.round(0.2 * meterScale.value) // 20厘米树干宽度
-    obstacleData.decorationProperties.foliageRadius = Math.round(0.75 * meterScale.value) // 75厘米树冠半径
+    obstacleData.decorationProperties.foliageRadius = Math.round(1 * meterScale.value) // 75厘米树冠半径
   } else if (newCategory === DecorationCategory.FENCE) {
     // 围栏默认属性
-    obstacleData.decorationProperties.width = Math.round(2 * meterScale.value) // 2米宽
-    obstacleData.decorationProperties.height = Math.round(1 * meterScale.value) // 1米高
+    obstacleData.decorationProperties.width = Math.round(4 * meterScale.value) // 2米宽
+    obstacleData.decorationProperties.height = Math.round(0.5 * meterScale.value) // 1米高
     obstacleData.decorationProperties.color = '#8B4513' // 棕色
     obstacleData.decorationProperties.borderWidth = Math.round(0.02 * meterScale.value) // 2厘米边框
     obstacleData.decorationProperties.borderColor = '#593b22'
   } else if (newCategory === DecorationCategory.FLOWER) {
     // 花默认属性
-    obstacleData.decorationProperties.width = Math.round(0.5 * meterScale.value) // 0.5米宽
-    obstacleData.decorationProperties.height = Math.round(0.5 * meterScale.value) // 0.5米高
+    obstacleData.decorationProperties.width = Math.round(1 * meterScale.value) // 0.5米宽
+    obstacleData.decorationProperties.height = Math.round(1 * meterScale.value) // 0.5米高
     obstacleData.decorationProperties.color = '#FF69B4' // 粉色
   } else if (newCategory === DecorationCategory.ENTRANCE || newCategory === DecorationCategory.EXIT) {
     // 入口/出口默认属性
-    obstacleData.decorationProperties.width = Math.round(1.5 * meterScale.value) // 1.5米宽
-    obstacleData.decorationProperties.height = Math.round(0.8 * meterScale.value) // 0.8米高
+    obstacleData.decorationProperties.width = Math.round(4 * meterScale.value) // 1.5米宽
+    obstacleData.decorationProperties.height = Math.round(3 * meterScale.value) // 0.8米高
     obstacleData.decorationProperties.color = '#000000' // 黑色
     obstacleData.decorationProperties.text = newCategory === DecorationCategory.ENTRANCE ? '入口' : '出口'
     obstacleData.decorationProperties.textColor = '#ffffff'
+  } else if (newCategory === DecorationCategory.CUSTOM) {
+    // 自定义装饰物默认属性
+    obstacleData.decorationProperties.width = Math.round(3.5 * meterScale.value) // 1.5米宽
+    obstacleData.decorationProperties.height = Math.round(3.5 * meterScale.value) // 2米高
+    obstacleData.decorationProperties.color = '#CCCCCC' // 灰色
   }
 
   // 清除不相关的属性

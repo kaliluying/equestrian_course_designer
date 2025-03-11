@@ -3,6 +3,7 @@ import type { AxiosRequestConfig, AxiosError } from 'axios'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import apiConfig from '@/config/api'
+import router from '@/router' // 导入router实例
 
 // 创建 axios 实例
 const axiosInstance = axios.create({
@@ -129,7 +130,7 @@ axiosInstance.interceptors.response.use(
           console.error('request.ts: 刷新token失败:', refreshError)
           // Refresh token 也过期了，需要重新登录
           const userStore = useUserStore()
-          userStore.logout()
+          userStore.logout(router)
           console.log('request.ts: 已登出用户，触发token过期事件')
           window.dispatchEvent(new Event('token-expired'))
         }
@@ -137,7 +138,7 @@ axiosInstance.interceptors.response.use(
         // 没有refresh token，直接登出
         console.log('request.ts: 没有refresh token，直接登出')
         const userStore = useUserStore()
-        userStore.logout()
+        userStore.logout(router)
         window.dispatchEvent(new Event('token-expired'))
       }
     }

@@ -45,6 +45,15 @@ const router = createRouter({
       name: 'feedback',
       component: Feedback,
     },
+    {
+      path: '/orders',
+      name: 'orders',
+      component: () => import('@/views/OrderList.vue'),
+      meta: {
+        requiresAuth: true,
+        title: '我的订单',
+      },
+    },
   ],
 })
 

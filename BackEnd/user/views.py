@@ -29,6 +29,7 @@ from rest_framework.exceptions import PermissionDenied
 from django.views.generic import TemplateView
 import logging
 from django.contrib.auth import authenticate
+from rest_framework.pagination import PageNumberPagination
 
 # Create your views here.
 
@@ -619,7 +620,7 @@ class UserViewSet(viewsets.ModelViewSet):
             'is_premium_active': profile.is_premium_active(),
             'design_count': design_count,
             'design_storage_limit': profile.storage_limit,
-            'available_plans': []
+            'available_plans': [],
         }
 
         # 添加当前会员计划
@@ -912,17 +913,45 @@ def create_membership_order(request):
         }, status=400)
 
 
+class StandardResultsSetPagination(PageNumberPagination):
+    """标准分页器"""
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_user_orders(request):
     """获取用户的所有订单"""
+    # 创建分页器实例
+    paginator = StandardResultsSetPagination()
+
+    # 获取查询参数
+    status = request.query_params.get('status')
+    start_date = request.query_params.get('start_date')
+    end_date = request.query_params.get('end_date')
+
+    # 构建查询集
     orders = MembershipOrder.objects.filter(
         user=request.user).order_by('-created_at')
-    serializer = MembershipOrderSerializer(orders, many=True)
-    return Response({
-        'success': True,
-        'orders': serializer.data
-    })
+
+    # 应用过滤条件
+    if status:
+        orders = orders.filter(status=status)
+    if start_date:
+        orders = orders.filter(created_at__gte=start_date)
+    if end_date:
+        orders = orders.filter(created_at__lte=end_date)
+
+    # 执行分页
+    page = paginator.paginate_queryset(orders, request)
+
+    # 序列化数据
+    serializer = MembershipOrderSerializer(page, many=True)
+
+    # 返回分页响应
+    return paginator.get_paginated_response(serializer.data)
 
 
 @api_view(['GET'])
@@ -1101,6 +1130,7 @@ def update_user_membership(user, order):
         logger.info(f"用户 {user.username} 首次开通会员: {order.membership_plan.name}")
         profile.membership_plan = order.membership_plan
         profile.premium_expire_date = now + duration
+        profile.is_premium = True
 
     # 更新存储限制
     if order.membership_plan:

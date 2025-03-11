@@ -259,23 +259,6 @@ const checkAutosave = () => {
       obstacles: courseData.obstacles.length,
       hasPath: !!courseData.path
     })
-
-    // 检查自动保存的时间是否在24小时内
-    const savedDate = new Date(timestamp)
-    const now = new Date()
-    const hoursDiff = (now.getTime() - savedDate.getTime()) / (1000 * 60 * 60)
-    console.log('自动保存时间距现在:', { hoursDiff: hoursDiff.toFixed(2) + '小时' })
-
-    if (hoursDiff <= 24) {
-      savedTimestamp.value = timestamp
-      // 确保对话框显示
-      console.log('显示恢复对话框')
-      showRestoreDialog.value = true
-    } else {
-      // 如果自动保存的时间超过24小时，则清除localStorage
-      console.log('自动保存数据已过期（超过24小时）')
-      clearLocalStorage()
-    }
   } catch (error) {
     console.error('解析自动保存数据失败:', error)
     clearLocalStorage()
@@ -331,7 +314,7 @@ onMounted(() => {
 
   // 监听 token 过期事件
   const handleTokenExpired = () => {
-    userStore.logout()
+    userStore.logout(router)
     loginDialogVisible.value = true
   }
   window.addEventListener('token-expired', handleTokenExpired)
@@ -592,7 +575,7 @@ const handleRegisterSuccess = () => {
 }
 
 const handleLogout = () => {
-  userStore.logout()
+  userStore.logout(router)
   ElMessage.success('已退出登录')
 }
 

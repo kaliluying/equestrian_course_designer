@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Design, DesignLike, PasswordResetToken, UserProfile, MembershipPlan, CustomObstacle
+from .models import Design, DesignLike, MembershipOrder, PasswordResetToken, UserProfile, MembershipPlan, CustomObstacle
 from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin, GroupAdmin
 from django.contrib.auth.models import Group
@@ -483,3 +483,13 @@ class CustomObstacleAdmin(admin.ModelAdmin):
             'all': ('css/admin.css',)
         }
         js = ('js/custom_obstacle_admin.js',)
+
+
+@admin.register(MembershipOrder)
+class MembershipOrderAdmin(admin.ModelAdmin):
+    list_display = ('user', 'order_id', 'membership_plan', 'amount', 'payment_channel', 'status', 'payment_time')
+    list_filter = ('status', 'user')
+    search_fields = ('user__username', 'order_id', 'membership_plan__name')
+    ordering = ('-payment_time',)
+
+

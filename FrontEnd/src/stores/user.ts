@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { LoginForm, RegisterForm } from '@/types/user'
 import { login, register } from '@/api/user'
+import type { Router } from 'vue-router'
 
 // 定义用户类型
 interface User {
@@ -115,7 +116,7 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  const logout = () => {
+  const logout = (router?: Router) => {
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
     localStorage.removeItem('user')
@@ -132,6 +133,11 @@ export const useUserStore = defineStore('user', () => {
       const obstacleStore = useObstacleStore()
       obstacleStore.initObstacles() // 这将清空障碍物存储，因为用户已登出
     })
+
+    // 如果提供了router实例，则重定向到首页
+    if (router) {
+      router.push('/')
+    }
   }
 
   // 更新用户资料，包括会员状态

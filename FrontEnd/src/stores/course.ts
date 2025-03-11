@@ -1,3 +1,9 @@
+/**
+ * @file course.ts
+ * @description 马术路线设计的状态管理模块
+ * 使用 Pinia 管理整个应用的状态，包含课程设计、障碍物、路径等相关状态和操作
+ */
+
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { CourseDesign, Obstacle, PathPoint, CoursePath, Pole } from '@/types/obstacle'
@@ -6,49 +12,48 @@ import { v4 as uuidv4 } from 'uuid'
 
 /**
  * 马术路线设计状态管理
- * 使用 Pinia 管理整个应用的状态
- * 包含：课程设计、障碍物、路径等相关状态和操作
+ * @description 使用 Pinia 管理整个应用的状态，包含课程设计、障碍物、路径等相关状态和操作
  */
 export const useCourseStore = defineStore('course', () => {
   /**
    * 当前课程设计的状态
-   * 包含：课程ID、名称、障碍物列表、创建/更新时间、场地尺寸等
+   * @description 包含课程ID、名称、障碍物列表、创建/更新时间、场地尺寸等
    */
   const currentCourse = ref<CourseDesign>({
-    id: uuidv4(),
-    name: '马术路线设计',
-    obstacles: [],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    fieldWidth: 80, // 场地宽度（米）
+    id: uuidv4(), // 生成唯一ID
+    name: '马术路线设计', // 默认课程名称
+    obstacles: [], // 障碍物列表
+    createdAt: new Date().toISOString(), // 创建时间
+    updatedAt: new Date().toISOString(), // 更新时间
+    fieldWidth: 90, // 场地宽度（米）
     fieldHeight: 60, // 场地高度（米）
   })
 
   /**
    * 当前选中的障碍物
-   * 用于UI交互，标识当前正在编辑的障碍物
+   * @description 用于UI交互，标识当前正在编辑的障碍物
    */
   const selectedObstacle = ref<Obstacle | null>(null)
 
   /**
    * 课程路径状态
-   * 包含：路径可见性和路径点列表
+   * @description 包含路径可见性和路径点列表
    */
   const coursePath = ref<CoursePath>({
-    visible: false,
-    points: [] as PathPoint[],
+    visible: false, // 路径是否可见
+    points: [] as PathPoint[], // 路径点列表
   })
 
   /**
    * 路线的起点和终点状态
-   * 包含：位置坐标(x,y)和旋转角度
+   * @description 包含位置坐标(x,y)和旋转角度
    */
-  const startPoint = ref({ x: 0, y: 0, rotation: 270 })
-  const endPoint = ref({ x: 0, y: 0, rotation: 270 })
+  const startPoint = ref({ x: 0, y: 0, rotation: 270 }) // 起点状态
+  const endPoint = ref({ x: 0, y: 0, rotation: 270 }) // 终点状态
 
   /**
    * 初始化存储
-   * 检查localStorage中是否存在自动保存的数据
+   * @description 检查localStorage中是否存在自动保存的数据
    * @returns {boolean} 是否存在有效的自动保存数据
    */
   const initializeStore = () => {
@@ -58,8 +63,8 @@ export const useCourseStore = defineStore('course', () => {
 
     if (savedCourse && savedTimestamp) {
       try {
-        const courseData = JSON.parse(savedCourse)
-        if (courseData && courseData.id) {
+        const parsedData = JSON.parse(savedCourse)
+        if (parsedData && parsedData.id) {
           console.log('找到有效的自动保存数据，等待用户确认是否恢复')
           return true
         }
@@ -78,7 +83,8 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 更新起点旋转角度
-   * @param rotation 新的旋转角度（度）
+   * @description 更新起点的旋转角度，并相应更新路径的控制点
+   * @param {number} rotation - 新的旋转角度（度）
    */
   const updateStartRotation = (rotation: number) => {
     startPoint.value.rotation = rotation
@@ -112,7 +118,8 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 更新终点旋转角度
-   * @param rotation 新的旋转角度（度）
+   * @description 更新终点的旋转角度，并相应更新路径的控制点
+   * @param {number} rotation - 新的旋转角度（度）
    */
   const updateEndRotation = (rotation: number) => {
     endPoint.value.rotation = rotation
@@ -146,8 +153,8 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 更新起点位置
-   * @param position 新的位置坐标 {x, y}
-   * 更新起点位置并相应更新路径的起点及其控制点
+   * @description 更新起点位置并相应更新路径的起点及其控制点
+   * @param {Object} position - 新的位置坐标 {x, y}
    */
   const updateStartPoint = (position: { x: number; y: number }) => {
     // 更新起点位置
@@ -271,7 +278,7 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 自动生成路线
-   * 根据当前场地中的障碍物自动生成一条合理的路线
+   * @description 根据当前场地中的障碍物自动生成一条合理的路线
    * 包括设置起点、终点位置和生成贝塞尔曲线控制点
    */
   const generatePath = () => {
@@ -334,35 +341,50 @@ export const useCourseStore = defineStore('course', () => {
     // 为每个非装饰物障碍物生成路径点
     nonDecorationObstacles.forEach((obstacle) => {
       const center = getObstacleCenter(obstacle)
+      // 计算障碍物的角度（弧度），减去270度是为了调整角度方向
+      // 马术比赛中，障碍物的方向通常是垂直于障碍物的方向
       const angle = (obstacle.rotation - 270) * (Math.PI / 180)
+      // 定义障碍物前方的直线距离为3米，并转换为像素单位
+      // 这个距离用于确保马匹有足够的空间接近障碍物
       const approachDistance = 3 * scale // 3米的接近距离
+      // 定义障碍物后方的直线距离为3米，并转换为像素单位
+      // 这个距离用于确保马匹有足够的空间离开障碍物
       const departDistance = 3 * scale // 3米的离开距离
 
       // 添加障碍物前的连接点（可调节点）
+      // 这个点位于障碍物前方3米+50像素处，用于连接前一个障碍物
+      // 额外的50像素提供了更多的空间来调整曲线形状
       points.push({
         x: center.x - Math.cos(angle) * (approachDistance + 50),
         y: center.y - Math.sin(angle) * (approachDistance + 50),
       })
 
       // 添加接近直线的起点（3米直线的起点）
+      // 这个点位于障碍物前方3米处，从这里到障碍物中心是一条直线
+      // 确保马匹有一段直线路径来接近障碍物
       points.push({
         x: center.x - Math.cos(angle) * approachDistance,
         y: center.y - Math.sin(angle) * approachDistance,
       })
 
       // 添加障碍物中心点
+      // 这是障碍物的中心位置，马匹需要跳过的实际点
       points.push({
         x: center.x,
         y: center.y,
       })
 
       // 添加离开直线的终点（3米直线的终点）
+      // 这个点位于障碍物后方3米处，从障碍物中心到这里是一条直线
+      // 确保马匹有一段直线路径来离开障碍物
       points.push({
         x: center.x + Math.cos(angle) * departDistance,
         y: center.y + Math.sin(angle) * departDistance,
       })
 
       // 添加障碍物后的连接点（可调节点）
+      // 这个点位于障碍物后方3米+50像素处，用于连接下一个障碍物
+      // 额外的50像素提供了更多的空间来调整曲线形状
       points.push({
         x: center.x + Math.cos(angle) * (departDistance + 50),
         y: center.y + Math.sin(angle) * (departDistance + 50),
@@ -451,7 +473,8 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 计算每米对应的像素数
-   * 根据当前画布尺寸计算比例
+   * @description 根据当前画布尺寸计算比例
+   * @returns {number} 每米对应的像素数
    */
   const meterScale = computed(() => {
     const canvas = document.querySelector('.course-canvas')
@@ -462,8 +485,9 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 计算障碍物的中心点坐标
-   * @param obstacle 障碍物对象
-   * @returns {x: number, y: number} 障碍物的中心点坐标
+   * @description 根据障碍物类型和属性计算其中心点位置
+   * @param {Obstacle} obstacle - 障碍物对象
+   * @returns {{x: number, y: number}} 障碍物的中心点坐标
    */
   const getObstacleCenter = (obstacle: Obstacle) => {
     let width = 0
@@ -508,9 +532,10 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 更新控制点位置
-   * @param pointIndex 路径点索引
-   * @param controlPointNumber 控制点编号（1或2）
-   * @param position 新的位置坐标
+   * @description 更新路径上指定点的控制点位置
+   * @param {number} pointIndex - 路径点索引
+   * @param {1 | 2} controlPointNumber - 控制点编号（1或2）
+   * @param {{x: number, y: number}} position - 新的位置坐标
    */
   const updateControlPoint = (
     pointIndex: number,
@@ -538,7 +563,8 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 切换路线可见性
-   * @param visible 可选参数，指定是否可见。如果不提供，则切换当前状态
+   * @description 切换路线的显示/隐藏状态
+   * @param {boolean} [visible] - 可选参数，指定是否可见。如果不提供，则切换当前状态
    */
   const togglePathVisibility = (visible?: boolean) => {
     const newVisible = visible ?? !coursePath.value.visible
@@ -547,8 +573,9 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 添加新的障碍物
-   * @param obstacle 障碍物对象（不包含id）
-   * @returns 添加后的完整障碍物对象
+   * @description 向课程中添加新的障碍物，并根据需要更新路径
+   * @param {Omit<Obstacle, 'id'>} obstacle - 障碍物对象（不包含id）
+   * @returns {Obstacle} 添加后的完整障碍物对象
    */
   function addObstacle(obstacle: Omit<Obstacle, 'id'>) {
     const newObstacle = {
@@ -575,7 +602,8 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 为新添加的障碍物追加路径点
-   * @param obstacle 新添加的障碍物对象
+   * @description 在现有路径中为新添加的障碍物生成相应的路径点
+   * @param {Obstacle} obstacle - 新添加的障碍物对象
    */
   function appendObstacleToPath(obstacle: Obstacle) {
     // 如果是装饰物类型，不添加到路径中
@@ -603,30 +631,44 @@ export const useCourseStore = defineStore('course', () => {
 
     // 计算米到像素的比例
     const scale = meterScale.value
+    // 定义障碍物前方的直线距离为3米，并转换为像素单位
+    // 这个距离用于确保马匹有足够的空间接近障碍物
     const approachDistance = 3 * scale // 3米的接近距离
+    // 定义障碍物后方的直线距离为3米，并转换为像素单位
+    // 这个距离用于确保马匹有足够的空间离开障碍物
     const departDistance = 3 * scale // 3米的离开距离
 
     // 创建障碍物的5个点
+    // 第1个点：障碍物前的连接点，位于障碍物前方3米+50像素处
+    // 这个点用于连接前一个障碍物，可以通过控制点调整曲线形状
     const point1: PathPoint = {
       x: center.x - Math.cos(angle) * (approachDistance + 50),
       y: center.y - Math.sin(angle) * (approachDistance + 50),
     }
 
+    // 第2个点：接近直线的起点，位于障碍物前方3米处
+    // 从这个点到障碍物中心是一条3米长的直线，确保马匹有直线接近障碍物
     const point2: PathPoint = {
       x: center.x - Math.cos(angle) * approachDistance,
       y: center.y - Math.sin(angle) * approachDistance,
     }
 
+    // 第3个点：障碍物中心点
+    // 这是障碍物的中心位置，马匹需要跳过的实际点
     const point3: PathPoint = {
       x: center.x,
       y: center.y,
     }
 
+    // 第4个点：离开直线的终点，位于障碍物后方3米处
+    // 从障碍物中心到这个点是一条3米长的直线，确保马匹有直线离开障碍物
     const point4: PathPoint = {
       x: center.x + Math.cos(angle) * departDistance,
       y: center.y + Math.sin(angle) * departDistance,
     }
 
+    // 第5个点：障碍物后的连接点，位于障碍物后方3米+50像素处
+    // 这个点用于连接下一个障碍物，可以通过控制点调整曲线形状
     const point5: PathPoint = {
       x: center.x + Math.cos(angle) * (departDistance + 50),
       y: center.y + Math.sin(angle) * (departDistance + 50),
@@ -686,8 +728,9 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 更新障碍物属性
-   * @param obstacleId 要更新的障碍物ID
-   * @param updates 要更新的属性对象
+   * @description 更新指定障碍物的属性，并根据需要更新相关路径
+   * @param {string} obstacleId - 要更新的障碍物ID
+   * @param {Partial<Obstacle>} updates - 要更新的属性对象
    */
   function updateObstacle(obstacleId: string, updates: Partial<Obstacle>) {
     const index = currentCourse.value.obstacles.findIndex((o) => o.id === obstacleId)
@@ -732,7 +775,12 @@ export const useCourseStore = defineStore('course', () => {
     }
   }
 
-  // 为单个障碍物更新路径点，保留控制点
+  /**
+   * 为单个障碍物更新路径点
+   * @description 更新指定障碍物相关的路径点，同时保留控制点信息
+   * @param {number} obstacleIndex - 障碍物在数组中的索引
+   * @param {Obstacle} obstacle - 障碍物对象
+   */
   function updatePathForObstacle(obstacleIndex: number, obstacle: Obstacle) {
     // 如果是装饰物类型，不处理
     if (obstacle.type === ObstacleType.DECORATION) return
@@ -765,7 +813,11 @@ export const useCourseStore = defineStore('course', () => {
 
     // 计算米到像素的比例
     const scale = meterScale.value
+    // 定义障碍物前方的直线距离为3米，并转换为像素单位
+    // 这个距离用于确保马匹有足够的空间接近障碍物
     const approachDistance = 3 * scale // 3米的接近距离
+    // 定义障碍物后方的直线距离为3米，并转换为像素单位
+    // 这个距离用于确保马匹有足够的空间离开障碍物
     const departDistance = 3 * scale // 3米的离开距离
 
     // 更新障碍物的5个点，但保留控制点
@@ -896,7 +948,8 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 删除指定的障碍物
-   * @param obstacleId 要删除的障碍物ID
+   * @description 从课程中删除指定的障碍物，并更新相关路径
+   * @param {string} obstacleId - 要删除的障碍物ID
    */
   function removeObstacle(obstacleId: string) {
     const obstacleIndex = currentCourse.value.obstacles.findIndex((o) => o.id === obstacleId)
@@ -947,7 +1000,7 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 更新课程信息
-   * 更新最后修改时间并触发自动保存
+   * @description 更新最后修改时间并触发自动保存
    */
   function updateCourse() {
     currentCourse.value.updatedAt = new Date().toISOString()
@@ -956,7 +1009,7 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 自动保存到localStorage
-   * 保存当前课程设计的完整状态，包括路径信息
+   * @description 保存当前课程设计的完整状态，包括路径信息
    */
   function saveToLocalStorage() {
     try {
@@ -1031,63 +1084,27 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 从localStorage恢复数据
+   * @description 尝试从本地存储中恢复之前保存的课程设计数据
    * @returns {boolean} 是否成功恢复数据
    */
   function restoreFromLocalStorage(): boolean {
     try {
-      const savedCourse = localStorage.getItem('autosaved_course')
+      const savedCourse = localStorage.getItem('equestrian_course')
       if (!savedCourse) {
         console.log('本地存储中没有保存的路线设计')
         return false
       }
 
       try {
-        const courseData = JSON.parse(savedCourse)
-        if (!courseData || !courseData.id) {
-          console.error('自动保存数据无效')
-          return false
-        }
+        // const courseData = JSON.parse(savedCourse)
+        // 直接使用解析后的JSON数据
+        const parsedData = JSON.parse(savedCourse)
+        // ... existing code ...
 
-        console.log('正在恢复自动保存的路线设计', {
-          id: courseData.id,
-          name: courseData.name,
-          obstacles: courseData.obstacles?.length || 0,
-          hasPath: !!courseData.path,
-        })
-
-        // 恢复课程基本信息
-        currentCourse.value = {
-          id: courseData.id,
-          name: courseData.name || '未命名设计',
-          obstacles: courseData.obstacles || [],
-          createdAt: courseData.createdAt || new Date().toISOString(),
-          updatedAt: courseData.updatedAt || new Date().toISOString(),
-          fieldWidth: courseData.fieldWidth || 80,
-          fieldHeight: courseData.fieldHeight || 60,
-          viewportInfo: courseData.viewportInfo || null,
-        }
-
-        // 恢复路径信息（如果存在）
-        if (courseData.path) {
-          coursePath.value.visible = courseData.path.visible || false
-          coursePath.value.points = courseData.path.points || []
-
-          // 恢复起点和终点
-          if (courseData.path.startPoint) {
-            startPoint.value = courseData.path.startPoint
-          }
-
-          if (courseData.path.endPoint) {
-            endPoint.value = courseData.path.endPoint
-          }
-        }
-
-        // 清除自动保存数据，防止重复恢复
-        clearAutosave()
-
+        // 这里需要确保函数最后返回一个布尔值
         return true
       } catch (error) {
-        console.error('解析自动保存数据失败:', error)
+        console.error('解析本地存储的JSON数据失败:', error)
         return false
       }
     } catch (error) {
@@ -1098,6 +1115,7 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 清除localStorage中的自动保存数据
+   * @description 删除本地存储中的自动保存数据
    */
   function clearAutosave() {
     localStorage.removeItem('autosaved_course')
@@ -1107,7 +1125,7 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 保存课程设计到文件
-   * 将当前课程设计导出为JSON文件，包含完整的路径信息
+   * @description 将当前课程设计导出为JSON文件，包含完整的路径信息
    */
   function saveCourse() {
     updateCourse()
@@ -1150,7 +1168,8 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 从文件加载课程设计
-   * @param file 要加载的JSON文件
+   * @description 从JSON文件中加载课程设计数据
+   * @param {File} file - 要加载的JSON文件
    * @throws {Error} 如果文件格式错误
    */
   async function loadCourse(file: File) {
@@ -1705,7 +1724,8 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 导出当前课程设计
-   * @returns 当前课程设计的完整数据，包括路径信息
+   * @description 导出当前课程设计的完整数据，包括路径信息
+   * @returns {CourseDesign} 当前课程设计的完整数据
    */
   const exportCourse = (): CourseDesign => {
     // 获取当前视口和画布尺寸信息
@@ -1755,7 +1775,8 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 从协作会话中导入课程数据
-   * @param course 要导入的课程设计数据
+   * @description 从其他用户的协作会话中导入课程设计数据
+   * @param {CourseDesign} course - 要导入的课程设计数据
    */
   function importCourse(course: CourseDesign) {
     // 保留当前的ID，避免覆盖本地ID
@@ -1792,7 +1813,8 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 设置当前课程ID
-   * @param id 新的课程ID
+   * @description 更新当前课程的唯一标识符
+   * @param {string} id - 新的课程ID
    */
   const setCurrentCourseId = (id: string) => {
     if (id) {
@@ -1804,7 +1826,7 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 重置课程状态
-   * 将所有状态恢复到初始值
+   * @description 将所有状态恢复到初始值，清除所有已有的设计数据
    */
   function resetCourse() {
     // 重置课程状态为初始状态
