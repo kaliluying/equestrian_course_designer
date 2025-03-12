@@ -58,6 +58,10 @@ const BASE_CONFIG: Record<EnvType, EnvConfig> = {
 
   // 生产环境配置
   production: {
+    // // 部署时修改这些值或通过环境变量覆盖
+    // apiBaseUrl: `https://${getEnvValue('API_HOST', 'equestrian.top')}`,
+    // wsBaseUrl: `wss://${getEnvValue('API_HOST', 'equestrian.top:8001')}/ws`,
+    // appBaseUrl: getEnvValue('APP_URL', 'https://equestrian.top'),
     // 部署时修改这些值或通过环境变量覆盖
     apiBaseUrl: `http://${getEnvValue('API_HOST', '47.104.168.42')}`,
     wsBaseUrl: `ws://${getEnvValue('API_HOST', '47.104.168.42:8001')}/ws`,
@@ -128,7 +132,8 @@ export default {
       setPremium: (userId: number) => getApiUrl(`/user/users/${userId}/set_premium/`),
       createOrder: `${config.apiBaseUrl}/user/api/payment/create-order/`,
       orders: `${config.apiBaseUrl}/user/api/payment/orders/`,
-      orderStatus: (orderId: string) => `${config.apiBaseUrl}/user/api/payment/order-status/${orderId}/`,
+      orderStatus: (orderId: string) =>
+        `${config.apiBaseUrl}/user/api/payment/order-status/${orderId}/`,
     },
 
     // 反馈相关

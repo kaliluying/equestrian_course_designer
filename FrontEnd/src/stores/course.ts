@@ -87,7 +87,12 @@ export const useCourseStore = defineStore('course', () => {
    * @param {number} rotation - 新的旋转角度（度）
    */
   const updateStartRotation = (rotation: number) => {
-    startPoint.value.rotation = rotation
+    // 计算旋转差值
+    const currentRotation = startPoint.value.rotation
+    const diff = rotation - currentRotation
+
+    // 更新旋转角度，保持连续性
+    startPoint.value.rotation = currentRotation + diff
 
     // 如果路径存在且可见，更新起点附近的控制点
     if (coursePath.value.visible && coursePath.value.points.length > 1) {
@@ -97,7 +102,8 @@ export const useCourseStore = defineStore('course', () => {
 
       // 计算新的控制点位置，基于旋转角度
       if (startPoint && nextPoint && startPoint.controlPoint2) {
-        const angle = (rotation - 270) * (Math.PI / 180)
+        // 使用实际旋转角度计算控制点位置
+        const angle = ((rotation % 360) - 270) * (Math.PI / 180)
         const distance =
           Math.sqrt(
             Math.pow(nextPoint.x - startPoint.x, 2) + Math.pow(nextPoint.y - startPoint.y, 2),
@@ -122,7 +128,12 @@ export const useCourseStore = defineStore('course', () => {
    * @param {number} rotation - 新的旋转角度（度）
    */
   const updateEndRotation = (rotation: number) => {
-    endPoint.value.rotation = rotation
+    // 计算旋转差值
+    const currentRotation = endPoint.value.rotation
+    const diff = rotation - currentRotation
+
+    // 更新旋转角度，保持连续性
+    endPoint.value.rotation = currentRotation + diff
 
     // 如果路径存在且可见，更新终点附近的控制点
     if (coursePath.value.visible && coursePath.value.points.length > 1) {
@@ -133,7 +144,8 @@ export const useCourseStore = defineStore('course', () => {
 
       // 计算新的控制点位置，基于旋转角度
       if (endPoint && prevPoint && endPoint.controlPoint1) {
-        const angle = (rotation - 90) * (Math.PI / 180)
+        // 使用实际旋转角度计算控制点位置
+        const angle = ((rotation % 360) - 90) * (Math.PI / 180)
         const distance =
           Math.sqrt(Math.pow(prevPoint.x - endPoint.x, 2) + Math.pow(prevPoint.y - endPoint.y, 2)) /
           3
@@ -1856,6 +1868,7 @@ export const useCourseStore = defineStore('course', () => {
   return {
     currentCourse,
     selectedObstacle,
+    selectedPoint: ref<'start' | 'end' | null>(null), // 添加选中点状态
     coursePath,
     startPoint,
     endPoint,

@@ -82,7 +82,9 @@
     </div>
 
     <!-- 订单详情对话框 -->
-    <el-dialog v-model="detailDialogVisible" title="订单详情" width="600px" destroy-on-close>
+    <el-dialog v-model="detailDialogVisible" title="订单详情" width="600px" destroy-on-close :modal="true"
+      :append-to-body="true" :lock-scroll="true" :show-close="true" :close-on-click-modal="false"
+      :close-on-press-escape="true" class="order-detail-dialog">
       <div v-if="currentOrder" class="order-detail">
         <div class="detail-item">
           <span class="label">订单编号：</span>

@@ -36,6 +36,14 @@
           反馈
         </router-link>
 
+        <!-- 比赛信息按钮 -->
+        <div v-if="$route.path === '/'" class="competition-toggle" @click="showCompetitionDrawer = true">
+          <el-icon>
+            <InfoFilled />
+          </el-icon>
+          <span>比赛信息</span>
+        </div>
+
         <div class="user-info">
           <template v-if="userStore.currentUser">
             <div class="user-profile">
@@ -133,11 +141,64 @@
 
     <!-- 协作面板 -->
     <CollaborationPanel v-if="isCollaborating" :designId="courseStore.currentCourse.id" />
+
+    <!-- 比赛信息抽屉 -->
+    <el-drawer v-model="showCompetitionDrawer" title="比赛信息" direction="rtl" size="400px" :with-header="true"
+      :destroy-on-close="false" :modal="true" :show-close="true" :append-to-body="true"
+      :before-close="handleDrawerClose">
+      <el-form :model="competitionForm" label-position="right" label-width="100px" class="competition-form">
+        <el-form-item label="比赛名称">
+          <el-input v-model="competitionForm.name" placeholder="请输入比赛名称" />
+        </el-form-item>
+        <el-form-item label="级别赛制">
+          <el-input v-model="competitionForm.level" placeholder="请输入级别赛制" />
+        </el-form-item>
+        <el-form-item label="比赛日期">
+          <el-input v-model="competitionForm.date" placeholder="请输入比赛日期" />
+        </el-form-item>
+        <el-form-item label="路线查看时间">
+          <el-input v-model="competitionForm.viewTime" placeholder="请输入路线查看时间" />
+        </el-form-item>
+        <el-form-item label="开赛时间">
+          <el-input v-model="competitionForm.startTime" placeholder="请输入开赛时间" />
+        </el-form-item>
+        <el-form-item label="判罚表">
+          <el-input v-model="competitionForm.penaltyTable" placeholder="请输入判罚表" />
+        </el-form-item>
+        <el-form-item label="障碍高度">
+          <el-input v-model="competitionForm.obstacleHeight" placeholder="请输入障碍高度" />
+        </el-form-item>
+        <el-form-item label="行进速度">
+          <el-input v-model="competitionForm.speed" placeholder="请输入行进速度" />
+        </el-form-item>
+        <el-form-item label="路线长度">
+          <el-input v-model="competitionForm.routeLength" placeholder="请输入路线长度" />
+        </el-form-item>
+        <el-form-item label="允许时间">
+          <el-input v-model="competitionForm.allowedTime" placeholder="请输入允许时间" />
+        </el-form-item>
+        <el-form-item label="限制时间">
+          <el-input v-model="competitionForm.limitTime" placeholder="请输入限制时间" />
+        </el-form-item>
+        <el-form-item label="障碍数量">
+          <el-input v-model="competitionForm.obstacleCount" placeholder="请输入障碍数量" />
+        </el-form-item>
+        <el-form-item label="跳跃数量">
+          <el-input v-model="competitionForm.jumpCount" placeholder="请输入跳跃数量" />
+        </el-form-item>
+        <el-form-item label="附加赛">
+          <el-input v-model="competitionForm.playoff" placeholder="请输入附加赛信息" />
+        </el-form-item>
+        <el-form-item label="路线设计师">
+          <el-input v-model="competitionForm.designer" placeholder="请输入路线设计师" />
+        </el-form-item>
+      </el-form>
+    </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed, reactive, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
 import ToolBar from '@/components/ToolBar.vue'
 import CourseCanvas from '@/components/CourseCanvas.vue'
@@ -145,7 +206,7 @@ import PropertiesPanel from '@/components/PropertiesPanel.vue'
 import LoginForm from '@/components/LoginForm.vue'
 import RegisterForm from '@/components/RegisterForm.vue'
 import CollaborationPanel from '@/components/CollaborationPanel.vue'
-import { Position, User, ChatDotRound, SwitchButton, Connection, Key, UserFilled, Check } from '@element-plus/icons-vue'
+import { Position, User, ChatDotRound, SwitchButton, Connection, Key, UserFilled, Check, InfoFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { useCourseStore } from '@/stores/course'
@@ -171,6 +232,33 @@ const showRestoreDialog = ref(false)
 const savedTimestamp = ref('')
 const showAutosaveNotification = ref(false)
 let autosaveNotificationTimer: number | null = null
+
+// 比赛信息表单数据
+const competitionForm = reactive({
+  name: '',
+  level: '',
+  date: '',
+  viewTime: '',
+  startTime: '',
+  penaltyTable: '',
+  obstacleHeight: '',
+  speed: '',
+  routeLength: '',
+  allowedTime: '',
+  limitTime: '',
+  obstacleCount: '',
+  jumpCount: '',
+  playoff: '',
+  designer: ''
+})
+
+// 监听比赛信息变化，自动保存
+watch(competitionForm, () => {
+  // 保存比赛信息到 localStorage
+  localStorage.setItem('competition_info', JSON.stringify(competitionForm))
+  // 触发自动保存提示
+  showAutosaveNotificationHandler()
+}, { deep: true })
 
 // 格式化保存时间
 const formatSavedTime = computed(() => {
@@ -271,6 +359,20 @@ const restoreAutosave = () => {
   console.log('尝试恢复自动保存的路线设计')
   const courseStore = useCourseStore()
   const success = courseStore.restoreFromLocalStorage()
+
+  // 恢复比赛信息
+  const savedCompetitionInfo = localStorage.getItem('competition_info')
+  if (savedCompetitionInfo) {
+    try {
+      const competitionData = JSON.parse(savedCompetitionInfo)
+      Object.assign(competitionForm, competitionData)
+      console.log('已恢复比赛信息')
+    } catch (error) {
+      console.error('恢复比赛信息失败:', error)
+      localStorage.removeItem('competition_info')
+    }
+  }
+
   if (success) {
     ElMessage.success('已恢复未完成的路线设计')
     console.log('恢复成功')
@@ -284,6 +386,8 @@ const restoreAutosave = () => {
 // 拒绝恢复自动保存
 const rejectRestore = () => {
   courseStore.clearAutosave()
+  // 同时清除比赛信息
+  localStorage.removeItem('competition_info')
   showRestoreDialog.value = false
   ElMessage.info('已放弃恢复')
 }
@@ -292,6 +396,7 @@ const rejectRestore = () => {
 const clearLocalStorage = () => {
   localStorage.removeItem('autosaved_course')
   localStorage.removeItem('autosaved_timestamp')
+  localStorage.removeItem('competition_info')
   console.log('已清除自动保存数据')
 }
 
@@ -490,6 +595,19 @@ onMounted(() => {
         }
       }
     }, 500)
+  }
+
+  // 检查并恢复比赛信息
+  const savedCompetitionInfo = localStorage.getItem('competition_info')
+  if (savedCompetitionInfo) {
+    try {
+      const competitionData = JSON.parse(savedCompetitionInfo)
+      Object.assign(competitionForm, competitionData)
+      console.log('已恢复比赛信息')
+    } catch (error) {
+      console.error('恢复比赛信息失败:', error)
+      localStorage.removeItem('competition_info')
+    }
   }
 
   // 在组件卸载时移除事件监听
@@ -845,6 +963,22 @@ const initializePanelWidths = () => {
 const showLoginDialog = () => {
   loginDialogVisible.value = true
 }
+
+// 添加抽屉控制变量
+const showCompetitionDrawer = ref(false)
+
+// 处理抽屉关闭
+const handleDrawerClose = (done: () => void) => {
+  done()
+}
+
+// 监听右侧面板宽度变化，更新比赛信息按钮位置
+watch(rightPanelWidth, (newWidth) => {
+  const toggle = document.querySelector('.competition-toggle') as HTMLElement
+  if (toggle) {
+    toggle.style.right = `${newWidth + 10}px`
+  }
+})
 </script>
 
 <style>
@@ -1389,5 +1523,65 @@ body,
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.competition-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.85);
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: var(--transition);
+  background-color: rgba(255, 255, 255, 0.1);
+  margin-right: 12px;
+
+  &:hover {
+    color: white;
+    background-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .el-icon {
+    font-size: 16px;
+  }
+
+  span {
+    font-size: 14px;
+    white-space: nowrap;
+  }
+}
+
+.competition-form {
+  padding: 20px;
+
+  :deep(.el-form-item) {
+    margin-bottom: 18px;
+  }
+
+  :deep(.el-input) {
+    width: 100%;
+  }
+
+  :deep(.el-form-item__label) {
+    font-size: 14px;
+    color: var(--el-text-color-regular);
+  }
+
+  :deep(.el-button) {
+    width: 100%;
+    margin-top: 10px;
+  }
+}
+
+:deep(.el-drawer__header) {
+  margin-bottom: 0;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+
+:deep(.el-drawer__body) {
+  padding: 0;
+  overflow-y: auto;
 }
 </style>

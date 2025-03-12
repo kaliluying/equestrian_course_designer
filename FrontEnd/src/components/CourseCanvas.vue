@@ -1001,16 +1001,6 @@ const handleMouseMove = (event: MouseEvent) => {
   }
 }
 
-// 处理鼠标松开
-const handleMouseUp = () => {
-  isDragging.value = false
-  isRotating.value = false
-  isDraggingNumber.value = false
-  draggingObstacle.value = null
-  draggingNumberObstacle.value = null
-  draggingPoleIndex.value = null
-  draggingControlPoint.value = null
-}
 
 // 处理拖放新障碍物
 const handleDrop = (event: DragEvent) => {
@@ -1635,15 +1625,15 @@ const endSelection = () => {
   selectedObstacles.value = newSelectedObstacles
   courseStore.selectedObstacle = newSelectedObstacles[0] || null
 
-  // 如果起点或终点被选中，设置拖拽状态
+  // 更新起终点选中状态，但不设置拖拽状态
   if (startSelected) {
-    draggingPoint.value = 'start'
-    // 设置鼠标位置偏移为0，以便下次拖拽时计算正确的位置
-    startMousePos.value = { x: 0, y: 0 }
+    // 仅标记为选中，不设置拖拽状态
+    courseStore.selectedPoint = 'start'
   } else if (endSelected) {
-    draggingPoint.value = 'end'
-    // 设置鼠标位置偏移为0，以便下次拖拽时计算正确的位置
-    startMousePos.value = { x: 0, y: 0 }
+    // 仅标记为选中，不设置拖拽状态
+    courseStore.selectedPoint = 'end'
+  } else {
+    courseStore.selectedPoint = null
   }
 
   isSelecting.value = false
@@ -1717,7 +1707,6 @@ const handleGlobalMouseUp = (event: MouseEvent) => {
   // 结束框选
   if (isSelecting.value) {
     endSelection()
-    return; // 如果是框选结束，则不清除拖拽状态，因为可能刚选中了起点或终点
   }
 
   // 结束障碍物拖拽
@@ -1744,21 +1733,24 @@ const handleGlobalMouseUp = (event: MouseEvent) => {
     draggingPoleIndex.value = null
   }
 
-  // 如果不是框选结束，且没有按下Shift键，则清除起终点的拖拽状态
-  if (!isSelecting.value && !event.shiftKey) {
+  // 结束起终点拖拽
+  if (!event.shiftKey) {
     // 如果是起点或终点的旋转状态，转换为普通选中状态
     if (draggingPoint.value === 'start-rotate') {
-      draggingPoint.value = 'start';
+      draggingPoint.value = null
+      courseStore.selectedPoint = 'start'
     } else if (draggingPoint.value === 'end-rotate') {
-      draggingPoint.value = 'end';
+      draggingPoint.value = null
+      courseStore.selectedPoint = 'end'
     } else if (!event.ctrlKey && !event.metaKey) {
-      // 如果没有按下Ctrl/Command键，则完全清除拖拽状态
-      draggingPoint.value = null;
+      // 如果没有按下Ctrl/Command键，则完全清除拖拽和选中状态
+      draggingPoint.value = null
+      courseStore.selectedPoint = null
     }
   }
 
   // 重置鼠标位置
-  startMousePos.value = { x: 0, y: 0 };
+  startMousePos.value = { x: 0, y: 0 }
 }
 
 // 组件挂载时添加事件监听
