@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>管理仪表盘</title>
+    <!-- 引入 ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+      /* 页面基本样式 */
+      body {
+        margin: 0;
+        padding: 20px;
+        font-family: "Microsoft YaHei", sans-serif;
+        background-color: #f5f5f5;
+      }
+
+      /* 数据卡片容器 */
+      .stats-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin-bottom: 20px;
+      }
+
+      /* 数据卡片样式 */
+      .stat-card {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .stat-card h3 {
+        margin: 0 0 10px 0;
+        color: #333;
+      }
+
+      .stat-value {
+        font-size: 24px;
+        font-weight: bold;
+        color: #1a73e8;
+      }
+
+      .trend {
+        font-size: 14px;
+        margin-top: 5px;
+      }
+
+      .trend.up {
+        color: #34a853;
+      }
+
+      .trend.down {
+        color: #ea4335;
+      }
+
+      /* 图表容器样式 */
+      .charts-container {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+      }
+
+      .chart-box {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .chart {
+        width: 100%;
+        height: 400px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 数据卡片区域 -->
+    <div class="stats-container">
+      <div class="stat-card">
+        <h3>当月收入</h3>
+        <div class="stat-value">¥{{ monthly_income }}</div>
+        <div
+          class="trend {% if income_trend >= 0 %}up{% else %}down{% endif %}">
+          {{ income_trend }}% 环比上月
+        </div>
+      </div>
+      <div class="stat-card">
+        <h3>新增用户</h3>
+        <div class="stat-value">{{ new_users }}</div>
+        <div class="trend {% if user_trend >= 0 %}up{% else %}down{% endif %}">
+          {{ user_trend }}% 环比上月
+        </div>
+      </div>
+      <div class="stat-card">
+        <h3>会员数量</h3>
+        <div class="stat-value">{{ premium_users }}</div>
+        <div
+          class="trend {% if premium_trend >= 0 %}up{% else %}down{% endif %}">
+          {{ premium_trend }}% 环比上月
+        </div>
+      </div>
+      <div class="stat-card">
+        <h3>总用户数</h3>
+        <div class="stat-value">{{ total_users }}</div>
+      </div>
+    </div>
+
+    <!-- 图表区域 -->
+    <div class="charts-container">
+      <div class="chart-box">
+        <div id="incomeChart" class="chart"></div>
+      </div>
+      <div class="chart-box">
+        <div id="userGrowthChart" class="chart"></div>
+      </div>
+      <div class="chart-box">
+        <div id="membershipDistribution" class="chart"></div>
+      </div>
+      <div class="chart-box">
+        <div id="paymentChannels" class="chart"></div>
+      </div>
+    </div>
+
+    <script>
+      // 初始化所有图表
+      const incomeChart = echarts.init(document.getElementById('incomeChart'));
+      const userGrowthChart = echarts.init(document.getElementById('userGrowthChart'));
+      const membershipDistribution = echarts.init(document.getElementById('membershipDistribution'));
+      const paymentChannels = echarts.init(document.getElementById('paymentChannels'));
+
+      // 收入趋势图配置
+      const incomeOption = {
+          title: {
+              text: '近6个月收入趋势'
+          },
+          tooltip: {
+              trigger: 'axis'
+          },
+          xAxis: {
+              type: 'category',
+              data: {{ income_months|safe }}
+          },
+          yAxis: {
+              type: 'value',
+              name: '收入(元)'
+          },
+          series: [{
+              name: '月收入',
+              type: 'line',
+              data: {{ income_data|safe }},
+              smooth: true,
+              areaStyle: {}
+          }]
+      };
+
+      // 用户增长趋势图配置
+      const userGrowthOption = {
+          title: {
+              text: '用户增长趋势'
+          },
+          tooltip: {
+              trigger: 'axis'
+          },
+          legend: {
+              data: ['新增用户', '新增会员']
+          },
+          xAxis: {
+              type: 'category',
+              data: {{ user_months|safe }}
+          },
+          yAxis: {
+              type: 'value',
+              name: '用户数'
+          },
+          series: [{
+              name: '新增用户',
+              type: 'bar',
+              data: {{ new_users_data|safe }}
+          }, {
+              name: '新增会员',
+              type: 'bar',
+              data: {{ new_premium_data|safe }}
+          }]
+      };
+
+      // 会员分布饼图配置
+      const membershipDistributionOption = {
+          title: {
+              text: '会员计划分布'
+          },
+          tooltip: {
+              trigger: 'item',
+              formatter: '{a} <br/>{b}: {c} ({d}%)'
+          },
+          series: [{
+              name: '会员计划',
+              type: 'pie',
+              radius: '60%',
+              data: {{ membership_distribution|safe }}
+          }]
+      };
+
+      // 支付渠道分布图配置
+      const paymentChannelsOption = {
+          title: {
+              text: '支付渠道分布'
+          },
+          tooltip: {
+              trigger: 'item',
+              formatter: '{a} <br/>{b}: {c} ({d}%)'
+          },
+          series: [{
+              name: '支付渠道',
+              type: 'pie',
+              radius: '60%',
+              data: {{ payment_channels|safe }}
+          }]
+      };
+
+      // 渲染所有图表
+      incomeChart.setOption(incomeOption);
+      userGrowthChart.setOption(userGrowthOption);
+      membershipDistribution.setOption(membershipDistributionOption);
+      paymentChannels.setOption(paymentChannelsOption);
+
+      // 响应式调整
+      window.addEventListener('resize', function() {
+          incomeChart.resize();
+          userGrowthChart.resize();
+          membershipDistribution.resize();
+          paymentChannels.resize();
+      });
+    </script>
+  </body>
+</html>

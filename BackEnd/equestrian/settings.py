@@ -158,6 +158,8 @@ SIMPLEUI_HOME_ACTION = False
 
 SIMPLEUI_INDEX = 'https://kaliluying.github.io/'
 
+SIMPLEUI_HOME_PAGE = '/api/feedback/dashboard'
+
 # DRF配置
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
