@@ -454,9 +454,8 @@ export const useCourseStore = defineStore('course', () => {
         current.controlPoint2 = undefined
         continue
       }
-
       // 只为连接点生成控制点
-      if (prev) {
+      if (prev && pointInObstacle != 4) {
         // 生成前控制点
         const angle = Math.atan2(prev.y - current.y, prev.x - current.x)
         const distance =
@@ -465,6 +464,7 @@ export const useCourseStore = defineStore('course', () => {
           x: current.x + Math.cos(angle) * distance,
           y: current.y + Math.sin(angle) * distance,
         }
+        continue
       }
 
       if (next) {
@@ -478,9 +478,9 @@ export const useCourseStore = defineStore('course', () => {
         }
       }
     }
-
     // 更新课程路径的点数组
     coursePath.value.points = points
+    updateCourse()
   }
 
   /**
@@ -1101,22 +1101,197 @@ export const useCourseStore = defineStore('course', () => {
    */
   function restoreFromLocalStorage(): boolean {
     try {
-      const savedCourse = localStorage.getItem('equestrian_course')
-      if (!savedCourse) {
-        console.log('本地存储中没有保存的路线设计')
+      // 先检查自动保存的数据
+      const savedCourse = localStorage.getItem('autosaved_course')
+      const savedTimestamp = localStorage.getItem('autosaved_timestamp')
+
+      if (!savedCourse || !savedTimestamp) {
+        console.log('本地存储中没有自动保存的路线设计')
         return false
       }
 
       try {
-        // const courseData = JSON.parse(savedCourse)
-        // 直接使用解析后的JSON数据
+        // 解析保存的数据
         const parsedData = JSON.parse(savedCourse)
-        // ... existing code ...
 
-        // 这里需要确保函数最后返回一个布尔值
+        // 验证数据完整性
+        if (!parsedData || !parsedData.id || !Array.isArray(parsedData.obstacles)) {
+          console.error('自动保存的数据格式无效')
+          return false
+        }
+
+        // 获取当前画布尺寸
+        const canvas = document.querySelector('.course-canvas')
+        const currentCanvasWidth = canvas ? canvas.clientWidth : 800
+        const currentCanvasHeight = canvas ? canvas.clientHeight : 600
+
+        // 获取当前视口信息
+        const currentViewport = {
+          width: window.innerWidth,
+          height: window.innerHeight,
+          canvasWidth: currentCanvasWidth,
+          canvasHeight: currentCanvasHeight,
+          aspectRatio: (parsedData.fieldWidth || 80) / (parsedData.fieldHeight || 60),
+        }
+
+        // 计算缩放系数
+        let scaleFactor = 1
+        if (parsedData.viewportInfo) {
+          const originalViewport = parsedData.viewportInfo
+          const scaleFactorWidth =
+            currentViewport.canvasWidth / (originalViewport.canvasWidth || 800)
+          const scaleFactorHeight =
+            currentViewport.canvasHeight / (originalViewport.canvasHeight || 600)
+          scaleFactor = Math.min(scaleFactorWidth, scaleFactorHeight)
+        }
+
+        // 缩放障碍物位置和尺寸
+        const scaledObstacles = parsedData.obstacles.map((obstacle: Obstacle) => {
+          const scaledObstacle = { ...obstacle }
+
+          // 缩放位置
+          if (scaledObstacle.position) {
+            scaledObstacle.position = {
+              x: scaledObstacle.position.x * scaleFactor,
+              y: scaledObstacle.position.y * scaleFactor,
+            }
+          }
+
+          // 缩放编号位置
+          if (scaledObstacle.numberPosition) {
+            scaledObstacle.numberPosition = {
+              x: scaledObstacle.numberPosition.x * scaleFactor,
+              y: scaledObstacle.numberPosition.y * scaleFactor,
+            }
+          }
+
+          // 缩放障碍物属性
+          if (scaledObstacle.poles) {
+            scaledObstacle.poles = scaledObstacle.poles.map((pole) => ({
+              ...pole,
+              width: pole.width * scaleFactor,
+              height: pole.height * scaleFactor,
+              spacing: pole.spacing ? pole.spacing * scaleFactor : undefined,
+            }))
+          }
+
+          // 缩放特定类型的属性
+          if (scaledObstacle.wallProperties) {
+            scaledObstacle.wallProperties = {
+              ...scaledObstacle.wallProperties,
+              width: scaledObstacle.wallProperties.width * scaleFactor,
+              height: scaledObstacle.wallProperties.height * scaleFactor,
+            }
+          }
+
+          if (scaledObstacle.liverpoolProperties) {
+            scaledObstacle.liverpoolProperties = {
+              ...scaledObstacle.liverpoolProperties,
+              width: scaledObstacle.liverpoolProperties.width * scaleFactor,
+              height: scaledObstacle.liverpoolProperties.height * scaleFactor,
+              waterDepth: scaledObstacle.liverpoolProperties.waterDepth * scaleFactor,
+            }
+          }
+
+          if (scaledObstacle.waterProperties) {
+            scaledObstacle.waterProperties = {
+              ...scaledObstacle.waterProperties,
+              width: scaledObstacle.waterProperties.width * scaleFactor,
+              depth: scaledObstacle.waterProperties.depth * scaleFactor,
+              borderWidth: scaledObstacle.waterProperties.borderWidth
+                ? scaledObstacle.waterProperties.borderWidth * scaleFactor
+                : undefined,
+            }
+          }
+
+          if (scaledObstacle.decorationProperties) {
+            scaledObstacle.decorationProperties = {
+              ...scaledObstacle.decorationProperties,
+              width: scaledObstacle.decorationProperties.width * scaleFactor,
+              height: scaledObstacle.decorationProperties.height * scaleFactor,
+              borderWidth: scaledObstacle.decorationProperties.borderWidth
+                ? scaledObstacle.decorationProperties.borderWidth * scaleFactor
+                : undefined,
+            }
+          }
+
+          return scaledObstacle
+        })
+
+        // 缩放路径数据
+        let scaledPath = null
+        if (parsedData.path) {
+          scaledPath = {
+            visible: parsedData.path.visible,
+            points: parsedData.path.points.map((point: PathPoint) => {
+              const scaledPoint = {
+                ...point,
+                x: point.x * scaleFactor,
+                y: point.y * scaleFactor,
+              }
+
+              if (point.controlPoint1) {
+                scaledPoint.controlPoint1 = {
+                  x: point.controlPoint1.x * scaleFactor,
+                  y: point.controlPoint1.y * scaleFactor,
+                }
+              }
+
+              if (point.controlPoint2) {
+                scaledPoint.controlPoint2 = {
+                  x: point.controlPoint2.x * scaleFactor,
+                  y: point.controlPoint2.y * scaleFactor,
+                }
+              }
+
+              return scaledPoint
+            }),
+          }
+        }
+
+        // 更新当前课程数据
+        currentCourse.value = {
+          ...parsedData,
+          obstacles: scaledObstacles,
+          viewportInfo: currentViewport,
+          updatedAt: new Date().toISOString(),
+        }
+
+        // 更新路径数据
+        if (scaledPath) {
+          coursePath.value = scaledPath
+
+          // 更新起点和终点
+          if (parsedData.path.startPoint) {
+            startPoint.value = {
+              x: parsedData.path.startPoint.x * scaleFactor,
+              y: parsedData.path.startPoint.y * scaleFactor,
+              rotation: parsedData.path.startPoint.rotation,
+            }
+          }
+
+          if (parsedData.path.endPoint) {
+            endPoint.value = {
+              x: parsedData.path.endPoint.x * scaleFactor,
+              y: parsedData.path.endPoint.y * scaleFactor,
+              rotation: parsedData.path.endPoint.rotation,
+            }
+          }
+        }
+
+        console.log('成功恢复自动保存的路线设计:', {
+          obstacles: scaledObstacles.length,
+          hasPath: !!scaledPath,
+          timestamp: savedTimestamp,
+          scaleFactor,
+        })
+
         return true
       } catch (error) {
         console.error('解析本地存储的JSON数据失败:', error)
+        // 清除无效的自动保存数据
+        localStorage.removeItem('autosaved_course')
+        localStorage.removeItem('autosaved_timestamp')
         return false
       }
     } catch (error) {

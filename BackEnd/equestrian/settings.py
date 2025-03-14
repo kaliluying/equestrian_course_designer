@@ -203,6 +203,7 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:8080",
     "http://192.168.1.6:5173",
     "http://192.168.1.6:8080",
+    "https://equestrian.top"
 ]
 
 # CORS配置
@@ -213,6 +214,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8080",
     "http://192.168.1.6:5173",
     "http://192.168.1.6:8080",
+    "https://equestrian.top"
 ]
 
 # 允许跨域请求携带cookie
@@ -243,7 +245,7 @@ CORS_ALLOW_HEADERS = [
 
 # 前端URL配置
 FRONTEND_URL = 'http://192.168.1.6:5173'  # 开发环境
-# FRONTEND_URL = 'https://yourdomain.com'  # 生产环境
+# FRONTEND_URL = 'https://equestrian.top'  # 生产环境
 
 
 # 邮件配置

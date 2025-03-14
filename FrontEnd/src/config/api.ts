@@ -59,13 +59,13 @@ const BASE_CONFIG: Record<EnvType, EnvConfig> = {
   // 生产环境配置
   production: {
     // // 部署时修改这些值或通过环境变量覆盖
-    // apiBaseUrl: `https://${getEnvValue('API_HOST', 'equestrian.top')}`,
-    // wsBaseUrl: `wss://${getEnvValue('API_HOST', 'equestrian.top:8001')}/ws`,
-    // appBaseUrl: getEnvValue('APP_URL', 'https://equestrian.top'),
+    apiBaseUrl: `https://${getEnvValue('API_HOST', 'equestrian.top')}`,
+    wsBaseUrl: `wss://${getEnvValue('API_HOST', 'equestrian.top:8001')}/ws`,
+    appBaseUrl: getEnvValue('APP_URL', 'https://equestrian.top'),
     // 部署时修改这些值或通过环境变量覆盖
-    apiBaseUrl: `http://${getEnvValue('API_HOST', '47.104.168.42')}`,
-    wsBaseUrl: `ws://${getEnvValue('API_HOST', '47.104.168.42:8001')}/ws`,
-    appBaseUrl: getEnvValue('APP_URL', 'http://47.104.168.42'),
+    // apiBaseUrl: `http://${getEnvValue('API_HOST', '47.104.168.42')}`,
+    // wsBaseUrl: `ws://${getEnvValue('API_HOST', '47.104.168.42:8001')}/ws`,
+    // appBaseUrl: getEnvValue('APP_URL', 'http://47.104.168.42'),
   },
 
   // 预发布环境配置

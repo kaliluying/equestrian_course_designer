@@ -1919,7 +1919,17 @@ const pathSegments = computed(() => {
     const current = points[i]
     const previous = points[i - 1]
 
-    if (current.controlPoint1 && previous.controlPoint2) {
+    // 检查是否是直线部分（障碍物前后3米的直线）
+    const isInObstacleLine = (index: number) => {
+      // 对于每个障碍物，从索引1开始的3个点是直线部分
+      const pointInObstacle = (index - 1) % 5
+      return pointInObstacle === 1 || pointInObstacle === 2 || pointInObstacle === 3
+    }
+
+    // 如果当前点或前一个点是直线部分，使用直线
+    if (isInObstacleLine(i) || isInObstacleLine(i - 1)) {
+      segments.push(`M ${previous.x} ${previous.y} L ${current.x} ${current.y}`)
+    } else if (current.controlPoint1 && previous.controlPoint2) {
       // 使用三次贝塞尔曲线
       segments.push(
         `M ${previous.x} ${previous.y} ` +
@@ -1928,11 +1938,10 @@ const pathSegments = computed(() => {
         `${current.x} ${current.y}`,
       )
     } else {
-      // 使用直线
+      // 如果没有控制点，使用直线
       segments.push(`M ${previous.x} ${previous.y} L ${current.x} ${current.y}`)
     }
   }
-
   return segments
 })
 
@@ -2514,7 +2523,7 @@ const bezierTangent = (
     right: -6px;
     width: 12px;
     height: 12px;
-    background-color: var(--primary-color);
+    background-color: #ff0000e8;
     border: 2px solid white;
     border-radius: 50%;
     cursor: pointer;

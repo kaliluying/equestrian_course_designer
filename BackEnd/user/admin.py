@@ -8,19 +8,55 @@ import os
 from django.urls import reverse
 from django.utils.safestring import mark_safe
 import json
+from django.contrib.admin import SimpleListFilter
 
 admin.site.site_header = '用户中心'
 admin.site.site_title = '用户中心'
 admin.site.index_title = '欢迎使用用户中心'
 
 
+# 注册UserProfile模型
+class UserProfileInline(admin.StackedInline):
+    model = UserProfile
+    can_delete = False
+    verbose_name_plural = '用户资料'
+
+# 扩展User管理
+
+
+# class UserAdmin(BaseUserAdmin):
+#     inlines = (UserProfileInline,)
+
+
+class MembershipPlanFilter(SimpleListFilter):
+    """会员计划过滤器"""
+    title = '会员计划'  # 过滤器标题
+    parameter_name = 'membership_plan'  # URL中的参数名
+
+    def lookups(self, request, model_admin):
+        """返回过滤选项"""
+        from .models import MembershipPlan
+        plans = MembershipPlan.objects.all()
+        return [(plan.id, plan.name) for plan in plans]
+
+    def queryset(self, request, queryset):
+        """根据选择的选项过滤查询集"""
+        if self.value():
+            if self.value() == 'none':
+                return queryset.filter(profile__membership_plan__isnull=True)
+            return queryset.filter(profile__membership_plan_id=self.value())
+        return queryset
+
+
 class CustomUserAdmin(BaseUserAdmin):
     """自定义用户管理页面"""
-    list_display = ('username', 'email', 'get_groups', 'is_staff',
-                    'get_membership_plan')
-    list_filter = ('is_staff', 'is_active', 'groups')
-    search_fields = ('username', 'email', 'groups__name')
+    list_display = ('username', 'email', 'is_staff',
+                    'get_membership_plan', 'get_membership_plan_date',)
+    list_filter = (MembershipPlanFilter,)
+    search_fields = ('username', 'email', )
     ordering = ('-date_joined',)
+
+    inlines = (UserProfileInline,)
 
     def get_groups(self, obj):
         """获取用户组名称"""
@@ -31,6 +67,11 @@ class CustomUserAdmin(BaseUserAdmin):
         """获取会员计划"""
         return obj.profile.membership_plan.name if obj.profile and obj.profile.membership_plan else '无'
     get_membership_plan.short_description = '会员计划'
+
+    def get_membership_plan_date(self, obj):
+        """获取会员计划到期时间"""
+        return obj.profile.premium_expire_date if obj.profile and obj.profile.premium_expire_date else '无'
+    get_membership_plan_date.short_description = '会员计划到期时间'
 
     # 修改分组显示名称
     fieldsets = (
@@ -71,15 +112,20 @@ class CustomUserAdmin(BaseUserAdmin):
         return request.user.is_superuser
 
 
+# 重新注册User
+admin.site.unregister(User)
+admin.site.register(User, CustomUserAdmin)
+
+
 @admin.register(Design)
 class DesignAdmin(admin.ModelAdmin):
     # 列表显示字段
     list_display = ('title', 'author', 'display_image', 'create_time',
-                    'update_time', 'download_button', 'export_button', 'edit_button')
+                    'update_time', 'download_button', 'export_button')
     list_filter = ('author',)
     search_fields = ('title', 'author__username')
     readonly_fields = ('create_time', 'update_time',
-                       'display_image', 'download_button', 'export_button', 'edit_button')
+                       'display_image', 'download_button', 'export_button')
 
     list_display_links = None
 
@@ -121,18 +167,6 @@ class DesignAdmin(admin.ModelAdmin):
             )
         return "无数据"
     export_button.short_description = '导出'
-
-    def edit_button(self, obj):
-        """修改按钮"""
-        if obj.download:
-            return format_html(
-                '<button class="el-button el-button--warning el-button--small" onclick="editDesign(\'{}\', \'{}\', \'{}\'); return false;">修改设计</button>',
-                obj.download.url,
-                obj.title,
-                obj.id
-            )
-        return "无数据"
-    edit_button.short_description = '修改'
 
     class Media:
         css = {
@@ -200,23 +234,6 @@ class CustomGroupAdmin(GroupAdmin):
         """只有超级管理员可以查看用户组"""
         return request.user.is_superuser
 
-
-# 注册UserProfile模型
-class UserProfileInline(admin.StackedInline):
-    model = UserProfile
-    can_delete = False
-    verbose_name_plural = '用户资料'
-
-# 扩展User管理
-
-
-class UserAdmin(BaseUserAdmin):
-    inlines = (UserProfileInline,)
-
-
-# 重新注册User
-admin.site.unregister(User)
-admin.site.register(User, UserAdmin)
 
 # 重新注册 Group 模型
 admin.site.unregister(Group)
@@ -487,9 +504,8 @@ class CustomObstacleAdmin(admin.ModelAdmin):
 
 @admin.register(MembershipOrder)
 class MembershipOrderAdmin(admin.ModelAdmin):
-    list_display = ('user', 'order_id', 'membership_plan', 'amount', 'payment_channel', 'status', 'payment_time')
+    list_display = ('user', 'order_id', 'membership_plan',
+                    'amount', 'payment_channel', 'status', 'payment_time')
     list_filter = ('status', 'user')
     search_fields = ('user__username', 'order_id', 'membership_plan__name')
     ordering = ('-payment_time',)
-
-
