@@ -143,7 +143,7 @@ export const updateObstacle = async (
       // 尝试从字符串中提取数字部分
       const match = id.match(/\d+/)
       numericId = match ? parseInt(match[0]) : 0
-      console.log(`从ID "${id}" 提取的数字部分是 ${numericId}`) // 调试信息
+
     }
   } else {
     numericId = id
@@ -153,7 +153,7 @@ export const updateObstacle = async (
     throw new Error(`无效的障碍物ID: ${id}`)
   }
 
-  console.log(`更新障碍物，ID: ${numericId}`) // 调试信息
+  
   return request.put<ObstacleData>(CUSTOM_OBSTACLE_API.UPDATE_OBSTACLE(numericId), data)
 }
 

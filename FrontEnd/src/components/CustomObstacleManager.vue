@@ -486,7 +486,7 @@ const handleDragStart = (event: DragEvent, obstacle: CustomObstacleTemplate) => 
     }
   }
 
-  console.log('开始拖拽自定义障碍物:', obstacle.id);
+
 }
 
 // 调整颜色亮度

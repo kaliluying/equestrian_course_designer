@@ -822,7 +822,7 @@ onMounted(() => {
 
 // 处理类型变更
 const handleTypeChange = (newType: ObstacleType) => {
-  console.log('类型变更为:', newType)
+  
 
   // 根据新类型设置默认值
   if (newType === ObstacleType.DECORATION && !obstacleData.decorationProperties) {

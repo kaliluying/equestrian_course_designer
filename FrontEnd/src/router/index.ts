@@ -67,6 +67,9 @@ router.beforeEach((to, from, next) => {
   // 需要会员才能访问的页面
   const requiresPremium = ['/collaborate']
 
+  // 检查是否通过链接加入协作
+  const isViaCollaborationLink = to.query.collaboration === 'true' && to.query.designId
+
   // 检查是否需要登录
   if (requiresAuth.some((path) => to.path.startsWith(path))) {
     if (!userStore.isAuthenticated) {
@@ -75,8 +78,8 @@ router.beforeEach((to, from, next) => {
     }
   }
 
-  // 检查是否需要会员权限
-  if (requiresPremium.some((path) => to.path.startsWith(path))) {
+  // 检查是否需要会员权限，但通过链接加入协作的用户不需要会员权限
+  if (requiresPremium.some((path) => to.path.startsWith(path)) && !isViaCollaborationLink) {
     if (!userStore.isAuthenticated) {
       next('/')
       return

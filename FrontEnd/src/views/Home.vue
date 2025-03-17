@@ -126,6 +126,21 @@ const checkAutosave = () => {
   // 如果是协作模式，不检查自动保存
   if (route.name === 'collaborate') return
 
+  // 检查是否有待处理的协作
+  const pendingCollabStr = localStorage.getItem('pendingCollaboration')
+  if (pendingCollabStr) {
+    try {
+      const pendingCollab = JSON.parse(pendingCollabStr)
+      // 检查是否通过链接加入
+      if (pendingCollab.viaLink) {
+        console.log('通过邀请链接打开，跳过恢复本地保存的设计')
+        return
+      }
+    } catch (error) {
+      console.error('解析待处理的协作数据失败:', error)
+    }
+  }
+
   console.log('检查是否有自动保存的路线设计')
   const timestamp = localStorage.getItem('autosaved_timestamp')
   const savedCourse = localStorage.getItem('autosaved_course')
@@ -184,7 +199,7 @@ const checkAutosave = () => {
 // 恢复自动保存的路线设计
 const restoreAutosave = () => {
   console.log('尝试恢复自动保存的路线设计')
-  const success = courseStore.restoreFromLocalStorage()
+  const success = courseStore.restoreFromLocalStorage(true)
   if (success) {
     ElMessage.success('已恢复未完成的路线设计')
     console.log('恢复成功')

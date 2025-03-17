@@ -301,20 +301,15 @@ const checkAutosave = () => {
   // 如果不是在首页，不检查自动保存
   if (route.path !== '/') return
 
-  console.log('检查是否有自动保存的路线设计')
+
   const timestamp = localStorage.getItem('autosaved_timestamp')
   const savedCourse = localStorage.getItem('autosaved_course')
 
   if (!timestamp || !savedCourse) {
-    console.log('没有找到自动保存的数据', { timestamp, hasSavedCourse: !!savedCourse })
+
     return
   }
 
-  console.log('找到自动保存的数据', {
-    timestamp,
-    dataSize: savedCourse.length,
-    savedAt: new Date(timestamp).toLocaleString()
-  })
 
   try {
     // 验证数据是否有效
@@ -341,12 +336,6 @@ const checkAutosave = () => {
       }
     }
 
-    console.log('自动保存数据验证通过', {
-      id: courseData.id,
-      name: courseData.name,
-      obstacles: courseData.obstacles.length,
-      hasPath: !!courseData.path
-    })
   } catch (error) {
     console.error('解析自动保存数据失败:', error)
     clearLocalStorage()
@@ -356,9 +345,9 @@ const checkAutosave = () => {
 
 // 恢复自动保存的路线设计
 const restoreAutosave = () => {
-  console.log('尝试恢复自动保存的路线设计')
   const courseStore = useCourseStore()
-  const success = courseStore.restoreFromLocalStorage()
+  // 传递 skipIfViaLink 参数为 true，使其在通过邀请链接打开时跳过恢复本地保存的设计
+  const success = courseStore.restoreFromLocalStorage(true)
 
   // 恢复比赛信息
   const savedCompetitionInfo = localStorage.getItem('competition_info')
@@ -366,7 +355,6 @@ const restoreAutosave = () => {
     try {
       const competitionData = JSON.parse(savedCompetitionInfo)
       Object.assign(competitionForm, competitionData)
-      console.log('已恢复比赛信息')
     } catch (error) {
       console.error('恢复比赛信息失败:', error)
       localStorage.removeItem('competition_info')
@@ -375,7 +363,7 @@ const restoreAutosave = () => {
 
   if (success) {
     ElMessage.success('已恢复未完成的路线设计')
-    console.log('恢复成功')
+
   } else {
     ElMessage.error('恢复失败，可能是数据已损坏')
     console.error('恢复失败')
@@ -397,19 +385,19 @@ const clearLocalStorage = () => {
   localStorage.removeItem('autosaved_course')
   localStorage.removeItem('autosaved_timestamp')
   localStorage.removeItem('competition_info')
-  console.log('已清除自动保存数据')
+
 }
 
 onMounted(() => {
   userStore.initializeAuth()
-  console.log('App.vue已挂载，初始化事件监听器')
+
 
   // 初始化面板宽度
   initializePanelWidths()
 
   // 如果用户已登录，初始化自定义障碍物
   if (userStore.isAuthenticated) {
-    console.log('用户已登录，初始化自定义障碍物')
+
     import('@/stores/obstacle').then(({ useObstacleStore }) => {
       const obstacleStore = useObstacleStore()
       obstacleStore.initObstacles()
@@ -423,91 +411,85 @@ onMounted(() => {
     loginDialogVisible.value = true
   }
   window.addEventListener('token-expired', handleTokenExpired)
-  console.log('已添加token-expired事件监听器')
+
 
   // 监听协作停止事件
   const handleCollaborationStopped = (event: Event) => {
     const customEvent = event as CustomEvent
-    // 减少日志输出
-    // console.log('收到协作停止事件', customEvent.detail)
 
     // 检查当前状态，避免重复处理
     if (!isCollaborating.value) {
-      // console.log('当前已经不在协作中，无需更新状态')
       return
     }
-
-    // 更新状态
-    // console.log('当前协作状态:', isCollaborating.value)
     isCollaborating.value = false
-    console.log('协作状态已更新为:', isCollaborating.value)
+
 
     // 显示提示消息
     if (customEvent.detail && customEvent.detail.error) {
-      console.log('这是一个错误导致的停止事件')
+
       ElMessage.error('协作连接出错，已断开连接')
     } else if (customEvent.detail && customEvent.detail.manual) {
-      // console.log('这是一个手动停止事件')
+      //
       ElMessage.warning('协作已被手动停止')
     } else if (customEvent.detail && customEvent.detail.source === 'onclose') {
-      // console.log('这是由WebSocket关闭触发的停止事件')
+      //
       ElMessage.warning(`协作连接已关闭 (代码: ${customEvent.detail.code})`)
     } else if (customEvent.detail && customEvent.detail.source === 'disconnect') {
-      // console.log('这是由disconnect方法触发的停止事件')
+      //
       ElMessage.info('已断开协作连接')
     } else if (customEvent.detail && customEvent.detail.delayed) {
-      // console.log('这是一个延迟触发的停止事件')
+      //
       ElMessage.info('已退出协作模式')
     } else if (customEvent.detail && customEvent.detail.reason === '用户主动退出') {
-      // console.log('这是用户主动退出的事件')
+      //
       ElMessage.info('已退出协作模式')
     } else {
-      // console.log('这是一个正常停止事件')
+      //
       ElMessage.info('已退出协作模式')
     }
 
     // 使用nextTick确保DOM更新
     nextTick(() => {
-      // console.log('DOM已更新，确认协作状态:', isCollaborating.value)
+      //
     })
   }
 
   // 监听协作连接成功事件
   const handleCollaborationConnected = (event: CustomEvent) => {
     // 减少日志输出
-    // console.log('收到collaboration-connected事件', event.detail)
+    //
 
     // 检查是否是延迟事件，如果是普通事件已经处理过，则不重复处理
     if (event.detail.delayed && isCollaborating.value) {
-      // console.log('已经处理过普通连接事件，忽略延迟事件')
+      //
       return
     }
 
     // 如果已经在协作状态，不重复设置
     if (isCollaborating.value) {
-      // console.log('已经在协作状态，不重复设置')
+      //
       return
     }
 
-    // console.log('更新协作状态为true')
+    //
     isCollaborating.value = true
 
     // 更新会话信息
     if (event.detail.session) {
-      // console.log('更新会话信息:', event.detail.session)
+      //
       collaborationSession.value = event.detail.session
     }
 
     // 显示成功消息
     ElMessage.success('已成功连接到协作会话')
-    console.log('协作状态已更新为:', isCollaborating.value)
+
   }
 
   // 先移除可能存在的旧监听器，避免重复绑定
   try {
     document.removeEventListener('collaboration-stopped', handleCollaborationStopped as EventListener)
     document.removeEventListener('collaboration-connected', handleCollaborationConnected as EventListener)
-    console.log('已移除旧的事件监听器')
+
   } catch (error) {
     console.error('移除旧事件监听器失败:', error)
   }
@@ -515,10 +497,10 @@ onMounted(() => {
   // 添加新的监听器
   try {
     document.addEventListener('collaboration-stopped', handleCollaborationStopped as EventListener)
-    console.log('已添加collaboration-stopped事件监听器')
+
 
     document.addEventListener('collaboration-connected', handleCollaborationConnected as EventListener)
-    console.log('已添加collaboration-connected事件监听器')
+
   } catch (error) {
     console.error('添加事件监听器失败:', error)
   }
@@ -540,7 +522,7 @@ onMounted(() => {
 
         // 检查邀请是否在24小时内
         if (now.getTime() - inviteTime.getTime() < 24 * 60 * 60 * 1000) {
-          console.log('发现待处理的协作邀请，设计ID:', designId)
+
           courseStore.setCurrentCourseId(designId)
 
           setTimeout(() => {
@@ -563,7 +545,7 @@ onMounted(() => {
 
   // 检查是否有自动保存的路线设计
   if (route.path === '/') {
-    console.log('准备检查自动保存数据')
+
 
     // 使用多种方法尝试显示对话框
     // 1. 立即检查
@@ -587,7 +569,7 @@ onMounted(() => {
           try {
             JSON.parse(savedCourse) // 验证JSON格式
             savedTimestamp.value = timestamp
-            console.log('直接设置对话框显示')
+
             showRestoreDialog.value = true
           } catch (e) {
             console.error('解析失败', e)
@@ -603,7 +585,7 @@ onMounted(() => {
     try {
       const competitionData = JSON.parse(savedCompetitionInfo)
       Object.assign(competitionForm, competitionData)
-      console.log('已恢复比赛信息')
+
     } catch (error) {
       console.error('恢复比赛信息失败:', error)
       localStorage.removeItem('competition_info')
@@ -612,13 +594,13 @@ onMounted(() => {
 
   // 在组件卸载时移除事件监听
   onUnmounted(() => {
-    console.log('App.vue即将卸载，移除事件监听器')
+
     window.removeEventListener('token-expired', handleTokenExpired)
     document.removeEventListener('collaboration-stopped', handleCollaborationStopped as EventListener)
     document.removeEventListener('collaboration-connected', handleCollaborationConnected as EventListener)
     // 移除自动保存事件监听
     document.removeEventListener('course-autosaved', showAutosaveNotificationHandler as EventListener)
-    console.log('已移除所有事件监听器')
+
   })
 })
 
@@ -647,7 +629,7 @@ const handleAuthSuccess = () => {
       const { designId, timestamp } = JSON.parse(pendingCollaboration)
       // 检查是否在30分钟内的邀请
       if (Date.now() - timestamp < 30 * 60 * 1000) {
-        console.log('登录后处理待处理的协作:', designId)
+
         courseStore.setCurrentCourseId(designId)
 
         // 显示加入协作的确认对话框
@@ -661,14 +643,14 @@ const handleAuthSuccess = () => {
           }
         )
           .then(() => {
-            console.log('用户确认加入待处理的协作')
+
             // 启动协作
             toggleCollaboration()
             // 清除待处理的协作
             localStorage.removeItem('pendingCollaboration')
           })
           .catch(() => {
-            console.log('用户取消加入待处理的协作')
+
             localStorage.removeItem('pendingCollaboration')
             ElMessage({
               type: 'info',
@@ -677,7 +659,7 @@ const handleAuthSuccess = () => {
           })
       } else {
         // 邀请已过期
-        console.log('协作邀请已过期')
+
         localStorage.removeItem('pendingCollaboration')
       }
     } catch (error) {
@@ -701,20 +683,20 @@ const handleLogout = () => {
 declare global {
   interface Window {
     debugCanvas?: {
-      startCollaboration: () => void;
+      startCollaboration: (viaLink?: boolean) => void;
       stopCollaboration: () => void;
     };
   }
 }
 
 // 切换协作状态
-const toggleCollaboration = async () => {
+const toggleCollaboration = async (viaLink = false) => {
   if (isTogglingCollaboration) return
   isTogglingCollaboration = true
 
   try {
-    // 检查用户是否为会员
-    if (!userStore.currentUser?.is_premium_active && !isCollaborating.value) {
+    // 检查用户是否为会员，但如果是通过链接加入则跳过检查
+    if (!userStore.currentUser?.is_premium_active && !isCollaborating.value && !viaLink) {
       // 先尝试更新用户资料，确保会员状态是最新的
       await userStore.updateUserProfile()
 
@@ -739,77 +721,24 @@ const toggleCollaboration = async () => {
       }
     }
 
+    // 如果已经在协作中，停止协作
     if (isCollaborating.value) {
-      // 退出协作模式
-      console.log('尝试退出协作模式')
 
-      // 立即更新状态，确保UI响应
+      // 停止协作
+      if (window.debugCanvas?.stopCollaboration) {
+        window.debugCanvas.stopCollaboration()
+      }
       isCollaborating.value = false
-
-      // 调用Canvas组件的stopCollaboration方法
-      if (canvasRef.value) {
-        try {
-          await canvasRef.value.stopCollaboration()
-          console.log('协作已停止')
-        } catch (error) {
-          console.error('停止协作时出错:', error)
-        }
-      } else {
-        console.error('Canvas引用不存在，无法停止协作')
-      }
-
-      // 触发协作停止事件
-      const event = new CustomEvent('collaboration-stopped', {
-        bubbles: true,
-        detail: {
-          timestamp: new Date().toISOString(),
-          source: 'manual',
-          message: '用户手动退出协作'
-        }
-      })
-      document.dispatchEvent(event)
-
-      // 显示提示消息
-      ElMessage.success('已退出协作模式')
+      ElMessage.success('已停止协作')
     } else {
-      // 进入协作模式
-      console.log('尝试进入协作模式')
 
-      // 确保有设计ID
-      if (!courseStore.currentCourse.id) {
-        console.log('设计ID不存在，生成新ID')
-        courseStore.currentCourse.id = uuidv4()
+      // 开始协作
+      if (window.debugCanvas?.startCollaboration) {
+        // 传递通过链接加入的标志
+        window.debugCanvas.startCollaboration(viaLink)
       }
-
-      // 先设置协作状态为true，确保面板显示
       isCollaborating.value = true
-
-      // 等待DOM更新，确保面板已渲染
-      await nextTick()
-
-      // 调用Canvas组件的startCollaboration方法
-      if (canvasRef.value) {
-        const result = await canvasRef.value.startCollaboration()
-        console.log('startCollaboration结果:', result)
-
-        if (!result) {
-          console.error('启动协作失败')
-          // 如果失败，恢复状态
-          isCollaborating.value = false
-          isTogglingCollaboration = false
-          return
-        }
-
-        // 显示成功消息
-        ElMessage.success('已成功进入协作模式')
-      } else {
-        console.error('Canvas引用不存在，无法启动协作')
-        ElMessage.error('无法启动协作，请刷新页面后重试')
-        // 如果失败，恢复状态
-        isCollaborating.value = false
-        isTogglingCollaboration = false
-        return
-      }
+      ElMessage.success('已开始协作')
     }
   } catch (error) {
     console.error('切换协作状态时出错:', error)
@@ -822,12 +751,12 @@ const toggleCollaboration = async () => {
 // 处理协作路由
 const handleCollaborationRoute = async () => {
   const currentRoute = route
-  console.log('处理协作路由:', currentRoute)
+
 
   // 处理URL中的协作参数
   if (currentRoute.query.collaboration) {
     const designId = currentRoute.query.designId as string
-    console.log('协作链接包含设计ID:', designId)
+
 
     if (!designId) {
       console.error('协作链接缺少设计ID')
@@ -837,18 +766,19 @@ const handleCollaborationRoute = async () => {
 
     // 确保用户已登录
     if (!userStore.isAuthenticated) {
-      console.log('用户未登录，显示登录对话框')
+
       loginDialogVisible.value = true
       // 存储协作信息，等待登录后处理
       localStorage.setItem('pendingCollaboration', JSON.stringify({
         designId,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        viaLink: true  // 标记为通过链接加入
       }))
       return
     }
 
     try {
-      console.log('设置当前设计ID:', designId)
+
       courseStore.setCurrentCourseId(designId)
 
       // 等待Canvas组件加载
@@ -865,12 +795,12 @@ const handleCollaborationRoute = async () => {
         }
       )
         .then(() => {
-          console.log('用户确认加入协作')
-          // 启动协作
-          toggleCollaboration()
+
+          // 启动协作，标记为通过链接加入
+          toggleCollaboration(true)
         })
         .catch(() => {
-          console.log('用户取消加入协作')
+
           ElMessage({
             type: 'info',
             message: '已取消加入协作',
@@ -890,11 +820,11 @@ const checkCollaborationInvite = () => {
   const designId = urlParams.get('designId')
 
   if (isCollaboration && designId) {
-    console.log('检测到协作邀请链接，设计ID:', designId)
+
 
     // 如果用户已登录，自动进入协作模式
     if (userStore.isAuthenticated) {
-      console.log('用户已登录，自动进入协作模式')
+
 
       // 加载设计
       courseStore.setCurrentCourseId(designId)
@@ -905,7 +835,7 @@ const checkCollaborationInvite = () => {
         ElMessage.success('已自动加入协作会话')
       }, 1000)
     } else {
-      console.log('用户未登录，提示登录后加入协作')
+
       ElMessage.warning('请先登录后再加入协作会话')
 
       // 保存协作信息，登录后可以自动加入
@@ -979,6 +909,47 @@ watch(rightPanelWidth, (newWidth) => {
     toggle.style.right = `${newWidth + 10}px`
   }
 })
+
+// 处理待处理的协作
+const handlePendingCollaboration = async () => {
+
+  const pendingCollabStr = localStorage.getItem('pendingCollaboration')
+  if (pendingCollabStr) {
+    try {
+      const pendingCollab = JSON.parse(pendingCollabStr)
+
+
+      // 检查时间戳是否在24小时内
+      const now = Date.now()
+      const timestamp = pendingCollab.timestamp
+      const isViaLink = pendingCollab.viaLink || false  // 获取是否通过链接加入的标志
+
+      if (now - timestamp < 24 * 60 * 60 * 1000) {
+
+
+        // 设置当前设计ID
+        courseStore.setCurrentCourseId(pendingCollab.designId)
+
+        // 等待Canvas组件加载
+        await nextTick()
+
+        // 启动协作，传递通过链接加入的标志
+        toggleCollaboration(isViaLink)
+
+        // 清除待处理的协作
+        localStorage.removeItem('pendingCollaboration')
+
+        ElMessage.success('已自动加入协作会话')
+      } else {
+
+        localStorage.removeItem('pendingCollaboration')
+      }
+    } catch (error) {
+      console.error('处理待处理的协作时出错:', error)
+      localStorage.removeItem('pendingCollaboration')
+    }
+  }
+}
 </script>
 
 <style>

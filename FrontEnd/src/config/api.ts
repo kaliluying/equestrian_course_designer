@@ -60,7 +60,7 @@ const BASE_CONFIG: Record<EnvType, EnvConfig> = {
   production: {
     // // 部署时修改这些值或通过环境变量覆盖
     apiBaseUrl: `https://${getEnvValue('API_HOST', 'equestrian.top')}`,
-    wsBaseUrl: `wss://${getEnvValue('API_HOST', 'equestrian.top:8001')}/ws`,
+    wsBaseUrl: `wss://${getEnvValue('API_HOST', 'equestrian.top')}/ws`,
     appBaseUrl: getEnvValue('APP_URL', 'https://equestrian.top'),
     // 部署时修改这些值或通过环境变量覆盖
     // apiBaseUrl: `http://${getEnvValue('API_HOST', '47.104.168.42')}`,

@@ -37,6 +37,16 @@
             </el-icon> 链接已复制到剪贴板
           </div>
         </div>
+
+        <!-- 所有者信息 -->
+        <div class="owner-info" v-if="session">
+          <div class="owner-label">所有者：</div>
+          <div class="owner-value">
+            <span v-if="getOwnerName()" class="owner-name">{{ getOwnerName() }}</span>
+            <span v-else class="owner-unknown">未知</span>
+            <span v-if="isCurrentUserOwner()" class="owner-badge">(我)</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -60,7 +70,6 @@
           </div>
           <div class="collaborator-info">
             <span class="collaborator-name">{{ collaborator.username }}</span>
-            <span class="collaborator-status">{{ getLastActiveText(collaborator) }}</span>
           </div>
           <div v-if="String(currentUser?.id) === collaborator.id" class="collaborator-badge">
             (我)
@@ -104,52 +113,9 @@
       <el-alert title="连接错误" type="error" description="无法连接到协作服务器，请检查网络连接或后端服务是否正常运行。" show-icon :closable="false" />
       <div class="error-actions">
         <el-button type="primary" @click="reconnect">重试连接</el-button>
-        <el-button @click="showTroubleshootingGuide = true">查看故障排除指南</el-button>
       </div>
     </div>
   </div>
-
-  <!-- 故障排除指南对话框 -->
-  <el-dialog v-model="showTroubleshootingGuide" title="协作功能故障排除指南" width="500px">
-    <div class="troubleshooting-guide">
-      <h4>常见问题解决方法：</h4>
-      <ol>
-        <li>
-          <strong>确保后端服务正在运行</strong>
-          <p>在终端中运行：<code>cd BackEnd && python manage.py runserver</code></p>
-        </li>
-        <li>
-          <strong>检查网络连接</strong>
-          <p>确保您的计算机可以访问后端服务（默认地址：127.0.0.1:8000）</p>
-        </li>
-        <li>
-          <strong>确认已登录</strong>
-          <p>协作功能需要用户登录才能使用</p>
-        </li>
-        <li>
-          <strong>刷新页面</strong>
-          <p>有时刷新页面可以解决连接问题</p>
-        </li>
-        <li>
-          <strong>检查浏览器控制台</strong>
-          <p>按F12打开开发者工具，查看控制台中是否有错误信息</p>
-        </li>
-      </ol>
-      <div class="connection-info">
-        <h4>连接信息：</h4>
-        <p><strong>连接状态：</strong> {{ connectionStatus }}</p>
-        <p><strong>设计ID：</strong> {{ props.designId }}</p>
-        <p><strong>WebSocket实例：</strong> {{ socket ? '存在' : '不存在' }}</p>
-        <p v-if="socket"><strong>WebSocket状态：</strong> {{ getWebSocketStateText() }}</p>
-      </div>
-    </div>
-    <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="showTroubleshootingGuide = false">关闭</el-button>
-        <el-button type="primary" @click="reconnect">重试连接</el-button>
-      </span>
-    </template>
-  </el-dialog>
 </template>
 
 <script setup lang="ts">
@@ -175,11 +141,6 @@ const props = defineProps({
 
 const userStore = useUserStore()
 
-// 连接状态相关变量
-const isConnecting = ref(false)
-const connectionError = ref<string | null>(null)
-const previousStatus = ref<ConnectionStatus>(ConnectionStatus.DISCONNECTED)
-
 // 从useWebSocketConnection获取状态和方法
 const {
   connectionStatus,
@@ -188,10 +149,8 @@ const {
   collaborators,
   sendChatMessage,
   connect,
+  session,
 } = useWebSocketConnection(props.designId)
-
-// 手动定义reconnectAttempts
-const reconnectAttempts = ref(0)
 
 // 当前用户
 const currentUser = computed(() => userStore.currentUser)
@@ -310,8 +269,6 @@ const endDrag = () => {
 
 // 在组件卸载时清理事件监听器
 onUnmounted(() => {
-  console.log('CollaborationPanel组件即将卸载，清理资源')
-
   // 移除事件监听器
   document.removeEventListener('mousemove', handleDrag)
   document.removeEventListener('mouseup', endDrag)
@@ -357,25 +314,40 @@ const inviteLink = computed(() => {
 })
 
 // 复制邀请链接
-const copyInviteLink = () => {
-  console.log('复制邀请链接:', inviteLink.value)
-  if (!props.designId) {
-    ElMessage.error('设计ID不存在，无法生成邀请链接')
-    return
-  }
-
-  navigator.clipboard.writeText(inviteLink.value)
-    .then(() => {
+const copyInviteLink = async () => {
+  try {
+    // 尝试使用 Clipboard API
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(inviteLink.value)
       copySuccess.value = true
       setTimeout(() => {
         copySuccess.value = false
-      }, 3000)
-      ElMessage.success('邀请链接已复制到剪贴板')
-    })
-    .catch((err) => {
-      console.error('复制失败:', err)
-      ElMessage.error('复制失败，请手动复制')
-    })
+      }, 2000)
+      ElMessage.success('链接已复制到剪贴板')
+    } else {
+      // 后备方案：使用传统的复制方法
+      const textArea = document.createElement('textarea')
+      textArea.value = inviteLink.value
+      document.body.appendChild(textArea)
+      textArea.select()
+      try {
+        document.execCommand('copy')
+        copySuccess.value = true
+        setTimeout(() => {
+          copySuccess.value = false
+        }, 2000)
+        ElMessage.success('链接已复制到剪贴板')
+      } catch (err) {
+        console.error('复制失败:', err)
+        ElMessage.error('复制失败，请手动复制链接')
+      } finally {
+        document.body.removeChild(textArea)
+      }
+    }
+  } catch (err) {
+    console.error('复制失败:', err)
+    ElMessage.error('复制失败，请手动复制链接')
+  }
 }
 
 // 复制成功状态
@@ -385,56 +357,66 @@ const copySuccess = ref(false)
 const chatInput = ref('')
 const chatMessagesRef = ref<HTMLElement | null>(null)
 
-// 修改connectionStatusType计算属性
-const connectionStatusType = computed(() => {
-  console.log('当前连接状态值:', connectionStatus.value, '类型:', typeof connectionStatus.value)
+// 计算连接状态类
+const connectionStatusClass = computed(() => {
+  switch (connectionStatus.value) {
+    case ConnectionStatus.CONNECTED:
+      return 'status-connected'
+    case ConnectionStatus.CONNECTING:
+      return 'status-connecting'
+    case ConnectionStatus.DISCONNECTED:
+      return 'status-disconnected'
+    case ConnectionStatus.ERROR:
+      return 'status-error'
+    default:
+      return ''
+  }
+})
 
+// 计算连接状态文本
+const connectionStatusText = computed(() => {
+  switch (connectionStatus.value) {
+    case ConnectionStatus.CONNECTED:
+      return '已连接'
+    case ConnectionStatus.CONNECTING:
+      return '连接中...'
+    case ConnectionStatus.DISCONNECTED:
+      return '未连接'
+    case ConnectionStatus.ERROR:
+      return '连接错误'
+    default:
+      return '未知状态'
+  }
+})
+
+// 计算连接状态类型
+const connectionStatusType = computed(() => {
   const status = connectionStatus.value;
 
-  if (status === 1) {
+  if (status === ConnectionStatus.CONNECTED) {
     return 'success';
-  } else if (status === 0) {
+  } else if (status === ConnectionStatus.CONNECTING) {
     return 'warning';
-  } else if (status === 2) {
+  } else if (status === ConnectionStatus.DISCONNECTING) {
     return 'warning';
-  } else if (status === 4) {
+  } else if (status === ConnectionStatus.ERROR) {
     return 'danger';
-  } else if (status === 3) {
+  } else if (status === ConnectionStatus.DISCONNECTED) {
     return 'info';
   }
 
-  console.warn('未知的连接状态:', connectionStatus.value);
   return 'info';
 })
 
-// 修改connectionStatusText计算属性
-const connectionStatusText = computed(() => {
-  console.log('计算connectionStatusText，当前状态:', connectionStatus.value)
-
-  const status = connectionStatus.value;
-
-  if (status === 1) {
-    return '已连接';
-  } else if (status === 0) {
-    return '连接中...';
-  } else if (status === 2) {
-    return '断开中...';
-  } else if (status === 4) {
-    return '连接错误';
-  } else if (status === 3) {
-    return '未连接';
-  }
-
-  console.warn('未知的连接状态:', connectionStatus.value);
-  return '未连接';
+// 检查是否已连接
+const isConnected = computed(() => {
+  return connectionStatus.value === 1 // ConnectionStatus.CONNECTED的值为1
 })
 
 // 在组件挂载时初始化面板位置
 onMounted(() => {
-  console.log('CollaborationPanel组件已挂载，设计ID:', props.designId)
   // 自动连接WebSocket
-  console.log('CollaborationPanel组件自动连接WebSocket')
-  reconnect() // 自动连接WebSocket
+  connect() // 自动连接WebSocket
   console.log('当前连接状态:', connectionStatus.value)
 
   // 使用nextTick确保DOM已完全渲染后再获取元素尺寸
@@ -442,23 +424,18 @@ onMounted(() => {
     // 初始化面板位置到窗口右侧
     if (panelRef.value) {
       const rect = panelRef.value.getBoundingClientRect()
-      console.log('初始化面板位置，面板宽度:', rect.width)
 
       // 使用transform初始化位置，将面板放置在屏幕右侧
       position.value = {
         x: window.innerWidth - rect.width - 20, // 距离右侧20px
         y: 80 // 距离顶部80px
       }
-
-      console.log('面板初始位置设置为:', position.value)
     } else {
-      console.log('面板引用不存在，无法初始化位置')
       // 使用默认位置，仍然放在屏幕右侧
       position.value = {
         x: window.innerWidth - 320, // 假设面板宽度为300px，加上右侧边距20px
         y: 80 // 距离顶部80px
       }
-      console.log('使用默认位置:', position.value)
     }
   })
 
@@ -469,7 +446,7 @@ onMounted(() => {
       console.log(`连接状态从 ${oldStatus} 变为 ${newStatus}，类型: ${typeof newStatus}`)
 
       // 如果连接状态变为已连接，尝试获取会话信息
-      if (newStatus === 1) {
+      if (newStatus === ConnectionStatus.CONNECTED) {
         console.log('尝试获取会话信息')
         tryGetSessionInfo()
       }
@@ -497,17 +474,14 @@ onMounted(() => {
 // 监听设计ID变化，重新连接
 watch(() => props.designId, (newDesignId) => {
   console.log('设计ID变化，重新连接WebSocket:', newDesignId)
-  if (newDesignId && userStore.currentUser && connectionStatus.value !== 1) {
+  if (newDesignId && userStore.currentUser && connectionStatus.value !== ConnectionStatus.CONNECTED) {
     // 不自动重连，而是等待父组件控制
-    console.log('设计ID已更新，但不会自动重连WebSocket')
   }
 })
 
 // 监听组件可见性变化
-watch(() => !isCollapsed.value, (isVisible) => {
-  console.log('协作面板可见性变化:', isVisible)
+watch(() => !isCollapsed.value, () => {
   // 不根据可见性自动连接
-  console.log('面板可见性已更新，但不会自动连接WebSocket')
 })
 
 // 监听协作状态变化
@@ -515,7 +489,7 @@ watch(() => connectionStatus.value, (newStatus, oldStatus) => {
   console.log('连接状态变化:', oldStatus, '->', newStatus)
 
   // 如果状态变为断开，确保UI更新
-  if (newStatus === 3) {
+  if (newStatus === ConnectionStatus.DISCONNECTED) {
     console.log('连接已断开，触发UI更新')
     nextTick(() => {
       console.log('连接断开后DOM已更新')
@@ -556,14 +530,10 @@ let statusCheckInterval: number | null = null
 
 // 检查WebSocket连接状态
 const checkConnectionStatus = () => {
-  console.log('检查WebSocket连接状态')
-
   // 先检查socket变量是否存在
   if (!socket) {
-    console.log('socket变量不存在，确保状态为DISCONNECTED')
-    if (connectionStatus.value !== 3) {
-      connectionStatus.value = 3
-      console.log('已将状态更新为DISCONNECTED')
+    if (connectionStatus.value !== ConnectionStatus.DISCONNECTED) {
+      connectionStatus.value = ConnectionStatus.DISCONNECTED
 
       // 触发断开连接事件
       try {
@@ -584,10 +554,8 @@ const checkConnectionStatus = () => {
 
   // 检查socket实例是否存在
   if (!socket.value) {
-    console.log('WebSocket实例不存在，确保状态为DISCONNECTED')
-    if (connectionStatus.value !== 3) {
-      connectionStatus.value = 3
-      console.log('已将状态更新为DISCONNECTED')
+    if (connectionStatus.value !== ConnectionStatus.DISCONNECTED) {
+      connectionStatus.value = ConnectionStatus.DISCONNECTED
 
       // 触发断开连接事件
       try {
@@ -606,44 +574,23 @@ const checkConnectionStatus = () => {
     return
   }
 
-  // 输出当前WebSocket的readyState
-  console.log('当前WebSocket readyState:', socket.value.readyState,
-    '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)')
-
-  // 输出当前连接状态
-  console.log('当前连接状态:', connectionStatus.value,
-    '是否为CONNECTED:', connectionStatus.value === 1)
-
   // 根据WebSocket的readyState更新连接状态
   if (socket.value.readyState === WebSocket.OPEN) {
     // 如果WebSocket是OPEN状态，但connectionStatus不是CONNECTED，则更新
-    if (connectionStatus.value !== 1) {
-      console.log('WebSocket已连接但状态不一致，更新为CONNECTED')
-      connectionStatus.value = 1
-      console.log('已将状态更新为CONNECTED')
-
-      // 强制更新计算属性
-      console.log('强制更新connectionStatusType:', connectionStatusType.value)
-      console.log('强制更新connectionStatusText:', connectionStatusText.value)
-      console.log('强制更新isConnected:', isConnected.value)
+    if (connectionStatus.value !== ConnectionStatus.CONNECTED) {
+      connectionStatus.value = ConnectionStatus.CONNECTED
     }
   } else if (socket.value.readyState === WebSocket.CONNECTING) {
-    if (connectionStatus.value !== 0) {
-      console.log('WebSocket正在连接但状态不一致，更新为CONNECTING')
-      connectionStatus.value = 0
-      console.log('已将状态更新为CONNECTING')
+    if (connectionStatus.value !== ConnectionStatus.CONNECTING) {
+      connectionStatus.value = ConnectionStatus.CONNECTING
     }
   } else if (socket.value.readyState === WebSocket.CLOSING) {
-    if (connectionStatus.value !== 2) {
-      console.log('WebSocket正在关闭但状态不一致，更新为DISCONNECTING')
-      connectionStatus.value = 2
-      console.log('已将状态更新为DISCONNECTING')
+    if (connectionStatus.value !== ConnectionStatus.DISCONNECTING) {
+      connectionStatus.value = ConnectionStatus.DISCONNECTING
     }
   } else if (socket.value.readyState === WebSocket.CLOSED) {
-    if (connectionStatus.value !== 3) {
-      console.log('WebSocket已关闭但状态不一致，更新为DISCONNECTED')
-      connectionStatus.value = 3
-      console.log('已将状态更新为DISCONNECTED')
+    if (connectionStatus.value !== ConnectionStatus.DISCONNECTED) {
+      connectionStatus.value = ConnectionStatus.DISCONNECTED
 
       // 触发断开连接事件
       try {
@@ -669,87 +616,28 @@ const tryGetSessionInfo = () => {
   // 例如发送特定的WebSocket消息请求会话数据
 }
 
-// 修改isConnected计算属性
-const isConnected = computed(() => {
-  return connectionStatus.value === 1
-})
-
-// 新增状态变量
-const showTroubleshootingGuide = ref(false)
-
-// 计算连接状态样式
-const connectionStatusClass = computed(() => {
-  switch (connectionStatus.value) {
-    case 1:
-      return 'status-connected'
-    case 0:
-      return 'status-connecting'
-    case 3:
-      return 'status-disconnected'
-    case 4:
-      return 'status-error'
-    default:
-      return 'status-disconnected'
-  }
-})
-
-// 获取WebSocket状态文本
-const getWebSocketStateText = () => {
-  if (!socket.value) return '不存在'
-
-  switch (socket.value.readyState) {
-    case WebSocket.CONNECTING:
-      return 'CONNECTING (0)'
-    case WebSocket.OPEN:
-      return 'OPEN (1)'
-    case WebSocket.CLOSING:
-      return 'CLOSING (2)'
-    case WebSocket.CLOSED:
-      return 'CLOSED (3)'
-    default:
-      return `未知 (${socket.value.readyState})`
-  }
-}
-
-// 重新连接方法
-const reconnect = () => {
-  console.log('尝试重新连接WebSocket')
-  if (typeof connect === 'function') {
-    // 重置重连尝试次数
-    reconnectAttempts.value = 0
-    connect()
-  } else {
-    console.error('connect函数不存在')
-    // 尝试从useWebSocketConnection中获取connect函数
-    const { connect: wsConnect } = useWebSocketConnection(props.designId)
-    if (typeof wsConnect === 'function') {
-      wsConnect()
-    } else {
-      ElMessage.error('无法重新连接，请刷新页面重试')
-    }
-  }
-}
-
 // 获取协作者最后活动时间文本
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const getLastActiveText = (collaborator: CollaboratorInfo) => {
-  if (!collaborator.lastActive) return '刚刚活动'
+  // 返回空字符串，不显示活动时间
+  return ''
+}
 
-  const now = new Date()
-  const lastActive = new Date(collaborator.lastActive)
-  const diffMs = now.getTime() - lastActive.getTime()
+// 获取所有者名称
+const getOwnerName = () => {
+  console.log('获取所有者名称', session.value)
+  if (!session.value || !session.value.owner) return null
 
-  if (diffMs < 60000) { // 小于1分钟
-    return '刚刚活动'
-  } else if (diffMs < 3600000) { // 小于1小时
-    const minutes = Math.floor(diffMs / 60000)
-    return `${minutes}分钟前活动`
-  } else if (diffMs < 86400000) { // 小于1天
-    const hours = Math.floor(diffMs / 3600000)
-    return `${hours}小时前活动`
-  } else {
-    const days = Math.floor(diffMs / 86400000)
-    return `${days}天前活动`
-  }
+  // 在协作者列表中查找所有者
+  const owner = collaborators.value.find(c => c.id === session.value?.owner)
+  return owner ? owner.username : null
+}
+
+// 检查当前用户是否是所有者
+const isCurrentUserOwner = () => {
+  return session.value &&
+    userStore.currentUser &&
+    session.value.owner === String(userStore.currentUser.id)
 }
 
 // 格式化消息时间
@@ -762,8 +650,7 @@ const formatMessageTime = (timestamp: Date) => {
 
 // 刷新协作者列表
 const refreshCollaborators = () => {
-  console.log('手动刷新协作者列表')
-  if (connectionStatus.value === 1 && userStore.currentUser) {
+  if (connectionStatus.value === ConnectionStatus.CONNECTED && userStore.currentUser) {
     try {
       // 检查WebSocket连接状态
       if (!socket || !socket.value || socket.value.readyState !== WebSocket.OPEN) {
@@ -771,8 +658,6 @@ const refreshCollaborators = () => {
         ElMessage.error('WebSocket未连接，无法刷新')
         return
       }
-
-      console.log('准备发送同步请求消息')
 
       // 构造同步请求消息
       const syncRequestMessage = {
@@ -786,7 +671,6 @@ const refreshCollaborators = () => {
 
       // 直接发送消息，不通过sendMessage函数，避免在聊天中显示
       socket.value.send(JSON.stringify(syncRequestMessage))
-      console.log('已发送同步请求消息')
       ElMessage.success('已刷新协作者列表')
     } catch (error) {
       console.error('刷新协作者列表失败:', error)
@@ -798,38 +682,47 @@ const refreshCollaborators = () => {
   }
 }
 
+// 重新连接WebSocket
+const reconnect = () => {
+  if (connectionStatus.value === ConnectionStatus.ERROR ||
+    connectionStatus.value === ConnectionStatus.DISCONNECTED) {
+    console.log('尝试重新连接WebSocket')
+    connect() // 调用useWebSocketConnection中的connect方法
+  }
+}
+
+// 定义状态变量以修复linter错误
+const isConnecting = ref(false)
+const connectionError = ref<string | null>(null)
+const previousStatus = ref<ConnectionStatus>(ConnectionStatus.DISCONNECTED)
+
 // 监听WebSocket连接状态变化
 watch(
   () => connectionStatus.value,
   (newStatus) => {
-    console.log('WebSocket连接状态变化:', newStatus)
-
     // 根据连接状态更新UI
-    if (newStatus === 1) {
+    if (newStatus === ConnectionStatus.CONNECTED) {
       isConnecting.value = false
       connectionError.value = null
-      console.log('WebSocket连接成功')
 
       // 显示成功消息
       ElMessage.success('协作连接已建立')
-    } else if (newStatus === 0) {
+    } else if (newStatus === ConnectionStatus.CONNECTING) {
       isConnecting.value = true
       connectionError.value = null
-      console.log('WebSocket正在连接中...')
-    } else if (newStatus === 4) {
+    } else if (newStatus === ConnectionStatus.ERROR) {
       isConnecting.value = false
       connectionError.value = '连接失败，请检查网络连接'
       console.error('WebSocket连接错误')
 
       // 显示错误消息
       ElMessage.error('协作连接失败，请检查网络连接')
-    } else if (newStatus === 3) {
+    } else if (newStatus === ConnectionStatus.DISCONNECTED) {
       isConnecting.value = false
 
       // 只有在之前是连接状态时才显示断开连接消息
-      if (previousStatus.value === 1) {
+      if (previousStatus.value === ConnectionStatus.CONNECTED) {
         connectionError.value = '连接已断开'
-        console.log('WebSocket连接已断开')
 
         // 显示断开连接消息
         ElMessage.warning('协作连接已断开')
@@ -845,18 +738,11 @@ watch(
 watch(
   () => socket.value,
   (newSocket) => {
-    console.log('WebSocket实例变化:', newSocket ? '存在' : '不存在')
-
     if (newSocket) {
-      // 如果有新的WebSocket实例，检查其readyState
-      console.log('WebSocket readyState:', newSocket.readyState,
-        '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)')
-
       // 如果WebSocket已经打开但连接状态不是CONNECTED，更新状态
       if (newSocket.readyState === WebSocket.OPEN &&
-        connectionStatus.value !== 1) {
-        console.log('WebSocket已打开但状态不一致，更新为CONNECTED')
-        connectionStatus.value = 1
+        connectionStatus.value !== ConnectionStatus.CONNECTED) {
+        connectionStatus.value = ConnectionStatus.CONNECTED
       }
     }
   }
@@ -864,16 +750,13 @@ watch(
 
 // 发送消息
 const sendMessage = () => {
-  console.log('尝试发送聊天消息:', chatInput.value)
-
   // 检查消息是否为空
   if (!chatInput.value.trim()) {
-    console.log('消息为空，不发送')
     return
   }
 
   // 检查WebSocket连接状态
-  if (connectionStatus.value !== 1) {
+  if (connectionStatus.value !== 1) { // ConnectionStatus.CONNECTED的值为1
     console.error('WebSocket未连接，无法发送消息，当前状态:', connectionStatus.value)
     ElMessage.error('未连接到协作服务器，无法发送消息')
 
@@ -900,9 +783,8 @@ const sendMessage = () => {
     ElMessage.error('协作连接异常，请尝试重新连接')
 
     // 确保状态为DISCONNECTED
-    if (connectionStatus.value !== 3) {
-      console.log('状态不一致，更新为DISCONNECTED')
-      connectionStatus.value = 3
+    if (connectionStatus.value !== ConnectionStatus.DISCONNECTED) {
+      connectionStatus.value = ConnectionStatus.DISCONNECTED
 
       // 触发断开连接事件，确保所有组件同步状态
       try {
@@ -923,15 +805,12 @@ const sendMessage = () => {
   }
 
   try {
-    console.log('发送聊天消息:', chatInput.value)
     sendChatMessage(chatInput.value)
-    console.log('聊天消息已发送')
 
     // 清空输入框
     chatInput.value = ''
 
     // 发送后滚动到底部
-    console.log('消息发送成功，准备滚动到底部')
     nextTick(() => {
       scrollToBottom()
     })
@@ -943,8 +822,7 @@ const sendMessage = () => {
     if (error instanceof Error &&
       (error.message.includes('WebSocket未连接') ||
         error.message.includes('WebSocket实例不存在'))) {
-      console.log('因WebSocket连接问题更新状态为DISCONNECTED')
-      connectionStatus.value = 3
+      connectionStatus.value = ConnectionStatus.DISCONNECTED
 
       // 触发断开连接事件
       try {
@@ -963,12 +841,10 @@ const sendMessage = () => {
 
       // 尝试重新初始化状态
       nextTick(() => {
-        console.log('尝试重新初始化WebSocket状态')
         if (socket && socket.value) {
           // 如果socket存在但状态不一致，尝试关闭它
           try {
             socket.value.close()
-            console.log('已关闭不一致的WebSocket连接')
           } catch (closeError) {
             console.error('关闭不一致的WebSocket连接失败:', closeError)
           }
@@ -980,13 +856,11 @@ const sendMessage = () => {
 
 // 滚动到最新消息
 const scrollToBottom = async () => {
-  console.log('尝试滚动到底部')
   // 使用两次nextTick确保DOM完全更新
   await nextTick()
   await nextTick()
 
   if (chatMessagesRef.value) {
-    console.log('滚动聊天区域到底部，高度:', chatMessagesRef.value.scrollHeight)
     chatMessagesRef.value.scrollTop = chatMessagesRef.value.scrollHeight
 
     // 额外保障：如果第一次滚动不成功，再尝试一次
@@ -1002,7 +876,6 @@ const scrollToBottom = async () => {
 
 // 监听消息变化，自动滚动
 watch(chatMessages, () => {
-  console.log('聊天消息变化，准备滚动到底部')
   nextTick(() => {
     scrollToBottom()
   })
@@ -1200,11 +1073,6 @@ watch(chatMessages, () => {
 .collaborator-name {
   font-size: 14px;
   font-weight: 500;
-}
-
-.collaborator-status {
-  font-size: 12px;
-  color: #909399;
 }
 
 /* 添加协作者标记样式 */
@@ -1455,5 +1323,48 @@ watch(chatMessages, () => {
 .invite-suggestion {
   margin-top: 10px;
   padding: 0 5px;
+}
+
+/* 所有者信息样式 */
+.owner-info {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background-color: #f5f7fa;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+}
+
+.owner-label {
+  font-weight: 500;
+  color: #606266;
+  margin-right: 8px;
+}
+
+.owner-value {
+  display: flex;
+  align-items: center;
+}
+
+.owner-name {
+  font-weight: 500;
+  color: #303133;
+}
+
+.owner-unknown {
+  color: #909399;
+  font-style: italic;
+}
+
+.owner-badge {
+  margin-left: 6px;
+  color: #409EFF;
+  font-size: 12px;
+}
+
+.restore-time {
+  font-size: 14px;
+  color: #909399;
+  margin-top: 10px;
 }
 </style>

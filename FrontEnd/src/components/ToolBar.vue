@@ -270,7 +270,7 @@ const handleDragStart = (event: DragEvent, type: ObstacleType) => {
     }
   }
 
-  console.log('开始拖拽障碍物类型:', type)
+
 }
 
 const handleSaveDesign = async () => {
@@ -286,7 +286,7 @@ const handleSaveDesign = async () => {
   }
 
   try {
-    console.log('开始保存设计...')
+
 
     // 显示加载提示
     const loadingInstance = ElLoading.service({
@@ -297,7 +297,7 @@ const handleSaveDesign = async () => {
 
     // 获取画布元素
     const canvas = document.querySelector('.course-canvas') as HTMLElement
-    console.log('画布元素:', canvas)
+
 
     if (!canvas) {
       throw new Error('获取画布元素失败')
@@ -342,11 +342,11 @@ const handleSaveDesign = async () => {
     const originalWidth = originalRect.width
     const originalHeight = originalRect.height
 
-    console.log('原始画布尺寸:', originalWidth, 'x', originalHeight)
+
 
     try {
       // 4. 使用html2canvas时的处理
-      console.log('开始转换画布为图片...')
+
 
       // 首先尝试使用更可靠的方式捕获画布内容
       const imageCanvas = await html2canvas(canvas, {
@@ -396,7 +396,7 @@ const handleSaveDesign = async () => {
         }
       })
 
-      console.log('html2canvas生成完成，尺寸:', imageCanvas.width, 'x', imageCanvas.height)
+
 
       // 5. 处理生成的图像，确保合适的尺寸
       const finalWidth = Math.max(800, imageCanvas.width)
@@ -433,7 +433,7 @@ const handleSaveDesign = async () => {
         }, 'image/png', 1.0)  // 使用最高质量
       })
 
-      console.log('图片生成完成，大小:', imageBlob.size)
+
 
       // 7. 导出设计数据
       const designData = courseStore.exportCourse()
@@ -441,7 +441,7 @@ const handleSaveDesign = async () => {
 
       // 8. 检查是否是更新现有设计
       const designIdToUpdate = localStorage.getItem('design_id_to_update')
-      console.log('设计ID (从localStorage):', designIdToUpdate)
+
 
       // 构建保存请求数据
       const saveData: SaveDesignRequest = {
@@ -457,19 +457,19 @@ const handleSaveDesign = async () => {
           throw new Error('设计ID无效，无法更新')
         }
         saveData.id = designId
-        console.log('更新设计，ID:', designId)
+
       } else {
-        console.log('创建新设计')
+
       }
 
       // 9. 发送保存请求
       const response = await saveDesign(saveData)
-      console.log('保存响应:', response)
+
 
       if (response.id) {
         // 保存新ID到localStorage
         localStorage.setItem('design_id_to_update', response.id.toString())
-        console.log('设计已保存，ID:', response.id)
+        
         ElMessage.success('设计保存成功！')
       } else {
         throw new Error('保存响应中没有ID')
@@ -700,7 +700,7 @@ const handleExport = async (command: string) => {
     const restoreTexts = cleanupCanvasForExport(canvas)
 
     // 使用 html2canvas 将画布转换为图片，并指定宽高
-    console.log('开始转换画布为图片...')
+
     const imageCanvas = await html2canvas(canvas, {
       backgroundColor: '#ffffff',
       scale: 3, // 使用3倍缩放以获得更高质量的图像
@@ -776,7 +776,7 @@ const handleExport = async (command: string) => {
     // 如果画布尺寸小于最小值，创建一个新的画布并进行缩放
     let finalCanvas = imageCanvas
     if (canvasWidth < minExportWidth || canvasHeight < minExportHeight) {
-      console.log('画布尺寸小于最小值，进行缩放')
+
 
       // 计算缩放比例
       const scaleRatio = Math.max(
@@ -857,7 +857,7 @@ const exportPDF = async () => {
     const restoreTexts = cleanupCanvasForExport(canvas)
 
     // 使用 html2canvas 将画布转换为图片，并指定宽高
-    console.log('开始转换画布为图片...')
+
     const imageCanvas = await html2canvas(canvas, {
       backgroundColor: '#ffffff',
       scale: 3, // 使用3倍缩放以获得更高质量的图像
@@ -933,7 +933,7 @@ const exportPDF = async () => {
     // 如果画布尺寸小于最小值，创建一个新的画布并进行缩放
     let finalCanvas = imageCanvas
     if (canvasWidth < minExportWidth || canvasHeight < minExportHeight) {
-      console.log('画布尺寸小于最小值，进行缩放')
+
 
       // 计算缩放比例
       const scaleRatio = Math.max(

@@ -57,7 +57,6 @@ export const useCourseStore = defineStore('course', () => {
    * @returns {boolean} 是否存在有效的自动保存数据
    */
   const initializeStore = () => {
-    console.log('初始化课程设计存储，检查是否有自动保存的数据')
     const savedCourse = localStorage.getItem('autosaved_course')
     const savedTimestamp = localStorage.getItem('autosaved_timestamp')
 
@@ -65,7 +64,6 @@ export const useCourseStore = defineStore('course', () => {
       try {
         const parsedData = JSON.parse(savedCourse)
         if (parsedData && parsedData.id) {
-          console.log('找到有效的自动保存数据，等待用户确认是否恢复')
           return true
         }
       } catch (error) {
@@ -613,6 +611,34 @@ export const useCourseStore = defineStore('course', () => {
   }
 
   /**
+   * 使用指定ID添加新的障碍物
+   * @description 向课程中添加带有指定ID的障碍物，用于协作模式下保持ID一致
+   * @param {Obstacle} obstacle - 完整的障碍物对象（包含id）
+   * @returns {Obstacle} 添加后的障碍物对象
+   */
+  function addObstacleWithId(obstacle: Obstacle) {
+    // 直接使用提供的障碍物对象（包含ID）
+    const newObstacle = { ...obstacle }
+
+    // 添加到障碍物列表
+    currentCourse.value.obstacles.push(newObstacle)
+
+    // 如果路径可见，则更新路径
+    if (coursePath.value.visible) {
+      if (coursePath.value.points.length <= 2) {
+        // 如果路径点不足，重新生成整个路径
+        generatePath()
+      } else {
+        // 否则，只为新障碍物添加路径点
+        appendObstacleToPath(newObstacle)
+      }
+    }
+
+    updateCourse()
+    return newObstacle
+  }
+
+  /**
    * 为新添加的障碍物追加路径点
    * @description 在现有路径中为新添加的障碍物生成相应的路径点
    * @param {Obstacle} obstacle - 新添加的障碍物对象
@@ -743,8 +769,9 @@ export const useCourseStore = defineStore('course', () => {
    * @description 更新指定障碍物的属性，并根据需要更新相关路径
    * @param {string} obstacleId - 要更新的障碍物ID
    * @param {Partial<Obstacle>} updates - 要更新的属性对象
+   * @param {boolean} sendUpdate - 是否发送更新消息到协作者，默认为 true
    */
-  function updateObstacle(obstacleId: string, updates: Partial<Obstacle>) {
+  function updateObstacle(obstacleId: string, updates: Partial<Obstacle>, sendUpdate = true) {
     const index = currentCourse.value.obstacles.findIndex((o) => o.id === obstacleId)
     if (index !== -1) {
       const obstacle = currentCourse.value.obstacles[index]
@@ -784,6 +811,27 @@ export const useCourseStore = defineStore('course', () => {
       }
 
       updateCourse()
+
+      // 如果启用了发送更新消息且存在协作功能，则发送更新消息
+      if (sendUpdate && typeof window !== 'undefined') {
+        // 检查是否存在协作功能
+        const isCollaborating = localStorage.getItem('isCollaborating') === 'true'
+        if (isCollaborating) {
+          try {
+            // 尝试获取 sendObstacleUpdate 函数
+            const event = new CustomEvent('obstacle-updated', {
+              detail: {
+                obstacleId,
+                updates,
+              },
+            })
+            document.dispatchEvent(event)
+            console.log('已触发障碍物更新事件:', obstacleId, updates)
+          } catch (error) {
+            console.error('发送障碍物更新消息失败:', error)
+          }
+        }
+      }
     }
   }
 
@@ -1041,7 +1089,6 @@ export const useCourseStore = defineStore('course', () => {
         currentCourse.value.obstacles.length === 0 &&
         (!coursePath.value.visible || coursePath.value.points.length === 0)
       ) {
-        console.log('没有内容需要自动保存')
         return
       }
 
@@ -1062,12 +1109,6 @@ export const useCourseStore = defineStore('course', () => {
           detail: { timestamp: new Date().toISOString() },
         })
         document.dispatchEvent(autoSaveEvent)
-
-        console.log('路线设计已自动保存到localStorage', {
-          obstacles: currentCourse.value.obstacles.length,
-          pathPoints: coursePath.value.points.length,
-          dataSize: courseJson.length,
-        })
       } catch (storageError) {
         console.error('localStorage存储失败，可能是存储空间不足:', storageError)
         // 尝试保存简化版数据
@@ -1084,7 +1125,6 @@ export const useCourseStore = defineStore('course', () => {
           const simplifiedJson = JSON.stringify(simplifiedData)
           localStorage.setItem('autosaved_course', simplifiedJson)
           localStorage.setItem('autosaved_timestamp', new Date().toISOString())
-          console.log('已保存简化版路线设计')
         } catch (fallbackError) {
           console.error('即使简化数据后仍然无法保存:', fallbackError)
         }
@@ -1097,16 +1137,34 @@ export const useCourseStore = defineStore('course', () => {
   /**
    * 从localStorage恢复数据
    * @description 尝试从本地存储中恢复之前保存的课程设计数据
+   * @param {boolean} skipIfViaLink - 如果是通过邀请链接打开，是否跳过恢复本地保存的设计
    * @returns {boolean} 是否成功恢复数据
    */
-  function restoreFromLocalStorage(): boolean {
+  function restoreFromLocalStorage(skipIfViaLink: boolean = false): boolean {
     try {
+      // 检查是否通过邀请链接打开
+      if (skipIfViaLink) {
+        // 检查是否有待处理的协作
+        const pendingCollabStr = localStorage.getItem('pendingCollaboration')
+        if (pendingCollabStr) {
+          try {
+            const pendingCollab = JSON.parse(pendingCollabStr)
+            // 检查是否通过链接加入
+            if (pendingCollab.viaLink) {
+              console.log('通过邀请链接打开，跳过恢复本地保存的设计')
+              return false
+            }
+          } catch (error) {
+            console.error('解析待处理的协作数据失败:', error)
+          }
+        }
+      }
+
       // 先检查自动保存的数据
       const savedCourse = localStorage.getItem('autosaved_course')
       const savedTimestamp = localStorage.getItem('autosaved_timestamp')
 
       if (!savedCourse || !savedTimestamp) {
-        console.log('本地存储中没有自动保存的路线设计')
         return false
       }
 
@@ -1279,13 +1337,6 @@ export const useCourseStore = defineStore('course', () => {
           }
         }
 
-        console.log('成功恢复自动保存的路线设计:', {
-          obstacles: scaledObstacles.length,
-          hasPath: !!scaledPath,
-          timestamp: savedTimestamp,
-          scaleFactor,
-        })
-
         return true
       } catch (error) {
         console.error('解析本地存储的JSON数据失败:', error)
@@ -1307,7 +1358,6 @@ export const useCourseStore = defineStore('course', () => {
   function clearAutosave() {
     localStorage.removeItem('autosaved_course')
     localStorage.removeItem('autosaved_timestamp')
-    console.log('已清除自动保存的路线设计')
   }
 
   /**
@@ -1364,22 +1414,6 @@ export const useCourseStore = defineStore('course', () => {
       const text = await file.text()
       const courseData = JSON.parse(text)
 
-      // 添加日志帮助调试
-      console.log(
-        '导入的原始课程数据:',
-        JSON.stringify({
-          name: courseData.name,
-          obstacles: courseData.obstacles ? courseData.obstacles.length : 0,
-          hasPath: !!courseData.path,
-          hasViewportInfo: !!courseData.viewportInfo,
-        }),
-      )
-
-      // 检查第一个障碍物的数据结构
-      if (courseData.obstacles && courseData.obstacles.length > 0) {
-        console.log('原始障碍物结构示例:', JSON.stringify(courseData.obstacles[0]))
-      }
-
       // 处理视口信息
       const originalViewport = courseData.viewportInfo || {
         width: window.innerWidth,
@@ -1402,7 +1436,6 @@ export const useCourseStore = defineStore('course', () => {
         const rect = canvasElement.getBoundingClientRect()
         currentCanvasWidth = rect.width
         currentCanvasHeight = rect.height
-        console.log('当前画布实际尺寸:', currentCanvasWidth, 'x', currentCanvasHeight)
       } else {
         console.warn('未找到画布元素，使用默认尺寸')
       }
@@ -1416,9 +1449,6 @@ export const useCourseStore = defineStore('course', () => {
         aspectRatio: (courseData.fieldWidth || 80) / (courseData.fieldHeight || 60),
       }
 
-      console.log('原始设计视口信息:', originalViewport)
-      console.log('当前设备视口信息:', currentViewport)
-
       // 计算缩放系数 - 使用画布大小比例
       const scaleFactorWidth = currentViewport.canvasWidth / (originalViewport.canvasWidth || 800)
       const scaleFactorHeight =
@@ -1426,15 +1456,8 @@ export const useCourseStore = defineStore('course', () => {
       // 使用一个统一的缩放因子，防止宽高比例不同导致的变形
       const scaleFactor = Math.min(scaleFactorWidth, scaleFactorHeight)
 
-      console.log('计算的缩放系数:', {
-        width: scaleFactorWidth,
-        height: scaleFactorHeight,
-        unified: scaleFactor,
-      })
-
       // 检查是否需要进行缩放调整
       const needsScaling = Math.abs(scaleFactor - 1) > 0.1
-      console.log('是否需要进行缩放调整:', needsScaling)
 
       // 调整障碍物位置和尺寸来适应当前屏幕
       const scaledObstacles = courseData.obstacles.map((obstacle: Obstacle, index: number) => {
@@ -1546,17 +1569,6 @@ export const useCourseStore = defineStore('course', () => {
           if (scaledObstacle.position.x > maxX) scaledObstacle.position.x = maxX
           if (scaledObstacle.position.y < minY) scaledObstacle.position.y = minY
           if (scaledObstacle.position.y > maxY) scaledObstacle.position.y = maxY
-
-          console.log(`障碍物 #${index} 完整调整:`, {
-            id: scaledObstacle.id,
-            type: scaledObstacle.type,
-            position: {
-              before: originalPosition,
-              after: scaledObstacle.position,
-            },
-            scaled: true,
-            factor: scaleFactor,
-          })
         }
 
         return scaledObstacle
@@ -1569,8 +1581,7 @@ export const useCourseStore = defineStore('course', () => {
 
         if (needsScaling && courseData.path.points) {
           // 缩放路径点 - 使用统一缩放因子
-          scaledPath.points = courseData.path.points.map((point: PathPoint, index: number) => {
-            const originalPoint = { ...point }
+          scaledPath.points = courseData.path.points.map((point: PathPoint) => {
             const scaledPoint = {
               ...point,
               x: point.x * scaleFactor,
@@ -1592,40 +1603,8 @@ export const useCourseStore = defineStore('course', () => {
               }
             }
 
-            console.log(`路径点 #${index} 缩放:`, {
-              before: { x: originalPoint.x, y: originalPoint.y },
-              after: { x: scaledPoint.x, y: scaledPoint.y },
-            })
-
             return scaledPoint
           })
-
-          // 缩放起点和终点
-          if (scaledPath.startPoint) {
-            const originalStart = { ...scaledPath.startPoint }
-            scaledPath.startPoint = {
-              ...scaledPath.startPoint,
-              x: scaledPath.startPoint.x * scaleFactor,
-              y: scaledPath.startPoint.y * scaleFactor,
-            }
-            console.log('起点位置调整:', {
-              before: originalStart,
-              after: scaledPath.startPoint,
-            })
-          }
-
-          if (scaledPath.endPoint) {
-            const originalEnd = { ...scaledPath.endPoint }
-            scaledPath.endPoint = {
-              ...scaledPath.endPoint,
-              x: scaledPath.endPoint.x * scaleFactor,
-              y: scaledPath.endPoint.y * scaleFactor,
-            }
-            console.log('终点位置调整:', {
-              before: originalEnd,
-              after: scaledPath.endPoint,
-            })
-          }
         }
       }
 
@@ -1656,8 +1635,6 @@ export const useCourseStore = defineStore('course', () => {
           endPoint.value = scaledPath.endPoint
         }
       }
-
-      console.log('加载课程数据完成，包含障碍物数量:', scaledObstacles.length)
 
       // 更新课程
       updateCourse()
@@ -1954,7 +1931,6 @@ export const useCourseStore = defineStore('course', () => {
           rotation: endPoint.value.rotation,
         },
       }
-      console.log('导出路线数据，路线点数量:', coursePath.value.points.length)
     }
 
     return exportData
@@ -1987,8 +1963,6 @@ export const useCourseStore = defineStore('course', () => {
       viewportInfo,
     }
 
-    console.log('导入课程数据，包含视口信息:', viewportInfo)
-
     // 清除选中的障碍物
     selectedObstacle.value = null
 
@@ -2005,9 +1979,7 @@ export const useCourseStore = defineStore('course', () => {
    */
   const setCurrentCourseId = (id: string) => {
     if (id) {
-      console.log('设置当前设计ID:', id)
       currentCourse.value.id = id || uuidv4()
-      console.log('当前设计ID已更新为:', currentCourse.value.id)
     }
   }
 
@@ -2043,32 +2015,36 @@ export const useCourseStore = defineStore('course', () => {
   return {
     currentCourse,
     selectedObstacle,
-    selectedPoint: ref<'start' | 'end' | null>(null), // 添加选中点状态
     coursePath,
     startPoint,
     endPoint,
-    updateCourseName,
-    generatePath,
-    updateControlPoint,
-    togglePathVisibility,
+    selectedPoint: ref<'start' | 'end' | null>(null), // 添加选中点状态
+    initializeStore,
     updateStartRotation,
     updateEndRotation,
     updateStartPoint,
     updateEndPoint,
+    generatePath,
+    updateControlPoint,
+    togglePathVisibility,
     addObstacle,
+    addObstacleWithId,
     updateObstacle,
     removeObstacle,
+    updateCourse,
+    saveToLocalStorage,
+    restoreFromLocalStorage,
+    clearAutosave,
     saveCourse,
     loadCourse,
     updateFieldSize,
     generateCourse,
     clearPath,
     resetStartEndPoints,
+    updateCourseName,
     exportCourse,
     importCourse,
     setCurrentCourseId,
     resetCourse,
-    restoreFromLocalStorage,
-    clearAutosave,
   }
 })

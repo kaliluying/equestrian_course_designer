@@ -6,6 +6,58 @@ from jwt.exceptions import InvalidTokenError
 from rest_framework_simplejwt.exceptions import TokenError
 
 
+from channels.middleware import BaseMiddleware
+from channels.db import database_sync_to_async
+from django.contrib.auth.models import AnonymousUser
+from rest_framework_simplejwt.tokens import AccessToken
+from jwt.exceptions import InvalidTokenError, DecodeError
+from rest_framework_simplejwt.exceptions import TokenError
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+class JWTAuthMiddleware(BaseMiddleware):
+    """
+    自定义JWT认证中间件，用于WebSocket连接
+    """
+    async def __call__(self, scope, receive, send):
+        # 从查询参数或cookie中获取token
+        query_string = scope.get('query_string', b'').decode('utf-8')
+        cookies = scope.get('cookies', {})
+        
+        # 尝试从查询参数获取token
+        token = None
+        for param in query_string.split('&'):
+            if param.startswith('token='):
+                token = param.split('=')[1]
+                break
+        
+        # 如果查询参数中没有token，尝试从cookie中获取
+        if not token:
+            token = cookies.get('access_token')
+        
+        # 如果找到token，验证并获取用户
+        if token:
+            try:
+                # 验证token
+                access_token = AccessToken(token)
+                user_id = access_token['user_id']
+                scope['user'] = await self.get_user(user_id)
+            except (InvalidTokenError, TokenError, DecodeError):
+                scope['user'] = AnonymousUser()
+        else:
+            scope['user'] = AnonymousUser()
+        
+        return await super().__call__(scope, receive, send)
+    
+    @database_sync_to_async
+    def get_user(self, user_id):
+        try:
+            return User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return AnonymousUser()
+
+
 class TokenAuthenticationMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response

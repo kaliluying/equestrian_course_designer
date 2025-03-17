@@ -64,7 +64,7 @@ const form = ref<LoginForm>({
 // 在组件挂载时获取CSRF令牌
 onMounted(async () => {
   try {
-    console.log('LoginForm组件已挂载，正在获取CSRF令牌...')
+
     // 请求CSRF令牌，这会设置cookie
     const response = await axios.get('http://127.0.0.1:8000/user/csrf/', {
       withCredentials: true,
@@ -72,12 +72,12 @@ onMounted(async () => {
       params: { _t: new Date().getTime() }
     })
 
-    console.log('CSRF令牌已获取', response.data)
+
 
     // 如果响应中包含csrfToken，则手动设置cookie
     if (response.data && response.data.csrfToken) {
       document.cookie = `csrftoken=${response.data.csrfToken}; path=/; SameSite=Lax`
-      console.log('已手动设置CSRF cookie')
+
     }
   } catch (error) {
     console.error('获取CSRF令牌失败:', error)
@@ -187,16 +187,16 @@ const handleSubmit = async () => {
   }
 
   try {
-    console.log('开始验证表单...')
+
     await formRef.value.validate()
     loading.value = true
 
-    console.log('提交登录表单:', form.value)
+    
 
     // 使用修改后的登录方法
     const user = await userStore.loginUser(form.value)
 
-    console.log('登录成功:', user)
+
     ElMessage.success('登录成功')
     emit('login-success', user)
   } catch (error) {

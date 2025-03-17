@@ -259,6 +259,24 @@ EMAIL_HOST_PASSWORD = 'wzeh vduq wxma zrap'  # 应用专用密码（非邮箱登
 # WebSocket配置
 ALLOWED_HOSTS = ['*']  # 允许所有主机访问，生产环境应该限制
 
+# settings.py
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [('127.0.0.1', 6379)],
+        },
+    },
+}
+
+
+# 获取项目根目录
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# 创建日志目录
+LOGS_DIR = os.path.join(BASE_DIR, 'logs')
+os.makedirs(LOGS_DIR, exist_ok=True)
+
 # 日志配置
 LOGGING = {
     'version': 1,
@@ -275,15 +293,21 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
         },
+        'file': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(LOGS_DIR, 'django-channels.log'),
+            'formatter': 'verbose',
+        },
     },
     'loggers': {
         'django': {
-            'handlers': ['console'],
+            'handlers': ['console', 'file'],  # 同时输出到控制台和文件
             'level': 'INFO',
             'propagate': True,
         },
         'django.channels': {
-            'handlers': ['console'],
+            'handlers': ['console', 'file'],  # 同时输出到控制台和文件
             'level': 'DEBUG',
             'propagate': False,
         },

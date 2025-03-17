@@ -210,6 +210,7 @@ import { Delete, Plus } from '@element-plus/icons-vue'
 import { useCourseStore } from '@/stores/course'
 import type { Pole } from '@/types/obstacle'
 import { ObstacleType } from '@/types/obstacle'
+import { useWebSocketConnection } from '@/utils/websocket'
 
 // 获取课程存储
 const courseStore = useCourseStore()
@@ -227,6 +228,10 @@ const endRotation = computed({
   get: () => courseStore.endPoint.rotation,
   set: (value) => courseStore.updateEndRotation(value),
 })
+
+const { isCollaborating, sendObstacleUpdate } = useWebSocketConnection(
+  courseStore.currentCourse.id
+)
 
 /**
  * 判断是否可以添加横木
@@ -281,11 +286,32 @@ const adjustColor = (color: string, amount: number): string => {
 }
 
 /**
+ * 更新障碍物并发送协作消息
+ * @param obstacleId 障碍物ID
+ * @param updates 更新内容
+ * @param updateType 更新类型（用于日志）
+ */
+const updateObstacleWithCollaboration = (
+  obstacleId: string,
+  updates: Partial<Obstacle>,
+  updateType: string = '属性'
+) => {
+  // 更新本地障碍物
+  courseStore.updateObstacle(obstacleId, updates)
+
+  // 如果在协作模式下，发送障碍物更新消息
+  if (isCollaborating.value) {
+    
+    sendObstacleUpdate(obstacleId, updates)
+  }
+}
+
+/**
  * 添加横木
  * 创建一个新的横木对象并添加到障碍物中
  */
 const addPole = (): void => {
-  if (!selectedObstacle.value || !canAddPole.value) return
+  if (!selectedObstacle.value) return
 
   // 创建新横木的初始参数
   const newPole: Pole = {
@@ -297,9 +323,11 @@ const addPole = (): void => {
   // 添加到障碍物的横木数组中
   selectedObstacle.value.poles.push(newPole)
   // 更新障碍物
-  courseStore.updateObstacle(selectedObstacle.value.id, {
-    poles: selectedObstacle.value.poles,
-  })
+  updateObstacleWithCollaboration(
+    selectedObstacle.value.id,
+    { poles: selectedObstacle.value.poles },
+    '添加横木'
+  )
 }
 
 /**
@@ -312,9 +340,11 @@ const removePole = (index: number): void => {
   // 从数组中移除指定索引的横木
   selectedObstacle.value.poles.splice(index, 1)
   // 更新障碍物
-  courseStore.updateObstacle(selectedObstacle.value.id, {
-    poles: selectedObstacle.value.poles,
-  })
+  updateObstacleWithCollaboration(
+    selectedObstacle.value.id,
+    { poles: selectedObstacle.value.poles },
+    '移除横木'
+  )
 }
 
 /**
@@ -339,9 +369,11 @@ const formatRotation = (val: number): string => `${val}°`
  */
 const updateRotation = (val: number): void => {
   if (!selectedObstacle.value) return
-  courseStore.updateObstacle(selectedObstacle.value.id, {
-    rotation: val,
-  })
+  updateObstacleWithCollaboration(
+    selectedObstacle.value.id,
+    { rotation: val },
+    '旋转角度'
+  )
 }
 
 /**
@@ -356,7 +388,11 @@ const updatePoleHeight = (index: number, heightInCm: number): void => {
     ...newPoles[index],
     height: (heightInCm / 100) * meterScale.value,  // 厘米转像素
   }
-  courseStore.updateObstacle(selectedObstacle.value.id, { poles: newPoles })
+  updateObstacleWithCollaboration(
+    selectedObstacle.value.id,
+    { poles: newPoles },
+    '横木高度'
+  )
 }
 
 /**
@@ -371,7 +407,11 @@ const updatePoleWidth = (index: number, widthInMeters: number): void => {
     ...newPoles[index],
     width: widthInMeters * meterScale.value,  // 米转像素
   }
-  courseStore.updateObstacle(selectedObstacle.value.id, { poles: newPoles })
+  updateObstacleWithCollaboration(
+    selectedObstacle.value.id,
+    { poles: newPoles },
+    '横木宽度'
+  )
 }
 
 /**
@@ -386,7 +426,11 @@ const updatePoleSpacing = (index: number, spacingInMeters: number): void => {
     ...newPoles[index],
     spacing: spacingInMeters * meterScale.value,  // 米转像素
   }
-  courseStore.updateObstacle(selectedObstacle.value.id, { poles: newPoles })
+  updateObstacleWithCollaboration(
+    selectedObstacle.value.id,
+    { poles: newPoles },
+    '横木间距'
+  )
 }
 
 // ===== 利物浦水障相关方法 =====
@@ -401,9 +445,11 @@ const updateWaterWidth = (widthInMeters: number): void => {
     ...selectedObstacle.value.liverpoolProperties,
     width: widthInMeters * meterScale.value,  // 米转像素
   }
-  courseStore.updateObstacle(selectedObstacle.value.id, {
-    liverpoolProperties: newProperties,
-  })
+  updateObstacleWithCollaboration(
+    selectedObstacle.value.id,
+    { liverpoolProperties: newProperties },
+    '水障宽度'
+  )
 }
 
 /**
@@ -416,9 +462,11 @@ const updateWaterDepth = (depthInCm: number): void => {
     ...selectedObstacle.value.liverpoolProperties,
     waterDepth: (depthInCm / 100) * meterScale.value,  // 厘米转像素
   }
-  courseStore.updateObstacle(selectedObstacle.value.id, {
-    liverpoolProperties: newProperties,
-  })
+  updateObstacleWithCollaboration(
+    selectedObstacle.value.id,
+    { liverpoolProperties: newProperties },
+    '水障深度'
+  )
 }
 
 /**
@@ -431,9 +479,11 @@ const updateWaterColor = (color: string): void => {
     ...selectedObstacle.value.liverpoolProperties,
     waterColor: color,
   }
-  courseStore.updateObstacle(selectedObstacle.value.id, {
-    liverpoolProperties: newProperties,
-  })
+  updateObstacleWithCollaboration(
+    selectedObstacle.value.id,
+    { liverpoolProperties: newProperties },
+    '水障颜色'
+  )
 }
 
 /**
@@ -446,9 +496,11 @@ const updateHasRail = (hasRail: boolean): void => {
     ...selectedObstacle.value.liverpoolProperties,
     hasRail,
   }
-  courseStore.updateObstacle(selectedObstacle.value.id, {
-    liverpoolProperties: newProperties,
-  })
+  updateObstacleWithCollaboration(
+    selectedObstacle.value.id,
+    { liverpoolProperties: newProperties },
+    '显示横杆'
+  )
 }
 
 /**
@@ -475,9 +527,11 @@ const updateWaterObstacleWidth = (widthInMeters: number): void => {
     ...selectedObstacle.value.waterProperties,
     width: widthInMeters * meterScale.value,  // 米转像素
   }
-  courseStore.updateObstacle(selectedObstacle.value.id, {
-    waterProperties: newProperties,
-  })
+  updateObstacleWithCollaboration(
+    selectedObstacle.value.id,
+    { waterProperties: newProperties },
+    '水障宽度'
+  )
 }
 
 /**
@@ -490,9 +544,11 @@ const updateWaterObstacleDepth = (depthInCm: number): void => {
     ...selectedObstacle.value.waterProperties,
     depth: (depthInCm / 100) * meterScale.value,  // 厘米转像素
   }
-  courseStore.updateObstacle(selectedObstacle.value.id, {
-    waterProperties: newProperties,
-  })
+  updateObstacleWithCollaboration(
+    selectedObstacle.value.id,
+    { waterProperties: newProperties },
+    '水障深度'
+  )
 }
 
 /**
@@ -505,9 +561,11 @@ const updateWaterObstacleColor = (color: string): void => {
     ...selectedObstacle.value.waterProperties,
     color: color,
   }
-  courseStore.updateObstacle(selectedObstacle.value.id, {
-    waterProperties: newProperties,
-  })
+  updateObstacleWithCollaboration(
+    selectedObstacle.value.id,
+    { waterProperties: newProperties },
+    '水障颜色'
+  )
 }
 
 /**
@@ -520,9 +578,11 @@ const updateWaterObstacleBorderColor = (color: string): void => {
     ...selectedObstacle.value.waterProperties,
     borderColor: color,
   }
-  courseStore.updateObstacle(selectedObstacle.value.id, {
-    waterProperties: newProperties,
-  })
+  updateObstacleWithCollaboration(
+    selectedObstacle.value.id,
+    { waterProperties: newProperties },
+    '水障边框颜色'
+  )
 }
 
 /**
@@ -535,9 +595,11 @@ const updateWaterObstacleBorderWidth = (width: number): void => {
     ...selectedObstacle.value.waterProperties,
     borderWidth: width,
   }
-  courseStore.updateObstacle(selectedObstacle.value.id, {
-    waterProperties: newProperties,
-  })
+  updateObstacleWithCollaboration(
+    selectedObstacle.value.id,
+    { waterProperties: newProperties },
+    '水障边框宽度'
+  )
 }
 
 /**
@@ -574,9 +636,11 @@ const updateShowDirectionArrow = (show: boolean): void => {
     ...selectedObstacle.value.decorationProperties,
     showDirectionArrow: show,
   }
-  courseStore.updateObstacle(selectedObstacle.value.id, {
-    decorationProperties: newProperties,
-  })
+  updateObstacleWithCollaboration(
+    selectedObstacle.value.id,
+    { decorationProperties: newProperties },
+    '装饰物方向箭头'
+  )
 }
 </script>
 

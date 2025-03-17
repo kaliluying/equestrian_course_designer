@@ -211,7 +211,6 @@ export const useObstacleStore = defineStore('obstacle', () => {
 
     // 如果用户未登录，则不加载任何障碍物
     if (!userStore.isAuthenticated) {
-      console.log('用户未登录，不加载自定义障碍物')
       return
     }
 
@@ -220,7 +219,6 @@ export const useObstacleStore = defineStore('obstacle', () => {
     try {
       // 从服务器加载障碍物
       const response = await fetchUserObstacles()
-      console.log('获取到的障碍物数据:', response)
 
       // 检查响应格式，处理分页数据
       // 使用类型断言处理可能的分页响应
@@ -229,13 +227,6 @@ export const useObstacleStore = defineStore('obstacle', () => {
 
       if (Array.isArray(obstacles)) {
         customObstacles.value = obstacles.map(convertApiObstacleToTemplate)
-        console.log(
-          '已从服务器加载用户ID',
-          userStore.currentUser?.id,
-          '的自定义障碍物:',
-          customObstacles.value.length,
-          '个',
-        )
 
         // 同时保存一份到本地存储（作为备份）
         const storageKey = getStorageKey()
@@ -264,7 +255,6 @@ export const useObstacleStore = defineStore('obstacle', () => {
         if (savedObstacles) {
           try {
             customObstacles.value = JSON.parse(savedObstacles)
-            console.log('已从本地存储加载自定义障碍物作为备份')
           } catch (localError) {
             console.error('加载本地备份障碍物失败:', localError)
             customObstacles.value = []
@@ -322,41 +312,33 @@ export const useObstacleStore = defineStore('obstacle', () => {
     error.value = null
 
     try {
-      console.log('开始保存自定义障碍物, 原始ID:', obstacle.id)
-
       // 转换为API格式
       const apiObstacle = convertTemplateToApiObstacle(obstacle)
-      console.log('转换后的API障碍物数据:', apiObstacle)
 
       let savedObstacle: ObstacleData
 
       // 通过API保存到服务器
       if (obstacle.id && obstacle.id !== 'new') {
         // 更新现有障碍物 - 直接传递ID，让API处理ID转换
-        console.log('更新现有障碍物, ID:', obstacle.id)
+
         savedObstacle = await updateObstacle(obstacle.id, apiObstacle)
       } else {
         // 创建新障碍物
-        console.log('创建新障碍物')
+
         savedObstacle = await createObstacle(apiObstacle)
       }
 
-      console.log('服务器返回的障碍物数据:', savedObstacle)
-
       // 转换回模板格式
       const savedTemplate = convertApiObstacleToTemplate(savedObstacle)
-      console.log('转换回模板格式后的障碍物:', savedTemplate)
 
       // 更新本地障碍物列表
       const index = customObstacles.value.findIndex((o) => o.id === savedTemplate.id)
       if (index >= 0) {
         // 更新现有障碍物
         customObstacles.value[index] = savedTemplate
-        console.log('更新了列表中的障碍物, 索引:', index)
       } else {
         // 添加新障碍物
         customObstacles.value.push(savedTemplate)
-        console.log('添加了新障碍物到列表')
       }
 
       // 同时更新本地存储备份
@@ -524,7 +506,6 @@ export const useObstacleStore = defineStore('obstacle', () => {
       (customObstacles.value.length === 0 ||
         (sharedObstacles.value.length === 0 && loadingShared.value === false))
     ) {
-      console.log('障碍物列表为空，尝试重新加载...')
       // 异步加载，不阻塞当前操作
       setTimeout(() => {
         initObstacles()
@@ -545,7 +526,6 @@ export const useObstacleStore = defineStore('obstacle', () => {
   const initSharedObstacles = async () => {
     // 如果用户未登录，则不加载共享障碍物但不抛出错误
     if (!userStore.isAuthenticated) {
-      console.log('用户未登录，不加载共享障碍物')
       // 清空共享障碍物列表，避免显示旧数据
       sharedObstacles.value = []
       return
@@ -557,7 +537,6 @@ export const useObstacleStore = defineStore('obstacle', () => {
     try {
       // 从服务器加载共享障碍物
       const response = await getSharedObstacles()
-      console.log('获取到的共享障碍物数据:', response)
 
       // 检查响应格式，处理分页数据
       // 使用类型断言处理可能的分页响应
@@ -572,7 +551,6 @@ export const useObstacleStore = defineStore('obstacle', () => {
 
       if (Array.isArray(obstacles)) {
         sharedObstacles.value = obstacles.map(convertApiObstacleToTemplate)
-        console.log('已从服务器加载共享障碍物:', sharedObstacles.value.length, '个')
       } else {
         console.error('服务器返回的共享障碍物数据格式不正确:', obstacles)
         sharedObstacles.value = [] // 设置为空数组避免引用错误

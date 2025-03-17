@@ -16,31 +16,25 @@ export const useUserStore = defineStore('user', () => {
   const isAuthenticated = ref(false)
 
   const initializeAuth = () => {
-    console.log('初始化用户认证状态...')
     const token = localStorage.getItem('access_token')
     const userData = localStorage.getItem('user')
     if (token && userData) {
       currentUser.value = JSON.parse(userData)
       isAuthenticated.value = true
-      console.log('用户已登录:', currentUser.value)
 
       // 获取最新的用户资料，包括会员状态
       updateUserProfile()
     } else {
-      console.log('用户未登录')
     }
   }
 
   const loginUser = async (form: LoginForm) => {
     try {
-      console.log('用户状态管理: 尝试登录:', form.username)
       const response = await login(form)
-      console.log('用户状态管理: 登录API响应:', response)
 
       // 保存令牌到localStorage
       localStorage.setItem('access_token', response.access_token)
       localStorage.setItem('refresh_token', response.refresh_token)
-      console.log('用户状态管理: 令牌已保存到localStorage')
 
       // 保存用户信息到localStorage
       const userData = {
@@ -48,12 +42,10 @@ export const useUserStore = defineStore('user', () => {
         username: response.username,
       }
       localStorage.setItem('user', JSON.stringify(userData))
-      console.log('用户状态管理: 用户信息已保存到localStorage')
 
       // 更新用户状态
       currentUser.value = userData
       isAuthenticated.value = true
-      console.log('用户状态管理: 用户状态已更新')
 
       // 获取最新的用户资料，包括会员状态
       updateUserProfile()
@@ -73,11 +65,8 @@ export const useUserStore = defineStore('user', () => {
 
   const registerUser = async (form: RegisterForm) => {
     try {
-      console.log('用户状态管理: 尝试注册:', form.username)
-
       // 使用api中的register方法，它已经处理了CSRF令牌
       const response = await register(form)
-      console.log('用户状态管理: 注册API响应:', response)
 
       const { access_token, refresh_token, user_id, username } = response
 
@@ -101,7 +90,6 @@ export const useUserStore = defineStore('user', () => {
       }
 
       isAuthenticated.value = true
-      console.log('用户状态管理: 用户状态已更新')
 
       // 在用户注册成功后初始化障碍物存储
       // 动态导入避免循环依赖
@@ -145,7 +133,6 @@ export const useUserStore = defineStore('user', () => {
     if (!isAuthenticated.value || !currentUser.value) return
 
     try {
-      console.log('正在更新用户资料...')
       const { getUserProfile } = await import('@/api/user')
       interface UserProfileResponse {
         success: boolean
@@ -162,7 +149,6 @@ export const useUserStore = defineStore('user', () => {
 
         // 更新本地存储
         localStorage.setItem('user', JSON.stringify(currentUser.value))
-        console.log('用户资料已更新:', currentUser.value)
       }
     } catch (error) {
       console.error('更新用户资料失败:', error)
