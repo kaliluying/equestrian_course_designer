@@ -414,9 +414,9 @@ export function useWebSocketConnection(designId: string) {
             )
             break // 如果发送失败，停止处理队列
           }
-        } else if (message.type === 'path' && message.data.path) {
+        } else if (message.type === 'path' && message.data.pathId && message.data.updates) {
           // 发送路径更新消息
-          console.log('从队列中发送路径更新消息:', message.data.path)
+          console.log('从队列中发送路径更新消息:', message.data.pathId, message.data.updates)
 
           // 直接发送消息，不使用sendPathUpdate函数，避免额外的连接检查
           if (socket.value && socket.value.readyState === WebSocket.OPEN && userStore.currentUser) {
@@ -427,7 +427,8 @@ export function useWebSocketConnection(designId: string) {
               sessionId: designId,
               timestamp: new Date().toISOString(),
               payload: {
-                path: message.data.path,
+                pathId: message.data.pathId,
+                updates: message.data.updates,
               },
             }
 
@@ -494,15 +495,35 @@ export function useWebSocketConnection(designId: string) {
    * 如果连接失败或超时，会自动尝试重新连接（最多5次）。
    *
    * @param isViaLink - 是否通过邀请链接加入，默认为false
+   * @param silentMode - 是否在静默模式下连接，静默模式下连接失败不会触发协作停止事件，默认为false
    */
-  const connect = (isViaLink: boolean = false) => {
-    console.log('尝试连接WebSocket，设计ID:', designId, '通过链接加入:', isViaLink)
+  const connect = (isViaLink: boolean = false, silentMode: boolean = false) => {
+    console.log(
+      '尝试连接WebSocket，设计ID:',
+      designId,
+      '通过链接加入:',
+      isViaLink,
+      '静默模式:',
+      silentMode,
+    )
 
     // 设置通过链接加入的状态
     viaLink.value = isViaLink
 
     // 断开现有连接，确保不会有多个连接同时存在
-    disconnect()
+    if (!silentMode) {
+      disconnect()
+    } else {
+      // 在静默模式下，只关闭WebSocket连接，不触发协作停止事件
+      if (socket.value) {
+        try {
+          socket.value.close()
+        } catch (error) {
+          console.error('关闭现有连接失败:', error)
+        }
+        socket.value = null
+      }
+    }
 
     // 更新连接状态为"连接中"
     connectionStatus.value = ConnectionStatus.CONNECTING
@@ -536,160 +557,112 @@ export function useWebSocketConnection(designId: string) {
           socket.value = null
           connectionStatus.value = ConnectionStatus.DISCONNECTED
 
-          // 触发连接失败事件，通知其他组件
-          try {
-            console.log('发送连接超时事件')
-            const event = new CustomEvent('collaboration-stopped', {
-              bubbles: true,
-              detail: {
-                timestamp: new Date().toISOString(),
-                error: true,
-                reason: 'WebSocket连接超时',
-              },
-            })
-            document.dispatchEvent(event)
-          } catch (error) {
-            console.error('发送连接超时事件失败:', error)
-          }
-
-          // 尝试重新连接，最多重试5次，每次间隔时间递增
-          if (reconnectAttempts.value < 5) {
-            reconnectAttempts.value++
-            console.log(`WebSocket连接超时，第${reconnectAttempts.value}次重试...`)
-            setTimeout(() => {
-              connect()
-            }, 1000 * reconnectAttempts.value) // 重试间隔随重试次数增加
+          // 在非静默模式下，触发连接失败事件，通知其他组件
+          if (!silentMode) {
+            try {
+              console.log('发送连接超时事件')
+              const event = new CustomEvent('collaboration-stopped', {
+                bubbles: true,
+                detail: {
+                  timestamp: new Date().toISOString(),
+                  error: true,
+                  reason: 'WebSocket连接超时',
+                },
+              })
+              document.dispatchEvent(event)
+            } catch (error) {
+              console.error('发送连接超时事件失败:', error)
+            }
+          } else {
+            console.log('静默模式下，不发送连接超时事件')
+            // 确保协作状态保持为true
+            localStorage.setItem('isCollaborating', 'true')
           }
         }
-      }, apiConfig.websocket.reconnectInterval) // 使用配置文件中的超时设置
+      }, 10000) // 10秒超时
 
-      // 设置WebSocket事件处理器（onopen, onmessage, onclose, onerror）
-      setupWebSocketEvents(ws, connectionTimeout)
+      // 设置WebSocket事件
+      setupWebSocketEvents(ws, connectionTimeout, silentMode)
+
+      return true
     } catch (error) {
-      // 处理连接创建过程中的错误
-      console.error('创建WebSocket连接失败:', error)
+      console.error('连接WebSocket失败:', error)
+      connectionError.value = '连接WebSocket失败'
       connectionStatus.value = ConnectionStatus.ERROR
-      connectionError.value = `创建WebSocket连接失败: ${error}`
-      socket.value = null
 
-      // 触发连接失败事件，通知其他组件
-      try {
-        console.log('发送连接失败事件')
-        const event = new CustomEvent('collaboration-stopped', {
-          bubbles: true,
-          detail: {
-            timestamp: new Date().toISOString(),
-            error: true,
-            reason: '创建WebSocket连接失败',
-          },
-        })
-        document.dispatchEvent(event)
-      } catch (error) {
-        console.error('发送连接失败事件失败:', error)
+      // 在非静默模式下，触发连接失败事件，通知其他组件
+      if (!silentMode) {
+        try {
+          console.log('发送连接失败事件')
+          const event = new CustomEvent('collaboration-stopped', {
+            bubbles: true,
+            detail: {
+              timestamp: new Date().toISOString(),
+              error: true,
+              reason: '连接WebSocket失败',
+            },
+          })
+          document.dispatchEvent(event)
+        } catch (eventError) {
+          console.error('发送连接失败事件失败:', eventError)
+        }
+      } else {
+        console.log('静默模式下，不发送连接失败事件')
+        // 确保协作状态保持为true
+        localStorage.setItem('isCollaborating', 'true')
       }
+
+      return false
     }
   }
 
   /**
-   * 设置WebSocket事件处理器
+   * 设置WebSocket事件
    *
-   * 为WebSocket实例设置各种事件处理函数：
-   * - onopen: 连接成功时的处理
-   * - onmessage: 接收消息时的处理
-   * - onclose: 连接关闭时的处理
-   * - onerror: 连接错误时的处理
+   * 为WebSocket连接设置各种事件处理器，包括连接打开、消息接收、连接关闭和错误处理。
+   * 在连接成功后会处理消息队列，确保之前积累的消息能够发送出去。
    *
    * @param ws - WebSocket实例
-   * @param connectionTimeout - 连接超时定时器，用于在连接成功时清除
+   * @param connectionTimeout - 连接超时定时器，连接成功后会清除
+   * @param silentMode - 是否在静默模式下运行，静默模式下连接失败不会触发协作停止事件，默认为false
    */
   const setupWebSocketEvents = (
     ws: WebSocket,
     connectionTimeout?: ReturnType<typeof setTimeout>,
+    silentMode: boolean = false,
   ) => {
     console.log('设置WebSocket事件处理器')
 
-    // 连接成功事件处理
+    // 连接打开事件处理
     ws.onopen = () => {
-      console.log('WebSocket连接成功')
+      console.log('WebSocket连接已打开')
 
       // 清除连接超时定时器
       if (connectionTimeout) {
         clearTimeout(connectionTimeout)
       }
 
-      // 更新连接状态为已连接
+      // 重置重连尝试次数
+      reconnectAttempts.value = 0
+
+      // 更新连接状态
       connectionStatus.value = ConnectionStatus.CONNECTED
       connectionError.value = null
-      reconnectAttempts.value = 0 // 重置重连尝试次数
 
-      // 如果有用户信息，发送加入消息
-      if (userStore.currentUser) {
-        try {
-          // 构造并发送加入消息，包含用户ID、用户名和随机颜色
-          const joinMessage: WebSocketMessage = {
-            type: MessageType.JOIN,
-            senderId: String(userStore.currentUser.id),
-            senderName: userStore.currentUser.username,
-            sessionId: designId,
-            timestamp: new Date().toISOString(),
-            payload: {
-              color: generateRandomColor(), // 为用户生成随机颜色标识
-            },
-          }
-          console.log('准备发送加入消息:', joinMessage)
-          sendMessage(joinMessage)
-          console.log('已发送加入消息')
-        } catch (error) {
-          console.error('发送加入消息失败:', error)
-          connectionError.value = `发送加入消息失败: ${error}`
-        }
-      } else {
-        console.error('用户未登录，无法发送加入消息')
-        connectionError.value = '用户未登录，无法发送加入消息'
-      }
-
-      // 处理连接建立前积累的消息队列
+      // 处理消息队列
       processMessageQueue()
 
-      // 触发连接成功事件，通知其他组件
-      try {
-        console.log('发送连接成功事件')
-        const event = new CustomEvent('collaboration-started', {
-          bubbles: true,
-          detail: {
-            timestamp: new Date().toISOString(),
-            designId,
-          },
-        })
-        document.dispatchEvent(event)
-      } catch (error) {
-        console.error('发送连接成功事件失败:', error)
-      }
+      // 发送加入消息
+      sendJoinMessage()
     }
 
     // 接收消息事件处理
-    ws.onmessage = (event: MessageEvent) => {
+    ws.onmessage = (messageEvent: MessageEvent) => {
+      console.log('收到WebSocket原始消息:', messageEvent.data)
+
       try {
-        console.log('收到WebSocket原始消息:', event.data)
-
-        // 处理心跳检测消息 - ping
-        if (event.data === '{"type":"ping"}') {
-          console.log('收到ping消息，发送pong响应')
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'pong' }))
-            console.log('pong响应已发送')
-          }
-          return
-        }
-
-        // 处理心跳检测响应 - pong
-        if (event.data === '{"type":"pong"}') {
-          console.log('收到pong响应，连接正常')
-          return
-        }
-
-        // 解析消息JSON内容为WebSocketMessage对象
-        const message = JSON.parse(event.data) as WebSocketMessage
+        // 解析消息
+        const message = JSON.parse(messageEvent.data) as WebSocketMessage
         console.log('解析后的WebSocket消息:', message)
         console.log(
           '消息类型:',
@@ -702,91 +675,74 @@ export function useWebSocketConnection(designId: string) {
         )
         console.log('消息内容:', message.payload)
 
-        // 验证消息格式是否完整
-        if (!message.type || !message.senderId || !message.senderName) {
-          console.error('收到格式不正确的WebSocket消息:', message)
-          return
-        }
-
-        // 调用相应的消息处理函数
+        // 处理消息
         handleMessage(message)
       } catch (error) {
-        // 捕获并记录消息处理过程中的任何错误
-        console.error('处理WebSocket消息失败:', error, '原始消息:', event.data)
+        console.error('处理WebSocket消息失败:', error)
       }
     }
 
     // 连接关闭事件处理
-    ws.onclose = (event) => {
-      console.log('WebSocket连接关闭:', event.code, event.reason)
+    ws.onclose = (closeEvent: CloseEvent) => {
+      console.log(`WebSocket连接已关闭，代码: ${closeEvent.code}, 原因: ${closeEvent.reason}`)
 
       // 清除连接超时定时器
       if (connectionTimeout) {
         clearTimeout(connectionTimeout)
       }
 
-      // 更新连接状态为已断开
-      if (connectionStatus.value !== ConnectionStatus.DISCONNECTED) {
-        connectionStatus.value = ConnectionStatus.DISCONNECTED
-        connectionError.value = `WebSocket连接关闭: ${event.code} ${event.reason}`
-      }
+      // 更新连接状态
+      connectionStatus.value = ConnectionStatus.DISCONNECTED
+      socket.value = null
 
-      // 触发连接关闭事件，通知其他组件
-      try {
-        console.log('发送连接关闭事件')
-        const event = new CustomEvent('collaboration-stopped', {
-          bubbles: true,
-          detail: {
-            timestamp: new Date().toISOString(),
-            error: false,
-            reason: '连接已关闭',
-          },
-        })
-        document.dispatchEvent(event)
-      } catch (error) {
-        console.error('发送连接关闭事件失败:', error)
-      }
-
-      // 如果不是主动断开连接，尝试自动重新连接（最多5次）
-      if (
-        (connectionStatus.value as number) !== ConnectionStatus.DISCONNECTING &&
-        reconnectAttempts.value < 5
-      ) {
-        reconnectAttempts.value++
-        console.log(`WebSocket连接关闭，第${reconnectAttempts.value}次重试...`)
-        setTimeout(() => {
-          connect()
-        }, 1000 * reconnectAttempts.value) // 重试间隔随重试次数增加
+      // 在非静默模式下，触发连接关闭事件，通知其他组件
+      if (!silentMode) {
+        try {
+          console.log('发送连接关闭事件')
+          const event = new CustomEvent('collaboration-stopped', {
+            bubbles: true,
+            detail: {
+              timestamp: new Date().toISOString(),
+              source: 'onclose',
+              code: closeEvent.code,
+              reason: closeEvent.reason || '连接已关闭',
+            },
+          })
+          document.dispatchEvent(event)
+        } catch (error) {
+          console.error('发送连接关闭事件失败:', error)
+        }
+      } else {
+        console.log('静默模式下，不发送连接关闭事件')
       }
     }
 
     // 连接错误事件处理
-    ws.onerror = (event) => {
-      console.error('WebSocket连接错误:', event)
+    ws.onerror = (errorEvent: Event) => {
+      console.error('WebSocket连接错误:', errorEvent)
 
-      // 清除连接超时定时器
-      if (connectionTimeout) {
-        clearTimeout(connectionTimeout)
-      }
-
-      // 更新连接状态为错误
+      // 更新连接状态
       connectionStatus.value = ConnectionStatus.ERROR
-      connectionError.value = 'WebSocket连接错误'
+      connectionError.value = '连接错误'
 
-      // 触发连接错误事件，通知其他组件
-      try {
-        console.log('发送连接错误事件')
-        const event = new CustomEvent('collaboration-stopped', {
-          bubbles: true,
-          detail: {
-            timestamp: new Date().toISOString(),
-            error: true,
-            reason: 'WebSocket连接错误',
-          },
-        })
-        document.dispatchEvent(event)
-      } catch (error) {
-        console.error('发送连接错误事件失败:', error)
+      // 在非静默模式下，触发连接错误事件，通知其他组件
+      if (!silentMode) {
+        try {
+          console.log('发送连接错误事件')
+          const event = new CustomEvent('collaboration-stopped', {
+            bubbles: true,
+            detail: {
+              timestamp: new Date().toISOString(),
+              error: true,
+              source: 'onerror',
+            },
+          })
+          document.dispatchEvent(event)
+        } catch (error) {
+          console.error('发送连接错误事件失败:', error)
+        }
+      } else {
+        console.log('静默模式下，不发送连接错误事件')
       }
     }
   }
@@ -803,77 +759,67 @@ export function useWebSocketConnection(designId: string) {
    * 6. 触发断开连接事件
    */
   const disconnect = () => {
-    console.log('准备断开WebSocket连接')
-    console.log('当前连接状态:', connectionStatus.value)
-    console.log('当前socket实例:', socket.value ? '存在' : '不存在')
+    console.log('断开连接，当前连接状态:', connectionStatus.value, '当前socket实例:', socket.value)
 
-    // 如果已经断开连接或正在断开连接，不重复操作
+    // 如果已经断开连接或正在断开连接，则不执行任何操作
     if (
       connectionStatus.value === ConnectionStatus.DISCONNECTED ||
       connectionStatus.value === ConnectionStatus.DISCONNECTING
     ) {
-      console.log('WebSocket已断开或正在断开连接，不重复操作')
+      console.log('已经断开连接或正在断开连接，不执行任何操作')
       return
     }
 
-    // 更新连接状态为正在断开连接
-    connectionStatus.value = ConnectionStatus.DISCONNECTING
-    console.log('已将连接状态设置为断开连接中:', connectionStatus.value)
+    try {
+      // 更新连接状态为正在断开连接
+      connectionStatus.value = ConnectionStatus.DISCONNECTING
+      console.log('更新连接状态为正在断开连接')
 
-    // 如果有用户信息且WebSocket连接已建立，发送离开消息
-    if (socket.value && socket.value.readyState === WebSocket.OPEN && userStore.currentUser) {
-      try {
-        // 构造并发送离开消息
-        sendMessage({
+      // 如果WebSocket连接打开且用户信息可用，则发送离开消息
+      if (socket.value && socket.value.readyState === WebSocket.OPEN && userStore.currentUser) {
+        console.log('发送离开消息')
+        const leaveMessage = {
           type: MessageType.LEAVE,
           senderId: String(userStore.currentUser.id),
           senderName: userStore.currentUser.username,
           sessionId: designId,
           timestamp: new Date().toISOString(),
           payload: {},
-        })
-        console.log('已发送离开消息')
-      } catch (error) {
-        console.error('发送离开消息失败:', error)
-        connectionError.value = `发送离开消息失败: ${error}`
+        }
+        socket.value.send(JSON.stringify(leaveMessage))
       }
-    }
 
-    // 关闭WebSocket连接
-    if (socket.value) {
-      try {
+      // 关闭WebSocket连接
+      if (socket.value) {
         console.log('关闭WebSocket连接')
-        socket.value.close(1000, '用户主动断开连接') // 1000是正常关闭的状态码
-        console.log('WebSocket连接已关闭')
-      } catch (error) {
-        console.error('关闭WebSocket连接失败:', error)
-        connectionError.value = `关闭WebSocket连接失败: ${error}`
+        socket.value.close()
+        socket.value = null
       }
-    }
 
-    // 更新连接状态为已断开连接
-    connectionStatus.value = ConnectionStatus.DISCONNECTED
-    socket.value = null
-    console.log('已将连接状态设置为已断开:', connectionStatus.value)
+      // 更新连接状态为已断开连接
+      connectionStatus.value = ConnectionStatus.DISCONNECTED
+      console.log('更新连接状态为已断开连接')
 
-    // 清空协作者列表
-    collaborators.value = []
-    console.log('已清空协作者列表')
+      // 清空协作者列表
+      collaborators.value = []
+      console.log('清空协作者列表')
 
-    // 触发断开连接事件，通知其他组件
-    try {
-      console.log('发送断开连接事件')
-      const event = new CustomEvent('collaboration-stopped', {
-        bubbles: true,
-        detail: {
-          timestamp: new Date().toISOString(),
-          error: false,
-          reason: '用户主动断开连接',
-        },
-      })
-      document.dispatchEvent(event)
+      // 发送自定义事件，通知其他组件连接已断开
+      try {
+        console.log('发送连接断开事件')
+        const event = new CustomEvent('websocket-disconnected', {
+          bubbles: true,
+          detail: {
+            timestamp: new Date().toISOString(),
+          },
+        })
+        document.dispatchEvent(event)
+      } catch (error) {
+        console.error('发送连接断开事件失败:', error)
+      }
     } catch (error) {
-      console.error('发送断开连接事件失败:', error)
+      console.error('断开连接失败:', error)
+      connectionStatus.value = ConnectionStatus.DISCONNECTED
     }
   }
 
@@ -1176,12 +1122,15 @@ export function useWebSocketConnection(designId: string) {
 
   // 处理加入消息
   const handleJoinMessage = (message: WebSocketMessage) => {
-    const { payload } = message
+    console.log('处理加入消息:', message)
 
-    console.log('收到加入消息:', message)
-    console.log('消息负载:', payload)
-    console.log('当前用户ID:', userStore.currentUser?.id)
-    console.log('发送者ID:', message.senderId)
+    // 检查消息有效性
+    if (!message || !message.payload) {
+      console.error('收到的加入消息无效:', message)
+      return
+    }
+
+    const { payload } = message
 
     // 更新会话信息
     if (payload && typeof payload === 'object' && 'session' in payload) {
@@ -1241,6 +1190,7 @@ export function useWebSocketConnection(designId: string) {
         console.log('当前用户是会话所有者')
       } else {
         isOwner.value = false
+        console.log('当前用户不是会话所有者')
       }
     }
   }
@@ -1390,7 +1340,7 @@ export function useWebSocketConnection(designId: string) {
 
         // 当障碍物ID不存在时，自动发送同步请求获取最新数据
         console.log('障碍物ID不存在，自动发送同步请求')
-        if (userStore.currentUser) {
+        if (userStore.currentUser && socket.value && socket.value.readyState === WebSocket.OPEN) {
           const syncRequest: WebSocketMessage = {
             type: MessageType.SYNC_REQUEST,
             senderId: String(userStore.currentUser.id),
@@ -1399,8 +1349,12 @@ export function useWebSocketConnection(designId: string) {
             timestamp: new Date().toISOString(),
             payload: {},
           }
-          sendMessage(syncRequest)
+          // 直接发送消息，不使用sendMessage函数
+          const messageString = JSON.stringify(syncRequest)
+          socket.value.send(messageString)
           console.log('已发送同步请求，等待接收最新数据')
+        } else {
+          console.error('无法发送同步请求: WebSocket未连接或用户未登录')
         }
 
         return
@@ -1428,43 +1382,31 @@ export function useWebSocketConnection(designId: string) {
 
   // 处理添加障碍物消息
   const handleAddObstacleMessage = (message: WebSocketMessage) => {
-    const { senderId, payload } = message
+    console.log('处理添加障碍物消息:', message)
 
-    // 避免处理自己发送的消息
-    if (senderId === String(userStore.currentUser?.id)) {
-      console.log('收到自己发送的添加障碍物消息，忽略处理')
+    // 检查消息有效性
+    if (!message || !message.payload || !message.payload.obstacle) {
+      console.error('收到的添加障碍物消息无效:', message)
       return
     }
 
-    console.log('收到添加障碍物消息:', payload)
+    // 检查是否是自己发送的消息
+    if (userStore.currentUser && message.senderId === String(userStore.currentUser.id)) {
+      console.log('忽略自己发送的添加障碍物消息')
+      return
+    }
 
     try {
-      if (payload.obstacle && typeof payload.obstacle === 'object') {
-        console.log('准备添加障碍物，数据:', payload.obstacle)
+      const { obstacle } = message.payload
+      console.log('从消息中提取的障碍物数据:', obstacle)
 
-        // 检查障碍物是否已存在
-        const obstacleExists = courseStore.currentCourse.obstacles.some(
-          (o) => o.id === (payload.obstacle as { id?: string }).id,
-        )
-
-        if (obstacleExists) {
-          console.log('障碍物已存在，不重复添加:', (payload.obstacle as { id?: string }).id)
-          return
-        }
-
-        // 直接使用原始障碍物数据添加，包括ID
-        const addedObstacle = courseStore.addObstacleWithId(payload.obstacle as Obstacle)
-
-        console.log(
-          '障碍物添加成功:',
-          addedObstacle,
-          '当前障碍物列表:',
-          courseStore.currentCourse.obstacles,
-        )
-
-        // 不再添加系统消息通知
-      } else {
-        console.error('添加障碍物失败，无效的障碍物数据:', payload)
+      // 添加障碍物到课程存储
+      try {
+        // 使用 addObstacleWithId 而不是 addObstacle，因为我们需要保留原始 ID
+        courseStore.addObstacleWithId(obstacle as Obstacle)
+        console.log('障碍物已添加到课程存储')
+      } catch (addError) {
+        console.error('添加障碍物到课程存储失败:', addError)
       }
     } catch (error) {
       console.error('处理添加障碍物消息失败:', error)
@@ -1681,7 +1623,7 @@ export function useWebSocketConnection(designId: string) {
 
     try {
       console.log('发送聊天消息:', content)
-      sendMessage({
+      const chatMessage = {
         type: MessageType.CHAT,
         senderId: String(userStore.currentUser.id),
         senderName: userStore.currentUser.username,
@@ -1690,8 +1632,21 @@ export function useWebSocketConnection(designId: string) {
         payload: {
           content,
         },
-      })
-      console.log('聊天消息已发送')
+      }
+
+      // 直接发送消息，不使用sendMessage函数
+      if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+        const messageString = JSON.stringify(chatMessage)
+        socket.value.send(messageString)
+        console.log('聊天消息已发送')
+        return true
+      } else {
+        console.error(
+          '聊天消息发送失败: WebSocket未连接或未就绪，当前状态:',
+          socket.value ? socket.value.readyState : '实例不存在',
+        )
+        return false
+      }
     } catch (error) {
       console.error('发送聊天消息失败:', error)
 
@@ -1752,8 +1707,8 @@ export function useWebSocketConnection(designId: string) {
       y: Number(position.y),
     }
 
-    // 发送消息
-    sendMessage({
+    // 构造消息
+    const cursorMessage = {
       type: MessageType.CURSOR_MOVE,
       senderId: String(userStore.currentUser.id),
       senderName: userStore.currentUser.username,
@@ -1762,7 +1717,21 @@ export function useWebSocketConnection(designId: string) {
       payload: {
         position: validPosition,
       },
-    })
+    }
+
+    // 直接发送消息，不使用sendMessage函数
+    if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+      const messageString = JSON.stringify(cursorMessage)
+      socket.value.send(messageString)
+      console.log('光标位置消息已发送')
+      return true
+    } else {
+      console.error(
+        '光标位置消息发送失败: WebSocket未连接或未就绪，当前状态:',
+        socket.value ? socket.value.readyState : '实例不存在',
+      )
+      return false
+    }
   }
 
   // 发送障碍物更新
@@ -1776,83 +1745,67 @@ export function useWebSocketConnection(designId: string) {
     // 检查参数有效性
     if (!obstacleId) {
       console.error('发送障碍物更新失败: 障碍物ID为空')
-      return
+      return false
     }
 
     if (!updates || Object.keys(updates).length === 0) {
       console.error('发送障碍物更新失败: 更新内容为空')
-      return
+      return false
     }
 
-    // 检查WebSocket连接状态
-    if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
-      console.error(
-        '发送障碍物更新失败: WebSocket未连接，当前状态:',
-        socket.value ? socket.value.readyState : '实例不存在',
-      )
-
-      // 如果允许使用队列，将消息添加到队列
-      if (useQueue) {
-        console.log('将障碍物更新消息添加到队列:', obstacleId, updates)
-        messageQueue.value.push({
-          type: 'update',
-          data: { obstacleId, updates },
-        })
-      }
-
-      return
-    }
-
+    // 检查用户是否登录
     if (!userStore.currentUser) {
       console.error('发送障碍物更新失败: 用户未登录')
-      return
+      return false
     }
 
-    console.log(`准备发送障碍物更新消息 - 障碍物ID: ${obstacleId}, 更新内容:`, updates)
-    console.log('当前WebSocket状态:', connectionStatus.value)
-    console.log('当前socket实例:', socket.value ? '存在' : '不存在')
-
-    if (socket.value) {
-      console.log(
-        'WebSocket readyState:',
-        socket.value.readyState,
-        '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)',
-      )
+    // 构造消息
+    const message = {
+      type: MessageType.UPDATE_OBSTACLE,
+      senderId: String(userStore.currentUser.id),
+      senderName: userStore.currentUser.username,
+      sessionId: designId,
+      timestamp: new Date().toISOString(),
+      payload: {
+        obstacleId,
+        updates,
+      },
     }
 
+    console.log('构造的障碍物更新消息:', message)
+
+    // 尝试直接发送消息
     try {
-      const message = {
-        type: MessageType.UPDATE_OBSTACLE,
-        senderId: String(userStore.currentUser.id),
-        senderName: userStore.currentUser.username,
-        sessionId: designId,
-        timestamp: new Date().toISOString(),
-        payload: {
-          obstacleId,
-          updates,
-        },
-      }
-
-      console.log('构造的障碍物更新消息:', message)
-      // 直接发送消息，不使用sendMessage函数，避免额外的连接检查
+      // 检查WebSocket连接状态
       if (socket.value && socket.value.readyState === WebSocket.OPEN) {
         const messageString = JSON.stringify(message)
         socket.value.send(messageString)
         console.log(`障碍物更新消息发送成功 - 障碍物ID: ${obstacleId}`)
         return true
       } else {
-        console.error(
-          `障碍物更新消息发送失败 - WebSocket未连接，当前状态:`,
-          socket.value ? socket.value.readyState : '实例不存在',
-        )
+        console.error('WebSocket未连接，尝试重新连接并将消息添加到队列')
 
         // 如果发送失败且允许使用队列，将消息添加到队列
         if (useQueue) {
-          console.log('发送失败，将障碍物更新消息添加到队列:', obstacleId, updates)
+          console.log('将障碍物更新消息添加到队列:', obstacleId, updates)
           messageQueue.value.push({
             type: 'update',
             data: { obstacleId, updates },
           })
+        }
+
+        // 尝试重新连接
+        if (connectionStatus.value !== ConnectionStatus.CONNECTING) {
+          console.log('尝试重新连接WebSocket')
+          connect()
+
+          // 设置延时，等待连接建立后处理队列
+          setTimeout(() => {
+            if (connectionStatus.value === ConnectionStatus.CONNECTED) {
+              console.log('WebSocket已重新连接，处理消息队列')
+              processMessageQueue()
+            }
+          }, 1000)
         }
 
         return false
@@ -1862,11 +1815,17 @@ export function useWebSocketConnection(designId: string) {
 
       // 如果发送失败且允许使用队列，将消息添加到队列
       if (useQueue) {
-        console.log('发送异常，将障碍物更新消息添加到队列:', obstacleId, updates)
+        console.log('发送失败，将障碍物更新消息添加到队列:', obstacleId, updates)
         messageQueue.value.push({
           type: 'update',
           data: { obstacleId, updates },
         })
+
+        // 尝试重新连接
+        if (connectionStatus.value !== ConnectionStatus.CONNECTING) {
+          console.log('尝试重新连接WebSocket')
+          connect()
+        }
       }
 
       return false
@@ -1875,116 +1834,100 @@ export function useWebSocketConnection(designId: string) {
 
   // 发送添加障碍物
   const sendAddObstacle = (obstacle: Record<string, unknown>, useQueue = true) => {
-    console.log('准备发送添加障碍物消息，障碍物数据:', obstacle)
+    console.log('发送添加障碍物消息:', obstacle)
 
-    // 检查参数有效性
+    // 检查参数
     if (!obstacle) {
-      console.error('发送添加障碍物失败: 障碍物数据为空')
-      return
+      console.error('发送添加障碍物失败: 障碍物参数无效')
+      return false
     }
 
     // 确保障碍物有ID
     if (!obstacle.id) {
       console.error('发送添加障碍物失败: 障碍物ID为空')
-      return
+      return false
     }
 
-    // 检查连接状态，不自动重连
-    if (!checkConnection(false)) {
-      console.error('发送添加障碍物失败: WebSocket未连接')
-
-      // 如果允许使用队列，将消息添加到队列
-      if (useQueue) {
-        console.log('将添加障碍物消息添加到队列:', obstacle)
-        messageQueue.value.push({
-          type: 'add',
-          data: { obstacle },
-        })
-      }
-
-      return
-    }
-
+    // 检查用户是否已登录
     if (!userStore.currentUser) {
       console.error('发送添加障碍物失败: 用户未登录')
-      return
+      return false
     }
 
-    console.log('准备发送添加障碍物消息:', obstacle)
-    console.log('当前WebSocket状态:', connectionStatus.value)
-    console.log('当前socket实例:', socket.value ? '存在' : '不存在')
-
-    if (socket.value) {
-      console.log(
-        'WebSocket readyState:',
-        socket.value.readyState,
-        '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)',
-      )
+    // 构建消息
+    const message = {
+      type: MessageType.ADD_OBSTACLE,
+      senderId: String(userStore.currentUser.id),
+      senderName: userStore.currentUser.username,
+      sessionId: designId,
+      timestamp: new Date().toISOString(),
+      payload: {
+        obstacle,
+      },
     }
 
-    // 再次检查WebSocket是否已连接
-    if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
-      console.error(
-        '发送添加障碍物失败: WebSocket未连接或未就绪，当前状态:',
-        socket.value ? socket.value.readyState : '实例不存在',
-      )
+    console.log('构建的添加障碍物消息:', message)
 
-      // 如果允许使用队列，将消息添加到队列
-      if (useQueue) {
-        console.log('将添加障碍物消息添加到队列:', obstacle)
-        messageQueue.value.push({
-          type: 'add',
-          data: { obstacle },
-        })
-      }
-
-      return
-    }
-
-    try {
-      const message = {
-        type: MessageType.ADD_OBSTACLE,
-        senderId: String(userStore.currentUser.id),
-        senderName: userStore.currentUser.username,
-        sessionId: designId,
-        timestamp: new Date().toISOString(),
-        payload: {
-          obstacle,
-        },
-      }
-
-      console.log('构造的添加障碍物消息:', message)
-      // 直接发送消息，不使用sendMessage函数，避免额外的连接检查
-      if (socket.value && socket.value.readyState === WebSocket.OPEN) {
-        const messageString = JSON.stringify(message)
-        socket.value.send(messageString)
-        console.log('添加障碍物消息发送成功')
+    // 检查WebSocket连接状态
+    if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+      try {
+        // 发送消息
+        socket.value.send(JSON.stringify(message))
+        console.log('添加障碍物消息已发送')
         return true
-      } else {
-        console.error('添加障碍物消息发送失败')
+      } catch (error) {
+        console.error('发送添加障碍物消息失败:', error)
 
-        // 如果发送失败且允许使用队列，将消息添加到队列
+        // 如果启用了队列，则将消息添加到队列
         if (useQueue) {
-          console.log('发送失败，将添加障碍物消息添加到队列:', obstacle)
+          console.log('将添加障碍物消息添加到队列')
           messageQueue.value.push({
             type: 'add',
             data: { obstacle },
           })
         }
 
+        // 尝试重新连接WebSocket
+        console.log('尝试重新连接WebSocket')
+        connect(viaLink.value, true)
+
+        // 延迟处理消息队列
+        setTimeout(() => {
+          if (connectionStatus.value === ConnectionStatus.CONNECTED) {
+            console.log('WebSocket已重新连接，处理消息队列')
+            processMessageQueue()
+          } else {
+            console.error('WebSocket重连失败，当前状态:', connectionStatus.value)
+          }
+        }, 1000)
+
         return false
       }
-    } catch (error) {
-      console.error('发送添加障碍物消息失败:', error)
+    } else {
+      console.error('发送添加障碍物消息失败: WebSocket未连接')
 
-      // 如果发送失败且允许使用队列，将消息添加到队列
+      // 如果启用了队列，则将消息添加到队列
       if (useQueue) {
-        console.log('发送异常，将添加障碍物消息添加到队列:', obstacle)
+        console.log('将添加障碍物消息添加到队列')
         messageQueue.value.push({
           type: 'add',
           data: { obstacle },
         })
       }
+
+      // 尝试重新连接WebSocket
+      console.log('尝试重新连接WebSocket')
+      connect(viaLink.value, true)
+
+      // 延迟处理消息队列
+      setTimeout(() => {
+        if (connectionStatus.value === ConnectionStatus.CONNECTED) {
+          console.log('WebSocket已重新连接，处理消息队列')
+          processMessageQueue()
+        } else {
+          console.error('WebSocket重连失败，当前状态:', connectionStatus.value)
+        }
+      }, 1000)
 
       return false
     }
@@ -1997,48 +1940,18 @@ export function useWebSocketConnection(designId: string) {
     // 检查参数有效性
     if (!obstacleId) {
       console.error('发送移除障碍物失败: 障碍物ID为空')
-      return
+      return false
     }
 
-    // 检查连接状态，不自动重连
-    if (!checkConnection(false)) {
-      console.error('发送移除障碍物失败: WebSocket未连接')
-
-      // 如果允许使用队列，将消息添加到队列
-      if (useQueue) {
-        console.log('将移除障碍物消息添加到队列:', obstacleId)
-        messageQueue.value.push({
-          type: 'remove',
-          data: { obstacleId },
-        })
-      }
-
-      return
-    }
-
+    // 检查用户是否登录
     if (!userStore.currentUser) {
       console.error('发送移除障碍物失败: 用户未登录')
-      return
+      return false
     }
 
-    console.log('准备发送移除障碍物消息:', obstacleId)
-    console.log('当前WebSocket状态:', connectionStatus.value)
-    console.log('当前socket实例:', socket.value ? '存在' : '不存在')
-
-    if (socket.value) {
-      console.log(
-        'WebSocket readyState:',
-        socket.value.readyState,
-        '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)',
-      )
-    }
-
-    // 再次检查WebSocket是否已连接
+    // 检查WebSocket连接状态
     if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
-      console.error(
-        '发送移除障碍物失败: WebSocket未连接或未就绪，当前状态:',
-        socket.value ? socket.value.readyState : '实例不存在',
-      )
+      console.error('WebSocket未连接，尝试重新连接并将消息添加到队列')
 
       // 如果允许使用队列，将消息添加到队列
       if (useQueue) {
@@ -2049,7 +1962,21 @@ export function useWebSocketConnection(designId: string) {
         })
       }
 
-      return
+      // 尝试重新连接
+      if (connectionStatus.value !== ConnectionStatus.CONNECTING) {
+        console.log('尝试重新连接WebSocket')
+        connect()
+
+        // 设置延时，等待连接建立后处理队列
+        setTimeout(() => {
+          if (connectionStatus.value === ConnectionStatus.CONNECTED) {
+            console.log('WebSocket已重新连接，处理消息队列')
+            processMessageQueue()
+          }
+        }, 1000)
+      }
+
+      return false
     }
 
     try {
@@ -2065,22 +1992,11 @@ export function useWebSocketConnection(designId: string) {
       }
 
       console.log('构造的移除障碍物消息:', message)
-      const result = sendMessage(message)
-
-      if (result) {
-        console.log('移除障碍物消息发送成功')
-      } else {
-        console.error('移除障碍物消息发送失败')
-
-        // 如果发送失败且允许使用队列，将消息添加到队列
-        if (useQueue) {
-          console.log('发送失败，将移除障碍物消息添加到队列:', obstacleId)
-          messageQueue.value.push({
-            type: 'remove',
-            data: { obstacleId },
-          })
-        }
-      }
+      // 直接发送消息，不使用sendMessage函数，避免额外的连接检查
+      const messageString = JSON.stringify(message)
+      socket.value.send(messageString)
+      console.log('移除障碍物消息发送成功')
+      return true
     } catch (error) {
       console.error('发送移除障碍物消息失败:', error)
 
@@ -2091,45 +2007,68 @@ export function useWebSocketConnection(designId: string) {
           type: 'remove',
           data: { obstacleId },
         })
+
+        // 尝试重新连接
+        if (connectionStatus.value !== ConnectionStatus.CONNECTING) {
+          console.log('尝试重新连接WebSocket')
+          connect()
+        }
       }
+
+      return false
     }
   }
 
   // 发送路径更新
-  const sendPathUpdate = (path: Record<string, unknown>, useQueue = true) => {
-    console.log('准备发送路径更新，路径数据:', path)
+  const sendPathUpdate = (pathId: string, updates: Record<string, unknown>, useQueue = true) => {
+    console.log('准备发送路径更新消息，路径ID:', pathId, '更新内容:', updates)
 
     // 检查参数有效性
-    if (!path) {
-      console.error('发送路径更新失败: 路径数据为空')
-      return
+    if (!pathId) {
+      console.error('发送路径更新失败: 路径ID为空')
+      return false
+    }
+
+    if (!updates || Object.keys(updates).length === 0) {
+      console.error('发送路径更新失败: 更新内容为空')
+      return false
+    }
+
+    // 检查用户是否登录
+    if (!userStore.currentUser) {
+      console.error('发送路径更新失败: 用户未登录')
+      return false
     }
 
     // 检查WebSocket连接状态
     if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
-      console.error(
-        '发送路径更新失败: WebSocket未连接，当前状态:',
-        socket.value ? socket.value.readyState : '实例不存在',
-      )
+      console.error('WebSocket未连接，尝试重新连接并将消息添加到队列')
 
       // 如果允许使用队列，将消息添加到队列
       if (useQueue) {
-        console.log('将路径更新消息添加到队列:', path)
+        console.log('将路径更新消息添加到队列:', pathId, updates)
         messageQueue.value.push({
           type: 'path',
-          data: { path },
+          data: { pathId, updates },
         })
       }
 
-      return
-    }
+      // 尝试重新连接
+      if (connectionStatus.value !== ConnectionStatus.CONNECTING) {
+        console.log('尝试重新连接WebSocket')
+        connect()
 
-    if (!userStore.currentUser) {
-      console.error('发送路径更新失败: 用户未登录')
-      return
-    }
+        // 设置延时，等待连接建立后处理队列
+        setTimeout(() => {
+          if (connectionStatus.value === ConnectionStatus.CONNECTED) {
+            console.log('WebSocket已重新连接，处理消息队列')
+            processMessageQueue()
+          }
+        }, 1000)
+      }
 
-    console.log('准备发送路径更新消息:', path)
+      return false
+    }
 
     try {
       const message = {
@@ -2139,11 +2078,13 @@ export function useWebSocketConnection(designId: string) {
         sessionId: designId,
         timestamp: new Date().toISOString(),
         payload: {
-          path,
+          pathId,
+          updates,
         },
       }
 
-      // 直接发送消息，不使用sendMessage函数
+      console.log('构造的路径更新消息:', message)
+      // 直接发送消息，不使用sendMessage函数，避免额外的连接检查
       const messageString = JSON.stringify(message)
       socket.value.send(messageString)
       console.log('路径更新消息发送成功')
@@ -2153,11 +2094,17 @@ export function useWebSocketConnection(designId: string) {
 
       // 如果发送失败且允许使用队列，将消息添加到队列
       if (useQueue) {
-        console.log('发送异常，将路径更新消息添加到队列:', path)
+        console.log('发送异常，将路径更新消息添加到队列:', pathId, updates)
         messageQueue.value.push({
           type: 'path',
-          data: { path },
+          data: { pathId, updates },
         })
+
+        // 尝试重新连接
+        if (connectionStatus.value !== ConnectionStatus.CONNECTING) {
+          console.log('尝试重新连接WebSocket')
+          connect()
+        }
       }
 
       return false
@@ -2202,15 +2149,22 @@ export function useWebSocketConnection(designId: string) {
       }
 
       console.log('构造的同步请求消息:', syncRequest)
-      const result = sendMessage(syncRequest)
-
-      if (result) {
+      // 直接发送消息，不使用sendMessage函数
+      if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+        const messageString = JSON.stringify(syncRequest)
+        socket.value.send(messageString)
         console.log('同步请求消息发送成功')
+        return true
       } else {
-        console.error('同步请求消息发送失败')
+        console.error(
+          '同步请求消息发送失败: WebSocket未连接或未就绪，当前状态:',
+          socket.value ? socket.value.readyState : '实例不存在',
+        )
+        return false
       }
     } catch (error) {
       console.error('发送同步请求消息失败:', error)
+      return false
     }
   }
 
@@ -2229,6 +2183,46 @@ export function useWebSocketConnection(designId: string) {
   onUnmounted(() => {
     disconnect()
   })
+
+  /**
+   * 发送加入消息
+   *
+   * 当WebSocket连接成功后，发送加入消息通知服务器用户已加入协作。
+   * 消息包含用户ID、用户名和随机颜色标识。
+   */
+  const sendJoinMessage = () => {
+    // 如果有用户信息，发送加入消息
+    if (userStore.currentUser) {
+      try {
+        // 构造并发送加入消息，包含用户ID、用户名和随机颜色
+        const joinMessage: WebSocketMessage = {
+          type: MessageType.JOIN,
+          senderId: String(userStore.currentUser.id),
+          senderName: userStore.currentUser.username,
+          sessionId: designId,
+          timestamp: new Date().toISOString(),
+          payload: {
+            color: generateRandomColor(), // 为用户生成随机颜色标识
+          },
+        }
+        console.log('准备发送加入消息:', joinMessage)
+
+        // 检查WebSocket连接状态
+        if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+          // 直接发送消息，不使用sendMessage函数
+          const messageString = JSON.stringify(joinMessage)
+          socket.value.send(messageString)
+          console.log('已发送加入消息')
+        } else {
+          console.error('WebSocket未连接，无法发送加入消息')
+        }
+      } catch (error) {
+        console.error('发送加入消息失败:', error)
+      }
+    } else {
+      console.error('用户未登录，无法发送加入消息')
+    }
+  }
 
   return {
     connectionStatus,

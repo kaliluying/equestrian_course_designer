@@ -42,7 +42,7 @@
         <div class="owner-info" v-if="session">
           <div class="owner-label">所有者：</div>
           <div class="owner-value">
-            <span v-if="getOwnerName()" class="owner-name">{{ getOwnerName() }}</span>
+            <span v-if="ownerName" class="owner-name">{{ ownerName }}</span>
             <span v-else class="owner-unknown">未知</span>
             <span v-if="isCurrentUserOwner()" class="owner-badge">(我)</span>
           </div>
@@ -625,13 +625,15 @@ const getLastActiveText = (collaborator: CollaboratorInfo) => {
 
 // 获取所有者名称
 const getOwnerName = () => {
-  console.log('获取所有者名称', session.value)
   if (!session.value || !session.value.owner) return null
 
   // 在协作者列表中查找所有者
   const owner = collaborators.value.find(c => c.id === session.value?.owner)
   return owner ? owner.username : null
 }
+
+// 使用计算属性缓存所有者名称
+const ownerName = computed(() => getOwnerName())
 
 // 检查当前用户是否是所有者
 const isCurrentUserOwner = () => {

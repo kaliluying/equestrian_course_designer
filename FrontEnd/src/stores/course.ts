@@ -85,9 +85,17 @@ export const useCourseStore = defineStore('course', () => {
    * @param {number} rotation - 新的旋转角度（度）
    */
   const updateStartRotation = (rotation: number) => {
-    // 计算旋转差值
-    const currentRotation = startPoint.value.rotation
-    const diff = rotation - currentRotation
+    // 计算旋转差值，确保在-180到180度之间
+    let currentRotation = startPoint.value.rotation % 360
+    if (currentRotation < 0) currentRotation += 360
+
+    let newRotation = rotation % 360
+    if (newRotation < 0) newRotation += 360
+
+    // 计算最短路径的角度差
+    let diff = newRotation - currentRotation
+    if (diff > 180) diff -= 360
+    if (diff < -180) diff += 360
 
     // 更新旋转角度，保持连续性
     startPoint.value.rotation = currentRotation + diff
@@ -101,7 +109,7 @@ export const useCourseStore = defineStore('course', () => {
       // 计算新的控制点位置，基于旋转角度
       if (startPoint && nextPoint && startPoint.controlPoint2) {
         // 使用实际旋转角度计算控制点位置
-        const angle = ((rotation % 360) - 270) * (Math.PI / 180)
+        const angle = ((currentRotation + diff - 270) % 360) * (Math.PI / 180)
         const distance =
           Math.sqrt(
             Math.pow(nextPoint.x - startPoint.x, 2) + Math.pow(nextPoint.y - startPoint.y, 2),
@@ -112,6 +120,8 @@ export const useCourseStore = defineStore('course', () => {
           x: startPoint.x + Math.cos(angle) * distance,
           y: startPoint.y + Math.sin(angle) * distance,
         }
+        // 标记控制点为已手动移动
+        startPoint.isControlPoint2Moved = true
 
         coursePath.value.points = points
       }
@@ -126,9 +136,17 @@ export const useCourseStore = defineStore('course', () => {
    * @param {number} rotation - 新的旋转角度（度）
    */
   const updateEndRotation = (rotation: number) => {
-    // 计算旋转差值
-    const currentRotation = endPoint.value.rotation
-    const diff = rotation - currentRotation
+    // 计算旋转差值，确保在-180到180度之间
+    let currentRotation = endPoint.value.rotation % 360
+    if (currentRotation < 0) currentRotation += 360
+
+    let newRotation = rotation % 360
+    if (newRotation < 0) newRotation += 360
+
+    // 计算最短路径的角度差
+    let diff = newRotation - currentRotation
+    if (diff > 180) diff -= 360
+    if (diff < -180) diff += 360
 
     // 更新旋转角度，保持连续性
     endPoint.value.rotation = currentRotation + diff
@@ -143,7 +161,7 @@ export const useCourseStore = defineStore('course', () => {
       // 计算新的控制点位置，基于旋转角度
       if (endPoint && prevPoint && endPoint.controlPoint1) {
         // 使用实际旋转角度计算控制点位置
-        const angle = ((rotation % 360) - 90) * (Math.PI / 180)
+        const angle = ((currentRotation + diff - 90) % 360) * (Math.PI / 180)
         const distance =
           Math.sqrt(Math.pow(prevPoint.x - endPoint.x, 2) + Math.pow(prevPoint.y - endPoint.y, 2)) /
           3
@@ -153,6 +171,8 @@ export const useCourseStore = defineStore('course', () => {
           x: endPoint.x + Math.cos(angle) * distance,
           y: endPoint.y + Math.sin(angle) * distance,
         }
+        // 标记控制点为已手动移动
+        endPoint.isControlPoint1Moved = true
 
         coursePath.value.points = points
       }
@@ -445,15 +465,13 @@ export const useCourseStore = defineStore('course', () => {
 
       // 对于障碍物部分的点，检查是否是直线部分
       const pointInObstacle = (i - 1) % 5
-
-      // 如果是直线部分的点，跳过控制点生成
-      if (pointInObstacle === 1 || pointInObstacle === 2 || pointInObstacle === 3) {
-        current.controlPoint1 = undefined
-        current.controlPoint2 = undefined
+      if (pointInObstacle === 1 || pointInObstacle === 3) {
+        // 如果是直线部分，不生成控制点
         continue
       }
-      // 只为连接点生成控制点
-      if (prev && pointInObstacle != 4) {
+
+      // 为其他点生成控制点
+      if (prev) {
         // 生成前控制点
         const angle = Math.atan2(prev.y - current.y, prev.x - current.x)
         const distance =
@@ -462,7 +480,6 @@ export const useCourseStore = defineStore('course', () => {
           x: current.x + Math.cos(angle) * distance,
           y: current.y + Math.sin(angle) * distance,
         }
-        continue
       }
 
       if (next) {
@@ -476,9 +493,21 @@ export const useCourseStore = defineStore('course', () => {
         }
       }
     }
-    // 更新课程路径的点数组
-    coursePath.value.points = points
+
+    // 更新路径点数组
+    coursePath.value = {
+      ...coursePath.value,
+      points,
+    }
+
+    // 更新课程状态
     updateCourse()
+
+    // 触发路线生成事件
+    console.log('路线生成完成，触发事件')
+    const event = new CustomEvent('route-generated')
+    document.dispatchEvent(event)
+    console.log('已触发路线生成事件')
   }
 
   /**
@@ -815,7 +844,7 @@ export const useCourseStore = defineStore('course', () => {
       // 如果启用了发送更新消息且存在协作功能，则发送更新消息
       if (sendUpdate && typeof window !== 'undefined') {
         // 检查是否存在协作功能
-        const isCollaborating = localStorage.getItem('isCollaborating') === 'true'
+        const isCollaborating = false
         if (isCollaborating) {
           try {
             // 尝试获取 sendObstacleUpdate 函数
@@ -1471,7 +1500,7 @@ export const useCourseStore = defineStore('course', () => {
 
         if (needsScaling) {
           // 记录原始位置用于调试
-          const originalPosition = { ...scaledObstacle.position }
+          // const originalPosition = { ...scaledObstacle.position }
 
           // 缩放位置 - 使用统一的缩放因子确保等比例缩放
           scaledObstacle.position = {
@@ -1942,6 +1971,7 @@ export const useCourseStore = defineStore('course', () => {
    * @param {CourseDesign} course - 要导入的课程设计数据
    */
   function importCourse(course: CourseDesign) {
+    console.log('开始导入课程数据:', course)
     // 保留当前的ID，避免覆盖本地ID
     const currentId = currentCourse.value.id
 
@@ -1968,7 +1998,43 @@ export const useCourseStore = defineStore('course', () => {
 
     // 更新路径
     if (course.path) {
-      coursePath.value = course.path
+      console.log('导入路径数据:', course.path)
+      // 更新路径数据
+      coursePath.value = {
+        visible: course.path.visible ?? false,
+        points: course.path.points ? [...course.path.points] : [],
+      }
+
+      // 更新起点和终点
+      if (course.path.startPoint) {
+        startPoint.value = {
+          x: course.path.startPoint.x,
+          y: course.path.startPoint.y,
+          rotation: course.path.startPoint.rotation || 270,
+        }
+      }
+      if (course.path.endPoint) {
+        endPoint.value = {
+          x: course.path.endPoint.x,
+          y: course.path.endPoint.y,
+          rotation: course.path.endPoint.rotation || 270,
+        }
+      }
+
+      console.log('路径数据导入完成:', {
+        coursePath: coursePath.value,
+        startPoint: startPoint.value,
+        endPoint: endPoint.value,
+      })
+    } else {
+      console.log('没有路径数据需要导入')
+      // 如果没有路径数据，重置路径状态
+      coursePath.value = {
+        visible: false,
+        points: [],
+      }
+      startPoint.value = { x: 0, y: 0, rotation: 270 }
+      endPoint.value = { x: 0, y: 0, rotation: 270 }
     }
   }
 

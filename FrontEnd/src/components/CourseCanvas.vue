@@ -1,9 +1,6 @@
 <template>
-  <div class="course-canvas" :style="canvasStyle" @drop="handleDrop" @dragover.prevent @mousedown.self="startSelection"
-    @mousemove="handleCollaborationMouseMove" ref="canvasContainerRef">
-    <!-- 添加协作者光标组件 -->
-    <CollaboratorCursors v-if="isCollaborating" :collaborators="collaborators" />
-
+  <div :class="['course-canvas', $attrs.class]" :style="canvasStyle" @drop="handleDrop" @dragover.prevent
+    @mousedown.self="startSelection" ref="canvasContainerRef">
     <!-- 添加调试信息 -->
     <div v-if="showDebugInfo" class="debug-info">
       <div>协作状态: {{ isCollaborating ? '已启用' : '未启用' }}</div>
@@ -453,9 +450,7 @@ import { useObstacleStore } from '@/stores/obstacle'
 import { useUserStore } from '@/stores/user'
 import { ObstacleType, DecorationCategory } from '@/types/obstacle'
 import type { Obstacle, PathPoint, CustomObstacleTemplate } from '@/types/obstacle'
-import CollaboratorCursors from './CollaboratorCursors.vue'
 import { useWebSocketConnection, ConnectionStatus } from '@/utils/websocket'
-import { throttle } from 'lodash-es'
 
 // 组件状态管理
 const courseStore = useCourseStore()
@@ -496,7 +491,6 @@ const showDistanceLabels = ref(true)
 const isCollaborating = ref(false)
 const {
   collaborators,
-  sendCursorPosition,
   sendPathUpdate,
   connect, // 添加connect方法
   disconnect, // 添加disconnect方法
@@ -549,53 +543,16 @@ const getCustomTemplate = (obstacle: Obstacle): CustomObstacleTemplate | null =>
   }
 }
 
-// 处理鼠标移动，同步光标位置
-const handleCollaborationMouseMove = throttle((event: MouseEvent) => {
-  if (isCollaborating.value && canvasContainerRef.value) {
-    const rect = canvasContainerRef.value.getBoundingClientRect()
-    const x = event.clientX - rect.left
-    const y = event.clientY - rect.top
-
-    // 添加更详细的日志输出
-    if (showDebugInfo.value) {
-      console.log('准备发送光标位置:', { x, y }, '协作状态:', isCollaborating.value, '协作者数量:', collaborators.value.length)
-    }
-
-    // 确保连接状态正常
-    if (connectionStatus.value === ConnectionStatus.CONNECTED) {
-      try {
-        // 发送光标位置
-        sendCursorPosition({ x, y })
-
-        // 如果协作者列表为空且已经尝试过一段时间，尝试刷新协作者列表
-        if (collaborators.value.length === 0 && Date.now() - collaborationStartTime.value > 5000) {
-          if (showDebugInfo.value) {
-            console.log('协作者列表为空，尝试刷新协作者列表')
-          }
-
-          // 每30秒自动刷新一次
-          const now = Date.now()
-          if (now - lastCollaboratorRefreshTime.value > 30000) {
-            lastCollaboratorRefreshTime.value = now
-            if (showDebugInfo.value) {
-              console.log('自动刷新协作者列表')
-            }
-            sendSyncRequest()
-          }
-        }
-      } catch (error) {
-        console.error('发送光标位置失败:', error)
-      }
-    } else if (showDebugInfo.value) {
-      console.warn('连接状态异常，无法发送光标位置:', connectionStatus.value)
-    }
-  }
-}, 100) // 限制为每100毫秒最多执行一次
-
 // 监听路径变化，同步到其他协作者
 watch(() => courseStore.coursePath, (newPath) => {
   if (isCollaborating.value) {
-    sendPathUpdate(newPath)
+    // 使用路径ID和更新内容调用sendPathUpdate
+    sendPathUpdate(courseStore.currentCourse.id, {
+      visible: newPath.visible,
+      points: newPath.points,
+      startPoint: courseStore.startPoint,
+      endPoint: courseStore.endPoint
+    })
   }
 }, { deep: true })
 
@@ -661,7 +618,7 @@ const stopCollaboration = () => {
       try {
         // 先更新状态，确保UI立即响应
         isCollaborating.value = false
-        console.log('协作状态已更新为:', isCollaborating.value)
+        console.log('协作状态已更新为false')
 
         // 触发自定义事件通知App.vue更新状态
         const event = new CustomEvent('collaboration-stopped', {
@@ -678,7 +635,7 @@ const stopCollaboration = () => {
 
         // 确保状态被重置
         isCollaborating.value = false
-        console.log('出错后已更新协作状态为:', isCollaborating.value)
+        console.log('出错后已更新协作状态为false')
 
         // 触发自定义事件
         const event = new CustomEvent('collaboration-stopped', {
@@ -692,7 +649,9 @@ const stopCollaboration = () => {
 
       // 确保状态被重置
       isCollaborating.value = false
-      console.log('disconnect方法不存在，已更新协作状态为:', isCollaborating.value)
+      // 同时更新 localStorage 中的协作状态
+      localStorage.setItem('isCollaborating', 'false')
+      console.log('disconnect方法不存在，已更新协作状态为false，并更新localStorage')
 
       // 触发自定义事件
       const event = new CustomEvent('collaboration-stopped', {
@@ -714,7 +673,9 @@ const stopCollaboration = () => {
     console.error('停止协作时出错:', error)
     // 确保状态被重置
     isCollaborating.value = false
-    console.log('出错后已更新协作状态为:', isCollaborating.value)
+    // 同时更新 localStorage 中的协作状态
+    localStorage.setItem('isCollaborating', 'false')
+    console.log('出错后已更新协作状态为false，并更新localStorage')
 
     // 触发自定义事件
     try {
@@ -907,44 +868,28 @@ const startDraggingPoleNumber = (event: MouseEvent, obstacle: Obstacle, poleInde
 
 // 处理鼠标移动
 const handleMouseMove = (event: MouseEvent) => {
-  if (!draggingObstacle.value && !draggingNumberObstacle.value) return
-
-  if (isDraggingNumber.value && draggingNumberObstacle.value && draggingPoleIndex.value !== null) {
-    const dx = event.clientX - startMousePos.value.x
-    const dy = event.clientY - startMousePos.value.y
-
-    const initialPos = startPos.value[draggingNumberObstacle.value.id]
-    const newPosition = {
-      x: initialPos.x + dx,
-      y: initialPos.y + dy,
-    }
-
-    // 更新编号位置
-    const newPoles = [...draggingNumberObstacle.value.poles]
-    newPoles[draggingPoleIndex.value] = {
-      ...newPoles[draggingPoleIndex.value],
-      numberPosition: newPosition,
-    }
-
-    courseStore.updateObstacle(draggingNumberObstacle.value.id, {
-      poles: newPoles,
-    })
-    return
+  // 更新框选区域
+  if (isSelecting.value) {
+    updateSelection(event)
   }
 
-  if (isDragging.value && draggingObstacle.value) {
-    // 计算拖动距离
-    const dx = event.clientX - startMousePos.value.x
-    const dy = event.clientY - startMousePos.value.y
+  // 处理障碍物拖拽
+  if (isDragging.value) {
+    // 计算鼠标移动距离
+    const deltaX = event.clientX - startMousePos.value.x
+    const deltaY = event.clientY - startMousePos.value.y
 
     // 更新所有选中障碍物的位置
     selectedObstacles.value.forEach((obstacle) => {
-      const initialPos = (startPos.value as Record<string, { x: number; y: number }>)[obstacle.id]
-      if (initialPos) {
+      if (startPos.value[obstacle.id]) {
+        const startPosition = startPos.value[obstacle.id]
         const newPosition = {
-          x: initialPos.x + dx,
-          y: initialPos.y + dy,
+          x: startPosition.x + deltaX,
+          y: startPosition.y + deltaY,
         }
+
+        // 更新障碍物位置
+        obstacle.position = newPosition
 
         // 更新本地障碍物位置
         courseStore.updateObstacle(obstacle.id, {
@@ -954,8 +899,13 @@ const handleMouseMove = (event: MouseEvent) => {
         // 如果在协作模式下，发送障碍物更新消息
         if (isCollaborating.value) {
           console.log('发送障碍物位置更新:', obstacle.id, newPosition)
-          // 直接发送位置更新，不使用节流函数
-          sendObstacleUpdate(obstacle.id, { position: newPosition })
+          try {
+            // 直接发送位置更新，不使用节流函数
+            sendObstacleUpdate(obstacle.id, { position: newPosition })
+            console.log('障碍物位置更新消息已发送')
+          } catch (error) {
+            console.error('发送障碍物位置更新失败:', error)
+          }
         }
       }
     })
@@ -990,8 +940,13 @@ const handleMouseMove = (event: MouseEvent) => {
     // 如果在协作模式下，发送障碍物旋转更新消息
     if (isCollaborating.value) {
       console.log('发送障碍物旋转更新:', draggingObstacle.value.id, newRotation)
-      // 直接发送旋转更新，不使用节流函数
-      sendObstacleUpdate(draggingObstacle.value.id, { rotation: newRotation })
+      try {
+        // 直接发送旋转更新，不使用节流函数
+        sendObstacleUpdate(draggingObstacle.value.id, { rotation: newRotation })
+        console.log('障碍物旋转更新消息已发送')
+      } catch (error) {
+        console.error('发送障碍物旋转更新失败:', error)
+      }
     }
   }
 
@@ -1010,7 +965,7 @@ const handleMouseMove = (event: MouseEvent) => {
       // 如果在协作模式下，发送路径更新
       if (isCollaborating.value) {
         // 直接发送路径更新，不使用节流函数
-        sendPathUpdate({
+        sendPathUpdate(courseStore.currentCourse.id, {
           visible: courseStore.coursePath.visible,
           points: courseStore.coursePath.points,
           startPoint: courseStore.startPoint,
@@ -1023,7 +978,7 @@ const handleMouseMove = (event: MouseEvent) => {
       // 如果在协作模式下，发送路径更新
       if (isCollaborating.value) {
         // 直接发送路径更新，不使用节流函数
-        sendPathUpdate({
+        sendPathUpdate(courseStore.currentCourse.id, {
           visible: courseStore.coursePath.visible,
           points: courseStore.coursePath.points,
           startPoint: courseStore.startPoint,
@@ -1042,41 +997,25 @@ const handleMouseMove = (event: MouseEvent) => {
     const centerY = rect.top + pointPos.y
 
     // 计算当前角度
-    const currentAngle =
-      (Math.atan2(event.clientY - centerY, event.clientX - centerX) * 180) / Math.PI
-    const deltaAngle = currentAngle - startMousePos.value.x
+    const currentAngle = Math.atan2(event.clientY - centerY, event.clientX - centerX) * (180 / Math.PI)
+    const startAngle = startMousePos.value.x
+    const startRotation = startMousePos.value.y
 
-    // 计算新的旋转角度，确保在0-360度之间
-    let newRotation = (startMousePos.value.y + deltaAngle) % 360
-    if (newRotation < 0) newRotation += 360
+    // 计算角度差值，使用改进的方法
+    let deltaAngle = currentAngle - startAngle
+    // 确保角度差值在-180到180度之间
+    deltaAngle = ((deltaAngle + 180) % 360) - 180
+
+    // 计算新的旋转角度
+    let newRotation = startRotation + deltaAngle
+    // 规范化到0-360度范围
+    newRotation = ((newRotation % 360) + 360) % 360
 
     // 更新旋转角度
     if (draggingPoint.value === 'start-rotate') {
-      courseStore.updateStartRotation(Math.round(newRotation))
-
-      // 如果在协作模式下，发送路径更新
-      if (isCollaborating.value) {
-        // 直接发送路径更新，不使用节流函数
-        sendPathUpdate({
-          visible: courseStore.coursePath.visible,
-          points: courseStore.coursePath.points,
-          startPoint: courseStore.startPoint,
-          endPoint: courseStore.endPoint
-        })
-      }
+      courseStore.updateStartRotation(newRotation)
     } else {
-      courseStore.updateEndRotation(Math.round(newRotation))
-
-      // 如果在协作模式下，发送路径更新
-      if (isCollaborating.value) {
-        // 直接发送路径更新，不使用节流函数
-        sendPathUpdate({
-          visible: courseStore.coursePath.visible,
-          points: courseStore.coursePath.points,
-          startPoint: courseStore.startPoint,
-          endPoint: courseStore.endPoint
-        })
-      }
+      courseStore.updateEndRotation(newRotation)
     }
   }
 
@@ -1098,7 +1037,7 @@ const handleMouseMove = (event: MouseEvent) => {
     // 如果在协作模式下，发送路径更新
     if (isCollaborating.value) {
       // 直接发送路径更新，不使用节流函数
-      sendPathUpdate({
+      sendPathUpdate(courseStore.currentCourse.id, {
         visible: courseStore.coursePath.visible,
         points: courseStore.coursePath.points,
         startPoint: courseStore.startPoint,
@@ -1190,15 +1129,66 @@ const handleDrop = (event: DragEvent) => {
 
         // 如果在协作模式下，发送添加障碍物的消息
         if (isCollaborating.value) {
+          console.log('协作模式下，准备发送添加障碍物消息')
+          console.log('当前协作状态:', isCollaborating.value)
+          console.log('当前WebSocket连接状态:', connectionStatus.value)
+
           if (!addedObstacle) {
             console.error('添加障碍物失败，无法发送消息')
             return
           }
 
-          console.log('发送添加障碍物消息，障碍物数据:', addedObstacle)
-          // 发送完整的障碍物数据，包括ID
-          const result = sendAddObstacle(addedObstacle)
-          console.log('添加障碍物消息发送结果:', result ? '成功' : '失败')
+          // 确保localStorage中的协作状态正确
+          localStorage.setItem('isCollaborating', 'true')
+
+          console.log('发送添加障碍物消息，障碍物数据:', JSON.stringify(addedObstacle, null, 2))
+
+          try {
+            // 发送完整的障碍物数据，包括ID
+            const result = sendAddObstacle(addedObstacle)
+            console.log('添加障碍物消息发送结果:', result ? '成功' : '失败')
+
+            if (!result) {
+              // 如果发送失败，尝试重新连接WebSocket，但不退出协作模式
+              console.log('发送失败，尝试重新连接WebSocket，但不退出协作模式')
+
+              // 确保协作状态保持为true
+              isCollaborating.value = true
+              localStorage.setItem('isCollaborating', 'true')
+
+              if (typeof connect === 'function') {
+                // 使用静默模式连接，避免触发协作停止事件
+                try {
+                  connect(false, true) // 第二个参数为 true 表示静默模式
+                  // 延迟后再次尝试发送
+                  setTimeout(() => {
+                    // 再次确保协作状态为true
+                    isCollaborating.value = true
+                    localStorage.setItem('isCollaborating', 'true')
+
+                    if (connectionStatus.value === ConnectionStatus.CONNECTED) {
+                      console.log('WebSocket已重新连接，再次尝试发送添加障碍物消息')
+                      const retryResult = sendAddObstacle(addedObstacle)
+                      console.log('重试发送结果:', retryResult ? '成功' : '失败')
+                    } else {
+                      console.log('WebSocket重连失败，但保持协作模式')
+                      // 即使连接失败，也不退出协作模式
+                    }
+                  }, 1000)
+                } catch (error) {
+                  console.error('重新连接WebSocket时出错:', error)
+                  // 即使连接失败，也不退出协作模式
+                  isCollaborating.value = true
+                  localStorage.setItem('isCollaborating', 'true')
+                }
+              }
+            }
+          } catch (error) {
+            console.error('发送添加障碍物消息时出错:', error)
+            // 即使发送失败，也不退出协作模式
+            isCollaborating.value = true
+            localStorage.setItem('isCollaborating', 'true')
+          }
         }
       })
     } catch (error) {
@@ -1435,16 +1425,37 @@ const handleDrop = (event: DragEvent) => {
   // 如果在协作模式下，发送添加障碍物的消息
   if (isCollaborating.value) {
     console.log('协作模式下，准备发送添加障碍物消息')
+    console.log('当前协作状态:', isCollaborating.value)
+    console.log('当前WebSocket连接状态:', connectionStatus.value)
 
     if (!addedObstacle) {
       console.error('添加障碍物失败，无法发送消息')
       return
     }
 
-    console.log('发送添加障碍物消息，障碍物数据:', addedObstacle)
+    // 确保localStorage中的协作状态正确
+    localStorage.setItem('isCollaborating', 'true')
+
+    console.log('发送添加障碍物消息，障碍物数据:', JSON.stringify(addedObstacle, null, 2))
     // 发送完整的障碍物数据，包括ID
     const result = sendAddObstacle(addedObstacle)
     console.log('添加障碍物消息发送结果:', result ? '成功' : '失败')
+
+    if (!result) {
+      // 如果发送失败，尝试重新连接WebSocket
+      console.log('发送失败，尝试重新连接WebSocket')
+      if (typeof connect === 'function') {
+        connect()
+        // 延迟后再次尝试发送
+        setTimeout(() => {
+          if (connectionStatus.value === ConnectionStatus.CONNECTED) {
+            console.log('WebSocket已重新连接，再次尝试发送添加障碍物消息')
+            const retryResult = sendAddObstacle(addedObstacle)
+            console.log('重试发送结果:', retryResult ? '成功' : '失败')
+          }
+        }, 1000)
+      }
+    }
   } else {
     console.log('非协作模式，不发送添加障碍物消息')
   }
@@ -1779,19 +1790,25 @@ const handleGlobalMouseMove = (event: MouseEvent) => {
     const centerY = rect.top + pointPos.y
 
     // 计算当前角度
-    const currentAngle =
-      (Math.atan2(event.clientY - centerY, event.clientX - centerX) * 180) / Math.PI
-    const deltaAngle = currentAngle - startMousePos.value.x
+    const currentAngle = Math.atan2(event.clientY - centerY, event.clientX - centerX) * (180 / Math.PI)
+    const startAngle = startMousePos.value.x
+    const startRotation = startMousePos.value.y
 
-    // 计算新的旋转角度，确保在0-360度之间
-    let newRotation = (startMousePos.value.y + deltaAngle) % 360
-    if (newRotation < 0) newRotation += 360
+    // 计算角度差值，使用改进的方法
+    let deltaAngle = currentAngle - startAngle
+    // 确保角度差值在-180到180度之间
+    deltaAngle = ((deltaAngle + 180) % 360) - 180
+
+    // 计算新的旋转角度
+    let newRotation = startRotation + deltaAngle
+    // 规范化到0-360度范围
+    newRotation = ((newRotation % 360) + 360) % 360
 
     // 更新旋转角度
     if (draggingPoint.value === 'start-rotate') {
-      courseStore.updateStartRotation(Math.round(newRotation))
+      courseStore.updateStartRotation(newRotation)
     } else {
-      courseStore.updateEndRotation(Math.round(newRotation))
+      courseStore.updateEndRotation(newRotation)
     }
   }
 
@@ -1809,6 +1826,17 @@ const handleGlobalMouseMove = (event: MouseEvent) => {
       draggingControlPoint.value.controlPointNumber,
       { x, y },
     )
+
+    // 如果在协作模式下，发送路径更新
+    if (isCollaborating.value) {
+      // 直接发送路径更新，不使用节流函数
+      sendPathUpdate(courseStore.currentCourse.id, {
+        visible: courseStore.coursePath.visible,
+        points: courseStore.coursePath.points,
+        startPoint: courseStore.startPoint,
+        endPoint: courseStore.endPoint
+      })
+    }
   }
 }
 
@@ -1820,14 +1848,16 @@ const handleGlobalMouseUp = (event: MouseEvent) => {
   }
 
   // 结束障碍物拖拽
-  if (isDragging.value) {
-    // 在拖拽结束时，确保发送最终位置
-    if (isCollaborating.value && selectedObstacles.value.length > 0) {
-      // 对每个选中的障碍物发送最终位置
-      selectedObstacles.value.forEach(obstacle => {
-        console.log('拖拽结束，发送最终位置:', obstacle.id, obstacle.position)
-        sendObstacleUpdate(obstacle.id, { position: obstacle.position })
-      })
+  if (isDragging.value && draggingObstacle.value) {
+    // 在拖拽结束时发送最终位置，确保其他协作者能看到最终位置
+    if (isCollaborating.value) {
+      console.log('拖拽结束，发送最终位置:', draggingObstacle.value.id, draggingObstacle.value.position)
+      try {
+        sendObstacleUpdate(draggingObstacle.value.id, { position: draggingObstacle.value.position })
+        console.log('最终位置更新消息已发送')
+      } catch (error) {
+        console.error('发送最终位置更新失败:', error)
+      }
     }
 
     isDragging.value = false
@@ -1835,11 +1865,16 @@ const handleGlobalMouseUp = (event: MouseEvent) => {
   }
 
   // 结束障碍物旋转
-  if (isRotating.value) {
-    // 在旋转结束时，确保发送最终旋转角度
-    if (isCollaborating.value && draggingObstacle.value) {
-      console.log('旋转结束，发送最终旋转角度:', draggingObstacle.value.id, draggingObstacle.value.rotation)
-      sendObstacleUpdate(draggingObstacle.value.id, { rotation: draggingObstacle.value.rotation })
+  if (isRotating.value && draggingObstacle.value) {
+    // 在旋转结束时发送最终旋转角度，确保其他协作者能看到最终角度
+    if (isCollaborating.value) {
+      console.log('旋转结束，发送最终角度:', draggingObstacle.value.id, draggingObstacle.value.rotation)
+      try {
+        sendObstacleUpdate(draggingObstacle.value.id, { rotation: draggingObstacle.value.rotation })
+        console.log('最终角度更新消息已发送')
+      } catch (error) {
+        console.error('发送最终角度更新失败:', error)
+      }
     }
 
     isRotating.value = false
@@ -1848,17 +1883,7 @@ const handleGlobalMouseUp = (event: MouseEvent) => {
 
   // 结束控制点拖拽
   if (draggingControlPoint.value) {
-    // 在控制点拖拽结束时，确保发送最终位置
-    if (isCollaborating.value) {
-      console.log('控制点拖拽结束，发送最终路径数据')
-      sendPathUpdate({
-        visible: courseStore.coursePath.visible,
-        points: courseStore.coursePath.points,
-        startPoint: courseStore.startPoint,
-        endPoint: courseStore.endPoint
-      })
-    }
-
+    // 不再在控制点拖拽结束时发送最终位置，因为在拖拽过程中已经实时发送了位置更新
     draggingControlPoint.value = null
   }
 
@@ -1871,16 +1896,7 @@ const handleGlobalMouseUp = (event: MouseEvent) => {
 
   // 结束起终点拖拽
   if (!event.shiftKey) {
-    // 如果是起点或终点的拖拽或旋转状态，发送最终位置
-    if (draggingPoint.value && isCollaborating.value) {
-      console.log('起终点拖拽结束，发送最终路径数据')
-      sendPathUpdate({
-        visible: courseStore.coursePath.visible,
-        points: courseStore.coursePath.points,
-        startPoint: courseStore.startPoint,
-        endPoint: courseStore.endPoint
-      })
-    }
+    // 不再在起终点拖拽结束时发送最终位置，因为在拖拽过程中已经实时发送了位置更新
 
     // 如果是起点或终点的旋转状态，转换为普通选中状态
     if (draggingPoint.value === 'start-rotate') {
@@ -1902,6 +1918,14 @@ const handleGlobalMouseUp = (event: MouseEvent) => {
 
 // 组件挂载时添加事件监听
 onMounted(() => {
+  // 检查 localStorage 中是否有协作状态标记
+  const storedCollaboratingState = localStorage.getItem('isCollaborating')
+  if (storedCollaboratingState === 'true') {
+    console.log('从 localStorage 中恢复协作状态')
+    isCollaborating.value = true
+  }
+
+  // 添加事件监听器
   window.addEventListener('mousemove', handleGlobalMouseMove)
   window.addEventListener('mouseup', handleGlobalMouseUp)
   window.addEventListener('keydown', handleKeyDown)
@@ -2019,7 +2043,6 @@ const startDraggingPoint = (point: 'start' | 'end', event: MouseEvent) => {
 
   // 记录鼠标点击位置相对于起点/终点的偏移
   const pointPos = point === 'start' ? courseStore.startPoint : courseStore.endPoint
-  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   const canvas = document.querySelector('.course-canvas')?.getBoundingClientRect()
 
   if (canvas) {
@@ -2101,12 +2124,45 @@ const pathSegments = computed(() => {
     if (isInObstacleLine(i) || isInObstacleLine(i - 1)) {
       segments.push(`M ${previous.x} ${previous.y} L ${current.x} ${current.y}`)
     } else if (current.controlPoint1 && previous.controlPoint2) {
-      // 使用三次贝塞尔曲线
+      // 增加曲线角度的系数
+      const angleMultiplier = 2
+
+      // 计算控制点到锚点的距离和角度
+      const prevCP2Distance = Math.sqrt(
+        Math.pow(previous.controlPoint2.x - previous.x, 2) +
+        Math.pow(previous.controlPoint2.y - previous.y, 2)
+      )
+      const currCP1Distance = Math.sqrt(
+        Math.pow(current.controlPoint1.x - current.x, 2) +
+        Math.pow(current.controlPoint1.y - current.y, 2)
+      )
+
+      // 计算控制点的角度
+      const prevCP2Angle = Math.atan2(
+        previous.controlPoint2.y - previous.y,
+        previous.controlPoint2.x - previous.x
+      )
+      const currCP1Angle = Math.atan2(
+        current.controlPoint1.y - current.y,
+        current.controlPoint1.x - current.x
+      )
+
+      // 计算新的控制点位置
+      const enhancedPrevCP2 = {
+        x: previous.x + Math.cos(prevCP2Angle) * (prevCP2Distance * angleMultiplier),
+        y: previous.y + Math.sin(prevCP2Angle) * (prevCP2Distance * angleMultiplier)
+      }
+      const enhancedCurrCP1 = {
+        x: current.x + Math.cos(currCP1Angle) * (currCP1Distance * angleMultiplier),
+        y: current.y + Math.sin(currCP1Angle) * (currCP1Distance * angleMultiplier)
+      }
+
+      // 使用增强的控制点生成贝塞尔曲线
       segments.push(
         `M ${previous.x} ${previous.y} ` +
-        `C ${previous.controlPoint2.x} ${previous.controlPoint2.y}, ` +
-        `${current.controlPoint1.x} ${current.controlPoint1.y}, ` +
-        `${current.x} ${current.y}`,
+        `C ${enhancedPrevCP2.x} ${enhancedPrevCP2.y}, ` +
+        `${enhancedCurrCP1.x} ${enhancedCurrCP1.y}, ` +
+        `${current.x} ${current.y}`
       )
     } else {
       // 如果没有控制点，使用直线
@@ -2142,6 +2198,17 @@ const handleGenerateCoursePath = () => {
   courseStore.generatePath()
   // 显示路径
   courseStore.togglePathVisibility(true)
+
+  // 如果在协作模式下，发送路径更新
+  if (isCollaborating.value) {
+    // 发送路径更新消息给其他协作者
+    sendPathUpdate(courseStore.currentCourse.id, {
+      visible: courseStore.coursePath.visible,
+      points: courseStore.coursePath.points,
+      startPoint: courseStore.startPoint,
+      endPoint: courseStore.endPoint
+    })
+  }
 }
 
 // 调整标签角度，使其更易读
@@ -2556,10 +2623,6 @@ const bezierTangent = (
 
 // 添加调试状态
 const showDebugInfo = ref(false)
-// 协作开始时间
-const collaborationStartTime = ref(Date.now())
-// 上次刷新协作者列表的时间
-const lastCollaboratorRefreshTime = ref(Date.now())
 
 // 获取连接状态文本
 const getConnectionStatusText = () => {
@@ -2684,6 +2747,11 @@ const handleObstacleUpdated = (event: Event) => {
     }
   }
 }
+
+// 设置 inheritAttrs 为 false，防止属性自动继承
+defineOptions({
+  inheritAttrs: false
+})
 </script>
 
 <style scoped lang="scss">

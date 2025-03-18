@@ -31,3 +31,4 @@ coverage
 
 BackEnd/staticfiles/
 BackEnd/media/
+BackEnd/logs/

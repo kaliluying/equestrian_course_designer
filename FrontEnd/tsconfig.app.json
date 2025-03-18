@@ -16,7 +16,6 @@
     "src/components/icons/IconCommunity.vue",
     "src/components/icons/IconDocumentation.vue",
     "src/views/AboutView.vue",
-    "src/views/HomeView.vue"
   ],
   "compilerOptions": {
     "composite": true,
