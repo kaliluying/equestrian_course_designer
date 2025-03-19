@@ -649,9 +649,7 @@ const stopCollaboration = () => {
 
       // 确保状态被重置
       isCollaborating.value = false
-      // 同时更新 localStorage 中的协作状态
-      localStorage.setItem('isCollaborating', 'false')
-      console.log('disconnect方法不存在，已更新协作状态为false，并更新localStorage')
+      console.log('disconnect方法不存在，已更新协作状态为false')
 
       // 触发自定义事件
       const event = new CustomEvent('collaboration-stopped', {
@@ -673,9 +671,7 @@ const stopCollaboration = () => {
     console.error('停止协作时出错:', error)
     // 确保状态被重置
     isCollaborating.value = false
-    // 同时更新 localStorage 中的协作状态
-    localStorage.setItem('isCollaborating', 'false')
-    console.log('出错后已更新协作状态为false，并更新localStorage')
+    console.log('出错后已更新协作状态为false')
 
     // 触发自定义事件
     try {
@@ -1918,13 +1914,6 @@ const handleGlobalMouseUp = (event: MouseEvent) => {
 
 // 组件挂载时添加事件监听
 onMounted(() => {
-  // 检查 localStorage 中是否有协作状态标记
-  const storedCollaboratingState = localStorage.getItem('isCollaborating')
-  if (storedCollaboratingState === 'true') {
-    console.log('从 localStorage 中恢复协作状态')
-    isCollaborating.value = true
-  }
-
   // 添加事件监听器
   window.addEventListener('mousemove', handleGlobalMouseMove)
   window.addEventListener('mouseup', handleGlobalMouseUp)
@@ -2106,48 +2095,61 @@ const startDraggingControlPoint = (
 
 // 计算路径段
 const pathSegments = computed(() => {
+  // 存储所有路径段的数组
   const segments: string[] = []
+  // 获取当前课程路径的所有点
   const points = courseStore.coursePath.points
-
+  // 遍历所有点，从第二个点开始（因为需要和前一个点形成线段）
   for (let i = 1; i < points.length; i++) {
+    // 获取当前点和前一个点
     const current = points[i]
     const previous = points[i - 1]
-
-    // 检查是否是直线部分（障碍物前后3米的直线）
+    // 判断一个点是否在障碍物前后的直线部分
     const isInObstacleLine = (index: number) => {
-      // 对于每个障碍物，从索引1开始的3个点是直线部分
+      // 每个障碍物有5个点：
+      // 0: 障碍物前的连接点
+      // 1: 接近直线的起点（3米直线的起点）
+      // 2: 障碍物中心点
+      // 3: 离开直线的终点（3米直线的终点）
+      // 4: 障碍物后的连接点
+      // 其中1、2、3是直线部分
       const pointInObstacle = (index - 1) % 5
       return pointInObstacle === 1 || pointInObstacle === 2 || pointInObstacle === 3
     }
 
-    // 如果当前点或前一个点是直线部分，使用直线
+    // 如果当前点或前一个点在直线部分，使用直线连接
     if (isInObstacleLine(i) || isInObstacleLine(i - 1)) {
+      // 使用 SVG 的 L 命令绘制直线
       segments.push(`M ${previous.x} ${previous.y} L ${current.x} ${current.y}`)
     } else if (current.controlPoint1 && previous.controlPoint2) {
-      // 增加曲线角度的系数
+      // 如果两个点都有控制点，使用贝塞尔曲线
+      // 增加曲线角度的系数，使曲线更陡峭
       const angleMultiplier = 2
 
-      // 计算控制点到锚点的距离和角度
+      // 计算前一个点的第二个控制点到锚点的距离
       const prevCP2Distance = Math.sqrt(
         Math.pow(previous.controlPoint2.x - previous.x, 2) +
         Math.pow(previous.controlPoint2.y - previous.y, 2)
       )
+      // 计算当前点的第一个控制点到锚点的距离
       const currCP1Distance = Math.sqrt(
         Math.pow(current.controlPoint1.x - current.x, 2) +
         Math.pow(current.controlPoint1.y - current.y, 2)
       )
 
-      // 计算控制点的角度
+      // 计算前一个点的第二个控制点的角度（相对于锚点）
       const prevCP2Angle = Math.atan2(
         previous.controlPoint2.y - previous.y,
         previous.controlPoint2.x - previous.x
       )
+      // 计算当前点的第一个控制点的角度（相对于锚点）
       const currCP1Angle = Math.atan2(
         current.controlPoint1.y - current.y,
         current.controlPoint1.x - current.x
       )
 
-      // 计算新的控制点位置
+      // 计算增强后的控制点位置
+      // 通过增加距离使曲线更陡峭
       const enhancedPrevCP2 = {
         x: previous.x + Math.cos(prevCP2Angle) * (prevCP2Distance * angleMultiplier),
         y: previous.y + Math.sin(prevCP2Angle) * (prevCP2Distance * angleMultiplier)
@@ -2157,18 +2159,22 @@ const pathSegments = computed(() => {
         y: current.y + Math.sin(currCP1Angle) * (currCP1Distance * angleMultiplier)
       }
 
-      // 使用增强的控制点生成贝塞尔曲线
+      // 使用增强后的控制点生成贝塞尔曲线
+      // SVG 的 C 命令用于绘制三次贝塞尔曲线
+      // 格式：C x1 y1, x2 y2, x y
+      // 其中 (x1,y1) 是第一个控制点，(x2,y2) 是第二个控制点，(x,y) 是终点
       segments.push(
-        `M ${previous.x} ${previous.y} ` +
-        `C ${enhancedPrevCP2.x} ${enhancedPrevCP2.y}, ` +
-        `${enhancedCurrCP1.x} ${enhancedCurrCP1.y}, ` +
-        `${current.x} ${current.y}`
+        `M ${previous.x} ${previous.y} ` + // 移动到起点
+        `C ${enhancedPrevCP2.x} ${enhancedPrevCP2.y}, ` + // 第一个控制点
+        `${enhancedCurrCP1.x} ${enhancedCurrCP1.y}, ` + // 第二个控制点
+        `${current.x} ${current.y}` // 终点
       )
     } else {
-      // 如果没有控制点，使用直线
+      // 如果没有控制点，使用直线连接
       segments.push(`M ${previous.x} ${previous.y} L ${current.x} ${current.y}`)
     }
   }
+  // 返回所有路径段
   return segments
 })
 
@@ -2299,41 +2305,43 @@ const calculatePathSegmentLength = (
 
 // 计算障碍物之间的距离
 const obstacleDistances = computed(() => {
+  // 如果路径不可见或点数不足，返回空数组
   if (!courseStore.coursePath.visible || courseStore.coursePath.points.length <= 2) {
     return []
   }
 
+  // 初始化距离数组
   const distances = []
+  // 获取路径上的所有点
   const points = courseStore.coursePath.points
+  // 获取米到像素的比例
   const scale = meterScale.value
+  // 获取所有障碍物
   const obstacles = courseStore.currentCourse.obstacles
 
-  // 计算起点到第一个障碍物的距离
+  // 第一部分：计算起点到第一个障碍物的距离
   if (points.length >= 3) {
-    const startPoint = points[0]
-    const firstObstaclePoint1 = points[1] // 第一个障碍物的前连接点
-    const firstObstacleCenter = points[3] // 第一个障碍物的中心点
+    // 获取起点和第一个障碍物的相关点
+    const startPoint = points[0]                    // 起点
+    const firstObstaclePoint1 = points[1]          // 第一个障碍物的前连接点
 
     // 计算起点到第一个障碍物的路径长度（像素）
     let distanceInPixels = 0
 
-    // 计算起点到第一个连接点的长度
-    distanceInPixels += calculatePathSegmentLength(startPoint, firstObstaclePoint1)
-
-    // 计算第一个连接点到障碍物中心的长度
-    for (let i = 1; i < 3; i++) {
-      distanceInPixels += calculatePathSegmentLength(points[i], points[i + 1])
+    // 只计算曲线部分的长度
+    if (startPoint.controlPoint2 && firstObstaclePoint1.controlPoint1) {
+      distanceInPixels = calculatePathSegmentLength(startPoint, firstObstaclePoint1)
     }
 
-    // 转换为米
+    // 将像素距离转换为米，并保留一位小数
     const distanceInMeters = (distanceInPixels / scale).toFixed(1)
 
-    // 计算标签位置（起点和第一个障碍物之间的路径中点）
-    // 使用贝塞尔曲线的中点计算，以便标签跟随曲线
+    // 计算标签位置
     let labelX, labelY
 
+    // 根据是否有控制点选择不同的计算方法
     if (startPoint.controlPoint2 && firstObstaclePoint1.controlPoint1) {
-      // 如果有控制点，计算贝塞尔曲线的中点
+      // 如果有控制点，使用贝塞尔曲线计算中点位置
       const t = 0.5 // 参数t=0.5表示曲线的中点
       labelX = bezierPoint(
         startPoint.x,
@@ -2349,17 +2357,8 @@ const obstacleDistances = computed(() => {
         firstObstaclePoint1.y,
         t
       )
-    } else {
-      // 如果没有控制点，使用直线的中点
-      labelX = (startPoint.x + firstObstacleCenter.x) / 2
-      labelY = (startPoint.y + firstObstacleCenter.y) / 2
-    }
 
-    // 计算角度，使标签沿着路径方向
-    let angle
-    if (startPoint.controlPoint2 && firstObstaclePoint1.controlPoint1) {
-      // 如果有控制点，计算贝塞尔曲线在中点处的切线角度
-      const t = 0.5
+      // 计算标签的旋转角度
       const dx = bezierTangent(
         startPoint.x,
         startPoint.controlPoint2.x,
@@ -2374,80 +2373,59 @@ const obstacleDistances = computed(() => {
         firstObstaclePoint1.y,
         t
       )
-      angle = Math.atan2(dy, dx) * (180 / Math.PI)
-    } else {
-      // 如果没有控制点，使用直线的角度
-      const dx = firstObstacleCenter.x - startPoint.x
-      const dy = firstObstacleCenter.y - startPoint.y
-      angle = Math.atan2(dy, dx) * (180 / Math.PI)
+      const angle = Math.atan2(dy, dx) * (180 / Math.PI)
+
+      // 获取第一个障碍物的编号
+      const firstObstacleNumber = obstacles[0]?.number || '1'
+
+      // 只有当有曲线时才添加距离标签
+      if (parseFloat(distanceInMeters) > 0) {
+        distances.push({
+          distance: distanceInMeters,
+          position: { x: labelX, y: labelY },
+          angle: angle,
+          fromNumber: 'S',
+          toNumber: firstObstacleNumber
+        })
+      }
     }
-
-    // 获取第一个障碍物的编号
-    const firstObstacleNumber = obstacles[0]?.number || '1'
-
-    distances.push({
-      distance: distanceInMeters,
-      position: { x: labelX, y: labelY },
-      angle: angle,
-      fromNumber: 'S',
-      toNumber: firstObstacleNumber
-    })
   }
 
-  // 每个障碍物在路径中占5个点，我们需要计算每个障碍物中心点之间的距离
-  // 障碍物中心点索引：3, 8, 13, ...
+  // 第二部分：计算相邻障碍物之间的距离
   for (let i = 3; i < points.length - 5; i += 5) {
-    // 确保下一个障碍物存在
     if (i + 5 < points.length) {
-      const currentCenter = points[i]
-      const nextCenter = points[i + 5]
-      const exitPoint = points[i + 2] // 当前障碍物的出口点
-      const entryPoint = points[i + 3] // 下一个障碍物的入口点
+      const exitPoint = points[i + 2]          // 当前障碍物的出口点
+      const entryPoint = points[i + 3]         // 下一个障碍物的入口点
 
-      // 计算两个障碍物之间的路径长度（像素）
+      // 只计算曲线部分的长度
       let distanceInPixels = 0
-
-      // 计算当前障碍物中心到下一个障碍物中心的所有路径段长度
-      for (let j = i; j < i + 5; j++) {
-        if (j + 1 < points.length) {
-          distanceInPixels += calculatePathSegmentLength(points[j], points[j + 1])
-        }
+      if (exitPoint.controlPoint2 && entryPoint.controlPoint1) {
+        distanceInPixels = calculatePathSegmentLength(exitPoint, entryPoint)
       }
 
-      // 转换为米
+      // 将像素距离转换为米
       const distanceInMeters = (distanceInPixels / scale).toFixed(1)
 
-      // 计算标签位置（两个障碍物之间的路径中点）
-      let labelX, labelY
-
-      if (exitPoint.controlPoint2 && entryPoint.controlPoint1) {
-        // 如果有控制点，计算贝塞尔曲线的中点
+      // 只有当有曲线时才计算标签位置和添加距离信息
+      if (parseFloat(distanceInMeters) > 0) {
+        // 计算标签位置
         const t = 0.5
-        labelX = bezierPoint(
+        const labelX = bezierPoint(
           exitPoint.x,
           exitPoint.controlPoint2.x,
           entryPoint.controlPoint1.x,
           entryPoint.x,
           t
         )
-        labelY = bezierPoint(
+        const labelY = bezierPoint(
           exitPoint.y,
           exitPoint.controlPoint2.y,
           entryPoint.controlPoint1.y,
           entryPoint.y,
           t
         )
-      } else {
-        // 如果没有控制点，使用直线的中点
-        labelX = (currentCenter.x + nextCenter.x) / 2
-        labelY = (currentCenter.y + nextCenter.y) / 2
-      }
 
-      // 计算角度，使标签沿着路径方向
-      let angle
-      if (exitPoint.controlPoint2 && entryPoint.controlPoint1) {
-        // 如果有控制点，计算贝塞尔曲线在中点处的切线角度
-        const t = 0.5
+        // 计算标签旋转角度
         const dx = bezierTangent(
           exitPoint.x,
           exitPoint.controlPoint2.x,
@@ -2462,82 +2440,63 @@ const obstacleDistances = computed(() => {
           entryPoint.y,
           t
         )
-        angle = Math.atan2(dy, dx) * (180 / Math.PI)
-      } else {
-        // 如果没有控制点，使用直线的角度
-        const dx = nextCenter.x - currentCenter.x
-        const dy = nextCenter.y - currentCenter.y
-        angle = Math.atan2(dy, dx) * (180 / Math.PI)
+        const angle = Math.atan2(dy, dx) * (180 / Math.PI)
+
+        // 计算障碍物索引
+        const currentObstacleIndex = Math.floor((i - 3) / 5)
+        const nextObstacleIndex = currentObstacleIndex + 1
+
+        // 获取障碍物编号
+        const currentObstacleNumber = obstacles[currentObstacleIndex]?.number || (currentObstacleIndex + 1).toString()
+        const nextObstacleNumber = obstacles[nextObstacleIndex]?.number || (nextObstacleIndex + 1).toString()
+
+        distances.push({
+          distance: distanceInMeters,
+          position: { x: labelX, y: labelY },
+          angle: angle,
+          fromNumber: currentObstacleNumber,
+          toNumber: nextObstacleNumber
+        })
       }
-
-      // 计算当前障碍物和下一个障碍物的索引
-      const currentObstacleIndex = Math.floor((i - 3) / 5)
-      const nextObstacleIndex = currentObstacleIndex + 1
-
-      // 获取障碍物编号
-      const currentObstacleNumber = obstacles[currentObstacleIndex]?.number || (currentObstacleIndex + 1).toString()
-      const nextObstacleNumber = obstacles[nextObstacleIndex]?.number || (nextObstacleIndex + 1).toString()
-
-      distances.push({
-        distance: distanceInMeters,
-        position: { x: labelX, y: labelY },
-        angle: angle,
-        fromNumber: currentObstacleNumber,
-        toNumber: nextObstacleNumber
-      })
     }
   }
 
-  // 计算最后一个障碍物到终点的距离
-  if (points.length >= 6) { // 至少有一个障碍物和起终点
-    const lastObstacleIndex = Math.floor((points.length - 3) / 5) * 5 + 3 // 最后一个障碍物中心点索引
+  // 第三部分：计算最后一个障碍物到终点的距离
+  if (points.length >= 6) {
+    const lastObstacleIndex = Math.floor((points.length - 3) / 5) * 5 + 3
     if (lastObstacleIndex < points.length) {
-      const lastObstacleCenter = points[lastObstacleIndex]
-      const endPoint = points[points.length - 1]
       const exitPoint = points[lastObstacleIndex + 2] // 最后一个障碍物的出口点
+      const endPoint = points[points.length - 1]      // 终点
 
-      // 计算最后一个障碍物到终点的路径长度（像素）
+      // 只计算曲线部分的长度
       let distanceInPixels = 0
-
-      // 计算最后障碍物中心到终点的所有路径段长度
-      for (let i = lastObstacleIndex; i < points.length - 1; i++) {
-        distanceInPixels += calculatePathSegmentLength(points[i], points[i + 1])
+      if (exitPoint.controlPoint2 && endPoint.controlPoint1) {
+        distanceInPixels = calculatePathSegmentLength(exitPoint, endPoint)
       }
 
       // 转换为米
       const distanceInMeters = (distanceInPixels / scale).toFixed(1)
 
-      // 计算标签位置（最后一个障碍物和终点之间的路径中点）
-      let labelX, labelY
-
-      if (exitPoint.controlPoint2 && endPoint.controlPoint1) {
-        // 如果有控制点，计算贝塞尔曲线的中点
+      // 只有当有曲线时才计算标签位置和添加距离信息
+      if (parseFloat(distanceInMeters) > 0) {
+        // 计算标签位置
         const t = 0.5
-        labelX = bezierPoint(
+        const labelX = bezierPoint(
           exitPoint.x,
           exitPoint.controlPoint2.x,
           endPoint.controlPoint1.x,
           endPoint.x,
           t
         )
-        labelY = bezierPoint(
+        const labelY = bezierPoint(
           exitPoint.y,
           exitPoint.controlPoint2.y,
           endPoint.controlPoint1.y,
           endPoint.y,
           t
         )
-      } else {
-        // 如果没有控制点，使用直线的中点
-        labelX = (lastObstacleCenter.x + endPoint.x) / 2
-        labelY = (lastObstacleCenter.y + endPoint.y) / 2
-      }
 
-      // 计算角度，使标签沿着路径方向
-      let angle
-      if (exitPoint.controlPoint2 && endPoint.controlPoint1) {
-        // 如果有控制点，计算贝塞尔曲线在中点处的切线角度
-        const t = 0.5
+        // 计算标签旋转角度
         const dx = bezierTangent(
           exitPoint.x,
           exitPoint.controlPoint2.x,
@@ -2552,27 +2511,22 @@ const obstacleDistances = computed(() => {
           endPoint.y,
           t
         )
-        angle = Math.atan2(dy, dx) * (180 / Math.PI)
-      } else {
-        // 如果没有控制点，使用直线的角度
-        const dx = endPoint.x - lastObstacleCenter.x
-        const dy = endPoint.y - lastObstacleCenter.y
-        angle = Math.atan2(dy, dx) * (180 / Math.PI)
+        const angle = Math.atan2(dy, dx) * (180 / Math.PI)
+
+        // 计算最后一个障碍物的数组索引
+        const lastObstacleArrayIndex = Math.floor((lastObstacleIndex - 3) / 5)
+
+        // 获取最后一个障碍物的编号
+        const lastObstacleNumber = obstacles[lastObstacleArrayIndex]?.number || (lastObstacleArrayIndex + 1).toString()
+
+        distances.push({
+          distance: distanceInMeters,
+          position: { x: labelX, y: labelY },
+          angle: angle,
+          fromNumber: lastObstacleNumber,
+          toNumber: 'F'
+        })
       }
-
-      // 计算最后一个障碍物的索引
-      const lastObstacleArrayIndex = Math.floor((lastObstacleIndex - 3) / 5)
-
-      // 获取最后一个障碍物的编号
-      const lastObstacleNumber = obstacles[lastObstacleArrayIndex]?.number || (lastObstacleArrayIndex + 1).toString()
-
-      distances.push({
-        distance: distanceInMeters,
-        position: { x: labelX, y: labelY },
-        angle: angle,
-        fromNumber: lastObstacleNumber,
-        toNumber: 'F'
-      })
     }
   }
 
@@ -2583,10 +2537,21 @@ const obstacleDistances = computed(() => {
 const totalDistance = computed(() => {
   if (!obstacleDistances.value.length) return '0'
 
-  // 将所有距离相加
-  const total = obstacleDistances.value.reduce((sum, item) => {
+  // 获取障碍物数量（不包括起点到终点的连接）
+  const obstacleCount = Math.max(0, courseStore.currentCourse.obstacles.filter(
+    obstacle => obstacle.type !== ObstacleType.DECORATION
+  ).length)
+
+  // 计算路径总长度
+  const pathDistance = obstacleDistances.value.reduce((sum, item) => {
     return sum + parseFloat(item.distance)
   }, 0)
+
+  // 每个障碍物需要加上6米的穿过长度（前3米+后3米）
+  const obstaclePassDistance = obstacleCount * 6
+
+  // 总距离 = 路径长度 + 障碍物穿过长度
+  const total = pathDistance + obstaclePassDistance
 
   // 保留一位小数
   return total.toFixed(1)

@@ -382,11 +382,10 @@ export const useCourseStore = defineStore('course', () => {
       const departDistance = 3 * scale // 3米的离开距离
 
       // 添加障碍物前的连接点（可调节点）
-      // 这个点位于障碍物前方3米+50像素处，用于连接前一个障碍物
-      // 额外的50像素提供了更多的空间来调整曲线形状
+      // 这个点位于障碍物前方3米处，用于连接前一个障碍物
       points.push({
-        x: center.x - Math.cos(angle) * (approachDistance + 50),
-        y: center.y - Math.sin(angle) * (approachDistance + 50),
+        x: center.x - Math.cos(angle) * approachDistance,
+        y: center.y - Math.sin(angle) * approachDistance,
       })
 
       // 添加接近直线的起点（3米直线的起点）
@@ -413,11 +412,10 @@ export const useCourseStore = defineStore('course', () => {
       })
 
       // 添加障碍物后的连接点（可调节点）
-      // 这个点位于障碍物后方3米+50像素处，用于连接下一个障碍物
-      // 额外的50像素提供了更多的空间来调整曲线形状
+      // 这个点位于障碍物后方3米，用于连接下一个障碍物
       points.push({
-        x: center.x + Math.cos(angle) * (departDistance + 50),
-        y: center.y + Math.sin(angle) * (departDistance + 50),
+        x: center.x + Math.cos(angle) * departDistance,
+        y: center.y + Math.sin(angle) * departDistance,
       })
     })
 
@@ -465,13 +463,15 @@ export const useCourseStore = defineStore('course', () => {
 
       // 对于障碍物部分的点，检查是否是直线部分
       const pointInObstacle = (i - 1) % 5
-      if (pointInObstacle === 1 || pointInObstacle === 3) {
-        // 如果是直线部分，不生成控制点
+
+      // 如果是直线部分的点，跳过控制点生成
+      if (pointInObstacle === 1 || pointInObstacle === 2 || pointInObstacle === 3) {
+        current.controlPoint1 = undefined
+        current.controlPoint2 = undefined
         continue
       }
-
-      // 为其他点生成控制点
-      if (prev) {
+      // 只为连接点生成控制点
+      if (prev && pointInObstacle != 4) {
         // 生成前控制点
         const angle = Math.atan2(prev.y - current.y, prev.x - current.x)
         const distance =
@@ -480,6 +480,7 @@ export const useCourseStore = defineStore('course', () => {
           x: current.x + Math.cos(angle) * distance,
           y: current.y + Math.sin(angle) * distance,
         }
+        continue
       }
 
       if (next) {
@@ -493,21 +494,9 @@ export const useCourseStore = defineStore('course', () => {
         }
       }
     }
-
-    // 更新路径点数组
-    coursePath.value = {
-      ...coursePath.value,
-      points,
-    }
-
-    // 更新课程状态
+    // 更新课程路径的点数组
+    coursePath.value.points = points
     updateCourse()
-
-    // 触发路线生成事件
-    console.log('路线生成完成，触发事件')
-    const event = new CustomEvent('route-generated')
-    document.dispatchEvent(event)
-    console.log('已触发路线生成事件')
   }
 
   /**
@@ -706,11 +695,11 @@ export const useCourseStore = defineStore('course', () => {
     const departDistance = 3 * scale // 3米的离开距离
 
     // 创建障碍物的5个点
-    // 第1个点：障碍物前的连接点，位于障碍物前方3米+50像素处
+    // 第1个点：障碍物前的连接点，位于障碍物前方3米
     // 这个点用于连接前一个障碍物，可以通过控制点调整曲线形状
     const point1: PathPoint = {
-      x: center.x - Math.cos(angle) * (approachDistance + 50),
-      y: center.y - Math.sin(angle) * (approachDistance + 50),
+      x: center.x - Math.cos(angle) * approachDistance,
+      y: center.y - Math.sin(angle) * approachDistance,
     }
 
     // 第2个点：接近直线的起点，位于障碍物前方3米处
@@ -734,11 +723,11 @@ export const useCourseStore = defineStore('course', () => {
       y: center.y + Math.sin(angle) * departDistance,
     }
 
-    // 第5个点：障碍物后的连接点，位于障碍物后方3米+50像素处
+    // 第5个点：障碍物后的连接点，位于障碍物后方3米
     // 这个点用于连接下一个障碍物，可以通过控制点调整曲线形状
     const point5: PathPoint = {
-      x: center.x + Math.cos(angle) * (departDistance + 50),
-      y: center.y + Math.sin(angle) * (departDistance + 50),
+      x: center.x + Math.cos(angle) * departDistance,
+      y: center.y + Math.sin(angle) * departDistance,
     }
 
     // 为连接点添加控制点
@@ -915,8 +904,8 @@ export const useCourseStore = defineStore('course', () => {
     const point1 = points[startIndex]
     const oldX1 = point1.x
     const oldY1 = point1.y
-    point1.x = center.x - Math.cos(angle) * (approachDistance + 50)
-    point1.y = center.y - Math.sin(angle) * (approachDistance + 50)
+    point1.x = center.x - Math.cos(angle) * approachDistance
+    point1.y = center.y - Math.sin(angle) * approachDistance
 
     // 2. 接近直线的起点
     const point2 = points[startIndex + 1]
@@ -937,8 +926,8 @@ export const useCourseStore = defineStore('course', () => {
     const point5 = points[startIndex + 4]
     const oldX5 = point5.x
     const oldY5 = point5.y
-    point5.x = center.x + Math.cos(angle) * (departDistance + 50)
-    point5.y = center.y + Math.sin(angle) * (departDistance + 50)
+    point5.x = center.x + Math.cos(angle) * departDistance
+    point5.y = center.y + Math.sin(angle) * departDistance
 
     // 处理连接点的控制点
     // 对于连接点1（障碍物前的连接点）
