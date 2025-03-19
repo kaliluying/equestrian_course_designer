@@ -380,42 +380,55 @@ export const useCourseStore = defineStore('course', () => {
       // 定义障碍物后方的直线距离为3米，并转换为像素单位
       // 这个距离用于确保马匹有足够的空间离开障碍物
       const departDistance = 3 * scale // 3米的离开距离
-
+      // 计算障碍物的总长度（包括横杆间距）
+      let totalLength = 0
+      if (obstacle.type === ObstacleType.DOUBLE && obstacle.poles.length > 1) {
+        // 双横杆障碍物：计算横杆长度加上间距
+        totalLength =
+          obstacle.poles[0].height + (obstacle.poles[0].spacing || 0) + obstacle.poles[1].height
+      } else if (obstacle.type === ObstacleType.LIVERPOOL && obstacle.liverpoolProperties) {
+        // 利物浦障碍物：使用水障宽度
+        totalLength = obstacle.liverpoolProperties.height
+      } else if (obstacle.type === ObstacleType.WALL && obstacle.wallProperties) {
+        // 砖墙障碍物：使用墙的宽度
+        totalLength = obstacle.wallProperties.height
+      } else if (obstacle.type === ObstacleType.COMBINATION) {
+        // 组合障碍物：使用组合障碍物的宽度
+        for (const pole of obstacle.poles) {
+          totalLength += pole.height + (pole.spacing || 0)
+        }
+      } else {
+        // 单横杆障碍物：使用横杆宽度
+        totalLength = obstacle.poles[0]?.height || 0
+      }
       // 添加障碍物前的连接点（可调节点）
-      // 这个点位于障碍物前方3米处，用于连接前一个障碍物
       points.push({
-        x: center.x - Math.cos(angle) * approachDistance,
-        y: center.y - Math.sin(angle) * approachDistance,
+        x: center.x - Math.cos(angle) * (approachDistance + totalLength / 2),
+        y: center.y - Math.sin(angle) * (approachDistance + totalLength / 2),
       })
 
       // 添加接近直线的起点（3米直线的起点）
-      // 这个点位于障碍物前方3米处，从这里到障碍物中心是一条直线
-      // 确保马匹有一段直线路径来接近障碍物
       points.push({
-        x: center.x - Math.cos(angle) * approachDistance,
-        y: center.y - Math.sin(angle) * approachDistance,
+        x: center.x - Math.cos(angle) * (approachDistance + totalLength / 2),
+        y: center.y - Math.sin(angle) * (approachDistance + totalLength / 2),
       })
 
       // 添加障碍物中心点
-      // 这是障碍物的中心位置，马匹需要跳过的实际点
       points.push({
         x: center.x,
         y: center.y,
       })
 
       // 添加离开直线的终点（3米直线的终点）
-      // 这个点位于障碍物后方3米处，从障碍物中心到这里是一条直线
-      // 确保马匹有一段直线路径来离开障碍物
       points.push({
-        x: center.x + Math.cos(angle) * departDistance,
-        y: center.y + Math.sin(angle) * departDistance,
+        x: center.x + Math.cos(angle) * (departDistance + totalLength / 2),
+        y: center.y + Math.sin(angle) * (departDistance + totalLength / 2),
       })
 
       // 添加障碍物后的连接点（可调节点）
-      // 这个点位于障碍物后方3米，用于连接下一个障碍物
       points.push({
-        x: center.x + Math.cos(angle) * departDistance,
-        y: center.y + Math.sin(angle) * departDistance,
+        x: center.x + Math.cos(angle) * (departDistance + totalLength / 2),
+        y: center.y + Math.sin(angle) * (departDistance + totalLength / 2),
       })
     })
 
@@ -694,19 +707,41 @@ export const useCourseStore = defineStore('course', () => {
     // 这个距离用于确保马匹有足够的空间离开障碍物
     const departDistance = 3 * scale // 3米的离开距离
 
+    // 计算障碍物的总长度（包括横杆间距）
+    let totalLength = 0
+    if (obstacle.type === ObstacleType.DOUBLE && obstacle.poles.length > 1) {
+      // 双横杆障碍物：计算横杆长度加上间距
+      totalLength =
+        obstacle.poles[0].height + (obstacle.poles[0].spacing || 0) + obstacle.poles[1].height
+    } else if (obstacle.type === ObstacleType.LIVERPOOL && obstacle.liverpoolProperties) {
+      // 利物浦障碍物：使用水障宽度
+      totalLength = obstacle.liverpoolProperties.height
+    } else if (obstacle.type === ObstacleType.WALL && obstacle.wallProperties) {
+      // 砖墙障碍物：使用墙的宽度
+      totalLength = obstacle.wallProperties.height
+    } else if (obstacle.type === ObstacleType.COMBINATION) {
+      // 组合障碍物：使用组合障碍物的宽度
+      for (const pole of obstacle.poles) {
+        totalLength += pole.height + (pole.spacing || 0)
+      }
+    } else {
+      // 单横杆障碍物：使用横杆宽度
+      totalLength = obstacle.poles[0]?.height || 0
+    }
+
     // 创建障碍物的5个点
     // 第1个点：障碍物前的连接点，位于障碍物前方3米
     // 这个点用于连接前一个障碍物，可以通过控制点调整曲线形状
     const point1: PathPoint = {
-      x: center.x - Math.cos(angle) * approachDistance,
-      y: center.y - Math.sin(angle) * approachDistance,
+      x: center.x - Math.cos(angle) * (approachDistance + totalLength / 2),
+      y: center.y - Math.sin(angle) * (approachDistance + totalLength / 2),
     }
 
     // 第2个点：接近直线的起点，位于障碍物前方3米处
     // 从这个点到障碍物中心是一条3米长的直线，确保马匹有直线接近障碍物
     const point2: PathPoint = {
-      x: center.x - Math.cos(angle) * approachDistance,
-      y: center.y - Math.sin(angle) * approachDistance,
+      x: center.x - Math.cos(angle) * (approachDistance + totalLength / 2),
+      y: center.y - Math.sin(angle) * (approachDistance + totalLength / 2),
     }
 
     // 第3个点：障碍物中心点
@@ -719,15 +754,15 @@ export const useCourseStore = defineStore('course', () => {
     // 第4个点：离开直线的终点，位于障碍物后方3米处
     // 从障碍物中心到这个点是一条3米长的直线，确保马匹有直线离开障碍物
     const point4: PathPoint = {
-      x: center.x + Math.cos(angle) * departDistance,
-      y: center.y + Math.sin(angle) * departDistance,
+      x: center.x + Math.cos(angle) * (departDistance + totalLength / 2),
+      y: center.y + Math.sin(angle) * (departDistance + totalLength / 2),
     }
 
     // 第5个点：障碍物后的连接点，位于障碍物后方3米
     // 这个点用于连接下一个障碍物，可以通过控制点调整曲线形状
     const point5: PathPoint = {
-      x: center.x + Math.cos(angle) * departDistance,
-      y: center.y + Math.sin(angle) * departDistance,
+      x: center.x + Math.cos(angle) * (departDistance + totalLength / 2),
+      y: center.y + Math.sin(angle) * (departDistance + totalLength / 2),
     }
 
     // 为连接点添加控制点
@@ -898,19 +933,41 @@ export const useCourseStore = defineStore('course', () => {
     // 这个距离用于确保马匹有足够的空间离开障碍物
     const departDistance = 3 * scale // 3米的离开距离
 
+    // 计算障碍物的总长度（包括横杆间距）
+    let totalLength = 0
+    if (obstacle.type === ObstacleType.DOUBLE && obstacle.poles.length > 1) {
+      // 双横杆障碍物：计算横杆长度加上间距
+      totalLength =
+        obstacle.poles[0].height + (obstacle.poles[0].spacing || 0) + obstacle.poles[1].height
+    } else if (obstacle.type === ObstacleType.LIVERPOOL && obstacle.liverpoolProperties) {
+      // 利物浦障碍物：使用水障宽度
+      totalLength = obstacle.liverpoolProperties.height
+    } else if (obstacle.type === ObstacleType.WALL && obstacle.wallProperties) {
+      // 砖墙障碍物：使用墙的宽度
+      totalLength = obstacle.wallProperties.height
+    } else if (obstacle.type === ObstacleType.COMBINATION) {
+      // 组合障碍物：使用组合障碍物的宽度
+      for (const pole of obstacle.poles) {
+        totalLength += pole.height + (pole.spacing || 0)
+      }
+    } else {
+      // 单横杆障碍物：使用横杆宽度
+      totalLength = obstacle.poles[0]?.height || 0
+    }
+
     // 更新障碍物的5个点，但保留控制点
 
     // 1. 障碍物前的连接点（可调节点）
     const point1 = points[startIndex]
     const oldX1 = point1.x
     const oldY1 = point1.y
-    point1.x = center.x - Math.cos(angle) * approachDistance
-    point1.y = center.y - Math.sin(angle) * approachDistance
+    point1.x = center.x - Math.cos(angle) * (approachDistance + totalLength / 2)
+    point1.y = center.y - Math.sin(angle) * (approachDistance + totalLength / 2)
 
     // 2. 接近直线的起点
     const point2 = points[startIndex + 1]
-    point2.x = center.x - Math.cos(angle) * approachDistance
-    point2.y = center.y - Math.sin(angle) * approachDistance
+    point2.x = center.x - Math.cos(angle) * (approachDistance + totalLength / 2)
+    point2.y = center.y - Math.sin(angle) * (approachDistance + totalLength / 2)
 
     // 3. 障碍物中心点
     const point3 = points[startIndex + 2]
@@ -919,15 +976,15 @@ export const useCourseStore = defineStore('course', () => {
 
     // 4. 离开直线的终点
     const point4 = points[startIndex + 3]
-    point4.x = center.x + Math.cos(angle) * departDistance
-    point4.y = center.y + Math.sin(angle) * departDistance
+    point4.x = center.x + Math.cos(angle) * (departDistance + totalLength / 2)
+    point4.y = center.y + Math.sin(angle) * (departDistance + totalLength / 2)
 
     // 5. 障碍物后的连接点（可调节点）
     const point5 = points[startIndex + 4]
     const oldX5 = point5.x
     const oldY5 = point5.y
-    point5.x = center.x + Math.cos(angle) * departDistance
-    point5.y = center.y + Math.sin(angle) * departDistance
+    point5.x = center.x + Math.cos(angle) * (departDistance + totalLength / 2)
+    point5.y = center.y + Math.sin(angle) * (departDistance + totalLength / 2)
 
     // 处理连接点的控制点
     // 对于连接点1（障碍物前的连接点）
@@ -1675,200 +1732,6 @@ export const useCourseStore = defineStore('course', () => {
   }
 
   /**
-   * 自动生成课程设计
-   * 根据场地尺寸自动生成一定数量的障碍物
-   */
-  function generateCourse() {
-    currentCourse.value.obstacles = []
-
-    const { fieldWidth, fieldHeight } = currentCourse.value
-    const meterScale = document.querySelector('.course-canvas')?.clientWidth ?? 1000 / fieldWidth
-
-    // 根据场地面积计算合适的障碍物数量（8-12个）
-    const obstacleCount = Math.min(12, Math.max(8, Math.floor((fieldWidth * fieldHeight) / 400)))
-
-    // 定义起点和终点区域
-    const startArea = { x: fieldWidth * 0.2, y: fieldHeight * 0.2 }
-    const endArea = { x: fieldWidth * 0.8, y: fieldHeight * 0.8 }
-
-    // 生成路径点
-    const pathPoints = generatePathPoints(
-      obstacleCount,
-      startArea,
-      endArea,
-      fieldWidth,
-      fieldHeight,
-    )
-
-    // 根据路径点生成障碍物
-    pathPoints.forEach((point, index) => {
-      const nextPoint = pathPoints[index + 1]
-      let rotation = 0
-      if (nextPoint) {
-        rotation = Math.atan2(nextPoint.y - point.y, nextPoint.x - point.x) * (180 / Math.PI)
-      }
-
-      // 创建新的障碍物
-      const obstacle: Omit<Obstacle, 'id'> = {
-        type: getRandomObstacleType(),
-        position: {
-          x: point.x * meterScale,
-          y: point.y * meterScale,
-        },
-        rotation: (rotation + 270) % 360,
-        poles: [
-          {
-            width: 4 * meterScale,
-            height: 0.2 * meterScale,
-            color: '#8B4513',
-            numberPosition: { x: 0, y: 50 },
-          },
-        ],
-        number: String(index + 1),
-      }
-
-      // 根据障碍物类型添加特定属性
-      if (obstacle.type === ObstacleType.DOUBLE) {
-        obstacle.poles.push({
-          width: 4 * meterScale,
-          height: 0.2 * meterScale,
-          color: '#8B4513',
-          numberPosition: { x: 0, y: 50 },
-        })
-        obstacle.poles[0].spacing = 2.5 * meterScale
-      } else if (obstacle.type === ObstacleType.LIVERPOOL) {
-        obstacle.liverpoolProperties = {
-          height: 0.3 * meterScale,
-          width: 4 * meterScale,
-          waterDepth: 0.2 * meterScale,
-          waterColor: 'rgba(0, 100, 255, 0.3)',
-          hasRail: true,
-          railHeight: 1.3 * meterScale,
-        }
-      } else if (obstacle.type === ObstacleType.WALL) {
-        obstacle.wallProperties = {
-          width: 4 * meterScale,
-          height: 3 * meterScale,
-          color: '#8B4513',
-        }
-      }
-
-      addObstacle(obstacle)
-    })
-
-    updateCourse()
-  }
-
-  /**
-   * 生成路径点
-   * @param count 需要生成的点数量
-   * @param start 起点区域
-   * @param end 终点区域
-   * @param maxWidth 场地最大宽度
-   * @param maxHeight 场地最大高度
-   * @returns 生成的路径点数组
-   */
-  function generatePathPoints(
-    count: number,
-    start: { x: number; y: number },
-    end: { x: number; y: number },
-    maxWidth: number,
-    maxHeight: number,
-  ) {
-    const points: { x: number; y: number }[] = []
-    const minDistance = 10 // 点之间的最小距离
-
-    // 添加起点
-    points.push({ x: start.x, y: start.y })
-
-    // 生成中间点
-    for (let i = 1; i < count - 1; i++) {
-      let attempts = 0
-      let point
-
-      // 尝试生成有效的点，最多100次
-      do {
-        point = {
-          x: maxWidth * 0.2 + Math.random() * maxWidth * 0.6,
-          y: maxHeight * 0.2 + Math.random() * maxHeight * 0.6,
-        }
-        attempts++
-      } while (!isValidPoint(point, points, minDistance) && attempts < 100)
-
-      if (attempts < 100) {
-        points.push(point)
-      }
-    }
-
-    // 添加终点
-    points.push({ x: end.x, y: end.y })
-
-    // 优化路径
-    optimizePath(points)
-
-    return points
-  }
-
-  /**
-   * 检查点是否有效
-   * @param point 要检查的点
-   * @param points 已存在的点数组
-   * @param minDistance 最小距离要求
-   * @returns 如果点与所有已存在的点的距离都大于最小距离，则返回true
-   */
-  function isValidPoint(
-    point: { x: number; y: number },
-    points: { x: number; y: number }[],
-    minDistance: number,
-  ) {
-    return points.every(
-      (p) => Math.sqrt(Math.pow(p.x - point.x, 2) + Math.pow(p.y - point.y, 2)) >= minDistance,
-    )
-  }
-
-  /**
-   * 优化路径点
-   * 调整路径点以避免急转弯
-   * @param points 要优化的路径点数组
-   */
-  function optimizePath(points: { x: number; y: number }[]) {
-    for (let i = 1; i < points.length - 1; i++) {
-      const prev = points[i - 1]
-      const curr = points[i]
-      const next = points[i + 1]
-
-      // 计算当前点与前后点形成的角度
-      const angle1 = Math.atan2(curr.y - prev.y, curr.x - prev.x)
-      const angle2 = Math.atan2(next.y - curr.y, next.x - curr.x)
-      const angleDiff = Math.abs(angle2 - angle1) * (180 / Math.PI)
-
-      // 如果角度大于90度，说明是急转弯，需要调整当前点的位置
-      if (angleDiff > 90) {
-        const midX = (prev.x + next.x) / 2
-        const midY = (prev.y + next.y) / 2
-        points[i] = {
-          x: curr.x * 0.3 + midX * 0.7,
-          y: curr.y * 0.3 + midY * 0.7,
-        }
-      }
-    }
-  }
-
-  /**
-   * 随机获取障碍物类型
-   * @returns 随机选择的障碍物类型
-   */
-  function getRandomObstacleType(): ObstacleType {
-    const types = [
-      ObstacleType.SINGLE,
-      ObstacleType.SINGLE,
-      ObstacleType.DOUBLE,
-      ObstacleType.LIVERPOOL,
-    ]
-    return types[Math.floor(Math.random() * types.length)]
-  }
-
-  /**
    * 清除路径
    * 重置路径相关的所有状态
    */
@@ -2093,7 +1956,6 @@ export const useCourseStore = defineStore('course', () => {
     saveCourse,
     loadCourse,
     updateFieldSize,
-    generateCourse,
     clearPath,
     resetStartEndPoints,
     updateCourseName,

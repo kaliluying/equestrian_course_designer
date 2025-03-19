@@ -2538,20 +2538,43 @@ const totalDistance = computed(() => {
   if (!obstacleDistances.value.length) return '0'
 
   // 获取障碍物数量（不包括起点到终点的连接）
-  const obstacleCount = Math.max(0, courseStore.currentCourse.obstacles.filter(
+  const obstacles = courseStore.currentCourse.obstacles.filter(
     obstacle => obstacle.type !== ObstacleType.DECORATION
-  ).length)
+  )
+  const obstacleCount = obstacles.length
 
   // 计算路径总长度
   const pathDistance = obstacleDistances.value.reduce((sum, item) => {
     return sum + parseFloat(item.distance)
   }, 0)
 
+  // 计算障碍物总长度（包括横杆宽度和间距）
+  const obstacleTotalLength = obstacles.reduce((sum, obstacle) => {
+    let obstacleLength = 0
+    console.log('obstacle', obstacle)
+
+    // 根据障碍物类型计算长度
+    if (obstacle.type === ObstacleType.DOUBLE && obstacle.poles.length > 1) {
+      // 双横杆障碍物：横杆宽度 + 间距 + 横杆宽度
+      obstacleLength = obstacle.poles[0].height + (obstacle.poles[0].spacing || 0) + obstacle.poles[1].height
+    } else if (obstacle.type === ObstacleType.COMBINATION) {
+      // 组合障碍物：所有横杆宽度 + 间距
+      obstacleLength = obstacle.poles.reduce((poleSum, pole, index) => {
+        return poleSum + pole.height + (index < obstacle.poles.length - 1 ? (pole.spacing || 0) : 0)
+      }, 0)
+    } else {
+      // 单横杆障碍物：横杆宽度
+      obstacleLength = obstacle.poles[0]?.height || 0
+    }
+
+    return obstacleLength / meterScale.value
+  }, 0)
+
   // 每个障碍物需要加上6米的穿过长度（前3米+后3米）
   const obstaclePassDistance = obstacleCount * 6
 
-  // 总距离 = 路径长度 + 障碍物穿过长度
-  const total = pathDistance + obstaclePassDistance
+  // 总距离 = 路径长度 + 障碍物穿过长度 + 障碍物总长度
+  const total = pathDistance + obstaclePassDistance + obstacleTotalLength
 
   // 保留一位小数
   return total.toFixed(1)
