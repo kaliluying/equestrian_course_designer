@@ -1,6 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useCourseStore } from '@/stores/course'
+import ResetPassword from '../views/ResetPassword.vue'
+import SharedDesigns from '../views/SharedDesigns.vue'
+import MyDesigns from '../views/MyDesigns.vue'
+import UserProfile from '../views/UserProfile.vue'
+import Feedback from '../views/Feedback.vue'
 import App from '@/App.vue'
 
 const router = createRouter({
@@ -14,30 +19,30 @@ const router = createRouter({
     {
       path: '/my-designs',
       name: 'my-designs',
-      component: () => import('@/views/MyDesigns.vue'),
+      component: MyDesigns,
       meta: { requiresAuth: true },
     },
     {
       path: '/shared-designs',
       name: 'shared-designs',
-      component: () => import('@/views/SharedDesigns.vue'),
+      component: SharedDesigns,
       meta: { requiresAuth: true },
     },
     {
       path: '/profile',
       name: 'profile',
-      component: () => import('@/views/UserProfile.vue'),
+      component: UserProfile,
       meta: { requiresAuth: true },
     },
     {
       path: '/feedback',
       name: 'feedback',
-      component: () => import('@/views/Feedback.vue'),
+      component: Feedback,
     },
     {
       path: '/reset-password',
       name: 'reset-password',
-      component: () => import('@/views/ResetPassword.vue'),
+      component: ResetPassword,
     },
   ],
 })

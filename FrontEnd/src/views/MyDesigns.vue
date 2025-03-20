@@ -670,6 +670,11 @@ onMounted(() => {
   }
 }
 
+:deep(.el-pagination) {
+  margin-top: 20px;
+  justify-content: space-around;
+}
+
 @media (max-width: 768px) {
   .designs-grid {
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));

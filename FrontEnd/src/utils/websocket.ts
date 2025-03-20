@@ -45,7 +45,6 @@ export enum ConnectionStatus {
  * - id: 用户唯一标识
  * - username: 用户名
  * - color: 用户在协作中的标识颜色
- * - cursor: 用户光标位置（可选）
  * - lastActive: 最后活动时间
  * - role: 用户角色
  */
@@ -53,7 +52,6 @@ export interface CollaboratorInfo {
   id: string
   username: string
   color: string
-  cursor?: { x: number; y: number }
   lastActive: Date
   role: string
 }
@@ -1098,7 +1096,7 @@ export function useWebSocketConnection(designId: string) {
         handleUpdatePathMessage(message)
         break
       case MessageType.CURSOR_MOVE:
-        handleCursorMoveMessage(message)
+        handleCursorMoveMessage()
         break
       case MessageType.SYNC_REQUEST:
         handleSyncRequestMessage()
@@ -1472,53 +1470,9 @@ export function useWebSocketConnection(designId: string) {
   }
 
   // 处理光标移动消息
-  const handleCursorMoveMessage = (message: WebSocketMessage) => {
-    const { senderId, payload } = message
-
-    // 避免处理自己发送的消息
-    if (senderId === String(userStore.currentUser?.id)) return
-
-    console.log('收到光标移动消息:', senderId, payload.position)
-
-    // 确保payload.position存在且格式正确
-    if (
-      !payload.position ||
-      typeof payload.position !== 'object' ||
-      !('x' in payload.position) ||
-      !('y' in payload.position)
-    ) {
-      console.error('光标位置数据格式不正确:', payload.position)
-      return
-    }
-
-    // 更新协作者光标位置
-    const collaborator = collaborators.value.find((c) => c.id === senderId)
-    if (collaborator) {
-      collaborator.cursor = payload.position as { x: number; y: number }
-      collaborator.lastActive = new Date()
-      console.log(`已更新协作者 ${collaborator.username} 的光标位置:`, collaborator.cursor)
-    } else {
-      console.warn(
-        '收到未知协作者的光标移动消息:',
-        senderId,
-        '当前协作者列表:',
-        collaborators.value,
-      )
-
-      // 尝试发送同步请求获取最新协作者列表
-      if (userStore.currentUser) {
-        console.log('尝试发送同步请求获取最新协作者列表')
-        const syncRequest: WebSocketMessage = {
-          type: MessageType.SYNC_REQUEST,
-          senderId: String(userStore.currentUser.id),
-          senderName: userStore.currentUser.username,
-          sessionId: designId,
-          timestamp: new Date().toISOString(),
-          payload: {},
-        }
-        sendMessage(syncRequest)
-      }
-    }
+  const handleCursorMoveMessage = () => {
+    // 不再需要处理光标移动消息
+    return
   }
 
   // 处理同步请求消息

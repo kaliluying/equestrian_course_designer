@@ -35,7 +35,7 @@ urlpatterns = [
     # 捕获所有前端路由，交由Vue Router处理
     re_path(r'^(?!admin|user|api|media|static).*$',
             TemplateView.as_view(template_name='index.html')),
-]
+] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
 # 添加媒体文件的URL配置
 if settings.DEBUG:

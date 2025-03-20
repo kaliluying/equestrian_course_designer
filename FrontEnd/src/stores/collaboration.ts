@@ -57,16 +57,6 @@ export const useCollaborationStore = defineStore('collaboration', () => {
     collaborators.value = collaborators.value.filter((c) => c.id !== collaboratorId)
   }
 
-  // 更新协作者光标位置
-  const updateCollaboratorCursor = (collaboratorId: string, position: { x: number; y: number }) => {
-    const collaborator = collaborators.value.find((c) => c.id === collaboratorId)
-
-    if (collaborator) {
-      collaborator.cursor = position
-      collaborator.lastActive = new Date()
-    }
-  }
-
   // 添加聊天消息
   const addChatMessage = (message: ChatMessage) => {
     chatHistory.value.push(message)
@@ -104,7 +94,6 @@ export const useCollaborationStore = defineStore('collaboration', () => {
     updateCollaborators,
     addCollaborator,
     removeCollaborator,
-    updateCollaboratorCursor,
     addChatMessage,
     clearChatHistory,
     setConnectionStatus,

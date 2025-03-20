@@ -1,0 +1,789 @@
+INFO 2025-03-19 18:51:39,579 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:9412][0m
+INFO 2025-03-19 18:51:39,590 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:9415][0m
+INFO 2025-03-19 18:51:39,592 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:9414][0m
+INFO 2025-03-19 18:51:39,598 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:9418][0m
+INFO 2025-03-19 18:51:39,613 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:9418][0m
+INFO 2025-03-19 18:51:42,340 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:9418][0m
+INFO 2025-03-19 18:51:42,353 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:9414][0m
+INFO 2025-03-19 18:51:42,362 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:9415][0m
+INFO 2025-03-19 18:51:42,362 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:9418][0m
+INFO 2025-03-19 18:51:42,397 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:9415][0m
+INFO 2025-03-19 18:57:07,458 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:10291][0m
+INFO 2025-03-19 18:57:07,469 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:10294][0m
+INFO 2025-03-19 18:57:07,470 runserver [mHTTP GET /user/obstacles/ 200 [0.03, 192.168.1.6:10293][0m
+INFO 2025-03-19 18:57:07,477 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:10297][0m
+INFO 2025-03-19 18:57:07,497 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:10297][0m
+INFO 2025-03-19 18:57:18,429 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:10297][0m
+INFO 2025-03-19 18:57:18,440 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:10294][0m
+INFO 2025-03-19 18:57:18,441 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:10293][0m
+INFO 2025-03-19 18:57:18,445 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:10291][0m
+INFO 2025-03-19 18:57:18,467 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:10291][0m
+INFO 2025-03-19 18:57:32,488 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:10291][0m
+INFO 2025-03-19 18:57:32,499 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:10294][0m
+INFO 2025-03-19 18:57:32,500 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:10293][0m
+INFO 2025-03-19 18:57:32,507 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:10297][0m
+INFO 2025-03-19 18:57:32,521 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:10297][0m
+INFO 2025-03-19 18:57:33,596 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:10297][0m
+INFO 2025-03-19 18:57:33,608 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:10294][0m
+INFO 2025-03-19 18:57:33,611 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:10293][0m
+INFO 2025-03-19 18:57:33,618 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:10291][0m
+INFO 2025-03-19 18:57:33,631 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:10291][0m
+INFO 2025-03-19 18:57:45,336 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:10291][0m
+INFO 2025-03-19 18:57:45,356 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:10293][0m
+INFO 2025-03-19 18:57:45,356 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:10294][0m
+INFO 2025-03-19 18:57:45,357 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:10297][0m
+INFO 2025-03-19 18:57:45,377 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:10294][0m
+INFO 2025-03-19 18:59:02,219 runserver [mHTTP OPTIONS /user/users/my_profile/ 200 [0.00, 192.168.1.6:10741][0m
+INFO 2025-03-19 18:59:02,222 runserver [mHTTP OPTIONS /user/users/my_profile/ 200 [0.00, 192.168.1.6:10742][0m
+INFO 2025-03-19 18:59:02,236 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:10743][0m
+INFO 2025-03-19 18:59:02,245 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:10745][0m
+INFO 2025-03-19 18:59:02,247 runserver [mHTTP OPTIONS /user/obstacles/ 200 [0.00, 192.168.1.6:10742][0m
+INFO 2025-03-19 18:59:02,247 runserver [mHTTP OPTIONS /user/obstacles/shared/ 200 [0.00, 192.168.1.6:10741][0m
+INFO 2025-03-19 18:59:02,264 runserver [mHTTP GET /user/obstacles/ 200 [0.01, 192.168.1.6:10745][0m
+INFO 2025-03-19 18:59:02,264 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:10743][0m
+INFO 2025-03-19 18:59:02,332 runserver [mHTTP OPTIONS /user/obstacles/count/ 200 [0.00, 192.168.1.6:10741][0m
+INFO 2025-03-19 18:59:02,341 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:10743][0m
+INFO 2025-03-19 18:59:05,484 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:10743][0m
+INFO 2025-03-19 18:59:05,502 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:10757][0m
+INFO 2025-03-19 18:59:05,502 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:10745][0m
+INFO 2025-03-19 18:59:05,503 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:10758][0m
+INFO 2025-03-19 18:59:05,520 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:10745][0m
+INFO 2025-03-19 18:59:22,113 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:10758][0m
+INFO 2025-03-19 18:59:22,128 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:10743][0m
+INFO 2025-03-19 18:59:22,129 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:10757][0m
+INFO 2025-03-19 18:59:22,136 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:10823][0m
+INFO 2025-03-19 18:59:22,151 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:10823][0m
+INFO 2025-03-19 19:00:36,536 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11082][0m
+INFO 2025-03-19 19:00:36,556 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:11084][0m
+INFO 2025-03-19 19:00:36,556 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:11085][0m
+INFO 2025-03-19 19:00:36,557 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:11086][0m
+INFO 2025-03-19 19:00:36,578 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:11086][0m
+INFO 2025-03-19 19:00:45,195 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11086][0m
+INFO 2025-03-19 19:00:45,204 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11085][0m
+INFO 2025-03-19 19:00:45,234 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:11086][0m
+INFO 2025-03-19 19:00:45,234 runserver [mHTTP GET /user/obstacles/ 200 [0.01, 192.168.1.6:11085][0m
+INFO 2025-03-19 19:00:45,305 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:11086][0m
+INFO 2025-03-19 19:00:47,294 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11086][0m
+INFO 2025-03-19 19:00:47,307 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11085][0m
+INFO 2025-03-19 19:00:47,315 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:11084][0m
+INFO 2025-03-19 19:00:47,315 runserver [mHTTP GET /user/obstacles/ 200 [0.01, 192.168.1.6:11086][0m
+INFO 2025-03-19 19:00:47,358 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:11086][0m
+INFO 2025-03-19 19:01:03,386 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11086][0m
+INFO 2025-03-19 19:01:03,399 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:11085][0m
+INFO 2025-03-19 19:01:03,400 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:11084][0m
+INFO 2025-03-19 19:01:03,406 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:11082][0m
+INFO 2025-03-19 19:01:03,431 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:11082][0m
+INFO 2025-03-19 19:01:12,490 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11082][0m
+INFO 2025-03-19 19:01:12,500 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:11085][0m
+INFO 2025-03-19 19:01:12,502 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:11084][0m
+INFO 2025-03-19 19:01:12,508 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:11086][0m
+INFO 2025-03-19 19:01:12,522 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:11086][0m
+INFO 2025-03-19 19:01:16,620 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11086][0m
+INFO 2025-03-19 19:01:16,633 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:11084][0m
+INFO 2025-03-19 19:01:16,634 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:11085][0m
+INFO 2025-03-19 19:01:16,636 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11082][0m
+INFO 2025-03-19 19:01:16,658 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:11082][0m
+INFO 2025-03-19 19:01:18,289 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11082][0m
+INFO 2025-03-19 19:01:18,297 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11085][0m
+INFO 2025-03-19 19:01:18,319 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:11082][0m
+INFO 2025-03-19 19:01:18,319 runserver [mHTTP GET /user/obstacles/ 200 [0.01, 192.168.1.6:11085][0m
+INFO 2025-03-19 19:01:18,374 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:11082][0m
+INFO 2025-03-19 19:01:32,721 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11082][0m
+INFO 2025-03-19 19:01:32,736 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:11084][0m
+INFO 2025-03-19 19:01:32,737 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:11085][0m
+INFO 2025-03-19 19:01:32,745 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:11086][0m
+INFO 2025-03-19 19:01:32,765 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:11086][0m
+INFO 2025-03-19 19:01:40,376 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11086][0m
+INFO 2025-03-19 19:01:40,394 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:11084][0m
+INFO 2025-03-19 19:01:40,394 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:11085][0m
+INFO 2025-03-19 19:01:40,396 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:11082][0m
+INFO 2025-03-19 19:01:40,425 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:11082][0m
+INFO 2025-03-19 19:04:10,570 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11828][0m
+INFO 2025-03-19 19:04:10,586 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:11833][0m
+INFO 2025-03-19 19:04:10,586 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:11830][0m
+INFO 2025-03-19 19:04:10,593 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:11843][0m
+INFO 2025-03-19 19:04:10,614 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:11843][0m
+INFO 2025-03-19 19:04:12,425 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11843][0m
+INFO 2025-03-19 19:04:12,436 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:11830][0m
+INFO 2025-03-19 19:04:12,438 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:11833][0m
+INFO 2025-03-19 19:04:12,441 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11828][0m
+INFO 2025-03-19 19:04:12,465 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:11828][0m
+INFO 2025-03-19 19:04:44,781 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11828][0m
+INFO 2025-03-19 19:04:44,797 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:11830][0m
+INFO 2025-03-19 19:04:44,799 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:11833][0m
+INFO 2025-03-19 19:04:44,801 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:11843][0m
+INFO 2025-03-19 19:04:44,823 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:11843][0m
+INFO 2025-03-19 19:04:47,571 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11843][0m
+INFO 2025-03-19 19:04:47,583 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:11830][0m
+INFO 2025-03-19 19:04:47,584 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:11833][0m
+INFO 2025-03-19 19:04:47,590 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:11828][0m
+INFO 2025-03-19 19:04:47,606 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:11828][0m
+INFO 2025-03-19 19:05:01,264 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11828][0m
+INFO 2025-03-19 19:05:01,275 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:11830][0m
+INFO 2025-03-19 19:05:01,276 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:11833][0m
+INFO 2025-03-19 19:05:01,284 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:11843][0m
+INFO 2025-03-19 19:05:01,298 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:11843][0m
+INFO 2025-03-19 19:05:02,523 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11843][0m
+INFO 2025-03-19 19:05:02,539 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:11830][0m
+INFO 2025-03-19 19:05:02,540 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:11833][0m
+INFO 2025-03-19 19:05:02,545 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:11828][0m
+INFO 2025-03-19 19:05:02,561 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:11828][0m
+INFO 2025-03-19 19:05:12,161 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11828][0m
+INFO 2025-03-19 19:05:12,178 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:11830][0m
+INFO 2025-03-19 19:05:12,182 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:11833][0m
+INFO 2025-03-19 19:05:12,186 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:11843][0m
+INFO 2025-03-19 19:05:12,240 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:11843][0m
+INFO 2025-03-19 19:08:05,053 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12475][0m
+INFO 2025-03-19 19:08:05,065 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:12478][0m
+INFO 2025-03-19 19:08:05,066 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:12477][0m
+INFO 2025-03-19 19:08:05,073 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:12480][0m
+INFO 2025-03-19 19:08:05,094 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:12480][0m
+INFO 2025-03-19 19:08:06,836 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:12480][0m
+INFO 2025-03-19 19:08:06,843 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:12478][0m
+INFO 2025-03-19 19:08:06,844 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:12477][0m
+INFO 2025-03-19 19:08:06,852 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12475][0m
+INFO 2025-03-19 19:08:06,868 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:12475][0m
+INFO 2025-03-19 19:08:08,685 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:12478][0m
+INFO 2025-03-19 19:08:08,686 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:12477][0m
+INFO 2025-03-19 19:08:08,686 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:12475][0m
+INFO 2025-03-19 19:08:08,697 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12480][0m
+INFO 2025-03-19 19:08:08,706 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:12477][0m
+INFO 2025-03-19 19:11:42,257 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:11:42,268 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:12912][0m
+INFO 2025-03-19 19:11:42,269 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:12911][0m
+INFO 2025-03-19 19:11:42,274 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:11:42,303 runserver [mHTTP GET /user/obstacles/count/ 200 [0.00, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:11:46,320 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:11:46,335 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:12912][0m
+INFO 2025-03-19 19:11:46,336 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:12911][0m
+INFO 2025-03-19 19:11:46,340 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:11:46,363 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:11:50,648 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:11:50,660 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:12911][0m
+INFO 2025-03-19 19:11:50,663 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:12912][0m
+INFO 2025-03-19 19:11:50,670 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:11:50,685 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:12:30,291 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:12:30,306 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:12911][0m
+INFO 2025-03-19 19:12:30,307 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:12912][0m
+INFO 2025-03-19 19:12:30,307 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:12:30,335 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:12:33,197 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:12:33,212 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12912][0m
+INFO 2025-03-19 19:12:33,212 runserver [mHTTP GET /user/obstacles/ 200 [0.01, 192.168.1.6:12911][0m
+INFO 2025-03-19 19:12:33,212 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:12:33,241 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:12:37,334 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:12:37,348 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:12911][0m
+INFO 2025-03-19 19:12:37,349 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:12912][0m
+INFO 2025-03-19 19:12:37,357 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:12:37,374 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:13:22,292 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:13:22,302 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:12911][0m
+INFO 2025-03-19 19:13:22,303 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:12912][0m
+INFO 2025-03-19 19:13:22,307 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:13:22,334 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:13:25,261 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:13:25,279 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:12912][0m
+INFO 2025-03-19 19:13:25,280 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:12911][0m
+INFO 2025-03-19 19:13:25,282 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:13:25,302 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:13:30,092 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:13:30,106 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:12912][0m
+INFO 2025-03-19 19:13:30,106 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:12911][0m
+INFO 2025-03-19 19:13:30,110 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:13:30,163 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:13:32,113 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:13:32,124 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:12912][0m
+INFO 2025-03-19 19:13:32,125 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:12911][0m
+INFO 2025-03-19 19:13:32,129 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:13:32,159 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:14:15,617 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:14:15,636 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:12912][0m
+INFO 2025-03-19 19:14:15,637 runserver [mHTTP GET /user/obstacles/ 200 [0.03, 192.168.1.6:12911][0m
+INFO 2025-03-19 19:14:15,642 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:14:15,659 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:14:50,271 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:14:50,285 runserver [mHTTP GET /user/obstacles/ 200 [0.03, 192.168.1.6:12912][0m
+INFO 2025-03-19 19:14:50,286 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:12911][0m
+INFO 2025-03-19 19:14:50,296 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:14:51,230 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:14:51,250 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:12912][0m
+INFO 2025-03-19 19:14:51,251 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:12911][0m
+INFO 2025-03-19 19:14:51,252 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:14:51,295 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:14:58,159 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:14:58,172 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12911][0m
+INFO 2025-03-19 19:14:58,181 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:12912][0m
+INFO 2025-03-19 19:14:58,182 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:14:58,228 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:15:00,752 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12909][0m
+INFO 2025-03-19 19:15:00,762 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:12912][0m
+INFO 2025-03-19 19:15:00,762 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:12911][0m
+INFO 2025-03-19 19:15:00,767 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:15:00,784 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:15:20,328 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:15:20,346 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:12911][0m
+INFO 2025-03-19 19:15:20,346 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:15:20,348 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:12912][0m
+INFO 2025-03-19 19:15:20,377 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:12915][0m
+INFO 2025-03-19 19:17:27,402 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:14004][0m
+INFO 2025-03-19 19:17:27,427 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:14009][0m
+INFO 2025-03-19 19:17:27,428 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:14004][0m
+INFO 2025-03-19 19:17:27,429 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:14008][0m
+INFO 2025-03-19 19:17:27,468 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:14008][0m
+INFO 2025-03-19 19:17:30,265 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:14008][0m
+INFO 2025-03-19 19:17:30,276 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:14009][0m
+INFO 2025-03-19 19:17:30,277 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:14004][0m
+INFO 2025-03-19 19:17:30,284 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:14026][0m
+INFO 2025-03-19 19:17:30,299 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:14026][0m
+INFO 2025-03-19 19:17:54,100 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:14026][0m
+INFO 2025-03-19 19:17:54,115 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:14009][0m
+INFO 2025-03-19 19:17:54,117 runserver [mHTTP GET /user/obstacles/ 200 [0.03, 192.168.1.6:14004][0m
+INFO 2025-03-19 19:17:54,124 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:14008][0m
+INFO 2025-03-19 19:17:54,139 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:14008][0m
+INFO 2025-03-19 19:18:23,281 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:14178][0m
+INFO 2025-03-19 19:18:23,298 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:14181][0m
+INFO 2025-03-19 19:18:23,300 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:14182][0m
+INFO 2025-03-19 19:18:23,300 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:14180][0m
+INFO 2025-03-19 19:18:23,340 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:14180][0m
+INFO 2025-03-19 19:18:25,154 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:14180][0m
+INFO 2025-03-19 19:18:25,167 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:14182][0m
+INFO 2025-03-19 19:18:25,168 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:14181][0m
+INFO 2025-03-19 19:18:25,176 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:14178][0m
+INFO 2025-03-19 19:18:25,194 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:14178][0m
+INFO 2025-03-19 19:18:26,153 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:14178][0m
+INFO 2025-03-19 19:18:26,170 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:14181][0m
+INFO 2025-03-19 19:18:26,170 runserver [mHTTP GET /user/obstacles/ 200 [0.03, 192.168.1.6:14182][0m
+INFO 2025-03-19 19:18:26,178 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:14180][0m
+INFO 2025-03-19 19:18:26,204 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:14180][0m
+INFO 2025-03-19 19:18:39,995 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:14180][0m
+INFO 2025-03-19 19:18:40,010 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:14181][0m
+INFO 2025-03-19 19:18:40,013 runserver [mHTTP GET /user/obstacles/ 200 [0.03, 192.168.1.6:14182][0m
+INFO 2025-03-19 19:18:40,018 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:14178][0m
+INFO 2025-03-19 19:18:40,046 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:14178][0m
+INFO 2025-03-19 19:18:42,030 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:14178][0m
+INFO 2025-03-19 19:18:42,040 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:14182][0m
+INFO 2025-03-19 19:18:42,040 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:14181][0m
+INFO 2025-03-19 19:18:42,045 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:14180][0m
+INFO 2025-03-19 19:18:42,061 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:14180][0m
+INFO 2025-03-19 19:19:46,201 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:14601][0m
+INFO 2025-03-19 19:19:46,213 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:14604][0m
+INFO 2025-03-19 19:19:46,214 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:14603][0m
+INFO 2025-03-19 19:19:46,221 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:14607][0m
+INFO 2025-03-19 19:19:46,237 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:14607][0m
+INFO 2025-03-19 19:19:49,258 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:14607][0m
+INFO 2025-03-19 19:19:49,271 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:14604][0m
+INFO 2025-03-19 19:19:49,273 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:14603][0m
+INFO 2025-03-19 19:19:49,276 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:14601][0m
+INFO 2025-03-19 19:19:49,297 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:14601][0m
+INFO 2025-03-19 19:19:51,221 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:14601][0m
+INFO 2025-03-19 19:19:51,232 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:14603][0m
+INFO 2025-03-19 19:19:51,240 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:14604][0m
+INFO 2025-03-19 19:19:51,241 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:14601][0m
+INFO 2025-03-19 19:19:51,277 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:14601][0m
+INFO 2025-03-19 19:20:12,727 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:14601][0m
+INFO 2025-03-19 19:20:12,743 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:14603][0m
+INFO 2025-03-19 19:20:12,743 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:14604][0m
+INFO 2025-03-19 19:20:12,744 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:14607][0m
+INFO 2025-03-19 19:20:12,765 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:14607][0m
+INFO 2025-03-19 19:21:23,331 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:14860][0m
+INFO 2025-03-19 19:21:23,345 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:14863][0m
+INFO 2025-03-19 19:21:23,345 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:14862][0m
+INFO 2025-03-19 19:21:23,353 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:14866][0m
+INFO 2025-03-19 19:21:23,387 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:14866][0m
+INFO 2025-03-19 19:21:29,410 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:14866][0m
+INFO 2025-03-19 19:21:29,422 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:14862][0m
+INFO 2025-03-19 19:21:29,422 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:14863][0m
+INFO 2025-03-19 19:21:29,427 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:14860][0m
+INFO 2025-03-19 19:21:29,449 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:14860][0m
+INFO 2025-03-19 19:21:32,251 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:14860][0m
+INFO 2025-03-19 19:21:32,265 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:14863][0m
+INFO 2025-03-19 19:21:32,267 runserver [mHTTP GET /user/obstacles/ 200 [0.01, 192.168.1.6:14860][0m
+INFO 2025-03-19 19:21:32,269 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:14862][0m
+INFO 2025-03-19 19:21:32,310 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:14862][0m
+INFO 2025-03-19 19:21:36,042 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:14862][0m
+INFO 2025-03-19 19:21:36,064 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:14860][0m
+INFO 2025-03-19 19:21:36,066 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:14863][0m
+INFO 2025-03-19 19:21:36,067 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:14862][0m
+INFO 2025-03-19 19:21:36,116 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:14862][0m
+INFO 2025-03-19 19:21:40,327 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:14862][0m
+INFO 2025-03-19 19:21:40,341 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:14863][0m
+INFO 2025-03-19 19:21:40,349 runserver [mHTTP GET /user/obstacles/ 200 [0.01, 192.168.1.6:14862][0m
+INFO 2025-03-19 19:21:40,349 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:14860][0m
+INFO 2025-03-19 19:21:40,376 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:14860][0m
+INFO 2025-03-19 19:21:43,495 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:14860][0m
+INFO 2025-03-19 19:21:43,507 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:14863][0m
+INFO 2025-03-19 19:21:43,508 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:14862][0m
+INFO 2025-03-19 19:21:43,515 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:14866][0m
+INFO 2025-03-19 19:21:43,531 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:14866][0m
+INFO 2025-03-19 19:24:11,473 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:1371][0m
+INFO 2025-03-19 19:24:11,483 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:1374][0m
+INFO 2025-03-19 19:24:11,484 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:1373][0m
+INFO 2025-03-19 19:24:11,489 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:1377][0m
+INFO 2025-03-19 19:24:11,505 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:1377][0m
+INFO 2025-03-19 19:24:15,398 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:1377][0m
+INFO 2025-03-19 19:24:15,408 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:1374][0m
+INFO 2025-03-19 19:24:15,409 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:1373][0m
+INFO 2025-03-19 19:24:15,414 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:1371][0m
+INFO 2025-03-19 19:24:15,434 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:1371][0m
+INFO 2025-03-19 19:24:17,481 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:1371][0m
+INFO 2025-03-19 19:24:17,489 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:1373][0m
+INFO 2025-03-19 19:24:17,505 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:1371][0m
+INFO 2025-03-19 19:24:17,506 runserver [mHTTP GET /user/obstacles/ 200 [0.01, 192.168.1.6:1373][0m
+INFO 2025-03-19 19:24:17,552 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:1371][0m
+INFO 2025-03-19 19:24:19,406 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:1371][0m
+INFO 2025-03-19 19:24:19,468 runserver [mHTTP GET /user/users/my_profile/ 200 [0.06, 192.168.1.6:1373][0m
+INFO 2025-03-19 19:24:19,471 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.06, 192.168.1.6:1374][0m
+INFO 2025-03-19 19:24:19,472 runserver [mHTTP GET /user/obstacles/ 200 [0.06, 192.168.1.6:1371][0m
+INFO 2025-03-19 19:24:19,516 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:1371][0m
+INFO 2025-03-19 19:24:21,322 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:1371][0m
+INFO 2025-03-19 19:24:21,332 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:1374][0m
+INFO 2025-03-19 19:24:21,349 runserver [mHTTP GET /user/obstacles/ 200 [0.01, 192.168.1.6:1374][0m
+INFO 2025-03-19 19:24:21,349 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:1371][0m
+INFO 2025-03-19 19:24:21,398 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:1374][0m
+INFO 2025-03-19 19:24:56,325 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:1374][0m
+INFO 2025-03-19 19:24:56,338 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:1373][0m
+INFO 2025-03-19 19:24:56,339 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:1371][0m
+INFO 2025-03-19 19:24:56,345 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:1377][0m
+INFO 2025-03-19 19:24:56,366 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:1377][0m
+INFO 2025-03-19 19:24:59,247 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:1377][0m
+INFO 2025-03-19 19:24:59,265 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:1371][0m
+INFO 2025-03-19 19:24:59,266 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:1377][0m
+INFO 2025-03-19 19:24:59,267 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:1373][0m
+INFO 2025-03-19 19:24:59,314 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:1373][0m
+INFO 2025-03-19 19:25:02,226 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:1373][0m
+INFO 2025-03-19 19:25:02,239 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:1377][0m
+INFO 2025-03-19 19:25:02,245 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:1371][0m
+INFO 2025-03-19 19:25:02,245 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:1373][0m
+INFO 2025-03-19 19:25:02,281 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:1373][0m
+INFO 2025-03-19 19:25:05,145 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:1373][0m
+INFO 2025-03-19 19:25:05,157 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:1371][0m
+INFO 2025-03-19 19:25:05,166 runserver [mHTTP GET /user/obstacles/ 200 [0.01, 192.168.1.6:1373][0m
+INFO 2025-03-19 19:25:05,167 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:1377][0m
+INFO 2025-03-19 19:25:05,205 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:1373][0m
+INFO 2025-03-19 19:25:08,369 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:1373][0m
+INFO 2025-03-19 19:25:08,376 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:1377][0m
+INFO 2025-03-19 19:25:08,394 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:1373][0m
+INFO 2025-03-19 19:25:08,395 runserver [mHTTP GET /user/obstacles/ 200 [0.01, 192.168.1.6:1377][0m
+INFO 2025-03-19 19:25:08,436 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:1373][0m
+INFO 2025-03-19 19:25:21,170 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:1373][0m
+INFO 2025-03-19 19:25:21,181 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:1377][0m
+INFO 2025-03-19 19:25:21,188 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:1371][0m
+INFO 2025-03-19 19:25:21,188 runserver [mHTTP GET /user/obstacles/ 200 [0.01, 192.168.1.6:1373][0m
+INFO 2025-03-19 19:25:21,236 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:1373][0m
+INFO 2025-03-19 19:26:37,049 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:1895][0m
+INFO 2025-03-19 19:26:37,064 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:1899][0m
+INFO 2025-03-19 19:26:37,065 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:1897][0m
+INFO 2025-03-19 19:26:37,072 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:1902][0m
+INFO 2025-03-19 19:26:37,090 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:1902][0m
+INFO 2025-03-19 19:28:44,404 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:2163][0m
+INFO 2025-03-19 19:28:44,414 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:2166][0m
+INFO 2025-03-19 19:28:44,414 runserver [mHTTP GET /user/obstacles/ 200 [0.01, 192.168.1.6:2165][0m
+INFO 2025-03-19 19:28:44,422 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:2169][0m
+INFO 2025-03-19 19:28:44,442 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:2169][0m
+INFO 2025-03-19 19:28:49,452 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:2169][0m
+INFO 2025-03-19 19:28:49,461 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:2165][0m
+INFO 2025-03-19 19:28:49,473 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:2165][0m
+INFO 2025-03-19 19:28:49,474 runserver [mHTTP GET /user/obstacles/ 200 [0.01, 192.168.1.6:2169][0m
+INFO 2025-03-19 19:28:49,517 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:2169][0m
+INFO 2025-03-19 19:32:54,510 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:2775][0m
+INFO 2025-03-19 19:32:54,514 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:2778][0m
+INFO 2025-03-19 19:32:54,515 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:2776][0m
+INFO 2025-03-19 19:32:54,524 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:2781][0m
+INFO 2025-03-19 19:32:54,544 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:2781][0m
+INFO 2025-03-19 19:33:42,493 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:2781][0m
+INFO 2025-03-19 19:33:42,504 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:2778][0m
+INFO 2025-03-19 19:33:42,505 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:2776][0m
+INFO 2025-03-19 19:33:42,510 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:2775][0m
+INFO 2025-03-19 19:33:42,529 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:2775][0m
+INFO 2025-03-19 19:33:44,344 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:2775][0m
+INFO 2025-03-19 19:33:44,355 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:2776][0m
+INFO 2025-03-19 19:33:44,362 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:2778][0m
+INFO 2025-03-19 19:33:44,362 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:2775][0m
+INFO 2025-03-19 19:33:44,404 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:2778][0m
+INFO 2025-03-19 19:34:14,689 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:2778][0m
+INFO 2025-03-19 19:34:14,700 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:2776][0m
+INFO 2025-03-19 19:34:14,702 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:2775][0m
+INFO 2025-03-19 19:34:14,708 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:2781][0m
+INFO 2025-03-19 19:34:14,723 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:2781][0m
+INFO 2025-03-19 19:35:19,288 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:3122][0m
+INFO 2025-03-19 19:35:19,296 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:3125][0m
+INFO 2025-03-19 19:35:19,297 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:3124][0m
+INFO 2025-03-19 19:35:19,301 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:3128][0m
+INFO 2025-03-19 19:35:19,320 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:3128][0m
+INFO 2025-03-19 19:39:44,521 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:3619][0m
+INFO 2025-03-19 19:39:44,538 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:3622][0m
+INFO 2025-03-19 19:39:44,539 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:3623][0m
+INFO 2025-03-19 19:39:44,539 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:3621][0m
+INFO 2025-03-19 19:39:44,568 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:3621][0m
+INFO 2025-03-19 19:40:55,214 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:3779][0m
+INFO 2025-03-19 19:40:55,227 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:3781][0m
+INFO 2025-03-19 19:40:55,228 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:3782][0m
+INFO 2025-03-19 19:40:55,235 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:3785][0m
+INFO 2025-03-19 19:40:55,247 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:3785][0m
+INFO 2025-03-19 19:41:09,896 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:3785][0m
+INFO 2025-03-19 19:41:09,912 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:3781][0m
+INFO 2025-03-19 19:41:09,914 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:3782][0m
+INFO 2025-03-19 19:41:09,917 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:3779][0m
+INFO 2025-03-19 19:41:09,935 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:3779][0m
+INFO 2025-03-19 19:43:00,538 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:4090][0m
+INFO 2025-03-19 19:43:00,547 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:4093][0m
+INFO 2025-03-19 19:43:00,548 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:4092][0m
+INFO 2025-03-19 19:43:00,555 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:4096][0m
+INFO 2025-03-19 19:43:00,576 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:4096][0m
+INFO 2025-03-19 19:44:04,552 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:4330][0m
+INFO 2025-03-19 19:44:04,563 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:4333][0m
+INFO 2025-03-19 19:44:04,564 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:4332][0m
+INFO 2025-03-19 19:44:04,570 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:4336][0m
+INFO 2025-03-19 19:44:04,589 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:4336][0m
+INFO 2025-03-19 19:44:08,480 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:4336][0m
+INFO 2025-03-19 19:44:08,496 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:4330][0m
+INFO 2025-03-19 19:44:08,497 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:4333][0m
+INFO 2025-03-19 19:44:08,497 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:4332][0m
+INFO 2025-03-19 19:44:08,532 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:4332][0m
+INFO 2025-03-19 19:44:28,406 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:4332][0m
+INFO 2025-03-19 19:44:28,409 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:4333][0m
+INFO 2025-03-19 19:44:28,409 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:4330][0m
+INFO 2025-03-19 19:44:28,415 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:4336][0m
+INFO 2025-03-19 19:44:28,437 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:4336][0m
+INFO 2025-03-19 19:44:33,884 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:4336][0m
+INFO 2025-03-19 19:44:33,898 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:4330][0m
+INFO 2025-03-19 19:44:33,902 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:4333][0m
+INFO 2025-03-19 19:44:33,908 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:4332][0m
+INFO 2025-03-19 19:44:33,926 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:4332][0m
+INFO 2025-03-19 19:46:09,662 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:4723][0m
+INFO 2025-03-19 19:46:09,676 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:4726][0m
+INFO 2025-03-19 19:46:09,678 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:4725][0m
+INFO 2025-03-19 19:46:09,684 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:4728][0m
+INFO 2025-03-19 19:46:09,706 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:4728][0m
+INFO 2025-03-19 19:46:12,821 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:4728][0m
+INFO 2025-03-19 19:46:12,835 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:4726][0m
+INFO 2025-03-19 19:46:12,836 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:4725][0m
+INFO 2025-03-19 19:46:12,836 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:4723][0m
+INFO 2025-03-19 19:46:12,862 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:4725][0m
+INFO 2025-03-19 19:46:24,122 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:4725][0m
+INFO 2025-03-19 19:46:24,134 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:4723][0m
+INFO 2025-03-19 19:46:24,152 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:4726][0m
+INFO 2025-03-19 19:46:24,153 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:4725][0m
+INFO 2025-03-19 19:46:24,195 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:4725][0m
+INFO 2025-03-19 19:48:46,281 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:3483][0m
+INFO 2025-03-19 19:48:46,297 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:3485][0m
+INFO 2025-03-19 19:48:46,309 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:3487][0m
+INFO 2025-03-19 19:48:46,309 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:3483][0m
+INFO 2025-03-19 19:48:46,377 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:3487][0m
+INFO 2025-03-19 19:49:21,737 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:3487][0m
+INFO 2025-03-19 19:49:21,749 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:3485][0m
+INFO 2025-03-19 19:49:21,750 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:3483][0m
+INFO 2025-03-19 19:49:21,756 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:3649][0m
+INFO 2025-03-19 19:49:21,772 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:3649][0m
+INFO 2025-03-19 19:54:46,374 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:4300][0m
+INFO 2025-03-19 19:54:46,389 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:4302][0m
+INFO 2025-03-19 19:54:46,390 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:4303][0m
+INFO 2025-03-19 19:54:46,393 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:4304][0m
+INFO 2025-03-19 19:54:46,420 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:4302][0m
+INFO 2025-03-19 19:56:31,575 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:4581][0m
+INFO 2025-03-19 19:56:31,584 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:4584][0m
+INFO 2025-03-19 19:56:31,586 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:4583][0m
+INFO 2025-03-19 19:56:31,591 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:4587][0m
+INFO 2025-03-19 19:56:31,607 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:4587][0m
+INFO 2025-03-19 19:56:33,272 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:4587][0m
+INFO 2025-03-19 19:56:33,287 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:4583][0m
+INFO 2025-03-19 19:56:33,303 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.6:4584][0m
+INFO 2025-03-19 19:56:33,303 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:4587][0m
+INFO 2025-03-19 19:56:33,332 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:4584][0m
+INFO 2025-03-20 13:25:31,628 autoreload Watching for file changes with StatReloader
+DEBUG 2025-03-20 13:25:31,894 runserver Daphne running, listening on 0.0.0.0:8000
+INFO 2025-03-20 13:25:36,156 runserver [mHTTP GET /user/csrf/?_t=1742448336142 200 [0.01, 127.0.0.1:7254][0m
+INFO 2025-03-20 13:25:43,857 runserver [mHTTP GET /?ide_webview_request_time=1742448343845 200 [0.01, 127.0.0.1:7357][0m
+WARNING 2025-03-20 13:25:43,908 runserver [33mHTTP GET /static/js/index.js 404 [0.04, 127.0.0.1:7362][0m
+WARNING 2025-03-20 13:25:43,913 runserver [33mHTTP GET /static/js/vendor.js 404 [0.01, 127.0.0.1:7363][0m
+WARNING 2025-03-20 13:25:43,917 runserver [33mHTTP GET /static/js/element-plus.js 404 [0.02, 127.0.0.1:7365][0m
+WARNING 2025-03-20 13:25:43,921 runserver [33mHTTP GET /static/css/index.css 404 [0.02, 127.0.0.1:7364][0m
+INFO 2025-03-20 13:25:53,667 runserver [mHTTP GET /?ide_webview_request_time=1742448353659 200 [0.00, 127.0.0.1:7479][0m
+WARNING 2025-03-20 13:25:53,683 runserver [33mHTTP GET /static/js/index.js 404 [0.01, 127.0.0.1:7484][0m
+WARNING 2025-03-20 13:25:53,689 runserver [33mHTTP GET /static/css/index.css 404 [0.00, 127.0.0.1:7485][0m
+WARNING 2025-03-20 13:25:53,694 runserver [33mHTTP GET /static/js/element-plus.js 404 [0.01, 127.0.0.1:7487][0m
+WARNING 2025-03-20 13:25:53,699 runserver [33mHTTP GET /static/js/vendor.js 404 [0.02, 127.0.0.1:7486][0m
+INFO 2025-03-20 13:26:15,480 runserver [mHTTP GET / 200 [0.00, 127.0.0.1:7756][0m
+WARNING 2025-03-20 13:26:15,533 runserver [33mHTTP GET /static/js/index.js 404 [0.01, 127.0.0.1:7756][0m
+WARNING 2025-03-20 13:26:15,543 runserver [33mHTTP GET /static/js/vendor.js 404 [0.01, 127.0.0.1:7757][0m
+WARNING 2025-03-20 13:26:15,552 runserver [33mHTTP GET /static/css/index.css 404 [0.01, 127.0.0.1:7756][0m
+WARNING 2025-03-20 13:26:15,559 runserver [33mHTTP GET /static/js/element-plus.js 404 [0.01, 127.0.0.1:7757][0m
+INFO 2025-03-20 13:26:15,864 runserver [mHTTP GET /static/favicon.ico 200 [0.03, 127.0.0.1:7757][0m
+INFO 2025-03-20 13:26:18,576 runserver [mHTTP GET / 200 [0.00, 127.0.0.1:7757][0m
+WARNING 2025-03-20 13:26:18,600 runserver [33mHTTP GET /static/js/index.js 404 [0.01, 127.0.0.1:7757][0m
+WARNING 2025-03-20 13:26:18,608 runserver [33mHTTP GET /static/js/vendor.js 404 [0.01, 127.0.0.1:7756][0m
+WARNING 2025-03-20 13:26:18,614 runserver [33mHTTP GET /static/css/index.css 404 [0.02, 127.0.0.1:7763][0m
+WARNING 2025-03-20 13:26:18,620 runserver [33mHTTP GET /static/js/element-plus.js 404 [0.02, 127.0.0.1:7762][0m
+INFO 2025-03-20 13:26:18,692 runserver [mHTTP GET /static/favicon.ico 200 [0.00, 127.0.0.1:7762][0m
+WARNING 2025-03-20 13:26:18,926 runserver [33mHTTP GET /static/js/index.js 404 [0.01, 127.0.0.1:7803][0m
+WARNING 2025-03-20 13:26:18,931 runserver [33mHTTP GET /static/js/vendor.js 404 [0.01, 127.0.0.1:7804][0m
+WARNING 2025-03-20 13:26:18,940 runserver [33mHTTP GET /static/js/element-plus.js 404 [0.01, 127.0.0.1:7805][0m
+INFO 2025-03-20 13:26:19,058 runserver [mHTTP GET / 200 [0.00, 127.0.0.1:7762][0m
+WARNING 2025-03-20 13:26:19,084 runserver [33mHTTP GET /static/js/index.js 404 [0.01, 127.0.0.1:7762][0m
+WARNING 2025-03-20 13:26:19,094 runserver [33mHTTP GET /static/js/vendor.js 404 [0.02, 127.0.0.1:7763][0m
+WARNING 2025-03-20 13:26:19,104 runserver [33mHTTP GET /static/js/element-plus.js 404 [0.03, 127.0.0.1:7756][0m
+WARNING 2025-03-20 13:26:19,113 runserver [33mHTTP GET /static/css/index.css 404 [0.03, 127.0.0.1:7757][0m
+WARNING 2025-03-20 13:26:19,122 runserver [33mHTTP GET /static/js/index.js 404 [0.02, 127.0.0.1:7805][0m
+WARNING 2025-03-20 13:26:19,127 runserver [33mHTTP GET /static/js/vendor.js 404 [0.02, 127.0.0.1:7804][0m
+WARNING 2025-03-20 13:26:19,134 runserver [33mHTTP GET /static/js/element-plus.js 404 [0.02, 127.0.0.1:7803][0m
+INFO 2025-03-20 13:26:19,171 runserver [mHTTP GET /static/favicon.ico 200 [0.00, 127.0.0.1:7757][0m
+INFO 2025-03-20 13:26:30,124 runserver [mHTTP OPTIONS /user/users/my_profile/ 200 [0.00, 192.168.1.6:7945][0m
+INFO 2025-03-20 13:26:30,125 runserver [mHTTP OPTIONS /user/users/my_profile/ 200 [0.00, 192.168.1.6:7946][0m
+INFO 2025-03-20 13:26:30,142 runserver [mHTTP OPTIONS /user/obstacles/ 200 [0.00, 192.168.1.6:7946][0m
+INFO 2025-03-20 13:26:30,146 runserver [mHTTP OPTIONS /user/obstacles/shared/ 200 [0.01, 192.168.1.6:7945][0m
+INFO 2025-03-20 13:26:30,165 runserver [mHTTP GET /user/users/my_profile/ 200 [0.03, 192.168.1.6:7947][0m
+INFO 2025-03-20 13:26:30,190 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.03, 192.168.1.6:7950][0m
+INFO 2025-03-20 13:26:30,193 runserver [mHTTP GET /user/obstacles/ 200 [0.04, 192.168.1.6:7949][0m
+INFO 2025-03-20 13:26:30,196 runserver [mHTTP GET /user/users/my_profile/ 200 [0.03, 192.168.1.6:7953][0m
+INFO 2025-03-20 13:26:30,213 runserver [mHTTP OPTIONS /user/obstacles/count/ 200 [0.00, 192.168.1.6:7945][0m
+INFO 2025-03-20 13:26:30,238 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:7953][0m
+INFO 2025-03-20 13:26:40,328 runserver [mHTTP GET /user/csrf/?_t=1742448400322 200 [0.00, 127.0.0.1:8114][0m
+INFO 2025-03-20 13:26:51,350 runserver [mHTTP GET /user/csrf/?_t=1742448411345 200 [0.00, 192.168.1.6:8174][0m
+INFO 2025-03-20 13:26:51,355 runserver [mHTTP OPTIONS /user/login/ 200 [0.00, 192.168.1.6:8175][0m
+INFO 2025-03-20 13:27:08,589 runserver [mHTTP GET /user/csrf/?_t=1742448428582 200 [0.00, 127.0.0.1:8249][0m
+INFO 2025-03-20 13:27:22,051 runserver [mHTTP GET /user/csrf/?_t=1742448442045 200 [0.00, 192.168.1.6:8174][0m
+INFO 2025-03-20 13:27:22,055 runserver [mHTTP OPTIONS /user/login/ 200 [0.00, 192.168.1.6:8175][0m
+INFO 2025-03-20 13:27:24,042 runserver [mHTTP GET /user/csrf/?_t=1742448444037 200 [0.00, 192.168.1.6:8174][0m
+INFO 2025-03-20 13:27:24,045 runserver [mHTTP OPTIONS /user/login/ 200 [0.00, 192.168.1.6:8175][0m
+INFO 2025-03-20 13:27:24,829 runserver [mHTTP GET /user/csrf/?_t=1742448444824 200 [0.00, 192.168.1.6:8174][0m
+INFO 2025-03-20 13:27:24,831 runserver [mHTTP OPTIONS /user/login/ 200 [0.00, 192.168.1.6:8175][0m
+INFO 2025-03-20 13:27:25,317 runserver [mHTTP GET /user/csrf/?_t=1742448445313 200 [0.00, 192.168.1.6:8174][0m
+INFO 2025-03-20 13:27:25,320 runserver [mHTTP OPTIONS /user/login/ 200 [0.00, 192.168.1.6:8175][0m
+INFO 2025-03-20 13:27:25,662 runserver [mHTTP GET /user/csrf/?_t=1742448445657 200 [0.00, 192.168.1.6:8174][0m
+INFO 2025-03-20 13:27:25,668 runserver [mHTTP OPTIONS /user/login/ 200 [0.00, 192.168.1.6:8175][0m
+INFO 2025-03-20 13:27:25,903 runserver [mHTTP GET /user/csrf/?_t=1742448445897 200 [0.00, 192.168.1.6:8174][0m
+INFO 2025-03-20 13:27:25,907 runserver [mHTTP OPTIONS /user/login/ 200 [0.00, 192.168.1.6:8175][0m
+INFO 2025-03-20 13:30:45,785 runserver [mHTTP GET /user/csrf/?_t=1742448645777 200 [0.00, 192.168.1.6:9722][0m
+INFO 2025-03-20 13:30:45,794 runserver [mHTTP OPTIONS /user/login/ 200 [0.00, 192.168.1.6:9723][0m
+INFO 2025-03-20 13:30:46,017 runserver [mHTTP POST /user/login/ 200 [0.22, 192.168.1.6:9722][0m
+INFO 2025-03-20 13:30:46,050 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:9722][0m
+INFO 2025-03-20 13:30:46,177 runserver [mHTTP GET /user/obstacles/ 200 [0.01, 192.168.1.6:9722][0m
+INFO 2025-03-20 13:30:46,198 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:9722][0m
+INFO 2025-03-20 13:31:02,836 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:9722][0m
+INFO 2025-03-20 13:31:02,851 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:9845][0m
+INFO 2025-03-20 13:31:02,852 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:9846][0m
+INFO 2025-03-20 13:31:02,861 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:9849][0m
+INFO 2025-03-20 13:31:02,880 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:9849][0m
+INFO 2025-03-20 13:31:03,729 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:9849][0m
+INFO 2025-03-20 13:31:03,746 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:9846][0m
+INFO 2025-03-20 13:31:03,748 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:9845][0m
+INFO 2025-03-20 13:31:03,754 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:9722][0m
+INFO 2025-03-20 13:31:03,779 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:9722][0m
+INFO 2025-03-20 13:31:05,576 runserver WebSocket HANDSHAKING /ws/collaboration/338fcb76-e455-4e20-9209-86efad7caf2c/ [192.168.1.6:9871]
+INFO 2025-03-20 13:31:05,664 consumers ÓÃ»§Í¨¹ýÁ´½Ó¼ÓÈë: gml
+INFO 2025-03-20 13:31:05,665 consumers WebSocketÁ¬½ÓÇëÇó: 338fcb76-e455-4e20-9209-86efad7caf2c, ¿Í»§¶Ë: 192.168.1.6:9871
+INFO 2025-03-20 13:31:05,665 consumers WebSocketÂ·ÓÉ²ÎÊý: {'args': (), 'kwargs': {'design_id': '338fcb76-e455-4e20-9209-86efad7caf2c'}}
+INFO 2025-03-20 13:31:05,665 consumers µ±Ç°ÓÃ»§: gml
+INFO 2025-03-20 13:31:05,665 consumers ÊÇ·ñÍ¨¹ýÁ´½Ó¼ÓÈë: True
+INFO 2025-03-20 13:31:05,665 consumers WebSocketÇëÇóÍ·: {b'host': b'192.168.1.6:8000', b'connection': b'Upgrade', b'pragma': b'no-cache', b'cache-control': b'no-cache', b'user-agent': b'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36', b'upgrade': b'websocket', b'origin': b'http://192.168.1.6:5173', b'sec-websocket-version': b'13', b'accept-encoding': b'gzip, deflate', b'accept-language': b'zh-CN,zh;q=0.9', b'cookie': b'csrftoken=YqhSt4gObI0nFHf3kGE5YiLbGMHxh23F', b'sec-websocket-key': b'QBU0HEFIz6TW+uxqNIofKw==', b'sec-websocket-extensions': b'permessage-deflate; client_max_window_bits'}
+INFO 2025-03-20 13:31:05,669 consumers ´´½¨ÐÂµÄ»á»°: 338fcb76-e455-4e20-9209-86efad7caf2c
+INFO 2025-03-20 13:31:05,670 consumers ÐÂ»á»°´´½¨Íê³É: {'id': 'ec27bd3c-cb77-420a-8cfd-cef04837f608', 'design_id': '338fcb76-e455-4e20-9209-86efad7caf2c', 'collaborators': [], 'owner': None, 'initiator': None, 'created_at': '2025-03-20T13:31:05.670254'}
+INFO 2025-03-20 13:31:05,670 runserver WebSocket CONNECT /ws/collaboration/338fcb76-e455-4e20-9209-86efad7caf2c/ [192.168.1.6:9871]
+INFO 2025-03-20 13:31:05,671 consumers WebSocketÁ¬½ÓÒÑ½ÓÊÜ: 338fcb76-e455-4e20-9209-86efad7caf2c
+INFO 2025-03-20 13:31:05,671 consumers ¼ì²éÓÃ»§ÈÏÖ¤×´Ì¬: True
+INFO 2025-03-20 13:31:05,671 consumers ÓÃ»§ÐÅÏ¢: gml
+INFO 2025-03-20 13:31:05,671 consumers ÒÑ·¢ËÍÁ¬½Ó³É¹¦ÏûÏ¢
+INFO 2025-03-20 13:31:05,671 consumers ÈÏÖ¤ÓÃ»§¼ÓÈë: gml
+INFO 2025-03-20 13:31:05,671 consumers ´´½¨Ð­×÷ÕßÐÅÏ¢: {'id': '1', 'username': 'gml', 'color': '#A5FFD6', 'role': 'collaborator', 'last_active': '2025-03-20T13:31:05.671250'}
+INFO 2025-03-20 13:31:05,672 consumers Ìí¼ÓÐÂÐ­×÷Õß: {'id': '1', 'username': 'gml', 'color': '#A5FFD6', 'role': 'collaborator', 'last_active': '2025-03-20T13:31:05.671250'}
+INFO 2025-03-20 13:31:05,672 consumers Ð­×÷ÕßÁÐ±í¸üÐÂºó: [{'id': '1', 'username': 'gml', 'color': '#A5FFD6', 'role': 'collaborator', 'last_active': '2025-03-20T13:31:05.671250'}]
+INFO 2025-03-20 13:31:05,672 consumers ÉèÖÃ»á»°ËùÓÐÕß: gml
+INFO 2025-03-20 13:31:05,672 consumers ×¼±¸¹ã²¥¼ÓÈëÏûÏ¢: {'type': 'collaboration_message', 'message': {'type': 'join', 'senderId': '1', 'senderName': 'gml', 'sessionId': 'ec27bd3c-cb77-420a-8cfd-cef04837f608', 'timestamp': '2025-03-20T13:31:05.672528', 'payload': {'session': {'id': 'ec27bd3c-cb77-420a-8cfd-cef04837f608', 'design_id': '338fcb76-e455-4e20-9209-86efad7caf2c', 'collaborators': [{'id': '1', 'username': 'gml', 'color': '#A5FFD6', 'role': 'collaborator', 'last_active': '2025-03-20T13:31:05.671250'}], 'owner': '1', 'initiator': None, 'created_at': '2025-03-20T13:31:05.670254'}, 'user_role': 'collaborator'}}}
+INFO 2025-03-20 13:31:05,674 consumers ¼ÓÈëÏûÏ¢ÒÑ¹ã²¥
+INFO 2025-03-20 13:31:05,674 consumers µ±Ç°»á»°×´Ì¬: {'id': 'ec27bd3c-cb77-420a-8cfd-cef04837f608', 'design_id': '338fcb76-e455-4e20-9209-86efad7caf2c', 'collaborators': [{'id': '1', 'username': 'gml', 'color': '#A5FFD6', 'role': 'collaborator', 'last_active': '2025-03-20T13:31:05.671250'}], 'owner': '1', 'initiator': None, 'created_at': '2025-03-20T13:31:05.670254'}
+INFO 2025-03-20 13:31:05,674 consumers µ±Ç°Ð­×÷ÕßÊýÁ¿: 1
+INFO 2025-03-20 13:31:05,676 consumers ÊÕµ½ÏûÏ¢ÀàÐÍ: join, ·¢ËÍÕß: 1
+INFO 2025-03-20 13:31:05,676 consumers ÏûÏ¢ÄÚÈÝ: {'type': 'join', 'senderId': '1', 'senderName': 'gml', 'sessionId': '338fcb76-e455-4e20-9209-86efad7caf2c', 'timestamp': '2025-03-20T05:31:05.674Z', 'payload': {'color': '#FF6B8B'}}
+INFO 2025-03-20 13:31:05,676 consumers ´¦Àí¼ÓÈëÏûÏ¢: gml
+INFO 2025-03-20 13:31:05,676 consumers ÏûÏ¢ÄÚÈÝ: {'type': 'join', 'senderId': '1', 'senderName': 'gml', 'sessionId': '338fcb76-e455-4e20-9209-86efad7caf2c', 'timestamp': '2025-03-20T05:31:05.674Z', 'payload': {'color': '#FF6B8B'}, 'server_timestamp': '2025-03-20T13:31:05.676466'}
+INFO 2025-03-20 13:31:05,677 consumers ÓÃ»§ÑÕÉ«: #FF6B8B
+INFO 2025-03-20 13:31:05,677 consumers ´´½¨Ð­×÷ÕßÐÅÏ¢: {'id': '1', 'username': 'gml', 'color': '#FF6B8B', 'role': 'collaborator', 'last_active': '2025-03-20T13:31:05.677462'}
+INFO 2025-03-20 13:31:05,677 consumers »á»°´æÔÚ: 338fcb76-e455-4e20-9209-86efad7caf2c
+INFO 2025-03-20 13:31:05,677 consumers ¸üÐÂÏÖÓÐÐ­×÷Õß: gml
+INFO 2025-03-20 13:31:05,677 consumers ¸üÐÂºóµÄÐ­×÷ÕßÐÅÏ¢: {'id': '1', 'username': 'gml', 'color': '#FF6B8B', 'role': 'collaborator', 'last_active': '2025-03-20T13:31:05.677462'}
+INFO 2025-03-20 13:31:05,678 consumers µ±Ç°Ð­×÷ÕßÁÐ±í: [{'id': '1', 'username': 'gml', 'color': '#FF6B8B', 'role': 'collaborator', 'last_active': '2025-03-20T13:31:05.677462'}]
+INFO 2025-03-20 13:31:05,678 consumers µ±Ç°Ð­×÷ÕßÊýÁ¿: 1
+INFO 2025-03-20 13:31:05,678 consumers ¹¹½¨¼ÓÈëÏûÏ¢: {'type': 'join', 'senderId': '1', 'senderName': 'gml', 'sessionId': 'ec27bd3c-cb77-420a-8cfd-cef04837f608', 'timestamp': '2025-03-20T13:31:05.678458', 'payload': {'session': {'id': 'ec27bd3c-cb77-420a-8cfd-cef04837f608', 'design_id': '338fcb76-e455-4e20-9209-86efad7caf2c', 'collaborators': [{'id': '1', 'username': 'gml', 'color': '#FF6B8B', 'role': 'collaborator', 'last_active': '2025-03-20T13:31:05.677462'}], 'owner': '1', 'initiator': None, 'created_at': '2025-03-20T13:31:05.670254'}, 'user_role': 'collaborator'}}
+INFO 2025-03-20 13:31:05,679 consumers ¼ÓÈëÏûÏ¢ÒÑ¹ã²¥
+INFO 2025-03-20 13:31:05,680 consumers ÒÑÖ±½Ó·¢ËÍ¼ÓÈëÏûÏ¢ÏìÓ¦¸øµ±Ç°ÓÃ»§
+INFO 2025-03-20 13:31:05,695 runserver WebSocket HANDSHAKING /ws/collaboration/338fcb76-e455-4e20-9209-86efad7caf2c/ [192.168.1.6:9876]
+INFO 2025-03-20 13:31:05,699 consumers WebSocketÁ¬½ÓÇëÇó: 338fcb76-e455-4e20-9209-86efad7caf2c, ¿Í»§¶Ë: 192.168.1.6:9876
+INFO 2025-03-20 13:31:05,699 consumers WebSocketÂ·ÓÉ²ÎÊý: {'args': (), 'kwargs': {'design_id': '338fcb76-e455-4e20-9209-86efad7caf2c'}}
+INFO 2025-03-20 13:31:05,700 consumers µ±Ç°ÓÃ»§: gml
+INFO 2025-03-20 13:31:05,700 consumers ÊÇ·ñÍ¨¹ýÁ´½Ó¼ÓÈë: False
+INFO 2025-03-20 13:31:05,700 consumers WebSocketÇëÇóÍ·: {b'host': b'192.168.1.6:8000', b'connection': b'Upgrade', b'pragma': b'no-cache', b'cache-control': b'no-cache', b'user-agent': b'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36', b'upgrade': b'websocket', b'origin': b'http://192.168.1.6:5173', b'sec-websocket-version': b'13', b'accept-encoding': b'gzip, deflate', b'accept-language': b'zh-CN,zh;q=0.9', b'cookie': b'csrftoken=YqhSt4gObI0nFHf3kGE5YiLbGMHxh23F', b'sec-websocket-key': b'J8g+/uNJshKwz1gScCEzsg==', b'sec-websocket-extensions': b'permessage-deflate; client_max_window_bits'}
+INFO 2025-03-20 13:31:05,704 consumers Ê¹ÓÃÏÖÓÐ»á»°: 338fcb76-e455-4e20-9209-86efad7caf2c
+INFO 2025-03-20 13:31:05,704 consumers µ±Ç°Ð­×÷Õß: [{'id': '1', 'username': 'gml', 'color': '#FF6B8B', 'role': 'collaborator', 'last_active': '2025-03-20T13:31:05.677462'}]
+INFO 2025-03-20 13:31:05,705 runserver WebSocket CONNECT /ws/collaboration/338fcb76-e455-4e20-9209-86efad7caf2c/ [192.168.1.6:9876]
+INFO 2025-03-20 13:31:05,705 consumers WebSocketÁ¬½ÓÒÑ½ÓÊÜ: 338fcb76-e455-4e20-9209-86efad7caf2c
+INFO 2025-03-20 13:31:05,705 consumers ¼ì²éÓÃ»§ÈÏÖ¤×´Ì¬: True
+INFO 2025-03-20 13:31:05,705 consumers ÓÃ»§ÐÅÏ¢: gml
+INFO 2025-03-20 13:31:05,705 consumers ÒÑ·¢ËÍÁ¬½Ó³É¹¦ÏûÏ¢
+INFO 2025-03-20 13:31:05,705 consumers ÈÏÖ¤ÓÃ»§¼ÓÈë: gml
+INFO 2025-03-20 13:31:05,706 consumers ´´½¨Ð­×÷ÕßÐÅÏ¢: {'id': '1', 'username': 'gml', 'color': '#A5FFD6', 'role': 'initiator', 'last_active': '2025-03-20T13:31:05.706980'}
+INFO 2025-03-20 13:31:05,706 consumers ÓÃ»§ÒÑÔÚÐ­×÷ÕßÁÐ±íÖÐ: gml
+INFO 2025-03-20 13:31:05,706 consumers ÒÑ¸üÐÂÓÃ»§»îÔ¾Ê±¼ä: {'id': '1', 'username': 'gml', 'color': '#FF6B8B', 'role': 'collaborator', 'last_active': '2025-03-20T13:31:05.706980'}
+INFO 2025-03-20 13:31:05,706 consumers µ±Ç°»á»°×´Ì¬: {'id': 'ec27bd3c-cb77-420a-8cfd-cef04837f608', 'design_id': '338fcb76-e455-4e20-9209-86efad7caf2c', 'collaborators': [{'id': '1', 'username': 'gml', 'color': '#FF6B8B', 'role': 'collaborator', 'last_active': '2025-03-20T13:31:05.706980'}], 'owner': '1', 'initiator': None, 'created_at': '2025-03-20T13:31:05.670254'}
+INFO 2025-03-20 13:31:05,706 consumers µ±Ç°Ð­×÷ÕßÊýÁ¿: 1
+INFO 2025-03-20 13:31:05,709 consumers ÊÕµ½ÏûÏ¢ÀàÐÍ: join, ·¢ËÍÕß: 1
+INFO 2025-03-20 13:31:05,709 consumers ÏûÏ¢ÄÚÈÝ: {'type': 'join', 'senderId': '1', 'senderName': 'gml', 'sessionId': '338fcb76-e455-4e20-9209-86efad7caf2c', 'timestamp': '2025-03-20T05:31:05.709Z', 'payload': {'color': '#FF9671'}}
+INFO 2025-03-20 13:31:05,709 consumers ´¦Àí¼ÓÈëÏûÏ¢: gml
+INFO 2025-03-20 13:31:05,709 consumers ÏûÏ¢ÄÚÈÝ: {'type': 'join', 'senderId': '1', 'senderName': 'gml', 'sessionId': '338fcb76-e455-4e20-9209-86efad7caf2c', 'timestamp': '2025-03-20T05:31:05.709Z', 'payload': {'color': '#FF9671'}, 'server_timestamp': '2025-03-20T13:31:05.709491'}
+INFO 2025-03-20 13:31:05,710 consumers ÓÃ»§ÑÕÉ«: #FF9671
+INFO 2025-03-20 13:31:05,710 consumers ´´½¨Ð­×÷ÕßÐÅÏ¢: {'id': '1', 'username': 'gml', 'color': '#FF9671', 'role': 'initiator', 'last_active': '2025-03-20T13:31:05.710756'}
+INFO 2025-03-20 13:31:05,710 consumers »á»°´æÔÚ: 338fcb76-e455-4e20-9209-86efad7caf2c
+INFO 2025-03-20 13:31:05,710 consumers ¸üÐÂÏÖÓÐÐ­×÷Õß: gml
+INFO 2025-03-20 13:31:05,711 consumers ¸üÐÂºóµÄÐ­×÷ÕßÐÅÏ¢: {'id': '1', 'username': 'gml', 'color': '#FF9671', 'role': 'collaborator', 'last_active': '2025-03-20T13:31:05.711776'}
+INFO 2025-03-20 13:31:05,711 consumers µ±Ç°Ð­×÷ÕßÁÐ±í: [{'id': '1', 'username': 'gml', 'color': '#FF9671', 'role': 'collaborator', 'last_active': '2025-03-20T13:31:05.711776'}]
+INFO 2025-03-20 13:31:05,712 consumers µ±Ç°Ð­×÷ÕßÊýÁ¿: 1
+INFO 2025-03-20 13:31:05,712 consumers ¹¹½¨¼ÓÈëÏûÏ¢: {'type': 'join', 'senderId': '1', 'senderName': 'gml', 'sessionId': 'ec27bd3c-cb77-420a-8cfd-cef04837f608', 'timestamp': '2025-03-20T13:31:05.712772', 'payload': {'session': {'id': 'ec27bd3c-cb77-420a-8cfd-cef04837f608', 'design_id': '338fcb76-e455-4e20-9209-86efad7caf2c', 'collaborators': [{'id': '1', 'username': 'gml', 'color': '#FF9671', 'role': 'collaborator', 'last_active': '2025-03-20T13:31:05.711776'}], 'owner': '1', 'initiator': None, 'created_at': '2025-03-20T13:31:05.670254'}, 'user_role': 'initiator'}}
+INFO 2025-03-20 13:31:05,715 consumers ¼ÓÈëÏûÏ¢ÒÑ¹ã²¥
+INFO 2025-03-20 13:31:05,715 consumers ÒÑÖ±½Ó·¢ËÍ¼ÓÈëÏûÏ¢ÏìÓ¦¸øµ±Ç°ÓÃ»§
+INFO 2025-03-20 13:36:00,899 runserver WebSocket DISCONNECT /ws/collaboration/338fcb76-e455-4e20-9209-86efad7caf2c/ [192.168.1.6:9871]
+INFO 2025-03-20 13:36:00,899 consumers ÊÕµ½ÏûÏ¢ÀàÐÍ: leave, ·¢ËÍÕß: 1
+INFO 2025-03-20 13:36:00,899 consumers ÏûÏ¢ÄÚÈÝ: {'type': 'leave', 'senderId': '1', 'senderName': 'gml', 'sessionId': '338fcb76-e455-4e20-9209-86efad7caf2c', 'timestamp': '2025-03-20T05:36:00.898Z', 'payload': {}}
+INFO 2025-03-20 13:36:00,901 consumers ÏûÏ¢ÒÑ×ª·¢: leave
+INFO 2025-03-20 13:36:00,902 consumers ´¦ÀíWebSocket¶Ï¿ªÁ¬½Ó: 338fcb76-e455-4e20-9209-86efad7caf2c, ÓÃ»§: gml
+INFO 2025-03-20 13:36:00,902 consumers ´ÓÐ­×÷ÕßÁÐ±íÖÐÒÆ³ýÓÃ»§: gml
+INFO 2025-03-20 13:36:00,902 consumers ÒÆ³ýÇ°µÄÐ­×÷ÕßÊýÁ¿: 1
+INFO 2025-03-20 13:36:00,903 consumers ÒÆ³ýºóµÄÐ­×÷ÕßÊýÁ¿: 0
+INFO 2025-03-20 13:36:00,904 runserver WebSocket DISCONNECT /ws/collaboration/338fcb76-e455-4e20-9209-86efad7caf2c/ [192.168.1.6:9876]
+INFO 2025-03-20 13:36:00,905 consumers ÊÕµ½ÏûÏ¢ÀàÐÍ: leave, ·¢ËÍÕß: 1
+INFO 2025-03-20 13:36:00,905 consumers ÏûÏ¢ÄÚÈÝ: {'type': 'leave', 'senderId': '1', 'senderName': 'gml', 'sessionId': '338fcb76-e455-4e20-9209-86efad7caf2c', 'timestamp': '2025-03-20T05:36:00.904Z', 'payload': {}}
+INFO 2025-03-20 13:36:00,907 consumers Ã»ÓÐÊ£ÓàÐ­×÷Õß£¬ÇåÀí»á»°: 338fcb76-e455-4e20-9209-86efad7caf2c
+INFO 2025-03-20 13:36:00,908 consumers WebSocketÁ¬½ÓÒÑ¶Ï¿ª: 338fcb76-e455-4e20-9209-86efad7caf2c, ´úÂë: None
+INFO 2025-03-20 13:36:00,909 consumers ÏûÏ¢ÒÑ×ª·¢: leave
+INFO 2025-03-20 13:36:00,911 consumers ´¦ÀíWebSocket¶Ï¿ªÁ¬½Ó: 338fcb76-e455-4e20-9209-86efad7caf2c, ÓÃ»§: gml
+INFO 2025-03-20 13:36:00,911 consumers WebSocketÁ¬½ÓÒÑ¶Ï¿ª: 338fcb76-e455-4e20-9209-86efad7caf2c, ´úÂë: None
+INFO 2025-03-20 13:57:20,080 autoreload Watching for file changes with StatReloader
+DEBUG 2025-03-20 13:57:20,258 runserver Daphne running, listening on 0.0.0.0:8000
+INFO 2025-03-20 13:57:23,082 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:4491][0m
+INFO 2025-03-20 13:57:23,092 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:4493][0m
+INFO 2025-03-20 13:57:23,093 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:4492][0m
+INFO 2025-03-20 13:57:23,098 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:4497][0m
+INFO 2025-03-20 13:57:23,123 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:4497][0m
+INFO 2025-03-20 14:57:43,815 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:11380][0m
+INFO 2025-03-20 14:57:43,815 runserver [mHTTP GET /user/users/my_profile/ 200 [0.03, 192.168.1.6:11378][0m
+INFO 2025-03-20 14:57:43,816 runserver [mHTTP GET /user/obstacles/ 200 [0.03, 192.168.1.6:11379][0m
+INFO 2025-03-20 14:57:43,826 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11385][0m
+INFO 2025-03-20 14:57:43,847 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:11385][0m
+INFO 2025-03-20 15:08:04,860 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:12972][0m
+INFO 2025-03-20 15:08:04,874 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:12975][0m
+INFO 2025-03-20 15:08:04,875 runserver [mHTTP GET /user/obstacles/ 200 [0.03, 192.168.1.6:12974][0m
+INFO 2025-03-20 15:08:04,885 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:12978][0m
+INFO 2025-03-20 15:08:04,910 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:12978][0m
+INFO 2025-03-20 15:08:06,138 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:12978][0m
+INFO 2025-03-20 15:08:06,154 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:12974][0m
+INFO 2025-03-20 15:08:06,154 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:12975][0m
+INFO 2025-03-20 15:08:06,162 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:12972][0m
+INFO 2025-03-20 15:08:06,177 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:12972][0m
+INFO 2025-03-20 15:08:23,379 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:12974][0m
+INFO 2025-03-20 15:08:23,382 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:12972][0m
+INFO 2025-03-20 15:08:23,384 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:12975][0m
+INFO 2025-03-20 15:08:23,399 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:12978][0m
+INFO 2025-03-20 15:08:23,408 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:12975][0m
+INFO 2025-03-20 15:13:56,082 runserver [mHTTP POST /user/obstacles/ 201 [0.03, 192.168.1.6:13371][0m
+INFO 2025-03-20 15:13:56,094 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:13371][0m
+INFO 2025-03-20 15:13:56,103 runserver [mHTTP OPTIONS /user/obstacles/25/ 200 [0.00, 192.168.1.6:13374][0m
+INFO 2025-03-20 15:13:56,120 runserver [mHTTP PUT /user/obstacles/25/ 200 [0.01, 192.168.1.6:13371][0m
+INFO 2025-03-20 15:13:56,132 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:13371][0m
+INFO 2025-03-20 15:20:28,632 runserver [mHTTP OPTIONS /user/designs/21/ 200 [0.00, 192.168.1.6:13758][0m
+INFO 2025-03-20 15:20:28,744 runserver [mHTTP PUT /user/designs/21/ 200 [0.11, 192.168.1.6:13759][0m
+INFO 2025-03-20 15:20:31,325 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:13759][0m
+INFO 2025-03-20 15:20:31,429 runserver [mHTTP OPTIONS /user/designs/my/?page=1 200 [0.00, 192.168.1.6:13758][0m
+INFO 2025-03-20 15:20:31,460 runserver [mHTTP GET /user/designs/my/?page=1 200 [0.03, 192.168.1.6:13759][0m
+INFO 2025-03-20 15:20:31,615 runserver [mHTTP GET /media/user_1/designs/images/20250309161858_f9c79412.png 200 [0.14, 192.168.1.6:13769][0m
+INFO 2025-03-20 15:20:31,616 runserver [mHTTP GET /media/user_1/designs/images/20250320152028_21.png 200 [0.14, 192.168.1.6:13759][0m
+INFO 2025-03-20 15:20:31,622 runserver [mHTTP GET /media/user_1/designs/images/20250308203122_582df2ca.png 200 [0.14, 192.168.1.6:13772][0m
+INFO 2025-03-20 15:20:31,623 runserver [mHTTP GET /media/user_1/designs/images/20250309220014_f2cddac7.png 200 [0.14, 192.168.1.6:13768][0m
+INFO 2025-03-20 15:20:31,624 runserver [mHTTP GET /media/user_1/designs/images/20250309161549_9d05c4af.png 200 [0.14, 192.168.1.6:13770][0m
+INFO 2025-03-20 15:20:31,626 runserver [mHTTP GET /media/user_1/designs/images/20250309161519_82333dea.png 200 [0.15, 192.168.1.6:13771][0m
+INFO 2025-03-20 15:20:31,643 runserver [mHTTP GET /media/user_1/designs/images/20250308203053_46371da6.png 200 [0.00, 192.168.1.6:13772][0m
+INFO 2025-03-20 15:20:31,644 runserver [mHTTP GET /media/user_1/designs/images/20250308203105_48c20485.png 200 [0.01, 192.168.1.6:13759][0m
+INFO 2025-03-20 15:20:31,647 runserver [mHTTP GET /media/user_1/designs/images/20250308203033_6537061d.png 200 [0.01, 192.168.1.6:13771][0m
+INFO 2025-03-20 15:20:43,394 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:13771][0m
+INFO 2025-03-20 15:20:43,553 runserver [mHTTP OPTIONS /user/designs/shared/?page=1 200 [0.00, 192.168.1.6:13758][0m
+INFO 2025-03-20 15:20:43,570 runserver [mHTTP GET /user/designs/shared/?page=1 200 [0.01, 192.168.1.6:13771][0m
+INFO 2025-03-20 15:20:43,589 runserver [mHTTP GET /media/user_1/designs/images/20250305154239_c809b58f.png 200 [0.01, 192.168.1.6:13771][0m
+INFO 2025-03-20 15:20:43,591 runserver [mHTTP GET /media/user_3/designs/images/%E9%A9%AC%E6%9C%AF%E8%B7%AF%E7%BA%BF%E8%AE%BE%E8%AE%A1_20250301_161458.png 200 [0.01, 192.168.1.6:13772][0m
+INFO 2025-03-20 15:20:43,592 runserver [mHTTP GET /media/user_1/designs/images/4/%E9%A9%AC%E6%9C%AF%E8%B7%AF%E7%BA%BF%E8%AE%BE%E8%AE%A1_20250302_204213.png 200 [0.01, 192.168.1.6:13759][0m
+INFO 2025-03-20 15:20:47,334 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:13759][0m
+INFO 2025-03-20 15:20:47,376 runserver [mHTTP GET /user/designs/my/?page=1 200 [0.02, 192.168.1.6:13759][0m
+INFO 2025-03-20 15:20:47,395 runserver [36mHTTP GET /media/user_1/designs/images/20250320152028_21.png 304 [0.00, 192.168.1.6:13759][0m
+INFO 2025-03-20 15:20:50,641 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:13759][0m
+INFO 2025-03-20 16:05:00,679 autoreload D:\Code\equestrian_course_designer\BackEnd\equestrian\urls.py changed, reloading.
+INFO 2025-03-20 16:05:01,517 autoreload Watching for file changes with StatReloader
+DEBUG 2025-03-20 16:05:01,745 runserver Daphne running, listening on 0.0.0.0:8000
+INFO 2025-03-20 16:08:53,448 autoreload D:\Code\equestrian_course_designer\BackEnd\equestrian\settings.py changed, reloading.
+INFO 2025-03-20 16:08:54,055 autoreload Watching for file changes with StatReloader
+DEBUG 2025-03-20 16:08:54,248 runserver Daphne running, listening on 0.0.0.0:8000
+INFO 2025-03-20 16:08:55,641 autoreload D:\Code\equestrian_course_designer\BackEnd\equestrian\settings.py changed, reloading.
+INFO 2025-03-20 16:08:56,263 autoreload Watching for file changes with StatReloader
+DEBUG 2025-03-20 16:08:56,448 runserver Daphne running, listening on 0.0.0.0:8000
+INFO 2025-03-20 16:22:52,467 autoreload D:\Code\equestrian_course_designer\BackEnd\equestrian\settings.py changed, reloading.
+INFO 2025-03-20 16:22:53,101 autoreload Watching for file changes with StatReloader
+DEBUG 2025-03-20 16:22:53,290 runserver Daphne running, listening on 0.0.0.0:8000
+INFO 2025-03-20 16:22:55,766 autoreload D:\Code\equestrian_course_designer\BackEnd\equestrian\settings.py changed, reloading.
+INFO 2025-03-20 16:22:56,388 autoreload Watching for file changes with StatReloader
+DEBUG 2025-03-20 16:22:56,589 runserver Daphne running, listening on 0.0.0.0:8000
+INFO 2025-03-20 16:23:23,874 autoreload Watching for file changes with StatReloader
+DEBUG 2025-03-20 16:23:24,052 runserver Daphne running, listening on 0.0.0.0:8000
+INFO 2025-03-20 16:58:22,514 runserver [mHTTP GET /user/csrf/?_t=1742461102494 200 [0.01, 127.0.0.1:4983][0m
+INFO 2025-03-20 17:05:06,477 runserver [mHTTP OPTIONS /user/users/my_profile/ 200 [0.00, 192.168.1.6:5928][0m
+INFO 2025-03-20 17:05:06,478 runserver [mHTTP OPTIONS /user/users/my_profile/ 200 [0.00, 192.168.1.6:5929][0m
+INFO 2025-03-20 17:05:06,483 runserver [mHTTP OPTIONS /user/obstacles/ 200 [0.00, 192.168.1.6:5930][0m
+INFO 2025-03-20 17:05:06,484 runserver [mHTTP OPTIONS /user/obstacles/shared/ 200 [0.00, 192.168.1.6:5931][0m
+INFO 2025-03-20 17:05:06,512 runserver [mHTTP GET /user/users/my_profile/ 200 [0.03, 192.168.1.6:5932][0m
+INFO 2025-03-20 17:05:06,517 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.03, 192.168.1.6:5934][0m
+INFO 2025-03-20 17:05:06,519 runserver [mHTTP GET /user/obstacles/ 200 [0.03, 192.168.1.6:5933][0m
+INFO 2025-03-20 17:05:06,530 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:5938][0m
+INFO 2025-03-20 17:05:06,535 runserver [mHTTP OPTIONS /user/obstacles/count/ 200 [0.00, 192.168.1.6:5931][0m
+INFO 2025-03-20 17:05:06,547 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:5938][0m
+INFO 2025-03-20 17:05:07,876 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:5938][0m
+INFO 2025-03-20 17:05:07,934 runserver [mHTTP GET /user/designs/my/?page=1 200 [0.03, 192.168.1.6:5938][0m
+INFO 2025-03-20 17:05:07,960 runserver [36mHTTP GET /media/user_1/designs/images/20250320152028_21.png 304 [0.01, 192.168.1.6:5938][0m
+INFO 2025-03-20 17:05:08,039 runserver [mHTTP GET /media/user_1/designs/images/20250309161858_f9c79412.png 200 [0.09, 192.168.1.6:5934][0m
+INFO 2025-03-20 17:05:08,040 runserver [mHTTP GET /media/user_1/designs/images/20250309220014_f2cddac7.png 200 [0.09, 192.168.1.6:5933][0m
+INFO 2025-03-20 17:05:08,923 runserver [mHTTP GET /media/user_1/designs/21/design_yZdF2fi.json 200 [0.00, 192.168.1.6:5931][0m
+INFO 2025-03-20 17:05:08,938 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:5934][0m
+INFO 2025-03-20 17:05:10,097 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:5934][0m
+INFO 2025-03-20 17:05:10,158 runserver [mHTTP GET /user/designs/my/?page=1 200 [0.03, 192.168.1.6:5934][0m
+INFO 2025-03-20 17:05:15,981 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:5934][0m
+INFO 2025-03-20 17:11:31,857 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:6721][0m
+INFO 2025-03-20 17:11:31,929 runserver [mHTTP GET /user/designs/my/?page=1 200 [0.03, 192.168.1.6:6721][0m
+INFO 2025-03-20 17:11:39,210 runserver [mHTTP OPTIONS /user/designs/my/?page=2 200 [0.00, 192.168.1.6:6733][0m
+INFO 2025-03-20 17:11:39,226 runserver [mHTTP GET /user/designs/my/?page=2 200 [0.01, 192.168.1.6:6721][0m
+INFO 2025-03-20 17:11:39,245 runserver [mHTTP GET /media/user_1/designs/images/20250305154239_c809b58f.png 200 [0.01, 192.168.1.6:6721][0m
+INFO 2025-03-20 17:11:39,246 runserver [mHTTP GET /media/user_1/designs/images/3/%E9%A9%AC%E6%9C%AF%E8%B7%AF%E7%BA%BF%E8%AE%BE%E8%AE%A1_20250302_204254.png 200 [0.01, 192.168.1.6:6736][0m
+INFO 2025-03-20 17:11:39,246 runserver [mHTTP GET /media/user_1/designs/images/4/%E9%A9%AC%E6%9C%AF%E8%B7%AF%E7%BA%BF%E8%AE%BE%E8%AE%A1_20250302_204213.png 200 [0.01, 192.168.1.6:6735][0m
+INFO 2025-03-20 17:11:40,441 runserver [mHTTP GET /user/designs/my/?page=1 200 [0.02, 192.168.1.6:6735][0m
+INFO 2025-03-20 17:14:18,908 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:7034][0m
+INFO 2025-03-20 17:14:18,927 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:7045][0m
+INFO 2025-03-20 17:14:18,928 runserver [mHTTP GET /user/obstacles/ 200 [0.03, 192.168.1.6:7044][0m
+INFO 2025-03-20 17:14:18,935 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:7048][0m
+INFO 2025-03-20 17:14:18,967 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:7048][0m
+INFO 2025-03-20 17:14:19,007 runserver [mHTTP GET /user/designs/my/?page=1 200 [0.03, 192.168.1.6:7048][0m
+INFO 2025-03-20 17:14:20,556 runserver [mHTTP GET /media/user_1/designs/images/20250309161519_82333dea.png 200 [0.00, 192.168.1.6:7057][0m
+INFO 2025-03-20 17:14:21,067 runserver [mHTTP GET /media/user_1/designs/images/20250308203053_46371da6.png 200 [0.00, 192.168.1.6:7057][0m
+INFO 2025-03-20 17:14:23,411 runserver [mHTTP GET /user/designs/my/?page=2 200 [0.01, 192.168.1.6:7048][0m
+INFO 2025-03-20 17:14:24,143 runserver [mHTTP GET /user/designs/my/?page=1 200 [0.02, 192.168.1.6:7048][0m
+INFO 2025-03-20 17:14:24,163 runserver [mHTTP GET /media/user_1/designs/images/20250308203053_46371da6.png 200 [0.00, 192.168.1.6:7044][0m
+INFO 2025-03-20 17:14:24,163 runserver [mHTTP GET /media/user_1/designs/images/20250309161519_82333dea.png 200 [0.01, 192.168.1.6:7048][0m
+INFO 2025-03-20 17:14:25,912 runserver [mHTTP GET /user/designs/my/?page=2 200 [0.01, 192.168.1.6:7048][0m
+INFO 2025-03-20 17:14:26,974 runserver [mHTTP GET /user/designs/my/?page=1 200 [0.02, 192.168.1.6:7048][0m
+INFO 2025-03-20 17:14:29,560 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:7048][0m
+INFO 2025-03-20 17:14:29,572 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:7045][0m
+INFO 2025-03-20 17:14:29,573 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:7044][0m
+INFO 2025-03-20 17:14:29,580 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:7034][0m
+INFO 2025-03-20 17:14:29,596 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:7034][0m
+INFO 2025-03-20 17:14:29,625 runserver [mHTTP GET /user/designs/my/?page=1 200 [0.02, 192.168.1.6:7034][0m
+INFO 2025-03-20 17:14:31,335 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:7034][0m
+INFO 2025-03-20 17:14:31,391 runserver [mHTTP GET /user/designs/shared/?page=1 200 [0.01, 192.168.1.6:7034][0m
+INFO 2025-03-20 17:14:31,405 runserver [mHTTP GET /media/user_3/designs/images/%E9%A9%AC%E6%9C%AF%E8%B7%AF%E7%BA%BF%E8%AE%BE%E8%AE%A1_20250301_161458.png 200 [0.00, 192.168.1.6:7034][0m
+INFO 2025-03-20 17:14:46,046 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:7034][0m
+INFO 2025-03-20 17:14:46,139 runserver [mHTTP OPTIONS /user/api/payment/orders/?page=1&page_size=10 200 [0.00, 192.168.1.6:7057][0m
+INFO 2025-03-20 17:14:46,149 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:7034][0m
+INFO 2025-03-20 17:14:46,154 runserver [mHTTP GET /user/api/payment/orders/?page=1&page_size=10 200 [0.01, 192.168.1.6:7044][0m
+INFO 2025-03-20 17:18:24,618 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:8253][0m

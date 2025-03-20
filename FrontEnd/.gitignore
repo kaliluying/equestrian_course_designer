@@ -29,6 +29,5 @@ coverage
 
 *.tsbuildinfo
 
-BackEnd/staticfiles/
-BackEnd/media/
-BackEnd/logs/
+staticfiles
+media
