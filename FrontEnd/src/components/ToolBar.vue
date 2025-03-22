@@ -469,7 +469,7 @@ const handleSaveDesign = async () => {
       if (response.id) {
         // 保存新ID到localStorage
         localStorage.setItem('design_id_to_update', response.id.toString())
-        
+
         ElMessage.success('设计保存成功！')
       } else {
         throw new Error('保存响应中没有ID')
@@ -553,6 +553,7 @@ const clearCourse = async () => {
     }
 
     ElMessage.success('画布已清空')
+    localStorage.removeItem('design_id_to_update')
   } catch {
     // 用户取消操作
   }

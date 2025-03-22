@@ -720,6 +720,9 @@ const handleClearCanvas = () => {
 
   // 清除选中状态
   clearSelection()
+
+  // 清除本地存储的 design_id_to_update
+  localStorage.removeItem('design_id_to_update')
 }
 
 // 切换距离标签显示
@@ -754,7 +757,6 @@ window.debugCanvas = {
   startCollaboration,
   stopCollaboration
 }
-
 // 选择障碍物
 const selectObstacle = (obstacle: Obstacle, multiSelect = false) => {
   if (multiSelect) {
@@ -1281,9 +1283,14 @@ const handleDrop = (event: DragEvent) => {
   console.log('障碍物类型:', obstacleData, '枚举值:', ObstacleType.DECORATION, '设置的类型:', newObstacle.type)
 
   const meterScale = computed(() => {
-    const canvas = document.querySelector('.course-canvas')
-    if (!canvas) return 1
-    return canvas.clientWidth / courseStore.currentCourse.fieldWidth
+    if (!canvasContainerRef.value) return 1
+    const rect = canvasContainerRef.value.getBoundingClientRect()
+    // 使用场地宽度计算比例，确保横杆宽度正确
+    const scaleByWidth = rect.width / courseStore.currentCourse.fieldWidth
+    // 使用场地高度计算比例，确保高度正确
+    const scaleByHeight = rect.height / courseStore.currentCourse.fieldHeight
+    // 使用较小的比例以保持宽高比
+    return Math.min(scaleByWidth, scaleByHeight)
   })
 
   // 根据障碍物类型设置属性
@@ -1291,8 +1298,8 @@ const handleDrop = (event: DragEvent) => {
     case ObstacleType.SINGLE:
     case 'SINGLE':
       newObstacle.poles = [{
-        height: (50 * meterScale.value) / 100,
-        width: 3.5 * meterScale.value,
+        height: 0.5 * meterScale.value, // 修改为0.5米
+        width: 3.5 * meterScale.value,  // 3.5米宽
         color: '#8B4513'
       }]
       break
@@ -1300,14 +1307,14 @@ const handleDrop = (event: DragEvent) => {
     case 'DOUBLE':
       newObstacle.poles = [
         {
-          height: (50 * meterScale.value) / 100,
-          width: 3.5 * meterScale.value,
+          height: 0.5 * meterScale.value, // 修改为0.5米
+          width: 3.5 * meterScale.value,  // 3.5米宽
           color: '#8B4513',
-          spacing: 0.5 * meterScale.value,
+          spacing: 0.5 * meterScale.value, // 间距0.5米
         },
         {
-          height: (50 * meterScale.value) / 100,
-          width: 3.5 * meterScale.value,
+          height: 0.5 * meterScale.value, // 修改为0.5米
+          width: 3.5 * meterScale.value,  // 3.5米宽
           color: '#8B4513',
           spacing: 0
         }
@@ -1317,20 +1324,20 @@ const handleDrop = (event: DragEvent) => {
     case 'COMBINATION':
       newObstacle.poles = [
         {
-          height: (50 * meterScale.value) / 100,
-          width: 3.5 * meterScale.value,
+          height: 0.5 * meterScale.value, // 修改为0.5米
+          width: 3.5 * meterScale.value,  // 3.5米宽
           color: '#8B4513',
-          spacing: 0.5 * meterScale.value,
+          spacing: 0.5 * meterScale.value, // 间距0.5米
         },
         {
-          height: (50 * meterScale.value) / 100,
-          width: 3.5 * meterScale.value,
+          height: 0.5 * meterScale.value, // 修改为0.5米
+          width: 3.5 * meterScale.value,  // 3.5米宽
           color: '#8B4513',
-          spacing: 0.5 * meterScale.value,
+          spacing: 0.5 * meterScale.value, // 间距0.5米
         },
         {
-          height: (50 * meterScale.value) / 100,
-          width: 3.5 * meterScale.value,
+          height: 0.5 * meterScale.value, // 修改为0.5米
+          width: 3.5 * meterScale.value,  // 3.5米宽
           color: '#8B4513',
           spacing: 0
         }
@@ -1339,36 +1346,36 @@ const handleDrop = (event: DragEvent) => {
     case ObstacleType.WALL:
     case 'WALL':
       newObstacle.wallProperties = {
-        height: (50 * meterScale.value) / 100,
-        width: 3.5 * meterScale.value,
+        height: 1.5 * meterScale.value, // 修改为1.5米高
+        width: 3.5 * meterScale.value,  // 3.5米宽
         color: '#8B4513'
       }
       break
     case ObstacleType.LIVERPOOL:
     case 'LIVERPOOL':
       newObstacle.liverpoolProperties = {
-        height: (50 * meterScale.value) / 100,
-        width: 3.5 * meterScale.value,
-        waterDepth: (50 * meterScale.value) / 100,
+        height: 0.5 * meterScale.value,  // 修改为0.5米高
+        width: 3.5 * meterScale.value,   // 3.5米宽
+        waterDepth: 0.3 * meterScale.value, // 水深0.3米
         waterColor: 'rgba(0, 100, 255, 0.3)',
         hasRail: true,
-        railHeight: 20
+        railHeight: 0.2 * meterScale.value  // 栏杆高度0.2米
       }
       // 为利物浦类型添加横杆
       newObstacle.poles = [{
-        height: (50 * meterScale.value) / 100,
-        width: 3.5 * meterScale.value,
+        height: 0.5 * meterScale.value,  // 修改为0.5米
+        width: 3.5 * meterScale.value,   // 3.5米宽
         color: '#8B4513'
       }]
       break
     case ObstacleType.WATER:
     case 'WATER':
       newObstacle.waterProperties = {
-        width: 3.5 * meterScale.value,
-        depth: (50 * meterScale.value) / 100,
+        width: 3.5 * meterScale.value,   // 3.5米宽
+        depth: 2.0 * meterScale.value,   // 修改为2.0米深
         color: 'rgba(0, 100, 255, 0.4)',
         borderColor: 'rgba(0, 50, 150, 0.5)',
-        borderWidth: 1
+        borderWidth: 0.1 * meterScale.value // 边框宽度0.1米
       }
       // 水障不需要横杆
       newObstacle.poles = []
@@ -1477,12 +1484,17 @@ const updateFieldSize = () => {
 const meterScale = computed(() => {
   if (!canvasContainerRef.value) return 1
   const rect = canvasContainerRef.value.getBoundingClientRect()
-  return rect.width / courseStore.currentCourse.fieldWidth
+  // 使用场地宽度计算比例，确保横杆宽度正确
+  const scaleByWidth = rect.width / courseStore.currentCourse.fieldWidth
+  // 使用场地高度计算比例，确保高度正确
+  const scaleByHeight = rect.height / courseStore.currentCourse.fieldHeight
+  // 使用较小的比例以保持宽高比
+  return Math.min(scaleByWidth, scaleByHeight)
 })
 
 // 计算比例尺长度（像素）
 const scaleWidth = computed(() => {
-  return 5 * meterScale.value
+  return 5 * meterScale.value // 5米的参考线
 })
 
 // 添加缩放比例的计算
@@ -1493,29 +1505,44 @@ const pathScaleFactor = computed(() => {
     return 1
   }
 
-  // 获取当前画布宽度
-  const currentCanvasWidth = canvasContainerRef.value?.clientWidth || 0
-  if (!currentCanvasWidth) {
+  // 获取当前画布宽度和高度
+  const currentCanvas = canvasContainerRef.value
+  if (!currentCanvas) {
     return 1
   }
 
-  // 计算缩放比例
-  return currentCanvasWidth / originalViewportInfo.canvasWidth
+  const currentRect = currentCanvas.getBoundingClientRect()
+  const currentWidth = currentRect.width
+  const currentHeight = currentRect.height
+
+  // 计算宽度和高度的缩放比例
+  const widthScale = currentWidth / originalViewportInfo.canvasWidth
+  const heightScale = currentHeight / originalViewportInfo.canvasHeight
+
+  // 使用较小的缩放比例以保持宽高比
+  const scale = Math.min(widthScale, heightScale)
+
+  // 考虑设备像素比的变化
+  const devicePixelRatioScale = (window.devicePixelRatio || 1) / (originalViewportInfo.devicePixelRatio || 1)
+
+  return scale * devicePixelRatioScale
 })
 
 // 添加坐标点缩放函数
 const scalePoint = (point: { x: number; y: number }) => {
+  const scale = pathScaleFactor.value
   return {
-    x: point.x * pathScaleFactor.value,
-    y: point.y * pathScaleFactor.value
+    x: point.x * scale,
+    y: point.y * scale
   }
 }
 
-// 添加反向缩放函数，用于将屏幕坐标转换回原始坐标
+// 添加反向缩放函数
 const unscalePoint = (point: { x: number; y: number }) => {
+  const scale = pathScaleFactor.value
   return {
-    x: point.x / pathScaleFactor.value,
-    y: point.y / pathScaleFactor.value
+    x: point.x / scale,
+    y: point.y / scale
   }
 }
 
@@ -1963,6 +1990,16 @@ const handleGlobalMouseUp = (event: MouseEvent) => {
 
 // 组件挂载时添加事件监听
 onMounted(() => {
+  // 只在非编辑模式下（即没有 design_id_to_update）才清除
+  const fromMyDesigns = localStorage.getItem('from_my_designs')
+
+  if (!fromMyDesigns) {
+    localStorage.removeItem('design_id_to_update')
+  } else {
+    // 清除标记，为下次判断做准备
+    localStorage.removeItem('from_my_designs')
+  }
+
   // 添加事件监听器
   window.addEventListener('mousemove', handleGlobalMouseMove)
   window.addEventListener('mouseup', handleGlobalMouseUp)
@@ -2153,24 +2190,27 @@ const pathSegments = computed(() => {
     const scaledCurrent = scalePoint(current)
     const scaledPrevious = scalePoint(previous)
 
-    const isInObstacleLine = (index: number) => {
-      const pointInObstacle = (index - 1) % 5
-      return pointInObstacle === 1 || pointInObstacle === 2 || pointInObstacle === 3
+    // 检查是否是障碍物连接线（每5个点为一组，其中点2-4为障碍物连接线）
+    const isObstacleLine = (index: number) => {
+      const pointInGroup = (index - 1) % 5
+      return pointInGroup >= 1 && pointInGroup <= 3
     }
 
-    if (isInObstacleLine(i) || isInObstacleLine(i - 1)) {
+    if (isObstacleLine(i) || isObstacleLine(i - 1)) {
+      // 障碍物连接线使用直线
       segments.push(`M ${scaledPrevious.x} ${scaledPrevious.y} L ${scaledCurrent.x} ${scaledCurrent.y}`)
-    } else if (current.controlPoint1 && previous.controlPoint2) {
-      const scaledControlPoint1 = scalePoint(current.controlPoint1)
-      const scaledControlPoint2 = scalePoint(previous.controlPoint2)
-
+    } else if (previous.controlPoint2 && current.controlPoint1) {
+      // 使用贝塞尔曲线连接路径点
+      const scaledCP2 = scalePoint(previous.controlPoint2)
+      const scaledCP1 = scalePoint(current.controlPoint1)
       segments.push(
         `M ${scaledPrevious.x} ${scaledPrevious.y} ` +
-        `C ${scaledControlPoint2.x} ${scaledControlPoint2.y}, ` +
-        `${scaledControlPoint1.x} ${scaledControlPoint1.y}, ` +
+        `C ${scaledCP2.x} ${scaledCP2.y}, ` +
+        `${scaledCP1.x} ${scaledCP1.y}, ` +
         `${scaledCurrent.x} ${scaledCurrent.y}`
       )
     } else {
+      // 如果没有控制点，使用直线
       segments.push(`M ${scaledPrevious.x} ${scaledPrevious.y} L ${scaledCurrent.x} ${scaledCurrent.y}`)
     }
   }
@@ -2308,266 +2348,141 @@ const calculatePathSegmentLength = (
   )
 }
 
-// 修改贝塞尔曲线点计算函数
-const bezierPoint = (
-  x0: number,
-  x1: number | undefined,
-  x2: number | undefined,
-  x3: number,
-  t: number
-) => {
-  // 如果没有控制点，返回线性插值
-  if (x1 === undefined || x2 === undefined) {
-    return x0 + (x3 - x0) * t
-  }
-
+// 添加贝塞尔曲线计算的辅助函数
+const bezierPoint = (p0: number, p1: number, p2: number, p3: number, t: number) => {
   const t1 = 1 - t
-  return t1 * t1 * t1 * x0 +
-    3 * t1 * t1 * t * x1 +
-    3 * t1 * t * t * x2 +
-    t * t * t * x3
+  return t1 * t1 * t1 * p0 +
+    3 * t1 * t1 * t * p1 +
+    3 * t1 * t * t * p2 +
+    t * t * t * p3
 }
 
-// 修改贝塞尔曲线切线计算函数
-const bezierTangent = (
-  x0: number,
-  x1: number | undefined,
-  x2: number | undefined,
-  x3: number,
-  t: number
+const bezierTangent = (p0: number, p1: number, p2: number, p3: number, t: number) => {
+  const t1 = 1 - t
+  return -3 * p0 * t1 * t1 +
+    p1 * (3 * t1 * t1 - 6 * t1 * t) +
+    p2 * (6 * t1 * t - 3 * t * t) +
+    3 * p3 * t * t
+}
+
+// 修改距离标签计算函数
+const calculateDistanceLabel = (
+  startPoint: PathPoint,
+  endPoint: PathPoint,
+  hasControlPoints: boolean
 ) => {
-  // 如果没有控制点，返回固定方向
-  if (x1 === undefined || x2 === undefined) {
-    return x3 - x0
+  const start = { x: startPoint.x, y: startPoint.y }
+  const end = { x: endPoint.x, y: endPoint.y }
+
+  if (!hasControlPoints || !startPoint.controlPoint2 || !endPoint.controlPoint1) {
+    // 线性插值计算标签位置
+    const position = {
+      x: start.x + (end.x - start.x) * 0.5,
+      y: start.y + (end.y - start.y) * 0.5
+    }
+    const angle = Math.atan2(end.y - start.y, end.x - start.x) * (180 / Math.PI)
+    return { position, angle }
   }
 
-  const t1 = 1 - t
-  return 3 * t1 * t1 * (x1 - x0) +
-    6 * t1 * t * (x2 - x1) +
-    3 * t * t * (x3 - x2)
+  // 使用贝塞尔曲线计算标签位置
+  const t = 0.5
+  const cp1 = startPoint.controlPoint2
+  const cp2 = endPoint.controlPoint1
+
+  const position = {
+    x: bezierPoint(start.x, cp1.x, cp2.x, end.x, t),
+    y: bezierPoint(start.y, cp1.y, cp2.y, end.y, t)
+  }
+
+  const dx = bezierTangent(start.x, cp1.x, cp2.x, end.x, t)
+  const dy = bezierTangent(start.y, cp1.y, cp2.y, end.y, t)
+  const angle = Math.atan2(dy, dx) * (180 / Math.PI)
+
+  return { position, angle }
 }
 
 // 计算障碍物之间的距离
 const obstacleDistances = computed(() => {
-  // 如果路径不可见或点数不足，返回空数组
-  if (!courseStore.coursePath.visible || courseStore.coursePath.points.length <= 2) {
+  if (!courseStore.coursePath.visible || courseStore.coursePath.points.length < 2) {
     return []
   }
 
-  // 初始化距离数组
   const distances = []
-  // 获取路径上的所有点
   const points = courseStore.coursePath.points
-  // 获取米到像素的比例
   const scale = meterScale.value
-  // 获取所有障碍物
   const obstacles = courseStore.currentCourse.obstacles
 
-  // 第一部分：计算起点到第一个障碍物的距离
+  // 计算起点到第一个障碍物的距离
   if (points.length >= 3) {
-    // 获取起点和第一个障碍物的相关点
-    const startPoint = points[0]                    // 起点
-    const firstObstaclePoint1 = points[1]          // 第一个障碍物的前连接点
+    const startPoint = points[0]
+    const firstObstacleEntry = points[1]
 
-    // 计算起点到第一个障碍物的路径长度（像素）
-    let distanceInPixels = 0
+    if (startPoint && firstObstacleEntry) {
+      const distanceInPixels = calculatePathSegmentLength(startPoint, firstObstacleEntry)
+      const distanceInMeters = (distanceInPixels / scale).toFixed(1)
 
-    // 只计算曲线部分的长度
-    if (startPoint.controlPoint2 && firstObstaclePoint1.controlPoint1) {
-      distanceInPixels = calculatePathSegmentLength(startPoint, firstObstaclePoint1)
-    }
-
-    // 将像素距离转换为米，并保留一位小数
-    const distanceInMeters = (distanceInPixels / scale).toFixed(1)
-
-    // 计算标签位置
-    let labelX, labelY
-
-    // 根据是否有控制点选择不同的计算方法
-    if (startPoint.controlPoint2 && firstObstaclePoint1.controlPoint1) {
-      // 如果有控制点，使用贝塞尔曲线计算中点位置
-      const t = 0.5 // 参数t=0.5表示曲线的中点
-      labelX = bezierPoint(
-        startPoint.x,
-        startPoint.controlPoint2.x,
-        firstObstaclePoint1.controlPoint1.x,
-        firstObstaclePoint1.x,
-        t
-      )
-      labelY = bezierPoint(
-        startPoint.y,
-        startPoint.controlPoint2.y,
-        firstObstaclePoint1.controlPoint1.y,
-        firstObstaclePoint1.y,
-        t
-      )
-
-      // 计算标签的旋转角度
-      const dx = bezierTangent(
-        startPoint.x,
-        startPoint.controlPoint2.x,
-        firstObstaclePoint1.controlPoint1.x,
-        firstObstaclePoint1.x,
-        t
-      )
-      const dy = bezierTangent(
-        startPoint.y,
-        startPoint.controlPoint2.y,
-        firstObstaclePoint1.controlPoint1.y,
-        firstObstaclePoint1.y,
-        t
-      )
-      const angle = Math.atan2(dy, dx) * (180 / Math.PI)
-
-      // 获取第一个障碍物的编号
-      const firstObstacleNumber = obstacles[0]?.number || '1'
-
-      // 只有当有曲线时才添加距离标签
       if (parseFloat(distanceInMeters) > 0) {
+        const label = calculateDistanceLabel(startPoint, firstObstacleEntry,
+          Boolean(startPoint.controlPoint2 && firstObstacleEntry.controlPoint1))
+
         distances.push({
           distance: distanceInMeters,
-          position: { x: labelX, y: labelY },
-          angle: angle,
+          position: scalePoint(label.position),
+          angle: label.angle,
           fromNumber: 'S',
-          toNumber: firstObstacleNumber
+          toNumber: '1'
         })
       }
     }
   }
 
-  // 第二部分：计算相邻障碍物之间的距离
-  for (let i = 3; i < points.length - 5; i += 5) {
-    if (i + 5 < points.length) {
-      const exitPoint = points[i + 2]          // 当前障碍物的出口点
-      const entryPoint = points[i + 3]         // 下一个障碍物的入口点
+  // 计算障碍物之间的距离
+  for (let i = 3; i < points.length - 2; i += 5) {
+    const exitPoint = points[i]
+    const nextEntryPoint = points[i + 1]
 
-      // 只计算曲线部分的长度
-      let distanceInPixels = 0
-      if (exitPoint.controlPoint2 && entryPoint.controlPoint1) {
-        distanceInPixels = calculatePathSegmentLength(exitPoint, entryPoint)
-      }
-
-      // 将像素距离转换为米
+    if (exitPoint && nextEntryPoint) {
+      const distanceInPixels = calculatePathSegmentLength(exitPoint, nextEntryPoint)
       const distanceInMeters = (distanceInPixels / scale).toFixed(1)
 
-      // 只有当有曲线时才计算标签位置和添加距离信息
       if (parseFloat(distanceInMeters) > 0) {
-        // 计算标签位置
-        const t = 0.5
-        const labelX = bezierPoint(
-          exitPoint.x,
-          exitPoint.controlPoint2.x,
-          entryPoint.controlPoint1.x,
-          entryPoint.x,
-          t
-        )
-        const labelY = bezierPoint(
-          exitPoint.y,
-          exitPoint.controlPoint2.y,
-          entryPoint.controlPoint1.y,
-          entryPoint.y,
-          t
-        )
+        const label = calculateDistanceLabel(exitPoint, nextEntryPoint,
+          Boolean(exitPoint.controlPoint2 && nextEntryPoint.controlPoint1))
 
-        // 计算标签旋转角度
-        const dx = bezierTangent(
-          exitPoint.x,
-          exitPoint.controlPoint2.x,
-          entryPoint.controlPoint1.x,
-          entryPoint.x,
-          t
-        )
-        const dy = bezierTangent(
-          exitPoint.y,
-          exitPoint.controlPoint2.y,
-          entryPoint.controlPoint1.y,
-          entryPoint.y,
-          t
-        )
-        const angle = Math.atan2(dy, dx) * (180 / Math.PI)
-
-        // 计算障碍物索引
         const currentObstacleIndex = Math.floor((i - 3) / 5)
         const nextObstacleIndex = currentObstacleIndex + 1
 
-        // 获取障碍物编号
-        const currentObstacleNumber = obstacles[currentObstacleIndex]?.number || (currentObstacleIndex + 1).toString()
-        const nextObstacleNumber = obstacles[nextObstacleIndex]?.number || (nextObstacleIndex + 1).toString()
-
         distances.push({
           distance: distanceInMeters,
-          position: { x: labelX, y: labelY },
-          angle: angle,
-          fromNumber: currentObstacleNumber,
-          toNumber: nextObstacleNumber
+          position: scalePoint(label.position),
+          angle: label.angle,
+          fromNumber: (currentObstacleIndex + 1).toString(),
+          toNumber: (nextObstacleIndex + 1).toString()
         })
       }
     }
   }
 
-  // 第三部分：计算最后一个障碍物到终点的距离
-  if (points.length >= 6) {
-    const lastObstacleIndex = Math.floor((points.length - 3) / 5) * 5 + 3
-    if (lastObstacleIndex < points.length) {
-      const exitPoint = points[lastObstacleIndex + 2] // 最后一个障碍物的出口点
-      const endPoint = points[points.length - 1]      // 终点
+  // 计算最后一个障碍物到终点的距离
+  if (points.length >= 5) {
+    const lastObstacleExit = points[points.length - 2]
+    const endPoint = points[points.length - 1]
 
-      // 只计算曲线部分的长度
-      let distanceInPixels = 0
-      if (exitPoint.controlPoint2 && endPoint.controlPoint1) {
-        distanceInPixels = calculatePathSegmentLength(exitPoint, endPoint)
-      }
-
-      // 转换为米
+    if (lastObstacleExit && endPoint) {
+      const distanceInPixels = calculatePathSegmentLength(lastObstacleExit, endPoint)
       const distanceInMeters = (distanceInPixels / scale).toFixed(1)
 
-      // 只有当有曲线时才计算标签位置和添加距离信息
       if (parseFloat(distanceInMeters) > 0) {
-        // 计算标签位置
-        const t = 0.5
-        const labelX = bezierPoint(
-          exitPoint.x,
-          exitPoint.controlPoint2.x,
-          endPoint.controlPoint1.x,
-          endPoint.x,
-          t
-        )
-        const labelY = bezierPoint(
-          exitPoint.y,
-          exitPoint.controlPoint2.y,
-          endPoint.controlPoint1.y,
-          endPoint.y,
-          t
-        )
+        const label = calculateDistanceLabel(lastObstacleExit, endPoint,
+          Boolean(lastObstacleExit.controlPoint2 && endPoint.controlPoint1))
 
-        // 计算标签旋转角度
-        const dx = bezierTangent(
-          exitPoint.x,
-          exitPoint.controlPoint2.x,
-          endPoint.controlPoint1.x,
-          endPoint.x,
-          t
-        )
-        const dy = bezierTangent(
-          exitPoint.y,
-          exitPoint.controlPoint2.y,
-          endPoint.controlPoint1.y,
-          endPoint.y,
-          t
-        )
-        const angle = Math.atan2(dy, dx) * (180 / Math.PI)
-
-        // 计算最后一个障碍物的数组索引
-        const lastObstacleArrayIndex = Math.floor((lastObstacleIndex - 3) / 5)
-
-        // 获取最后一个障碍物的编号
-        const lastObstacleNumber = obstacles[lastObstacleArrayIndex]?.number || (lastObstacleArrayIndex + 1).toString()
+        const lastObstacleIndex = Math.floor((points.length - 5) / 5)
 
         distances.push({
           distance: distanceInMeters,
-          position: { x: labelX, y: labelY },
-          angle: angle,
-          fromNumber: lastObstacleNumber,
+          position: scalePoint(label.position),
+          angle: label.angle,
+          fromNumber: (lastObstacleIndex + 1).toString(),
           toNumber: 'F'
         })
       }

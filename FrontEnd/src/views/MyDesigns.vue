@@ -88,6 +88,9 @@
             <el-button type="danger" @click="confirmDelete(design)">
               删除
             </el-button>
+            <el-button type="info" @click="handleDownload(design)">
+              下载
+            </el-button>
           </div>
         </div>
       </el-card>
@@ -99,6 +102,41 @@
     <!-- 图片预览组件 -->
     <ImagePreview v-model:visible="previewVisible" :image-url="previewImageUrl" :image-alt="previewImageAlt"
       :title="previewImageTitle" />
+
+    <!-- 添加下载对话框 -->
+    <el-dialog v-model="downloadDialogVisible" title="下载设计" width="400px" destroy-on-close>
+      <div class="dialog-content">
+        <p class="dialog-description">请选择您想要下载的文件格式：</p>
+        <el-select v-model="selectedDownloadType" placeholder="选择文件类型" style="width: 100%">
+          <el-option v-for="option in downloadTypeOptions" :key="option.value" :label="option.label"
+            :value="option.value" />
+        </el-select>
+        <div class="format-description" v-if="selectedDownloadType === 'json'">
+          <el-icon>
+            <Document />
+          </el-icon>
+          <span>JSON格式包含完整的设计数据，可用于编辑和重新加载</span>
+        </div>
+        <div class="format-description" v-else-if="selectedDownloadType === 'png'">
+          <el-icon>
+            <Picture />
+          </el-icon>
+          <span>PNG格式为高质量图片，适合打印或分享</span>
+        </div>
+        <div class="format-description" v-else-if="selectedDownloadType === 'pdf'">
+          <el-icon>
+            <Tickets />
+          </el-icon>
+          <span>PDF格式包含详细说明，适合正式文档和打印</span>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="downloadDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="confirmDownload">下载</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -106,11 +144,11 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getUserDesigns, deleteDesign, toggleDesignSharing } from '@/api/design'
+import { getUserDesigns, deleteDesign, toggleDesignSharing, downloadDesign } from '@/api/design'
 import type { DesignResponse } from '@/types/design'
 import { useUserStore } from '@/stores/user'
 import { useCourseStore } from '@/stores/course'
-import { Star, Download, HomeFilled, Share, Clock, Timer } from '@element-plus/icons-vue'
+import { Star, Download, HomeFilled, Share, Clock, Timer, Document, Picture, Tickets } from '@element-plus/icons-vue'
 import ImagePreview from '@/components/ImagePreview.vue'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -129,6 +167,18 @@ const previewVisible = ref(false)
 const previewImageUrl = ref('')
 const previewImageAlt = ref('')
 const previewImageTitle = ref('')
+
+// 下载相关状态
+const downloadDialogVisible = ref(false)
+const selectedDownloadType = ref('json')
+const currentDesign = ref<DesignResponse | null>(null)
+
+// 下载类型选项
+const downloadTypeOptions = [
+  { label: 'JSON格式 (设计数据)', value: 'json' },
+  { label: 'PNG格式 (设计图片)', value: 'png' },
+  { label: 'PDF格式 (设计文档)', value: 'pdf' }
+]
 
 // 预览图片
 const previewImage = (design: DesignResponse) => {
@@ -261,6 +311,10 @@ const openDesign = async (design: DesignResponse) => {
       // 导航到主页
       router.push('/')
       ElMessage.success(`已加载设计: ${design.title}`)
+      // 保存设计ID到本地存储
+      localStorage.setItem('design_id_to_update', design.id.toString())
+      // 设置标记，表示是从"我的设计"页面进入的编辑模式
+      localStorage.setItem('from_my_designs', 'true')
     } catch (loadError) {
       console.error('加载课程数据错误:', loadError)
       throw new Error('加载设计数据到系统失败')
@@ -322,6 +376,51 @@ const handleDelete = async (design: DesignResponse) => {
 const handlePageChange = (page: number) => {
   currentPage.value = page
   fetchUserDesigns()
+}
+
+// 处理下载按钮点击
+const handleDownload = async (design: DesignResponse) => {
+  currentDesign.value = design
+  selectedDownloadType.value = 'json'
+  downloadDialogVisible.value = true
+}
+
+// 确认下载
+const confirmDownload = async () => {
+  if (!currentDesign.value) return
+
+  try {
+    ElMessage.info('正在准备下载...')
+
+    const response = await downloadDesign(
+      currentDesign.value.id,
+      selectedDownloadType.value as 'json' | 'png' | 'pdf'
+    )
+
+    // 更新下载计数
+    if (currentDesign.value) {
+      currentDesign.value.downloads_count = response.downloads_count
+    }
+
+    // 检查下载URL
+    if (!response.download_url) {
+      throw new Error('服务器未返回有效的下载链接')
+    }
+
+    // 创建下载链接并触发下载
+    const link = document.createElement('a')
+    link.href = response.download_url
+    link.download = response.filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+
+    ElMessage.success('下载成功')
+    downloadDialogVisible.value = false
+  } catch (error) {
+    console.error('下载失败:', error)
+    ElMessage.error(`下载失败: ${error instanceof Error ? error.message : '未知错误'}`)
+  }
 }
 
 // 组件挂载时获取数据
@@ -696,5 +795,39 @@ onMounted(() => {
   .page-navigation {
     flex-wrap: wrap;
   }
+}
+
+.dialog-content {
+  padding: 20px 0;
+
+  .dialog-description {
+    margin-bottom: 20px;
+    color: var(--text-color);
+    font-size: 14px;
+  }
+
+  .format-description {
+    margin-top: 16px;
+    padding: 12px;
+    background-color: var(--bg-color-light);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 14px;
+    color: var(--text-color-secondary);
+
+    .el-icon {
+      font-size: 20px;
+      color: var(--primary-color);
+    }
+  }
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
 }
 </style>

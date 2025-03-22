@@ -1440,6 +1440,20 @@ export const useCourseStore = defineStore('course', () => {
    * @description 将当前课程设计导出为JSON文件，包含完整的路径信息
    */
   function saveCourse() {
+    // 获取当前画布元素
+    const canvasElement = document.querySelector('.course-canvas')
+    const viewportInfo = {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      canvasWidth: canvasElement ? canvasElement.getBoundingClientRect().width : 800,
+      canvasHeight: canvasElement ? canvasElement.getBoundingClientRect().height : 600,
+      aspectRatio: currentCourse.value.fieldWidth / currentCourse.value.fieldHeight,
+      devicePixelRatio: window.devicePixelRatio,
+    }
+
+    // 更新课程中的视口信息
+    currentCourse.value.viewportInfo = viewportInfo
+
     updateCourse()
     // 创建包含路线信息的完整数据对象
     const courseDataWithPath = {

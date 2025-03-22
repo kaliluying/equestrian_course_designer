@@ -4,6 +4,7 @@ export interface ViewportInfo {
   canvasWidth: number
   canvasHeight: number
   aspectRatio: number
+  devicePixelRatio: number
 }
 
 export interface CourseDesign {

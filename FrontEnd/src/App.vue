@@ -490,7 +490,6 @@ onMounted(() => {
 
   // 添加事件监听
   window.addEventListener('token-expired', handleTokenExpired)
-  console.log('组件挂载，添加事件监听')
   document.addEventListener('collaboration-connected', handleCollaborationConnected as EventListener)
   document.addEventListener('collaboration-failed', handleCollaborationFailed as EventListener)
   document.addEventListener('collaboration-disconnected', handleCollaborationDisconnected as EventListener)
