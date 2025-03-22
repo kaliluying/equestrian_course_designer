@@ -29,8 +29,8 @@
         selected: isSelected(obstacle),
         dragging: draggingObstacle?.id === obstacle.id,
       }" :style="{
-        left: `${obstacle.position.x}px`,
-        top: `${obstacle.position.y}px`,
+        left: `${scalePoint(obstacle.position).x}px`,
+        top: `${scalePoint(obstacle.position).y}px`,
         transform: `rotate(${obstacle.rotation}deg)`,
       }" @click="selectObstacle(obstacle, $event.ctrlKey || $event.metaKey)"
       @mousedown="startDragging($event, obstacle)">
@@ -316,8 +316,8 @@
         class="pole-number"
         @mousedown.stop="startDraggingPoleNumber($event, obstacle, obstacle.poles.findIndex(p => p === pole))" :style="{
           position: 'absolute',
-          left: `${obstacle.position.x + (pole.numberPosition?.x ?? 0)}px`,
-          top: `${obstacle.position.y + (pole.numberPosition?.y ?? 50)}px`,
+          left: `${scalePoint({ x: obstacle.position.x + (pole.numberPosition?.x ?? 0), y: 0 }).x}px`,
+          top: `${scalePoint({ x: 0, y: obstacle.position.y + (pole.numberPosition?.y ?? 50) }).y}px`,
           transform: 'translate(-50%, -50%)',
         }">
         {{ pole.number }}
@@ -825,10 +825,11 @@ const startDragging = (event: MouseEvent, obstacle: Obstacle) => {
 const startRotating = (event: MouseEvent, obstacle: Obstacle) => {
   isRotating.value = true
   draggingObstacle.value = obstacle
+
   const rect = (event.currentTarget as HTMLElement).closest('.obstacle')?.getBoundingClientRect()
   if (!rect) return
 
-  // 计算旋转中心点
+  // 计算旋转中心点（使用缩放后的坐标）
   const centerX = rect.left + rect.width / 2
   const centerY = rect.top + rect.height / 2
 
@@ -852,7 +853,7 @@ const startDraggingPoleNumber = (event: MouseEvent, obstacle: Obstacle, poleInde
   draggingPoleIndex.value = poleIndex
   startMousePos.value = { x: event.clientX, y: event.clientY }
 
-  // 记录编号的初始位置
+  // 记录编号的初始位置（使用原始坐标）
   const pole = obstacle.poles[poleIndex]
   startPos.value = {
     [obstacle.id]: {
@@ -871,9 +872,9 @@ const handleMouseMove = (event: MouseEvent) => {
 
   // 处理障碍物拖拽
   if (isDragging.value) {
-    // 计算鼠标移动距离
-    const deltaX = event.clientX - startMousePos.value.x
-    const deltaY = event.clientY - startMousePos.value.y
+    // 计算鼠标移动距离（需要考虑缩放）
+    const deltaX = (event.clientX - startMousePos.value.x) / pathScaleFactor.value
+    const deltaY = (event.clientY - startMousePos.value.y) / pathScaleFactor.value
 
     // 更新所有选中障碍物的位置
     selectedObstacles.value.forEach((obstacle) => {
@@ -894,14 +895,7 @@ const handleMouseMove = (event: MouseEvent) => {
 
         // 如果在协作模式下，发送障碍物更新消息
         if (isCollaborating.value) {
-          console.log('发送障碍物位置更新:', obstacle.id, newPosition)
-          try {
-            // 直接发送位置更新，不使用节流函数
-            sendObstacleUpdate(obstacle.id, { position: newPosition })
-            console.log('障碍物位置更新消息已发送')
-          } catch (error) {
-            console.error('发送障碍物位置更新失败:', error)
-          }
+          sendObstacleUpdate(obstacle.id, { position: newPosition })
         }
       }
     })
@@ -935,14 +929,7 @@ const handleMouseMove = (event: MouseEvent) => {
 
     // 如果在协作模式下，发送障碍物旋转更新消息
     if (isCollaborating.value) {
-      console.log('发送障碍物旋转更新:', draggingObstacle.value.id, newRotation)
-      try {
-        // 直接发送旋转更新，不使用节流函数
-        sendObstacleUpdate(draggingObstacle.value.id, { rotation: newRotation })
-        console.log('障碍物旋转更新消息已发送')
-      } catch (error) {
-        console.error('发送障碍物旋转更新失败:', error)
-      }
+      sendObstacleUpdate(draggingObstacle.value.id, { rotation: newRotation })
     }
   }
 
@@ -955,12 +942,14 @@ const handleMouseMove = (event: MouseEvent) => {
     const x = Math.max(0, Math.min(event.clientX - rect.left, rect.width))
     const y = Math.max(0, Math.min(event.clientY - rect.top, rect.height))
 
+    // 将屏幕坐标转换回原始坐标
+    const unscaledPoint = unscalePoint({ x, y })
+
     if (draggingPoint.value === 'start') {
-      courseStore.updateStartPoint({ x, y })
+      courseStore.updateStartPoint(unscaledPoint)
 
       // 如果在协作模式下，发送路径更新
       if (isCollaborating.value) {
-        // 直接发送路径更新，不使用节流函数
         sendPathUpdate(courseStore.currentCourse.id, {
           visible: courseStore.coursePath.visible,
           points: courseStore.coursePath.points,
@@ -969,11 +958,10 @@ const handleMouseMove = (event: MouseEvent) => {
         })
       }
     } else {
-      courseStore.updateEndPoint({ x, y })
+      courseStore.updateEndPoint(unscaledPoint)
 
       // 如果在协作模式下，发送路径更新
       if (isCollaborating.value) {
-        // 直接发送路径更新，不使用节流函数
         sendPathUpdate(courseStore.currentCourse.id, {
           visible: courseStore.coursePath.visible,
           points: courseStore.coursePath.points,
@@ -989,8 +977,11 @@ const handleMouseMove = (event: MouseEvent) => {
     const rect = canvas.getBoundingClientRect()
     const pointPos =
       draggingPoint.value === 'start-rotate' ? courseStore.startPoint : courseStore.endPoint
-    const centerX = rect.left + pointPos.x
-    const centerY = rect.top + pointPos.y
+
+    // 使用缩放后的坐标计算中心点
+    const scaledPoint = scalePoint(pointPos)
+    const centerX = rect.left + scaledPoint.x
+    const centerY = rect.top + scaledPoint.y
 
     // 计算当前角度
     const currentAngle = Math.atan2(event.clientY - centerY, event.clientX - centerX) * (180 / Math.PI)
@@ -1013,6 +1004,16 @@ const handleMouseMove = (event: MouseEvent) => {
     } else {
       courseStore.updateEndRotation(newRotation)
     }
+
+    // 如果在协作模式下，发送路径更新
+    if (isCollaborating.value) {
+      sendPathUpdate(courseStore.currentCourse.id, {
+        visible: courseStore.coursePath.visible,
+        points: courseStore.coursePath.points,
+        startPoint: courseStore.startPoint,
+        endPoint: courseStore.endPoint
+      })
+    }
   }
 
   // 处理控制点拖拽
@@ -1024,15 +1025,17 @@ const handleMouseMove = (event: MouseEvent) => {
     const x = Math.max(0, Math.min(event.clientX - rect.left, rect.width))
     const y = Math.max(0, Math.min(event.clientY - rect.top, rect.height))
 
+    // 将屏幕坐标转换回原始坐标
+    const unscaledPoint = unscalePoint({ x, y })
+
     courseStore.updateControlPoint(
       draggingControlPoint.value.pointIndex,
       draggingControlPoint.value.controlPointNumber,
-      { x, y },
+      unscaledPoint
     )
 
     // 如果在协作模式下，发送路径更新
     if (isCollaborating.value) {
-      // 直接发送路径更新，不使用节流函数
       sendPathUpdate(courseStore.currentCourse.id, {
         visible: courseStore.coursePath.visible,
         points: courseStore.coursePath.points,
@@ -1042,7 +1045,6 @@ const handleMouseMove = (event: MouseEvent) => {
     }
   }
 }
-
 
 // 处理拖放新障碍物
 const handleDrop = (event: DragEvent) => {
@@ -1064,10 +1066,12 @@ const handleDrop = (event: DragEvent) => {
     return
   }
 
-  // 计算鼠标在画布上的位置
-  const x = event.clientX - canvasRect.left
-  const y = event.clientY - canvasRect.top
-  console.log('拖放位置:', x, y)
+  // 计算鼠标在画布上的位置（需要考虑缩放）
+  const screenX = event.clientX - canvasRect.left
+  const screenY = event.clientY - canvasRect.top
+
+  // 将屏幕坐标转换为原始坐标
+  const position = unscalePoint({ x: screenX, y: screenY })
 
   // 检查是否是自定义障碍物
   if (obstacleData.startsWith('CUSTOM:')) {
@@ -1089,7 +1093,7 @@ const handleDrop = (event: DragEvent) => {
         // 从模板创建新障碍物
         const newObstacle: Omit<Obstacle, 'id'> = {
           type: ObstacleType.CUSTOM,
-          position: { x, y },
+          position: position, // 使用转换后的坐标
           rotation: 0,
           poles: JSON.parse(JSON.stringify(template.poles)),
           customId: template.id,
@@ -1215,7 +1219,7 @@ const handleDrop = (event: DragEvent) => {
         // 从模板创建新障碍物
         const newObstacle: Omit<Obstacle, 'id'> = {
           type: ObstacleType.CUSTOM, // 初始设置为CUSTOM
-          position: { x, y },
+          position: position, // 使用转换后的坐标
           rotation: 0,
           poles: JSON.parse(JSON.stringify(template.poles)),
           // 因为共享障碍物直接使用而不是引用，所以不设置customId
@@ -1269,10 +1273,7 @@ const handleDrop = (event: DragEvent) => {
   // 创建新障碍物
   const newObstacle: Omit<Obstacle, 'id'> = {
     type: obstacleData as ObstacleType,
-    position: {
-      x: x,
-      y: y
-    },
+    position: position, // 使用转换后的坐标
     rotation: 0,
     poles: []
   }
@@ -1484,7 +1485,41 @@ const scaleWidth = computed(() => {
   return 5 * meterScale.value
 })
 
-// 计算画布样式
+// 添加缩放比例的计算
+const pathScaleFactor = computed(() => {
+  // 获取原始设计的视口信息
+  const originalViewportInfo = courseStore.currentCourse.viewportInfo
+  if (!originalViewportInfo || !originalViewportInfo.canvasWidth) {
+    return 1
+  }
+
+  // 获取当前画布宽度
+  const currentCanvasWidth = canvasContainerRef.value?.clientWidth || 0
+  if (!currentCanvasWidth) {
+    return 1
+  }
+
+  // 计算缩放比例
+  return currentCanvasWidth / originalViewportInfo.canvasWidth
+})
+
+// 添加坐标点缩放函数
+const scalePoint = (point: { x: number; y: number }) => {
+  return {
+    x: point.x * pathScaleFactor.value,
+    y: point.y * pathScaleFactor.value
+  }
+}
+
+// 添加反向缩放函数，用于将屏幕坐标转换回原始坐标
+const unscalePoint = (point: { x: number; y: number }) => {
+  return {
+    x: point.x / pathScaleFactor.value,
+    y: point.y / pathScaleFactor.value
+  }
+}
+
+// 修改 canvasStyle computed 属性
 const canvasStyle = computed(() => {
   // 获取视口宽度和高度
   const viewportWidth = window.innerWidth
@@ -1505,7 +1540,6 @@ const canvasStyle = computed(() => {
     const heightRatio = viewportHeight / originalViewportInfo.height
     // 使用较小的比例作为缩放因子，确保内容完全显示
     scaleFactor = Math.min(widthRatio, heightRatio)
-    console.log('画布比例调整因子:', scaleFactor)
   }
 
   // 最大宽度是视口的95%，预留一些空间给边距和滚动条
@@ -1525,10 +1559,6 @@ const canvasStyle = computed(() => {
   if (originalViewportInfo && scaleFactor !== 1 && originalViewportInfo.canvasWidth > 0) {
     // 基于原始画布尺寸和缩放因子计算新尺寸
     const adjustedWidth = Math.min(originalViewportInfo.canvasWidth * scaleFactor, width)
-    // 确保维持原始宽高比
-    const adjustedHeight = adjustedWidth / idealRatio
-
-    // 确保画布尺寸不会太小或太大
     width = Math.max(Math.min(adjustedWidth, maxWidth), viewportWidth * 0.5)
     height = width / idealRatio
 
@@ -1537,11 +1567,6 @@ const canvasStyle = computed(() => {
       height = viewportHeight * 0.8
       width = height * idealRatio
     }
-
-    console.log('画布尺寸调整:', {
-      original: { width: originalViewportInfo.canvasWidth, height: originalViewportInfo.canvasHeight },
-      adjusted: { width, height }
-    })
   }
 
   // 返回最终的样式
@@ -1549,7 +1574,7 @@ const canvasStyle = computed(() => {
     width: `${width}px`,
     height: `${height}px`,
     aspectRatio: `${courseStore.currentCourse.fieldWidth}/${courseStore.currentCourse.fieldHeight}`,
-    margin: '0 auto' // 居中显示
+    margin: '0 auto'
   }
 })
 
@@ -1612,10 +1637,14 @@ const handleKeyDown = (event: KeyboardEvent) => {
 const selectionStyle = computed(() => {
   if (!isSelecting.value) return {}
 
-  const left = Math.min(selectionStart.value.x, selectionEnd.value.x)
-  const top = Math.min(selectionStart.value.y, selectionEnd.value.y)
-  const width = Math.abs(selectionEnd.value.x - selectionStart.value.x)
-  const height = Math.abs(selectionEnd.value.y - selectionStart.value.y)
+  // 获取选择框的起点和终点（需要转换回屏幕坐标）
+  const scaledStart = scalePoint(selectionStart.value)
+  const scaledEnd = scalePoint(selectionEnd.value)
+
+  const left = Math.min(scaledStart.x, scaledEnd.x)
+  const top = Math.min(scaledStart.y, scaledEnd.y)
+  const width = Math.abs(scaledEnd.x - scaledStart.x)
+  const height = Math.abs(scaledEnd.y - scaledStart.y)
 
   return {
     left: `${left}px`,
@@ -1631,9 +1660,12 @@ const startSelection = (event: MouseEvent) => {
   const x = event.clientX - rect.left
   const y = event.clientY - rect.top
 
+  // 将屏幕坐标转换为原始坐标
+  const unscaledPoint = unscalePoint({ x, y })
+
   isSelecting.value = true
-  selectionStart.value = { x, y }
-  selectionEnd.value = { x, y }
+  selectionStart.value = unscaledPoint
+  selectionEnd.value = unscaledPoint
 
   // 如果没按住Ctrl/Command键，清除当前选中
   if (!event.ctrlKey && !event.metaKey) {
@@ -1652,7 +1684,9 @@ const updateSelection = (event: MouseEvent) => {
   const x = Math.max(0, Math.min(event.clientX - rect.left, rect.width))
   const y = Math.max(0, Math.min(event.clientY - rect.top, rect.height))
 
-  selectionEnd.value = { x, y }
+  // 将屏幕坐标转换为原始坐标
+  const unscaledPoint = unscalePoint({ x, y })
+  selectionEnd.value = unscaledPoint
 }
 
 // 结束框选
@@ -1782,8 +1816,11 @@ const handleGlobalMouseMove = (event: MouseEvent) => {
     const rect = canvas.getBoundingClientRect()
     const pointPos =
       draggingPoint.value === 'start-rotate' ? courseStore.startPoint : courseStore.endPoint
-    const centerX = rect.left + pointPos.x
-    const centerY = rect.top + pointPos.y
+
+    // 使用缩放后的坐标计算中心点
+    const scaledPoint = scalePoint(pointPos)
+    const centerX = rect.left + scaledPoint.x
+    const centerY = rect.top + scaledPoint.y
 
     // 计算当前角度
     const currentAngle = Math.atan2(event.clientY - centerY, event.clientX - centerX) * (180 / Math.PI)
@@ -1806,6 +1843,16 @@ const handleGlobalMouseMove = (event: MouseEvent) => {
     } else {
       courseStore.updateEndRotation(newRotation)
     }
+
+    // 如果在协作模式下，发送路径更新
+    if (isCollaborating.value) {
+      sendPathUpdate(courseStore.currentCourse.id, {
+        visible: courseStore.coursePath.visible,
+        points: courseStore.coursePath.points,
+        startPoint: courseStore.startPoint,
+        endPoint: courseStore.endPoint
+      })
+    }
   }
 
   // 处理控制点拖拽
@@ -1817,15 +1864,17 @@ const handleGlobalMouseMove = (event: MouseEvent) => {
     const x = Math.max(0, Math.min(event.clientX - rect.left, rect.width))
     const y = Math.max(0, Math.min(event.clientY - rect.top, rect.height))
 
+    // 将屏幕坐标转换回原始坐标
+    const unscaledPoint = unscalePoint({ x, y })
+
     courseStore.updateControlPoint(
       draggingControlPoint.value.pointIndex,
       draggingControlPoint.value.controlPointNumber,
-      { x, y },
+      unscaledPoint
     )
 
     // 如果在协作模式下，发送路径更新
     if (isCollaborating.value) {
-      // 直接发送路径更新，不使用节流函数
       sendPathUpdate(courseStore.currentCourse.id, {
         visible: courseStore.coursePath.visible,
         points: courseStore.coursePath.points,
@@ -2095,101 +2144,57 @@ const startDraggingControlPoint = (
 
 // 计算路径段
 const pathSegments = computed(() => {
-  // 存储所有路径段的数组
   const segments: string[] = []
-  // 获取当前课程路径的所有点
   const points = courseStore.coursePath.points
-  // 遍历所有点，从第二个点开始（因为需要和前一个点形成线段）
+
   for (let i = 1; i < points.length; i++) {
-    // 获取当前点和前一个点
     const current = points[i]
     const previous = points[i - 1]
-    // 判断一个点是否在障碍物前后的直线部分
+    const scaledCurrent = scalePoint(current)
+    const scaledPrevious = scalePoint(previous)
+
     const isInObstacleLine = (index: number) => {
-      // 每个障碍物有5个点：
-      // 0: 障碍物前的连接点
-      // 1: 接近直线的起点（3米直线的起点）
-      // 2: 障碍物中心点
-      // 3: 离开直线的终点（3米直线的终点）
-      // 4: 障碍物后的连接点
-      // 其中1、2、3是直线部分
       const pointInObstacle = (index - 1) % 5
       return pointInObstacle === 1 || pointInObstacle === 2 || pointInObstacle === 3
     }
 
-    // 如果当前点或前一个点在直线部分，使用直线连接
     if (isInObstacleLine(i) || isInObstacleLine(i - 1)) {
-      // 使用 SVG 的 L 命令绘制直线
-      segments.push(`M ${previous.x} ${previous.y} L ${current.x} ${current.y}`)
+      segments.push(`M ${scaledPrevious.x} ${scaledPrevious.y} L ${scaledCurrent.x} ${scaledCurrent.y}`)
     } else if (current.controlPoint1 && previous.controlPoint2) {
-      // 如果两个点都有控制点，使用贝塞尔曲线
-      // 增加曲线角度的系数，使曲线更陡峭
-      const angleMultiplier = 2
+      const scaledControlPoint1 = scalePoint(current.controlPoint1)
+      const scaledControlPoint2 = scalePoint(previous.controlPoint2)
 
-      // 计算前一个点的第二个控制点到锚点的距离
-      const prevCP2Distance = Math.sqrt(
-        Math.pow(previous.controlPoint2.x - previous.x, 2) +
-        Math.pow(previous.controlPoint2.y - previous.y, 2)
-      )
-      // 计算当前点的第一个控制点到锚点的距离
-      const currCP1Distance = Math.sqrt(
-        Math.pow(current.controlPoint1.x - current.x, 2) +
-        Math.pow(current.controlPoint1.y - current.y, 2)
-      )
-
-      // 计算前一个点的第二个控制点的角度（相对于锚点）
-      const prevCP2Angle = Math.atan2(
-        previous.controlPoint2.y - previous.y,
-        previous.controlPoint2.x - previous.x
-      )
-      // 计算当前点的第一个控制点的角度（相对于锚点）
-      const currCP1Angle = Math.atan2(
-        current.controlPoint1.y - current.y,
-        current.controlPoint1.x - current.x
-      )
-
-      // 计算增强后的控制点位置
-      // 通过增加距离使曲线更陡峭
-      const enhancedPrevCP2 = {
-        x: previous.x + Math.cos(prevCP2Angle) * (prevCP2Distance * angleMultiplier),
-        y: previous.y + Math.sin(prevCP2Angle) * (prevCP2Distance * angleMultiplier)
-      }
-      const enhancedCurrCP1 = {
-        x: current.x + Math.cos(currCP1Angle) * (currCP1Distance * angleMultiplier),
-        y: current.y + Math.sin(currCP1Angle) * (currCP1Distance * angleMultiplier)
-      }
-
-      // 使用增强后的控制点生成贝塞尔曲线
-      // SVG 的 C 命令用于绘制三次贝塞尔曲线
-      // 格式：C x1 y1, x2 y2, x y
-      // 其中 (x1,y1) 是第一个控制点，(x2,y2) 是第二个控制点，(x,y) 是终点
       segments.push(
-        `M ${previous.x} ${previous.y} ` + // 移动到起点
-        `C ${enhancedPrevCP2.x} ${enhancedPrevCP2.y}, ` + // 第一个控制点
-        `${enhancedCurrCP1.x} ${enhancedCurrCP1.y}, ` + // 第二个控制点
-        `${current.x} ${current.y}` // 终点
+        `M ${scaledPrevious.x} ${scaledPrevious.y} ` +
+        `C ${scaledControlPoint2.x} ${scaledControlPoint2.y}, ` +
+        `${scaledControlPoint1.x} ${scaledControlPoint1.y}, ` +
+        `${scaledCurrent.x} ${scaledCurrent.y}`
       )
     } else {
-      // 如果没有控制点，使用直线连接
-      segments.push(`M ${previous.x} ${previous.y} L ${current.x} ${current.y}`)
+      segments.push(`M ${scaledPrevious.x} ${scaledPrevious.y} L ${scaledCurrent.x} ${scaledCurrent.y}`)
     }
   }
-  // 返回所有路径段
   return segments
 })
 
-// 修改起终点的样式绑定
-const startStyle = computed(() => ({
-  left: `${courseStore.startPoint.x}px`,
-  top: `${courseStore.startPoint.y}px`,
-  transform: `translate(-50%, -50%) rotate(${courseStore.startPoint.rotation}deg)`,
-}))
+// 修改起终点的样式绑定，使用缩放后的坐标
+const startStyle = computed(() => {
+  const scaledPoint = scalePoint(courseStore.startPoint)
+  return {
+    left: `${scaledPoint.x}px`,
+    top: `${scaledPoint.y}px`,
+    transform: `translate(-50%, -50%) rotate(${courseStore.startPoint.rotation}deg)`,
+  }
+})
 
-const endStyle = computed(() => ({
-  left: `${courseStore.endPoint.x}px`,
-  top: `${courseStore.endPoint.y}px`,
-  transform: `translate(-50%, -50%) rotate(${courseStore.endPoint.rotation}deg)`,
-}))
+const endStyle = computed(() => {
+  const scaledPoint = scalePoint(courseStore.endPoint)
+  return {
+    left: `${scaledPoint.x}px`,
+    top: `${scaledPoint.y}px`,
+    transform: `translate(-50%, -50%) rotate(${courseStore.endPoint.rotation}deg)`,
+  }
+})
 
 // 修改生成路线的方法
 const handleGenerateCoursePath = () => {
@@ -2240,14 +2245,22 @@ const adjustLabelAngle = (angle: number) => {
   return normalizedAngle
 }
 
-// 计算贝塞尔曲线长度的函数
+// 修改计算贝塞尔曲线长度的函数
 const calculateBezierLength = (
   p0: { x: number; y: number },
-  p1: { x: number; y: number },
-  p2: { x: number; y: number },
+  p1: { x: number; y: number } | undefined,
+  p2: { x: number; y: number } | undefined,
   p3: { x: number; y: number },
   steps = 20
 ) => {
+  // 如果没有控制点，返回直线距离
+  if (!p1 || !p2) {
+    return Math.sqrt(
+      Math.pow(p3.x - p0.x, 2) +
+      Math.pow(p3.y - p0.y, 2)
+    )
+  }
+
   let length = 0
   let prevPoint = p0
 
@@ -2281,26 +2294,57 @@ const calculateBezierLength = (
   return length
 }
 
-// 计算路径段长度
+// 修改计算路径段长度的函数
 const calculatePathSegmentLength = (
   startPoint: PathPoint,
   endPoint: PathPoint
 ) => {
   // 如果有控制点，使用贝塞尔曲线计算
-  if (startPoint.controlPoint2 && endPoint.controlPoint1) {
-    return calculateBezierLength(
-      startPoint,
-      startPoint.controlPoint2,
-      endPoint.controlPoint1,
-      endPoint
-    )
-  } else {
-    // 否则使用直线距离
-    return Math.sqrt(
-      Math.pow(endPoint.x - startPoint.x, 2) +
-      Math.pow(endPoint.y - startPoint.y, 2)
-    )
+  return calculateBezierLength(
+    startPoint,
+    startPoint.controlPoint2,
+    endPoint.controlPoint1,
+    endPoint
+  )
+}
+
+// 修改贝塞尔曲线点计算函数
+const bezierPoint = (
+  x0: number,
+  x1: number | undefined,
+  x2: number | undefined,
+  x3: number,
+  t: number
+) => {
+  // 如果没有控制点，返回线性插值
+  if (x1 === undefined || x2 === undefined) {
+    return x0 + (x3 - x0) * t
   }
+
+  const t1 = 1 - t
+  return t1 * t1 * t1 * x0 +
+    3 * t1 * t1 * t * x1 +
+    3 * t1 * t * t * x2 +
+    t * t * t * x3
+}
+
+// 修改贝塞尔曲线切线计算函数
+const bezierTangent = (
+  x0: number,
+  x1: number | undefined,
+  x2: number | undefined,
+  x3: number,
+  t: number
+) => {
+  // 如果没有控制点，返回固定方向
+  if (x1 === undefined || x2 === undefined) {
+    return x3 - x0
+  }
+
+  const t1 = 1 - t
+  return 3 * t1 * t1 * (x1 - x0) +
+    6 * t1 * t * (x2 - x1) +
+    3 * t * t * (x3 - x2)
 }
 
 // 计算障碍物之间的距离
@@ -2551,7 +2595,6 @@ const totalDistance = computed(() => {
   // 计算障碍物总长度（包括横杆宽度和间距）
   const obstacleTotalLength = obstacles.reduce((sum, obstacle) => {
     let obstacleLength = 0
-    console.log('obstacle', obstacle)
 
     // 根据障碍物类型计算长度
     if (obstacle.type === ObstacleType.DOUBLE && obstacle.poles.length > 1) {
@@ -2579,35 +2622,6 @@ const totalDistance = computed(() => {
   // 保留一位小数
   return total.toFixed(1)
 })
-
-// 计算贝塞尔曲线上的点
-const bezierPoint = (
-  x0: number,
-  x1: number,
-  x2: number,
-  x3: number,
-  t: number
-) => {
-  const t1 = 1 - t
-  return t1 * t1 * t1 * x0 +
-    3 * t1 * t1 * t * x1 +
-    3 * t1 * t * t * x2 +
-    t * t * t * x3
-}
-
-// 计算贝塞尔曲线在某点的切线
-const bezierTangent = (
-  x0: number,
-  x1: number,
-  x2: number,
-  x3: number,
-  t: number
-) => {
-  const t1 = 1 - t
-  return 3 * t1 * t1 * (x1 - x0) +
-    6 * t1 * t * (x2 - x1) +
-    3 * t * t * (x3 - x2)
-}
 
 // 添加调试状态
 const showDebugInfo = ref(false)

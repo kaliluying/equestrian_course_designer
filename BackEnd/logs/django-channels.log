@@ -787,3 +787,538 @@ INFO 2025-03-20 17:14:46,139 runserver [mHTTP OPTIONS /user/api/payment/orders/
 INFO 2025-03-20 17:14:46,149 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:7034][0m
 INFO 2025-03-20 17:14:46,154 runserver [mHTTP GET /user/api/payment/orders/?page=1&page_size=10 200 [0.01, 192.168.1.6:7044][0m
 INFO 2025-03-20 17:18:24,618 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:8253][0m
+INFO 2025-03-22 12:21:36,658 autoreload Watching for file changes with StatReloader
+DEBUG 2025-03-22 12:21:36,958 runserver Daphne running, listening on 0.0.0.0:8000
+DEBUG 2025-03-22 12:21:36,983 runserver Daphne exited
+INFO 2025-03-22 12:24:57,948 autoreload Watching for file changes with StatReloader
+DEBUG 2025-03-22 12:24:58,123 runserver Daphne running, listening on 127.0.0.1:8000
+DEBUG 2025-03-22 12:24:58,139 runserver Daphne exited
+INFO 2025-03-22 12:25:24,020 autoreload Watching for file changes with StatReloader
+DEBUG 2025-03-22 12:25:24,193 runserver Daphne running, listening on 0.0.0.0:8000
+DEBUG 2025-03-22 12:25:24,208 runserver Daphne exited
+INFO 2025-03-22 12:25:50,078 autoreload Watching for file changes with StatReloader
+DEBUG 2025-03-22 12:25:50,265 runserver Daphne running, listening on 0.0.0.0:8000
+INFO 2025-03-22 12:25:53,498 runserver [mHTTP OPTIONS /user/users/my_profile/ 200 [0.00, 192.168.1.6:3464][0m
+INFO 2025-03-22 12:25:53,499 runserver [mHTTP OPTIONS /user/users/my_profile/ 200 [0.00, 192.168.1.6:3465][0m
+INFO 2025-03-22 12:25:53,506 runserver [mHTTP OPTIONS /user/obstacles/ 200 [0.00, 192.168.1.6:3465][0m
+INFO 2025-03-22 12:25:53,507 runserver [mHTTP OPTIONS /user/obstacles/shared/ 200 [0.00, 192.168.1.6:3464][0m
+INFO 2025-03-22 12:25:53,542 runserver [mHTTP GET /user/users/my_profile/ 200 [0.04, 192.168.1.6:3466][0m
+INFO 2025-03-22 12:25:53,543 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.03, 192.168.1.6:3468][0m
+INFO 2025-03-22 12:25:53,544 runserver [mHTTP GET /user/obstacles/ 200 [0.03, 192.168.1.6:3467][0m
+INFO 2025-03-22 12:25:53,552 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:3472][0m
+INFO 2025-03-22 12:25:53,577 runserver [mHTTP OPTIONS /user/obstacles/count/ 200 [0.00, 192.168.1.6:3464][0m
+INFO 2025-03-22 12:25:53,588 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:3472][0m
+INFO 2025-03-22 12:26:08,745 runserver [mHTTP OPTIONS /user/users/my_profile/ 200 [0.01, 192.168.1.12:52016][0m
+INFO 2025-03-22 12:26:08,748 runserver [mHTTP OPTIONS /user/users/my_profile/ 200 [0.01, 192.168.1.12:52017][0m
+INFO 2025-03-22 12:26:08,750 runserver [mHTTP OPTIONS /user/obstacles/ 200 [0.01, 192.168.1.12:52018][0m
+INFO 2025-03-22 12:26:08,753 runserver [mHTTP OPTIONS /user/obstacles/shared/ 200 [0.01, 192.168.1.12:52019][0m
+WARNING 2025-03-22 12:26:08,793 log Unauthorized: /user/users/my_profile/
+WARNING 2025-03-22 12:26:08,794 log Unauthorized: /user/obstacles/
+WARNING 2025-03-22 12:26:08,794 log Unauthorized: /user/users/my_profile/
+WARNING 2025-03-22 12:26:08,794 log Unauthorized: /user/obstacles/shared/
+WARNING 2025-03-22 12:26:08,794 runserver [31;1mHTTP GET /user/users/my_profile/ 401 [0.01, 192.168.1.12:52023][0m
+WARNING 2025-03-22 12:26:08,795 runserver [31;1mHTTP GET /user/obstacles/ 401 [0.01, 192.168.1.12:52025][0m
+WARNING 2025-03-22 12:26:08,795 runserver [31;1mHTTP GET /user/users/my_profile/ 401 [0.01, 192.168.1.12:52021][0m
+WARNING 2025-03-22 12:26:08,796 runserver [31;1mHTTP GET /user/obstacles/shared/ 401 [0.01, 192.168.1.12:52027][0m
+INFO 2025-03-22 12:26:08,832 runserver [mHTTP OPTIONS /user/token/refresh/ 200 [0.00, 192.168.1.12:52019][0m
+INFO 2025-03-22 12:26:08,833 runserver [mHTTP OPTIONS /user/token/refresh/ 200 [0.00, 192.168.1.12:52018][0m
+INFO 2025-03-22 12:26:08,870 runserver [mHTTP OPTIONS /user/token/refresh/ 200 [0.01, 192.168.1.12:52019][0m
+INFO 2025-03-22 12:26:08,870 runserver [mHTTP OPTIONS /user/token/refresh/ 200 [0.01, 192.168.1.12:52016][0m
+ERROR 2025-03-22 12:26:08,917 log Internal Server Error: /user/token/refresh/
+Traceback (most recent call last):
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\asgiref\sync.py", line 518, in thread_handler
+    raise exc_info[1]
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\django\core\handlers\exception.py", line 42, in inner
+    response = await get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\asgiref\sync.py", line 518, in thread_handler
+    raise exc_info[1]
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\django\core\handlers\base.py", line 253, in _get_response_async
+    response = await wrapped_callback(
+               ^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\asgiref\sync.py", line 468, in __call__
+    ret = await asyncio.shield(exec_coro)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\asgiref\current_thread_executor.py", line 40, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\asgiref\sync.py", line 522, in thread_handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\django\views\decorators\csrf.py", line 56, in wrapper_view
+    return view_func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\django\views\generic\base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework_simplejwt\views.py", line 44, in post
+    serializer.is_valid(raise_exception=True)
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\serializers.py", line 223, in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\serializers.py", line 445, in run_validation
+    value = self.validate(value)
+            ^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework_simplejwt\serializers.py", line 141, in validate
+    refresh.outstand()
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework_simplejwt\tokens.py", line 222, in outstand
+    return OutstandingToken.objects.get_or_create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: type object 'OutstandingToken' has no attribute 'objects'
+ERROR 2025-03-22 12:26:08,923 log Internal Server Error: /user/token/refresh/
+Traceback (most recent call last):
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\asgiref\sync.py", line 518, in thread_handler
+    raise exc_info[1]
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\django\core\handlers\exception.py", line 42, in inner
+    response = await get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\asgiref\sync.py", line 518, in thread_handler
+    raise exc_info[1]
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\django\core\handlers\base.py", line 253, in _get_response_async
+    response = await wrapped_callback(
+               ^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\asgiref\sync.py", line 468, in __call__
+    ret = await asyncio.shield(exec_coro)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\asgiref\current_thread_executor.py", line 40, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\asgiref\sync.py", line 522, in thread_handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\django\views\decorators\csrf.py", line 56, in wrapper_view
+    return view_func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\django\views\generic\base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework_simplejwt\views.py", line 44, in post
+    serializer.is_valid(raise_exception=True)
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\serializers.py", line 223, in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\serializers.py", line 445, in run_validation
+    value = self.validate(value)
+            ^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework_simplejwt\serializers.py", line 141, in validate
+    refresh.outstand()
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework_simplejwt\tokens.py", line 222, in outstand
+    return OutstandingToken.objects.get_or_create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: type object 'OutstandingToken' has no attribute 'objects'
+ERROR 2025-03-22 12:26:08,936 runserver [35;1mHTTP POST /user/token/refresh/ 500 [0.07, 192.168.1.12:52017][0m
+ERROR 2025-03-22 12:26:08,942 runserver [35;1mHTTP POST /user/token/refresh/ 500 [0.08, 192.168.1.12:52018][0m
+ERROR 2025-03-22 12:26:08,958 log Internal Server Error: /user/token/refresh/
+Traceback (most recent call last):
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\asgiref\sync.py", line 518, in thread_handler
+    raise exc_info[1]
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\django\core\handlers\exception.py", line 42, in inner
+    response = await get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\asgiref\sync.py", line 518, in thread_handler
+    raise exc_info[1]
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\django\core\handlers\base.py", line 253, in _get_response_async
+    response = await wrapped_callback(
+               ^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\asgiref\sync.py", line 468, in __call__
+    ret = await asyncio.shield(exec_coro)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\asgiref\current_thread_executor.py", line 40, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\asgiref\sync.py", line 522, in thread_handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\django\views\decorators\csrf.py", line 56, in wrapper_view
+    return view_func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\django\views\generic\base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework_simplejwt\views.py", line 44, in post
+    serializer.is_valid(raise_exception=True)
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\serializers.py", line 223, in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\serializers.py", line 445, in run_validation
+    value = self.validate(value)
+            ^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework_simplejwt\serializers.py", line 141, in validate
+    refresh.outstand()
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework_simplejwt\tokens.py", line 222, in outstand
+    return OutstandingToken.objects.get_or_create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: type object 'OutstandingToken' has no attribute 'objects'
+ERROR 2025-03-22 12:26:08,965 log Internal Server Error: /user/token/refresh/
+Traceback (most recent call last):
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\asgiref\sync.py", line 518, in thread_handler
+    raise exc_info[1]
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\django\core\handlers\exception.py", line 42, in inner
+    response = await get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\asgiref\sync.py", line 518, in thread_handler
+    raise exc_info[1]
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\django\core\handlers\base.py", line 253, in _get_response_async
+    response = await wrapped_callback(
+               ^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\asgiref\sync.py", line 468, in __call__
+    ret = await asyncio.shield(exec_coro)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\asgiref\current_thread_executor.py", line 40, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\asgiref\sync.py", line 522, in thread_handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\django\views\decorators\csrf.py", line 56, in wrapper_view
+    return view_func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\django\views\generic\base.py", line 104, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\views.py", line 509, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\views.py", line 469, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\views.py", line 480, in raise_uncaught_exception
+    raise exc
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\views.py", line 506, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework_simplejwt\views.py", line 44, in post
+    serializer.is_valid(raise_exception=True)
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\serializers.py", line 223, in is_valid
+    self._validated_data = self.run_validation(self.initial_data)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework\serializers.py", line 445, in run_validation
+    value = self.validate(value)
+            ^^^^^^^^^^^^^^^^^^^^
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework_simplejwt\serializers.py", line 141, in validate
+    refresh.outstand()
+  File "D:\Tools\miniconda\envs\equestrian\Lib\site-packages\rest_framework_simplejwt\tokens.py", line 222, in outstand
+    return OutstandingToken.objects.get_or_create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: type object 'OutstandingToken' has no attribute 'objects'
+ERROR 2025-03-22 12:26:08,968 runserver [35;1mHTTP POST /user/token/refresh/ 500 [0.04, 192.168.1.12:52016][0m
+ERROR 2025-03-22 12:26:08,970 runserver [35;1mHTTP POST /user/token/refresh/ 500 [0.05, 192.168.1.12:52019][0m
+INFO 2025-03-22 12:27:34,104 runserver [mHTTP GET /user/csrf/?_t=1742617654099 200 [0.00, 127.0.0.1:3813][0m
+INFO 2025-03-22 12:35:13,982 runserver [mHTTP GET /user/csrf/?_t=1742618114768 200 [0.00, 192.168.1.12:54312][0m
+INFO 2025-03-22 12:35:14,008 runserver [mHTTP OPTIONS /user/login/ 200 [0.00, 192.168.1.12:54314][0m
+INFO 2025-03-22 12:35:14,226 runserver [mHTTP POST /user/login/ 200 [0.20, 192.168.1.12:54312][0m
+INFO 2025-03-22 12:35:14,249 runserver [mHTTP OPTIONS /user/users/my_profile/ 200 [0.00, 192.168.1.12:54314][0m
+INFO 2025-03-22 12:35:14,271 runserver [mHTTP OPTIONS /user/obstacles/ 200 [0.00, 192.168.1.12:54316][0m
+INFO 2025-03-22 12:35:14,279 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.12:54312][0m
+INFO 2025-03-22 12:35:14,302 runserver [mHTTP GET /user/obstacles/ 200 [0.01, 192.168.1.12:54318][0m
+INFO 2025-03-22 12:35:14,353 runserver [mHTTP OPTIONS /user/obstacles/count/ 200 [0.00, 192.168.1.12:54316][0m
+INFO 2025-03-22 12:35:14,379 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.12:54318][0m
+INFO 2025-03-22 12:36:49,926 runserver [mHTTP GET /user/csrf/?_t=1742618210728 200 [0.00, 192.168.1.12:54724][0m
+INFO 2025-03-22 12:36:49,984 runserver [mHTTP OPTIONS /user/login/ 200 [0.00, 192.168.1.12:54725][0m
+INFO 2025-03-22 12:36:50,195 runserver [mHTTP POST /user/login/ 200 [0.20, 192.168.1.12:54724][0m
+INFO 2025-03-22 12:36:50,337 runserver [mHTTP OPTIONS /user/users/my_profile/ 200 [0.00, 192.168.1.12:54725][0m
+INFO 2025-03-22 12:36:50,353 runserver [mHTTP OPTIONS /user/obstacles/ 200 [0.00, 192.168.1.12:54730][0m
+INFO 2025-03-22 12:36:50,367 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.12:54724][0m
+INFO 2025-03-22 12:36:50,407 runserver [mHTTP GET /user/obstacles/ 200 [0.01, 192.168.1.12:54731][0m
+INFO 2025-03-22 12:36:50,454 runserver [mHTTP OPTIONS /user/obstacles/count/ 200 [0.00, 192.168.1.12:54730][0m
+INFO 2025-03-22 12:36:50,476 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.12:54731][0m
+INFO 2025-03-22 12:38:34,320 runserver [mHTTP GET /user/csrf/?_t=1742618315157 200 [0.00, 192.168.1.12:55178][0m
+INFO 2025-03-22 12:38:34,345 runserver [mHTTP OPTIONS /user/login/ 200 [0.00, 192.168.1.12:55179][0m
+INFO 2025-03-22 12:38:34,554 runserver [mHTTP POST /user/login/ 200 [0.19, 192.168.1.12:55178][0m
+INFO 2025-03-22 12:38:34,743 runserver [mHTTP OPTIONS /user/users/my_profile/ 200 [0.01, 192.168.1.12:55179][0m
+INFO 2025-03-22 12:38:34,903 runserver [mHTTP OPTIONS /user/obstacles/ 200 [0.01, 192.168.1.12:55184][0m
+INFO 2025-03-22 12:38:34,915 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.12:55178][0m
+INFO 2025-03-22 12:38:34,942 runserver [mHTTP GET /user/obstacles/ 200 [0.01, 192.168.1.12:55185][0m
+INFO 2025-03-22 12:38:35,266 runserver [mHTTP OPTIONS /user/obstacles/count/ 200 [0.00, 192.168.1.12:55184][0m
+INFO 2025-03-22 12:38:35,289 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.12:55185][0m
+INFO 2025-03-22 12:38:54,962 autoreload Watching for file changes with StatReloader
+DEBUG 2025-03-22 12:38:55,141 runserver Daphne running, listening on 0.0.0.0:8000
+INFO 2025-03-22 12:39:15,413 runserver [mHTTP GET /user/csrf/?_t=1742618355405 200 [0.01, 192.168.1.6:6005][0m
+INFO 2025-03-22 12:39:15,419 runserver [mHTTP OPTIONS /user/login/ 200 [0.00, 192.168.1.6:6006][0m
+INFO 2025-03-22 12:39:15,630 runserver [mHTTP POST /user/login/ 200 [0.21, 192.168.1.6:6005][0m
+INFO 2025-03-22 12:39:15,656 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:6005][0m
+INFO 2025-03-22 12:39:15,672 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:6009][0m
+INFO 2025-03-22 12:39:15,696 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:6009][0m
+INFO 2025-03-22 12:40:44,537 runserver [mHTTP GET /user/users/my_profile/ 200 [0.04, 192.168.1.12:55742][0m
+INFO 2025-03-22 12:40:44,562 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.12:55745][0m
+INFO 2025-03-22 12:40:44,565 runserver [mHTTP GET /user/obstacles/ 200 [0.03, 192.168.1.12:55744][0m
+INFO 2025-03-22 12:40:44,570 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.12:55742][0m
+INFO 2025-03-22 12:40:44,635 runserver [mHTTP GET /user/obstacles/count/ 200 [0.02, 192.168.1.12:55745][0m
+INFO 2025-03-22 12:40:45,622 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.12:55745][0m
+INFO 2025-03-22 12:40:45,686 runserver [mHTTP OPTIONS /user/designs/my/?page=1 200 [0.00, 192.168.1.12:55747][0m
+INFO 2025-03-22 12:40:45,756 runserver [mHTTP GET /user/designs/my/?page=1 200 [0.04, 192.168.1.12:55745][0m
+INFO 2025-03-22 12:40:45,803 runserver [36mHTTP GET /media/user_1/designs/images/20250309220014_f2cddac7.png 304 [0.00, 192.168.1.12:55744][0m
+INFO 2025-03-22 12:40:45,803 runserver [36mHTTP GET /media/user_1/designs/images/20250309161858_f9c79412.png 304 [0.00, 192.168.1.12:55742][0m
+INFO 2025-03-22 12:40:45,813 runserver [36mHTTP GET /media/user_1/designs/images/20250309161549_9d05c4af.png 304 [0.00, 192.168.1.12:55750][0m
+INFO 2025-03-22 12:40:45,814 runserver [36mHTTP GET /media/user_1/designs/images/20250309161519_82333dea.png 304 [0.00, 192.168.1.12:55751][0m
+INFO 2025-03-22 12:40:45,816 runserver [36mHTTP GET /media/user_1/designs/images/20250308203122_582df2ca.png 304 [0.00, 192.168.1.12:55752][0m
+INFO 2025-03-22 12:40:45,818 runserver [36mHTTP GET /media/user_1/designs/images/20250308203105_48c20485.png 304 [0.00, 192.168.1.12:55742][0m
+INFO 2025-03-22 12:40:45,820 runserver [36mHTTP GET /media/user_1/designs/images/20250308203053_46371da6.png 304 [0.00, 192.168.1.12:55744][0m
+INFO 2025-03-22 12:40:45,822 runserver [mHTTP GET /media/user_1/designs/images/20250320152028_21.png 200 [0.04, 192.168.1.12:55745][0m
+INFO 2025-03-22 12:40:45,847 runserver [36mHTTP GET /media/user_1/designs/images/20250308203033_6537061d.png 304 [0.00, 192.168.1.12:55742][0m
+INFO 2025-03-22 12:40:47,825 runserver [mHTTP GET /media/user_1/designs/21/design_yZdF2fi.json 200 [0.01, 192.168.1.12:55747][0m
+INFO 2025-03-22 12:40:47,857 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.12:55745][0m
+INFO 2025-03-22 12:42:07,928 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:6522][0m
+INFO 2025-03-22 12:42:07,941 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:6525][0m
+INFO 2025-03-22 12:42:07,942 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:6524][0m
+INFO 2025-03-22 12:42:07,946 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:6528][0m
+INFO 2025-03-22 12:42:07,964 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:6528][0m
+INFO 2025-03-22 12:42:08,476 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:6528][0m
+INFO 2025-03-22 12:42:08,503 runserver [mHTTP OPTIONS /user/designs/my/?page=1 200 [0.00, 192.168.1.6:6533][0m
+INFO 2025-03-22 12:42:08,531 runserver [mHTTP GET /user/designs/my/?page=1 200 [0.02, 192.168.1.6:6528][0m
+INFO 2025-03-22 12:42:08,574 runserver [mHTTP GET /media/user_1/designs/images/20250309220014_f2cddac7.png 200 [0.01, 192.168.1.6:6524][0m
+INFO 2025-03-22 12:42:08,576 runserver [mHTTP GET /media/user_1/designs/images/20250320152028_21.png 200 [0.01, 192.168.1.6:6528][0m
+INFO 2025-03-22 12:42:08,576 runserver [mHTTP GET /media/user_1/designs/images/20250308203122_582df2ca.png 200 [0.01, 192.168.1.6:6536][0m
+INFO 2025-03-22 12:42:08,578 runserver [mHTTP GET /media/user_1/designs/images/20250309161858_f9c79412.png 200 [0.01, 192.168.1.6:6525][0m
+INFO 2025-03-22 12:42:08,578 runserver [mHTTP GET /media/user_1/designs/images/20250309161519_82333dea.png 200 [0.01, 192.168.1.6:6535][0m
+INFO 2025-03-22 12:42:08,580 runserver [mHTTP GET /media/user_1/designs/images/20250309161549_9d05c4af.png 200 [0.01, 192.168.1.6:6522][0m
+INFO 2025-03-22 12:42:08,594 runserver [mHTTP GET /media/user_1/designs/images/20250308203053_46371da6.png 200 [0.01, 192.168.1.6:6536][0m
+INFO 2025-03-22 12:42:08,594 runserver [mHTTP GET /media/user_1/designs/images/20250308203105_48c20485.png 200 [0.01, 192.168.1.6:6524][0m
+INFO 2025-03-22 12:42:08,599 runserver [mHTTP GET /media/user_1/designs/images/20250308203033_6537061d.png 200 [0.01, 192.168.1.6:6528][0m
+INFO 2025-03-22 12:42:09,507 runserver [mHTTP GET /media/user_1/designs/21/design_yZdF2fi.json 200 [0.00, 192.168.1.6:6533][0m
+INFO 2025-03-22 12:42:09,523 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:6528][0m
+INFO 2025-03-22 12:45:15,069 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:6929][0m
+INFO 2025-03-22 12:45:15,088 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:6932][0m
+INFO 2025-03-22 12:45:15,090 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:6931][0m
+INFO 2025-03-22 12:45:15,094 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:6933][0m
+INFO 2025-03-22 12:45:15,112 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:6933][0m
+INFO 2025-03-22 12:45:16,294 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.12:55836][0m
+INFO 2025-03-22 12:45:16,295 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.12:55834][0m
+INFO 2025-03-22 12:45:16,297 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.12:55835][0m
+INFO 2025-03-22 12:45:16,355 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.12:55837][0m
+INFO 2025-03-22 12:45:16,364 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.12:55835][0m
+INFO 2025-03-22 12:46:31,076 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.12:55863][0m
+INFO 2025-03-22 12:48:35,735 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:7406][0m
+INFO 2025-03-22 12:48:35,747 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:7409][0m
+INFO 2025-03-22 12:48:35,751 runserver [mHTTP GET /user/obstacles/ 200 [0.03, 192.168.1.6:7407][0m
+INFO 2025-03-22 12:48:35,756 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:7412][0m
+INFO 2025-03-22 12:48:35,790 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:7412][0m
+INFO 2025-03-22 12:48:47,077 runserver [mHTTP OPTIONS /user/designs/21/ 200 [0.00, 192.168.1.6:7422][0m
+INFO 2025-03-22 12:48:47,155 runserver [mHTTP PUT /user/designs/21/ 200 [0.07, 192.168.1.6:7412][0m
+INFO 2025-03-22 12:48:53,348 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.12:56000][0m
+INFO 2025-03-22 12:48:53,357 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.12:56002][0m
+INFO 2025-03-22 12:48:53,357 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.12:56001][0m
+INFO 2025-03-22 12:48:53,400 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.12:56003][0m
+INFO 2025-03-22 12:48:53,450 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.12:56003][0m
+INFO 2025-03-22 12:48:53,476 runserver [mHTTP GET /user/designs/my/?page=1 200 [0.02, 192.168.1.12:56001][0m
+INFO 2025-03-22 12:48:53,511 runserver [mHTTP GET /media/user_1/designs/images/20250322124847_21.png 200 [0.00, 192.168.1.12:56001][0m
+INFO 2025-03-22 12:48:56,352 runserver [mHTTP GET /media/user_1/designs/21/design_XOMGdi0.json 200 [0.01, 192.168.1.12:56007][0m
+INFO 2025-03-22 12:48:56,377 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.12:56001][0m
+INFO 2025-03-22 12:51:29,611 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.12:56336][0m
+INFO 2025-03-22 12:51:29,611 runserver [mHTTP GET /user/obstacles/ 200 [0.01, 192.168.1.12:56337][0m
+INFO 2025-03-22 12:51:29,612 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.12:56335][0m
+INFO 2025-03-22 12:51:29,638 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.12:56336][0m
+INFO 2025-03-22 12:51:29,658 runserver [mHTTP GET /user/obstacles/count/ 200 [0.00, 192.168.1.12:56337][0m
+INFO 2025-03-22 12:51:31,966 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.12:56337][0m
+INFO 2025-03-22 12:51:32,036 runserver [mHTTP GET /user/designs/my/?page=1 200 [0.02, 192.168.1.12:56337][0m
+INFO 2025-03-22 12:51:32,075 runserver [36mHTTP GET /media/user_1/designs/images/20250322124847_21.png 304 [0.00, 192.168.1.12:56337][0m
+INFO 2025-03-22 12:51:33,373 runserver [36mHTTP GET /media/user_1/designs/21/design_XOMGdi0.json 304 [0.00, 192.168.1.12:56340][0m
+INFO 2025-03-22 12:51:33,398 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.12:56337][0m
+INFO 2025-03-22 12:52:00,375 runserver [32mHTTP GET /admin 301 [0.01, 192.168.1.6:7902][0m
+INFO 2025-03-22 12:52:00,404 runserver [32mHTTP GET /admin/ 302 [0.02, 192.168.1.6:7902][0m
+INFO 2025-03-22 12:52:00,418 runserver [mHTTP GET /admin/login/?next=/admin/ 200 [0.01, 192.168.1.6:7902][0m
+INFO 2025-03-22 12:52:00,446 runserver [mHTTP GET /static/admin/simpleui-x/elementui/theme-chalk/index.css 200 [0.01, 192.168.1.6:7902][0m
+INFO 2025-03-22 12:52:00,451 runserver [mHTTP GET /static/admin/simpleui-x/fontawesome-free-6.2.0-web/css/all.min.css 200 [0.01, 192.168.1.6:7903][0m
+INFO 2025-03-22 12:52:00,454 runserver [mHTTP GET /static/admin/simpleui-x/css/login.css?_=2.1 200 [0.01, 192.168.1.6:7904][0m
+INFO 2025-03-22 12:52:00,458 runserver [mHTTP GET /static/admin/simpleui-x/img/logo.png 200 [0.01, 192.168.1.6:7905][0m
+INFO 2025-03-22 12:52:00,461 runserver [mHTTP GET /static/admin/simpleui-x/js/vue.min.js?_=2025.01.13 200 [0.02, 192.168.1.6:7906][0m
+INFO 2025-03-22 12:52:00,538 runserver [mHTTP GET /static/admin/simpleui-x/elementui/index.js?_=2025.01.13 200 [0.01, 192.168.1.6:7906][0m
+INFO 2025-03-22 12:52:00,542 runserver [mHTTP GET /static/admin/simpleui-x/particles/app.js 200 [0.01, 192.168.1.6:7903][0m
+INFO 2025-03-22 12:52:00,546 runserver [mHTTP GET /static/admin/simpleui-x/particles/particles.js 200 [0.01, 192.168.1.6:7904][0m
+INFO 2025-03-22 12:52:00,548 runserver [mHTTP GET /static/admin/simpleui-x/js/login.js?_=3.3 200 [0.02, 192.168.1.6:7905][0m
+INFO 2025-03-22 12:52:00,550 runserver [mHTTP GET /static/admin/simpleui-x/img/bg.svg 200 [0.01, 192.168.1.6:7902][0m
+INFO 2025-03-22 12:52:00,608 runserver [mHTTP GET /static/admin/simpleui-x/fontawesome-free-6.2.0-web/webfonts/fa-solid-900.woff2 200 [0.00, 192.168.1.6:7902][0m
+INFO 2025-03-22 12:52:00,792 runserver [mHTTP GET /favicon.ico 200 [0.00, 192.168.1.6:7902][0m
+INFO 2025-03-22 12:52:04,945 runserver [mHTTP GET /static/admin/simpleui-x/elementui/theme-chalk/fonts/element-icons.woff 200 [0.01, 192.168.1.6:7902][0m
+INFO 2025-03-22 12:52:08,820 runserver [32mHTTP POST /admin/login/?next=/admin/ 302 [0.34, 192.168.1.6:7902][0m
+INFO 2025-03-22 12:52:08,847 runserver [mHTTP GET /admin/ 200 [0.02, 192.168.1.6:7902][0m
+INFO 2025-03-22 12:52:08,877 runserver [mHTTP GET /static/admin/simpleui-x/css/index.css?_=3.2 200 [0.00, 192.168.1.6:7902][0m
+INFO 2025-03-22 12:52:08,880 runserver [mHTTP GET /static/admin/simpleui-x/waves/waves.min.css?_=2.1 200 [0.01, 192.168.1.6:7905][0m
+INFO 2025-03-22 12:52:08,883 runserver [mHTTP GET /static/admin/simpleui-x/automatic/dicts.js?_=2025.01.13 200 [0.01, 192.168.1.6:7904][0m
+INFO 2025-03-22 12:52:08,887 runserver [mHTTP GET /static/admin/simpleui-x/automatic/segment.js?_=2025.01.13 200 [0.01, 192.168.1.6:7903][0m
+INFO 2025-03-22 12:52:08,905 runserver [mHTTP GET /static/admin/simpleui-x/locale/en-us.js?_=2025.01.13 200 [0.00, 192.168.1.6:7903][0m
+INFO 2025-03-22 12:52:08,907 runserver [mHTTP GET /static/admin/simpleui-x/locale/zh-hans.js?_=2025.01.13 200 [0.01, 192.168.1.6:7904][0m
+INFO 2025-03-22 12:52:08,911 runserver [mHTTP GET /static/admin/simpleui-x/js/cookie.js?_=2025.01.13 200 [0.01, 192.168.1.6:7905][0m
+INFO 2025-03-22 12:52:08,914 runserver [mHTTP GET /static/admin/simpleui-x/theme/theme.js?_=2025.01.13 200 [0.01, 192.168.1.6:7902][0m
+INFO 2025-03-22 12:52:08,918 runserver [mHTTP GET /static/admin/simpleui-x/waves/waves.min.js?_=2025.01.13 200 [0.01, 192.168.1.6:7906][0m
+INFO 2025-03-22 12:52:08,919 runserver [mHTTP GET /static/admin/simpleui-x/js/menu.js?_=2025.01.13 200 [0.02, 192.168.1.6:7915][0m
+INFO 2025-03-22 12:52:08,923 runserver [mHTTP GET /static/admin/simpleui-x/js/index.js?_=2025.01.13 200 [0.02, 192.168.1.6:7903][0m
+INFO 2025-03-22 12:52:09,043 runserver [mHTTP GET /api/feedback/dashboard 200 [0.05, 192.168.1.6:7903][0m
+INFO 2025-03-22 12:52:09,062 runserver [mHTTP GET /static/js/echarts.min.js 200 [0.00, 192.168.1.6:7903][0m
+INFO 2025-03-22 12:52:09,284 runserver [mHTTP GET /favicon.ico 200 [0.00, 192.168.1.6:7903][0m
+INFO 2025-03-22 12:53:33,566 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.12:56379][0m
+INFO 2025-03-22 12:53:33,573 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.12:56381][0m
+INFO 2025-03-22 12:53:33,574 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.12:56380][0m
+INFO 2025-03-22 12:53:33,617 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.12:56382][0m
+INFO 2025-03-22 12:53:33,678 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.12:56382][0m
+INFO 2025-03-22 12:53:36,294 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.12:56382][0m
+INFO 2025-03-22 12:53:36,396 runserver [mHTTP GET /user/designs/my/?page=1 200 [0.02, 192.168.1.12:56382][0m
+INFO 2025-03-22 12:53:36,430 runserver [36mHTTP GET /media/user_1/designs/images/20250322124847_21.png 304 [0.00, 192.168.1.12:56382][0m
+INFO 2025-03-22 12:53:38,419 runserver [36mHTTP GET /media/user_1/designs/21/design_XOMGdi0.json 304 [0.00, 192.168.1.12:56393][0m
+INFO 2025-03-22 12:53:38,457 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.12:56395][0m
+INFO 2025-03-22 12:55:10,010 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.12:56425][0m
+INFO 2025-03-22 12:55:10,044 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.12:56425][0m
+INFO 2025-03-22 12:55:10,044 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.01, 192.168.1.12:56429][0m
+INFO 2025-03-22 12:55:10,045 runserver [mHTTP GET /user/obstacles/ 200 [0.01, 192.168.1.12:56428][0m
+INFO 2025-03-22 12:55:10,127 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.12:56428][0m
+INFO 2025-03-22 12:55:25,399 runserver [mHTTP OPTIONS /user/designs/ 200 [0.00, 192.168.1.12:56430][0m
+INFO 2025-03-22 12:55:25,730 runserver [mHTTP POST /user/designs/ 201 [0.01, 192.168.1.12:56428][0m
+INFO 2025-03-22 12:55:30,999 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:8500][0m
+INFO 2025-03-22 12:55:31,059 runserver [mHTTP GET /user/designs/my/?page=1 200 [0.03, 192.168.1.6:8500][0m
+INFO 2025-03-22 12:55:31,091 runserver [mHTTP GET /media/user_1/designs/images/20250322125525_2a922793.png 200 [0.01, 192.168.1.6:8500][0m
+INFO 2025-03-22 12:55:31,094 runserver [mHTTP GET /media/user_1/designs/images/20250309220014_f2cddac7.png 200 [0.01, 192.168.1.6:8504][0m
+INFO 2025-03-22 12:55:31,095 runserver [mHTTP GET /media/user_1/designs/images/20250309161549_9d05c4af.png 200 [0.01, 192.168.1.6:8506][0m
+INFO 2025-03-22 12:55:31,095 runserver [mHTTP GET /media/user_1/designs/images/20250322124847_21.png 200 [0.01, 192.168.1.6:8503][0m
+INFO 2025-03-22 12:55:31,095 runserver [mHTTP GET /media/user_1/designs/images/20250309161519_82333dea.png 200 [0.01, 192.168.1.6:8507][0m
+INFO 2025-03-22 12:55:31,096 runserver [mHTTP GET /media/user_1/designs/images/20250309161858_f9c79412.png 200 [0.01, 192.168.1.6:8505][0m
+INFO 2025-03-22 12:55:31,105 runserver [mHTTP GET /media/user_1/designs/images/20250308203122_582df2ca.png 200 [0.01, 192.168.1.6:8504][0m
+INFO 2025-03-22 12:55:31,110 runserver [mHTTP GET /media/user_1/designs/images/20250308203105_48c20485.png 200 [0.01, 192.168.1.6:8503][0m
+INFO 2025-03-22 12:55:31,114 runserver [mHTTP GET /media/user_1/designs/images/20250308203053_46371da6.png 200 [0.00, 192.168.1.6:8505][0m
+INFO 2025-03-22 12:55:32,975 runserver [mHTTP GET /media/user_1/designs/files/20250322125525_6d27bdc1.json 200 [0.00, 192.168.1.6:8520][0m
+INFO 2025-03-22 12:55:32,992 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:8505][0m
+INFO 2025-03-22 13:00:08,873 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:9243][0m
+INFO 2025-03-22 13:00:08,887 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:9246][0m
+INFO 2025-03-22 13:00:08,888 runserver [mHTTP GET /user/obstacles/ 200 [0.03, 192.168.1.6:9245][0m
+INFO 2025-03-22 13:00:08,894 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:9249][0m
+INFO 2025-03-22 13:00:08,916 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:9249][0m
+INFO 2025-03-22 13:00:09,605 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.12:56500][0m
+INFO 2025-03-22 13:00:09,607 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.12:56499][0m
+INFO 2025-03-22 13:00:09,615 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.12:56498][0m
+INFO 2025-03-22 13:00:09,648 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.12:56499][0m
+INFO 2025-03-22 13:00:09,661 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.12:56498][0m
+INFO 2025-03-22 13:01:03,399 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:9249][0m
+INFO 2025-03-22 13:01:03,409 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:9246][0m
+INFO 2025-03-22 13:01:03,410 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:9245][0m
+INFO 2025-03-22 13:01:03,416 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:9243][0m
+INFO 2025-03-22 13:01:03,430 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:9243][0m
+INFO 2025-03-22 13:01:04,146 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:9243][0m
+INFO 2025-03-22 13:01:04,196 runserver [mHTTP GET /user/designs/my/?page=1 200 [0.02, 192.168.1.6:9243][0m
+INFO 2025-03-22 13:01:04,221 runserver [mHTTP GET /media/user_1/designs/images/20250322125525_2a922793.png 200 [0.01, 192.168.1.6:9243][0m
+INFO 2025-03-22 13:01:04,222 runserver [mHTTP GET /media/user_1/designs/images/20250322124847_21.png 200 [0.01, 192.168.1.6:9245][0m
+INFO 2025-03-22 13:01:05,028 runserver [mHTTP GET /media/user_1/designs/files/20250322125525_6d27bdc1.json 200 [0.00, 192.168.1.6:9409][0m
+INFO 2025-03-22 13:01:05,038 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:9245][0m
+INFO 2025-03-22 13:01:09,634 runserver [mHTTP GET /user/users/my_profile/ 200 [0.03, 192.168.1.6:9245][0m
+INFO 2025-03-22 13:01:09,634 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.03, 192.168.1.6:9246][0m
+INFO 2025-03-22 13:01:09,635 runserver [mHTTP GET /user/obstacles/ 200 [0.03, 192.168.1.6:9243][0m
+INFO 2025-03-22 13:01:09,649 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:9249][0m
+INFO 2025-03-22 13:01:09,656 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:9246][0m
+INFO 2025-03-22 13:01:10,665 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:9246][0m
+INFO 2025-03-22 13:01:10,727 runserver [mHTTP GET /user/designs/my/?page=1 200 [0.03, 192.168.1.6:9246][0m
+INFO 2025-03-22 13:01:11,775 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:9246][0m
+INFO 2025-03-22 13:01:13,893 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:9246][0m
+INFO 2025-03-22 13:01:15,169 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:9246][0m
+INFO 2025-03-22 13:01:16,956 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:9246][0m
+INFO 2025-03-22 13:01:16,969 runserver [mHTTP GET /user/obstacles/ 200 [0.03, 192.168.1.6:9249][0m
+INFO 2025-03-22 13:01:16,969 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:9245][0m
+INFO 2025-03-22 13:01:16,977 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:9243][0m
+INFO 2025-03-22 13:01:16,990 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:9243][0m
+INFO 2025-03-22 13:01:17,757 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:9243][0m
+INFO 2025-03-22 13:01:17,809 runserver [mHTTP GET /user/designs/my/?page=1 200 [0.03, 192.168.1.6:9243][0m
+INFO 2025-03-22 13:01:19,008 runserver [mHTTP GET /media/user_1/designs/21/design_XOMGdi0.json 200 [0.00, 192.168.1.6:9409][0m
+INFO 2025-03-22 13:01:19,021 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:9243][0m
+INFO 2025-03-22 13:01:27,813 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:9243][0m
+INFO 2025-03-22 13:01:27,826 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:9249][0m
+INFO 2025-03-22 13:01:27,827 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:9245][0m
+INFO 2025-03-22 13:01:27,832 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:9246][0m
+INFO 2025-03-22 13:01:27,847 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:9246][0m
+INFO 2025-03-22 13:01:28,175 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:9246][0m
+INFO 2025-03-22 13:01:28,176 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:9245][0m
+INFO 2025-03-22 13:01:28,176 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:9249][0m
+INFO 2025-03-22 13:01:28,184 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:9243][0m
+INFO 2025-03-22 13:01:28,192 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:9249][0m
+INFO 2025-03-22 13:05:51,556 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:10181][0m
+INFO 2025-03-22 13:05:51,580 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:10183][0m
+INFO 2025-03-22 13:05:51,584 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:10184][0m
+INFO 2025-03-22 13:05:51,585 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:10181][0m
+INFO 2025-03-22 13:05:51,626 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:10181][0m
+INFO 2025-03-22 13:05:51,659 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.12:56571][0m
+INFO 2025-03-22 13:05:51,661 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.12:56572][0m
+INFO 2025-03-22 13:05:51,662 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.12:56573][0m
+INFO 2025-03-22 13:05:51,688 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.12:56572][0m
+INFO 2025-03-22 13:05:51,694 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.12:56573][0m
+INFO 2025-03-22 13:05:57,085 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:10181][0m
+INFO 2025-03-22 13:05:57,109 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:10183][0m
+INFO 2025-03-22 13:05:57,110 runserver [mHTTP GET /user/obstacles/ 200 [0.03, 192.168.1.6:10184][0m
+INFO 2025-03-22 13:05:57,112 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:10211][0m
+INFO 2025-03-22 13:05:57,138 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:10211][0m
+INFO 2025-03-22 13:05:57,449 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.03, 192.168.1.12:56571][0m
+INFO 2025-03-22 13:05:57,449 runserver [mHTTP GET /user/users/my_profile/ 200 [0.03, 192.168.1.12:56573][0m
+INFO 2025-03-22 13:05:57,451 runserver [mHTTP GET /user/obstacles/ 200 [0.03, 192.168.1.12:56572][0m
+INFO 2025-03-22 13:05:57,478 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.12:56573][0m
+INFO 2025-03-22 13:05:57,493 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.12:56572][0m
+INFO 2025-03-22 13:07:02,083 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:10427][0m
+INFO 2025-03-22 13:07:02,097 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:10430][0m
+INFO 2025-03-22 13:07:02,098 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:10429][0m
+INFO 2025-03-22 13:07:02,102 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:10432][0m
+INFO 2025-03-22 13:07:02,116 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:10432][0m
+INFO 2025-03-22 13:07:02,657 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:10432][0m
+INFO 2025-03-22 13:07:02,672 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:10430][0m
+INFO 2025-03-22 13:07:02,673 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:10429][0m
+INFO 2025-03-22 13:07:02,679 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:10427][0m
+INFO 2025-03-22 13:07:02,694 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:10427][0m
+INFO 2025-03-22 13:07:03,171 runserver [mHTTP GET /user/users/my_profile/ 200 [0.03, 192.168.1.6:10427][0m
+INFO 2025-03-22 13:07:03,172 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.03, 192.168.1.6:10430][0m
+INFO 2025-03-22 13:07:03,173 runserver [mHTTP GET /user/obstacles/ 200 [0.03, 192.168.1.6:10429][0m
+INFO 2025-03-22 13:07:03,187 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:10432][0m
+INFO 2025-03-22 13:07:03,196 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:10429][0m
+INFO 2025-03-22 13:07:04,299 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:10429][0m
+INFO 2025-03-22 13:07:04,385 runserver [mHTTP GET /user/designs/my/?page=1 200 [0.04, 192.168.1.6:10429][0m
+INFO 2025-03-22 13:07:04,430 runserver [36mHTTP GET /media/user_1/designs/images/20250322125525_2a922793.png 304 [0.01, 192.168.1.6:10429][0m
+INFO 2025-03-22 13:07:04,432 runserver [36mHTTP GET /media/user_1/designs/images/20250322124847_21.png 304 [0.01, 192.168.1.6:10432][0m
+INFO 2025-03-22 13:07:05,357 runserver [36mHTTP GET /media/user_1/designs/files/20250322125525_6d27bdc1.json 304 [0.00, 192.168.1.6:10453][0m
+INFO 2025-03-22 13:07:05,375 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:10432][0m
+INFO 2025-03-22 13:07:12,485 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.12:56594][0m
+INFO 2025-03-22 13:07:12,595 runserver [mHTTP GET /user/designs/my/?page=1 200 [0.03, 192.168.1.12:56594][0m
+INFO 2025-03-22 13:07:12,622 runserver [mHTTP GET /media/user_1/designs/images/20250322125525_2a922793.png 200 [0.00, 192.168.1.12:56594][0m
+INFO 2025-03-22 13:07:12,642 runserver [36mHTTP GET /media/user_1/designs/images/20250322124847_21.png 304 [0.00, 192.168.1.12:56595][0m
+INFO 2025-03-22 13:07:14,314 runserver [mHTTP GET /media/user_1/designs/files/20250322125525_6d27bdc1.json 200 [0.00, 192.168.1.12:56597][0m
+INFO 2025-03-22 13:07:14,358 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.12:56594][0m
+INFO 2025-03-22 13:07:33,449 runserver [mHTTP GET /user/obstacles/ 200 [0.05, 192.168.1.12:56595][0m
+INFO 2025-03-22 13:07:33,450 runserver [mHTTP GET /user/users/my_profile/ 200 [0.04, 192.168.1.12:56594][0m
+INFO 2025-03-22 13:07:33,453 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.04, 192.168.1.12:56608][0m
+INFO 2025-03-22 13:07:33,471 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.12:56610][0m
+INFO 2025-03-22 13:07:33,480 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.12:56608][0m
+INFO 2025-03-22 13:07:46,080 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:10432][0m
+INFO 2025-03-22 13:07:46,102 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:10430][0m
+INFO 2025-03-22 13:07:46,103 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:10429][0m
+INFO 2025-03-22 13:07:46,104 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:10427][0m
+INFO 2025-03-22 13:07:46,126 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:10429][0m
+INFO 2025-03-22 13:07:53,399 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:10429][0m
+INFO 2025-03-22 13:07:53,414 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:10430][0m
+INFO 2025-03-22 13:07:53,416 runserver [mHTTP GET /user/obstacles/ 200 [0.03, 192.168.1.6:10427][0m
+INFO 2025-03-22 13:07:53,424 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:10432][0m
+INFO 2025-03-22 13:07:53,437 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:10432][0m
+INFO 2025-03-22 13:12:21,863 runserver [mHTTP GET /user/users/my_profile/ 200 [0.02, 192.168.1.6:11511][0m
+INFO 2025-03-22 13:12:21,868 runserver [mHTTP GET /user/obstacles/shared/ 200 [0.02, 192.168.1.6:11513][0m
+INFO 2025-03-22 13:12:21,869 runserver [mHTTP GET /user/obstacles/ 200 [0.02, 192.168.1.6:11512][0m
+INFO 2025-03-22 13:12:21,879 runserver [mHTTP GET /user/users/my_profile/ 200 [0.01, 192.168.1.6:11517][0m
+INFO 2025-03-22 13:12:21,907 runserver [mHTTP GET /user/obstacles/count/ 200 [0.01, 192.168.1.6:11517][0m

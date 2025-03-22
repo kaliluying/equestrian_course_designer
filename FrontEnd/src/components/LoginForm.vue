@@ -42,14 +42,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import type { LoginForm } from '@/types/user'
 import type { AxiosResponse } from 'axios'
 import { forgotPassword } from '@/api/user'
-import axios from 'axios'
 
 const emit = defineEmits(['switch-mode', 'login-success'])
 const userStore = useUserStore()
@@ -59,29 +58,6 @@ const loading = ref(false)
 const form = ref<LoginForm>({
   username: '',
   password: '',
-})
-
-// 在组件挂载时获取CSRF令牌
-onMounted(async () => {
-  try {
-
-    // 请求CSRF令牌，这会设置cookie
-    const response = await axios.get('http://127.0.0.1:8000/user/csrf/', {
-      withCredentials: true,
-      // 添加时间戳防止缓存
-      params: { _t: new Date().getTime() }
-    })
-
-
-
-    // 如果响应中包含csrfToken，则手动设置cookie
-    if (response.data && response.data.csrfToken) {
-      document.cookie = `csrftoken=${response.data.csrfToken}; path=/; SameSite=Lax`
-
-    }
-  } catch (error) {
-    console.error('获取CSRF令牌失败:', error)
-  }
 })
 
 const rules = {
@@ -191,7 +167,7 @@ const handleSubmit = async () => {
     await formRef.value.validate()
     loading.value = true
 
-    
+
 
     // 使用修改后的登录方法
     const user = await userStore.loginUser(form.value)
