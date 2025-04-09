@@ -142,7 +142,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
 
 # 站点域名配置，用于媒体文件URL生成
-SITE_DOMAIN = os.environ.get('SITE_DOMAIN', '192.168.1.6:8000')
+SITE_DOMAIN = os.environ.get('SITE_DOMAIN', '192.168.1.7:8000')
 USE_HTTPS = os.environ.get('USE_HTTPS', 'False').lower() == 'true'
 
 # Default primary key field type
@@ -204,7 +204,9 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:8080",
     "http://192.168.1.6:5173",
     "http://192.168.1.6:8080",
-    "https://equestrian.top"
+    "https://equestrian.top",
+    "http://192.168.1.7:5173",
+    "http://192.168.1.7:8080",
 ]
 
 # CORS配置
@@ -215,7 +217,9 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8080",
     "http://192.168.1.6:5173",
     "http://192.168.1.6:8080",
-    "https://equestrian.top"
+    "https://equestrian.top",
+    "http://192.168.1.7:5173",
+    "http://192.168.1.7:8080",
 ]
 
 # 允许跨域请求携带cookie

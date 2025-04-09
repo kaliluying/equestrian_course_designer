@@ -74,7 +74,7 @@
         </template>
         <template v-else-if="obstacle.type === ObstacleType.CUSTOM">
           <!-- 自定义障碍物渲染 -->
-          <template v-if="getCustomTemplate(obstacle) && getCustomTemplate(obstacle).baseType === ObstacleType.WALL">
+          <template v-if="getCustomTemplate(obstacle) && getCustomTemplate(obstacle)?.baseType === ObstacleType.WALL">
             <div class="wall" :style="{
               width: `${obstacle.wallProperties?.width}px`,
               height: `${obstacle.wallProperties?.height}px`,
@@ -84,7 +84,7 @@
             </div>
           </template>
           <template
-            v-else-if="getCustomTemplate(obstacle) && getCustomTemplate(obstacle).baseType === ObstacleType.LIVERPOOL">
+            v-else-if="getCustomTemplate(obstacle) && getCustomTemplate(obstacle)?.baseType === ObstacleType.LIVERPOOL">
             <div class="liverpool" :style="{
               width: `${obstacle.poles[0]?.width}px`,
             }">
@@ -164,8 +164,8 @@
               style="position: relative; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;">
               <!-- 树冠 -->
               <div :style="{
-                width: `${obstacle.decorationProperties?.foliageRadius * 2}px`,
-                height: `${obstacle.decorationProperties?.foliageRadius * 2}px`,
+                width: `${(obstacle.decorationProperties?.foliageRadius ?? 0) * 2}px`,
+                height: `${(obstacle.decorationProperties?.foliageRadius ?? 0) * 2}px`,
                 borderRadius: '50%',
                 backgroundColor: obstacle.decorationProperties?.secondaryColor,
                 position: 'absolute',
@@ -1500,33 +1500,48 @@ const scaleWidth = computed(() => {
 // 添加缩放比例的计算
 const pathScaleFactor = computed(() => {
   // 获取原始设计的视口信息
-  const originalViewportInfo = courseStore.currentCourse.viewportInfo
-  if (!originalViewportInfo || !originalViewportInfo.canvasWidth) {
-    return 1
+  const originalViewportInfo = courseStore.currentCourse.viewportInfo;
+  // 确保 originalViewportInfo 和其属性存在且有效
+  if (!originalViewportInfo || !originalViewportInfo.canvasWidth || !originalViewportInfo.canvasHeight || originalViewportInfo.canvasWidth <= 0 || originalViewportInfo.canvasHeight <= 0) {
+    console.warn("原始视口信息缺失或无效，使用默认缩放因子 1。");
+    return 1;
   }
 
-  // 获取当前画布宽度和高度
-  const currentCanvas = canvasContainerRef.value
+  // 获取当前画布元素
+  const currentCanvas = canvasContainerRef.value;
   if (!currentCanvas) {
-    return 1
+    console.warn("当前画布引用不可用，使用默认缩放因子 1。");
+    return 1;
   }
 
-  const currentRect = currentCanvas.getBoundingClientRect()
-  const currentWidth = currentRect.width
-  const currentHeight = currentRect.height
+  // 获取当前画布的尺寸
+  const currentRect = currentCanvas.getBoundingClientRect();
+  const currentWidth = currentRect.width;
+  const currentHeight = currentRect.height;
+
+  // 防止除以零或无效尺寸
+  if (currentWidth <= 0 || currentHeight <= 0) {
+    console.warn("当前画布尺寸无效，使用默认缩放因子 1。");
+    return 1;
+  }
 
   // 计算宽度和高度的缩放比例
-  const widthScale = currentWidth / originalViewportInfo.canvasWidth
-  const heightScale = currentHeight / originalViewportInfo.canvasHeight
+  const widthScale = currentWidth / originalViewportInfo.canvasWidth;
+  const heightScale = currentHeight / originalViewportInfo.canvasHeight;
 
-  // 使用较小的缩放比例以保持宽高比
-  const scale = Math.min(widthScale, heightScale)
+  // 使用较小的缩放比例以保持宽高比并适应较小维度的缩放
+  const scale = Math.min(widthScale, heightScale);
 
-  // 考虑设备像素比的变化
-  const devicePixelRatioScale = (window.devicePixelRatio || 1) / (originalViewportInfo.devicePixelRatio || 1)
+  // 检查计算出的缩放因子是否有效
+  if (scale <= 0 || !isFinite(scale)) {
+    console.warn(`计算出无效的缩放因子: ${scale}。将使用 1 代替。 W: ${currentWidth}/${originalViewportInfo.canvasWidth}, H: ${currentHeight}/${originalViewportInfo.canvasHeight}`);
+    return 1;
+  }
+  // 可选的调试日志
+  // console.log(`路径缩放因子: ${scale} (当前: ${currentWidth}x${currentHeight}, 原始: ${originalViewportInfo.canvasWidth}x${originalViewportInfo.canvasHeight})`);
 
-  return scale * devicePixelRatioScale
-})
+  return scale;
+});
 
 // 添加坐标点缩放函数
 const scalePoint = (point: { x: number; y: number }) => {
@@ -2403,92 +2418,141 @@ const calculateDistanceLabel = (
 
 // 计算障碍物之间的距离
 const obstacleDistances = computed(() => {
+  // 检查路径是否可见以及是否有足够的点
   if (!courseStore.coursePath.visible || courseStore.coursePath.points.length < 2) {
-    return []
+    return [] // 如果不可见或点不足，返回空数组
   }
 
-  const distances = []
-  const points = courseStore.coursePath.points
-  const scale = meterScale.value
-  const obstacles = courseStore.currentCourse.obstacles
+  const distances = [] // 初始化距离数组
+  const points = courseStore.coursePath.points // 获取路径点
+  const scale = meterScale.value // 获取米到像素的比例
+  const obstacles = courseStore.currentCourse.obstacles // 获取障碍物列表
+
+  // 首先清空之前的距离数据，因为我们会重新计算并按顺序添加
+  // （或者直接在最后返回新计算的 distances 数组）
 
   // 计算起点到第一个障碍物的距离
+  // 检查是否有足够的点来计算起点到第一个障碍物的距离 (至少 Start, Obs1_Entry, Obs1_Center)
   if (points.length >= 3) {
-    const startPoint = points[0]
-    const firstObstacleEntry = points[1]
+    const startPoint = points[0] // 获取起点
+    const firstObstacleEntry = points[1] // 获取第一个障碍物的入口连接点
 
     if (startPoint && firstObstacleEntry) {
+      // 计算起点到第一个障碍物入口连接点的路径长度（像素）
       const distanceInPixels = calculatePathSegmentLength(startPoint, firstObstacleEntry)
+      // 将像素距离转换为米
       const distanceInMeters = (distanceInPixels / scale).toFixed(1)
 
+      // 如果距离有效，则添加标签信息
       if (parseFloat(distanceInMeters) > 0) {
+        // 计算标签的位置和角度
         const label = calculateDistanceLabel(startPoint, firstObstacleEntry,
           Boolean(startPoint.controlPoint2 && firstObstacleEntry.controlPoint1))
 
+        // 添加起点到第一个障碍物的距离信息
         distances.push({
-          distance: distanceInMeters,
-          position: scalePoint(label.position),
-          angle: label.angle,
-          fromNumber: 'S',
-          toNumber: '1'
+          distance: distanceInMeters, // 距离值
+          position: scalePoint(label.position), // 标签位置（应用缩放）
+          angle: label.angle, // 标签旋转角度
+          fromNumber: 'S', // 起始点标记为 'S'
+          toNumber: '1' // 第一个障碍物标记为 '1'
         })
       }
     }
   }
 
-  // 计算障碍物之间的距离
-  for (let i = 3; i < points.length - 2; i += 5) {
-    const exitPoint = points[i]
-    const nextEntryPoint = points[i + 1]
+  // 计算障碍物之间的距离 (修正后的逻辑)
+  // 循环遍历每个障碍物的连接点
+  // i 代表当前障碍物的中心点索引 (3, 8, 13, ...)
+  // 循环条件调整为 points.length - 3，确保 nextEntryPointIndex (i+3) 不会越界
+  for (let i = 3; i < points.length - 3; i += 5) {
+    const exitPointIndex = i + 2; // 正确：当前障碍物的出口连接点索引 (点5, 10, 15...)
+    const nextEntryPointIndex = i + 3; // 正确：下一个障碍物的入口连接点索引 (点6, 11, 16...)
 
-    if (exitPoint && nextEntryPoint) {
-      const distanceInPixels = calculatePathSegmentLength(exitPoint, nextEntryPoint)
-      const distanceInMeters = (distanceInPixels / scale).toFixed(1)
+    // 再次检查索引是否在有效范围内（虽然循环条件已调整，双重检查更安全）
+    if (exitPointIndex < points.length && nextEntryPointIndex < points.length) {
+      const exitPoint = points[exitPointIndex]; // 获取当前障碍物的出口连接点
+      const nextEntryPoint = points[nextEntryPointIndex]; // 获取下一个障碍物的入口连接点
 
-      if (parseFloat(distanceInMeters) > 0) {
-        const label = calculateDistanceLabel(exitPoint, nextEntryPoint,
-          Boolean(exitPoint.controlPoint2 && nextEntryPoint.controlPoint1))
+      if (exitPoint && nextEntryPoint) {
+        // 计算这两个连接点之间的路径段长度（像素）
+        const distanceInPixels = calculatePathSegmentLength(exitPoint, nextEntryPoint)
+        // 将像素距离转换为米，并保留一位小数
+        const distanceInMeters = (distanceInPixels / scale).toFixed(1)
 
-        const currentObstacleIndex = Math.floor((i - 3) / 5)
-        const nextObstacleIndex = currentObstacleIndex + 1
+        // 仅当距离大于0时才添加标签
+        if (parseFloat(distanceInMeters) > 0) {
+          // 计算标签的位置和角度
+          const label = calculateDistanceLabel(exitPoint, nextEntryPoint,
+            Boolean(exitPoint.controlPoint2 && nextEntryPoint.controlPoint1))
 
-        distances.push({
-          distance: distanceInMeters,
-          position: scalePoint(label.position),
-          angle: label.angle,
-          fromNumber: (currentObstacleIndex + 1).toString(),
-          toNumber: (nextObstacleIndex + 1).toString()
-        })
+          // 计算当前和下一个障碍物的编号
+          // (i-3)/5 得到从0开始的障碍物索引
+          const currentObstacleIndex = Math.floor((i - 3) / 5)
+          const nextObstacleIndex = currentObstacleIndex + 1
+
+          // 添加障碍物之间的距离信息到数组中
+          distances.push({
+            distance: distanceInMeters, // 距离值（米）
+            position: scalePoint(label.position), // 标签位置（缩放后）
+            angle: label.angle, // 标签角度
+            fromNumber: (currentObstacleIndex + 1).toString(), // 起始障碍物编号 (从1开始)
+            toNumber: (nextObstacleIndex + 1).toString() // 结束障碍物编号 (从1开始)
+          })
+        }
       }
+    } else {
+      // 如果索引越界（理论上不应发生），在控制台打印错误信息，帮助调试
+      console.error("计算障碍物距离时索引越界:", exitPointIndex, nextEntryPointIndex, points.length);
     }
   }
+
 
   // 计算最后一个障碍物到终点的距离
-  if (points.length >= 5) {
-    const lastObstacleExit = points[points.length - 2]
-    const endPoint = points[points.length - 1]
+  // 检查是否有足够的点来计算 (至少 Start, Obs1_..., LastObs_Exit, End)
+  // 最后一个障碍物的出口连接点索引是 points.length - 2
+  if (points.length >= 5) { // 至少需要起点、一个障碍物的5个点、终点 = 7个点？不对，是起点+障碍物组+终点。 5个点代表起点+一个障碍物的入口+中心+出口+终点？ 检查逻辑。
+    // 需要： Start(0), Obs1_Entry(1), ..., ObsN_Exit(len-2), End(len-1)
+    // 最后一个障碍物的 Exit 连接点是 len-2
+    const lastObstacleExit = points[points.length - 2] // 获取最后一个障碍物的出口连接点
+    const endPoint = points[points.length - 1] // 获取终点
 
     if (lastObstacleExit && endPoint) {
+      // 计算最后一个障碍物出口到终点的路径长度
       const distanceInPixels = calculatePathSegmentLength(lastObstacleExit, endPoint)
+      // 转换为米
       const distanceInMeters = (distanceInPixels / scale).toFixed(1)
 
+      // 如果距离有效，则添加标签信息
       if (parseFloat(distanceInMeters) > 0) {
+        // 计算标签位置和角度
         const label = calculateDistanceLabel(lastObstacleExit, endPoint,
           Boolean(lastObstacleExit.controlPoint2 && endPoint.controlPoint1))
 
-        const lastObstacleIndex = Math.floor((points.length - 5) / 5)
+        // 计算最后一个障碍物的编号
+        // (总点数 - 2) / 5 = 障碍物数量 ?
+        // (len - 2) = 最后一个障碍物的 exit 连接点索引
+        // 假设最后一个障碍物中心点是 len - 4 (i = len - 4)
+        // 则索引是 (len - 4 - 3) / 5 = (len - 7) / 5 ?? 不对
+        // 最后一个障碍物的 exit 连接点是 points.length - 2
+        // 该障碍物的中心点是 points.length - 4
+        // 该障碍物的编号是 ((points.length - 4) - 3) / 5 + 1 = (points.length - 7) / 5 + 1
+        // 另一种方法：计算非装饰障碍物数量
+        const numNonDecorationObstacles = obstacles.filter(o => o.type !== ObstacleType.DECORATION).length;
 
+        // 添加最后一个障碍物到终点的距离信息
         distances.push({
-          distance: distanceInMeters,
-          position: scalePoint(label.position),
-          angle: label.angle,
-          fromNumber: (lastObstacleIndex + 1).toString(),
-          toNumber: 'F'
+          distance: distanceInMeters, // 距离值
+          position: scalePoint(label.position), // 标签位置
+          angle: label.angle, // 标签角度
+          fromNumber: numNonDecorationObstacles.toString(), // 最后一个障碍物的编号
+          toNumber: 'F' // 终点标记为 'F'
         })
       }
     }
   }
 
+  // 返回包含所有计算出的距离信息的数组
   return distances
 })
 

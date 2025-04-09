@@ -1138,19 +1138,49 @@ export const useCourseStore = defineStore('course', () => {
    * @description 更新最后修改时间并触发自动保存
    */
   function updateCourse() {
+    // 获取当前画布元素和视口信息
+    const canvasElement = document.querySelector('.course-canvas')
+    const viewportInfo = {
+      width: window.innerWidth, // 当前视口宽度
+      height: window.innerHeight, // 当前视口高度
+      canvasWidth: canvasElement
+        ? canvasElement.getBoundingClientRect().width
+        : currentCourse.value.viewportInfo?.canvasWidth || 800, // 当前画布宽度，如果获取不到则使用已有的或默认值
+      canvasHeight: canvasElement
+        ? canvasElement.getBoundingClientRect().height
+        : currentCourse.value.viewportInfo?.canvasHeight || 600, // 当前画布高度，如果获取不到则使用已有的或默认值
+      aspectRatio: currentCourse.value.fieldWidth / currentCourse.value.fieldHeight, // 场地宽高比
+      devicePixelRatio: window.devicePixelRatio || 1, // 设备像素比
+    }
+
+    // 更新课程状态中的视口信息
+    currentCourse.value.viewportInfo = viewportInfo
+    // 更新最后修改时间
     currentCourse.value.updatedAt = new Date().toISOString()
+    // 调用自动保存，现在会包含最新的视口信息
     saveToLocalStorage()
   }
 
   /**
    * 自动保存到localStorage
-   * @description 保存当前课程设计的完整状态，包括路径信息
+   * @description 保存当前课程设计的完整状态，包括路径信息和视口信息
    */
   function saveToLocalStorage() {
     try {
-      // 创建包含路线信息的完整数据对象
-      const courseDataWithPath = {
-        ...currentCourse.value,
+      // 检查是否有实际内容需要保存（避免保存空设计）
+      if (
+        currentCourse.value.obstacles.length === 0 &&
+        (!coursePath.value.visible || coursePath.value.points.length === 0)
+      ) {
+        // 可以选择在此处清除自动保存或直接返回
+        // localStorage.removeItem('autosaved_course');
+        // localStorage.removeItem('autosaved_timestamp');
+        return // 如果没有内容，不保存
+      }
+
+      // 创建包含路线和视口信息的完整数据对象
+      const courseDataToSave = {
+        ...currentCourse.value, // 包含更新后的 viewportInfo
         path: {
           visible: coursePath.value.visible,
           points: coursePath.value.points,
@@ -1159,51 +1189,9 @@ export const useCourseStore = defineStore('course', () => {
         },
       }
 
-      // 检查是否有实际内容需要保存
-      if (
-        currentCourse.value.obstacles.length === 0 &&
-        (!coursePath.value.visible || coursePath.value.points.length === 0)
-      ) {
-        return
-      }
-
-      // 保存到localStorage
-      try {
-        const courseJson = JSON.stringify(courseDataWithPath)
-        localStorage.setItem('autosaved_course', courseJson)
-        localStorage.setItem('autosaved_timestamp', new Date().toISOString())
-
-        // 验证保存是否成功
-        const savedData = localStorage.getItem('autosaved_course')
-        if (!savedData) {
-          throw new Error('保存后无法读取数据')
-        }
-
-        // 触发自动保存成功事件
-        const autoSaveEvent = new CustomEvent('course-autosaved', {
-          detail: { timestamp: new Date().toISOString() },
-        })
-        document.dispatchEvent(autoSaveEvent)
-      } catch (storageError) {
-        console.error('localStorage存储失败，可能是存储空间不足:', storageError)
-        // 尝试保存简化版数据
-        try {
-          const simplifiedData = {
-            ...courseDataWithPath,
-            obstacles: courseDataWithPath.obstacles.map((o) => ({
-              id: o.id,
-              type: o.type,
-              position: o.position,
-              rotation: o.rotation,
-            })),
-          }
-          const simplifiedJson = JSON.stringify(simplifiedData)
-          localStorage.setItem('autosaved_course', simplifiedJson)
-          localStorage.setItem('autosaved_timestamp', new Date().toISOString())
-        } catch (fallbackError) {
-          console.error('即使简化数据后仍然无法保存:', fallbackError)
-        }
-      }
+      // 保存数据到localStorage
+      localStorage.setItem('autosaved_course', JSON.stringify(courseDataToSave))
+      localStorage.setItem('autosaved_timestamp', new Date().toISOString())
     } catch (error) {
       console.error('自动保存到localStorage失败:', error)
     }

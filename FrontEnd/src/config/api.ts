@@ -41,27 +41,28 @@ interface EnvConfig {
   wsBaseUrl: string
   appBaseUrl: string
 }
-
+const apiHost = '192.168.1.7'
 // 基础配置
 const BASE_CONFIG: Record<EnvType, EnvConfig> = {
   // 开发环境配置
+
   development: {
     // 后端API基础URL，支持环境变量覆盖
-    apiBaseUrl: `http://${getEnvValue('API_HOST', '192.168.1.6:8000')}`,
+    apiBaseUrl: `http://${apiHost}:8000`,
 
     // WebSocket基础URL，支持环境变量覆盖
-    wsBaseUrl: `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${getEnvValue('API_HOST', '192.168.1.6:8000')}/ws`,
+    wsBaseUrl: `ws://${apiHost}:8000/ws`,
 
     // 前端应用URL，支持环境变量覆盖
-    appBaseUrl: getEnvValue('APP_URL', 'http://192.168.1.6:5173'),
+    appBaseUrl: `http://${apiHost}:5173`,
   },
 
   // 生产环境配置
   production: {
     // // 部署时修改这些值或通过环境变量覆盖
-    apiBaseUrl: `https://${getEnvValue('API_HOST', 'equestrian.top')}`,
-    wsBaseUrl: `wss://${getEnvValue('API_HOST', 'equestrian.top')}/ws`,
-    appBaseUrl: getEnvValue('APP_URL', 'https://equestrian.top'),
+    apiBaseUrl: `https://equestrian.top`,
+    wsBaseUrl: `wss://equestrian.top/ws`,
+    appBaseUrl: `https://equestrian.top`,
     // 部署时修改这些值或通过环境变量覆盖
     // apiBaseUrl: `http://${getEnvValue('API_HOST', '47.104.168.42')}`,
     // wsBaseUrl: `ws://${getEnvValue('API_HOST', '47.104.168.42:8001')}/ws`,
