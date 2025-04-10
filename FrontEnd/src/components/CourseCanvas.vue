@@ -1024,6 +1024,7 @@ const handleMouseMove = (event: MouseEvent) => {
     if (!canvas) return
 
     const rect = canvas.getBoundingClientRect()
+    // 直接使用鼠标位置，不再加上偏移量
     const x = Math.max(0, Math.min(event.clientX - rect.left, rect.width))
     const y = Math.max(0, Math.min(event.clientY - rect.top, rect.height))
 
@@ -1035,6 +1036,9 @@ const handleMouseMove = (event: MouseEvent) => {
       draggingControlPoint.value.controlPointNumber,
       unscaledPoint
     )
+
+    // 应用增强的弧线形变
+    applyEnhancedCurveEffect(draggingControlPoint.value.pointIndex, draggingControlPoint.value.controlPointNumber)
 
     // 如果在协作模式下，发送路径更新
     if (isCollaborating.value) {
@@ -1903,6 +1907,7 @@ const handleGlobalMouseMove = (event: MouseEvent) => {
     if (!canvas) return
 
     const rect = canvas.getBoundingClientRect()
+    // 直接使用鼠标位置，不再加上偏移量
     const x = Math.max(0, Math.min(event.clientX - rect.left, rect.width))
     const y = Math.max(0, Math.min(event.clientY - rect.top, rect.height))
 
@@ -1914,6 +1919,9 @@ const handleGlobalMouseMove = (event: MouseEvent) => {
       draggingControlPoint.value.controlPointNumber,
       unscaledPoint
     )
+
+    // 应用增强的弧线形变
+    applyEnhancedCurveEffect(draggingControlPoint.value.pointIndex, draggingControlPoint.value.controlPointNumber)
 
     // 如果在协作模式下，发送路径更新
     if (isCollaborating.value) {
@@ -2211,17 +2219,57 @@ const pathSegments = computed(() => {
       return pointInGroup >= 1 && pointInGroup <= 3
     }
 
+    // 如果当前点或前一个点在直线部分，使用直线连接
     if (isObstacleLine(i) || isObstacleLine(i - 1)) {
-      // 障碍物连接线使用直线
+      // 使用 SVG 的 L 命令绘制直线
       segments.push(`M ${scaledPrevious.x} ${scaledPrevious.y} L ${scaledCurrent.x} ${scaledCurrent.y}`)
     } else if (previous.controlPoint2 && current.controlPoint1) {
-      // 使用贝塞尔曲线连接路径点
-      const scaledCP2 = scalePoint(previous.controlPoint2)
-      const scaledCP1 = scalePoint(current.controlPoint1)
+      // 如果两个点都有控制点，使用贝塞尔曲线
+      // 增加曲线角度的系数，使曲线更陡峭
+      const angleMultiplier = 2
+
+      // 计算前一个点的第二个控制点到锚点的距离
+      const prevCP2Distance = Math.sqrt(
+        Math.pow(previous.controlPoint2.x - previous.x, 2) +
+        Math.pow(previous.controlPoint2.y - previous.y, 2)
+      )
+      // 计算当前点的第一个控制点到锚点的距离
+      const currCP1Distance = Math.sqrt(
+        Math.pow(current.controlPoint1.x - current.x, 2) +
+        Math.pow(current.controlPoint1.y - current.y, 2)
+      )
+
+      // 计算前一个点的第二个控制点的角度（相对于锚点）
+      const prevCP2Angle = Math.atan2(
+        previous.controlPoint2.y - previous.y,
+        previous.controlPoint2.x - previous.x
+      )
+      // 计算当前点的第一个控制点的角度（相对于锚点）
+      const currCP1Angle = Math.atan2(
+        current.controlPoint1.y - current.y,
+        current.controlPoint1.x - current.x
+      )
+
+      // 计算增强后的控制点位置
+      // 通过增加距离使曲线更陡峭
+      const enhancedPrevCP2 = {
+        x: previous.x + Math.cos(prevCP2Angle) * (prevCP2Distance * angleMultiplier),
+        y: previous.y + Math.sin(prevCP2Angle) * (prevCP2Distance * angleMultiplier)
+      }
+      const enhancedCurrCP1 = {
+        x: current.x + Math.cos(currCP1Angle) * (currCP1Distance * angleMultiplier),
+        y: current.y + Math.sin(currCP1Angle) * (currCP1Distance * angleMultiplier)
+      }
+
+      // 使用增强的控制点计算缩放后的坐标
+      const scaledEnhancedCP2 = scalePoint(enhancedPrevCP2)
+      const scaledEnhancedCP1 = scalePoint(enhancedCurrCP1)
+
+      // 使用增强的控制点创建贝塞尔曲线
       segments.push(
         `M ${scaledPrevious.x} ${scaledPrevious.y} ` +
-        `C ${scaledCP2.x} ${scaledCP2.y}, ` +
-        `${scaledCP1.x} ${scaledCP1.y}, ` +
+        `C ${scaledEnhancedCP2.x} ${scaledEnhancedCP2.y}, ` +
+        `${scaledEnhancedCP1.x} ${scaledEnhancedCP1.y}, ` +
         `${scaledCurrent.x} ${scaledCurrent.y}`
       )
     } else {
@@ -2316,23 +2364,50 @@ const calculateBezierLength = (
     )
   }
 
+  // 增加曲线角度的系数，使曲线更陡峭，与路径绘制保持一致
+  const angleMultiplier = 2
+
+  // 增强控制点位置
+  // 计算控制点到锚点的距离和角度
+  const p1Distance = Math.sqrt(
+    Math.pow(p1.x - p0.x, 2) +
+    Math.pow(p1.y - p0.y, 2)
+  )
+  const p2Distance = Math.sqrt(
+    Math.pow(p2.x - p3.x, 2) +
+    Math.pow(p2.y - p3.y, 2)
+  )
+
+  const p1Angle = Math.atan2(p1.y - p0.y, p1.x - p0.x)
+  const p2Angle = Math.atan2(p2.y - p3.y, p2.x - p3.x)
+
+  // 计算增强的控制点
+  const enhancedP1 = {
+    x: p0.x + Math.cos(p1Angle) * (p1Distance * angleMultiplier),
+    y: p0.y + Math.sin(p1Angle) * (p1Distance * angleMultiplier)
+  }
+  const enhancedP2 = {
+    x: p3.x + Math.cos(p2Angle) * (p2Distance * angleMultiplier),
+    y: p3.y + Math.sin(p2Angle) * (p2Distance * angleMultiplier)
+  }
+
   let length = 0
   let prevPoint = p0
 
-  // 使用参数方程计算贝塞尔曲线上的点
+  // 使用参数方程计算贝塞尔曲线上的点，使用增强的控制点
   for (let i = 1; i <= steps; i++) {
     const t = i / steps
     const t1 = 1 - t
 
     // 三次贝塞尔曲线的参数方程
     const x = t1 * t1 * t1 * p0.x +
-      3 * t1 * t1 * t * p1.x +
-      3 * t1 * t * t * p2.x +
+      3 * t1 * t1 * t * enhancedP1.x +
+      3 * t1 * t * t * enhancedP2.x +
       t * t * t * p3.x
 
     const y = t1 * t1 * t1 * p0.y +
-      3 * t1 * t1 * t * p1.y +
-      3 * t1 * t * t * p2.y +
+      3 * t1 * t1 * t * enhancedP1.y +
+      3 * t1 * t * t * enhancedP2.y +
       t * t * t * p3.y
 
     const currentPoint = { x, y }
@@ -2399,10 +2474,42 @@ const calculateDistanceLabel = (
     return { position, angle }
   }
 
-  // 使用贝塞尔曲线计算标签位置
+  // 增加曲线角度的系数，使曲线更陡峭
+  const angleMultiplier = 2
+
+  // 计算控制点到锚点的距离和角度
+  const cp2Distance = Math.sqrt(
+    Math.pow(startPoint.controlPoint2.x - startPoint.x, 2) +
+    Math.pow(startPoint.controlPoint2.y - startPoint.y, 2)
+  )
+  const cp1Distance = Math.sqrt(
+    Math.pow(endPoint.controlPoint1.x - endPoint.x, 2) +
+    Math.pow(endPoint.controlPoint1.y - endPoint.y, 2)
+  )
+
+  const cp2Angle = Math.atan2(
+    startPoint.controlPoint2.y - startPoint.y,
+    startPoint.controlPoint2.x - startPoint.x
+  )
+  const cp1Angle = Math.atan2(
+    endPoint.controlPoint1.y - endPoint.y,
+    endPoint.controlPoint1.x - endPoint.x
+  )
+
+  // 计算增强的控制点
+  const enhancedCP2 = {
+    x: startPoint.x + Math.cos(cp2Angle) * (cp2Distance * angleMultiplier),
+    y: startPoint.y + Math.sin(cp2Angle) * (cp2Distance * angleMultiplier)
+  }
+  const enhancedCP1 = {
+    x: endPoint.x + Math.cos(cp1Angle) * (cp1Distance * angleMultiplier),
+    y: endPoint.y + Math.sin(cp1Angle) * (cp1Distance * angleMultiplier)
+  }
+
+  // 使用增强的贝塞尔曲线计算标签位置
   const t = 0.5
-  const cp1 = startPoint.controlPoint2
-  const cp2 = endPoint.controlPoint1
+  const cp1 = enhancedCP2
+  const cp2 = enhancedCP1
 
   const position = {
     x: bezierPoint(start.x, cp1.x, cp2.x, end.x, t),
@@ -2733,6 +2840,53 @@ const handleObstacleUpdated = (event: Event) => {
 defineOptions({
   inheritAttrs: false
 })
+
+// 增加新函数：应用增强的弧线形变效果
+const applyEnhancedCurveEffect = (pointIndex: number, controlPointNumber: 1 | 2) => {
+  const points = courseStore.coursePath.points
+  const point = points[pointIndex]
+
+  // 标记控制点已被手动移动
+  if (controlPointNumber === 1) {
+    point.isControlPoint1Moved = true
+  } else {
+    point.isControlPoint2Moved = true
+  }
+
+  // 应用更温和的增强效果系数
+  const angleMultiplier = 1
+
+  // 获取对应的控制点
+  const controlPoint = controlPointNumber === 1 ? point.controlPoint1 : point.controlPoint2
+
+  if (controlPoint) {
+    // 计算控制点到锚点的距离和角度
+    const distance = Math.sqrt(
+      Math.pow(controlPoint.x - point.x, 2) +
+      Math.pow(controlPoint.y - point.y, 2)
+    )
+
+    const angle = Math.atan2(
+      controlPoint.y - point.y,
+      controlPoint.x - point.x
+    )
+
+    // 使用平滑函数计算增强效果
+    const maxDistance = 100 // 最大距离阈值
+    const normalizedDistance = Math.min(distance, maxDistance) / maxDistance
+    const smoothMultiplier = 1 + (angleMultiplier - 1) * Math.sin(normalizedDistance * Math.PI / 2)
+
+    // 计算平滑后的控制点位置
+    const enhancedDistance = distance * smoothMultiplier
+
+    // 更新控制点位置
+    controlPoint.x = point.x + Math.cos(angle) * enhancedDistance
+    controlPoint.y = point.y + Math.sin(angle) * enhancedDistance
+  }
+
+  // 更新路径点
+  courseStore.coursePath.points = [...points]
+}
 </script>
 
 <style scoped lang="scss">

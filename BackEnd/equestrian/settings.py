@@ -210,17 +210,8 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 # CORS配置
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",  # Vite默认开发服务器
-    "http://127.0.0.1:5173",
-    "http://localhost:8080",
-    "http://127.0.0.1:8080",
-    "http://192.168.1.6:5173",
-    "http://192.168.1.6:8080",
-    "https://equestrian.top",
-    "http://192.168.1.7:5173",
-    "http://192.168.1.7:8080",
-]
+CORS_ORIGIN_ALLOW_ALL = True
+
 
 # 允许跨域请求携带cookie
 CORS_ALLOW_CREDENTIALS = True
@@ -249,7 +240,7 @@ CORS_ALLOW_HEADERS = [
 ]
 
 # 前端URL配置
-FRONTEND_URL = 'http://192.168.1.6:5173'  # 开发环境
+FRONTEND_URL = 'http://192.168.1.7:5173'  # 开发环境
 # FRONTEND_URL = 'https://equestrian.top'  # 生产环境
 
 
