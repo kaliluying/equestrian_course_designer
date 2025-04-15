@@ -496,9 +496,6 @@ onMounted(() => {
   document.addEventListener('sync-canvas-state', handleCollaborationSync as EventListener)
   document.addEventListener('route-generated', handleRouteGenerated as EventListener)
 
-  // 处理协作路由
-  handleCollaborationRoute()
-
   // 检查URL参数中是否有协作邀请
   checkCollaborationInvite()
 
@@ -636,16 +633,16 @@ const toggleCollaboration = async (viaLink = false) => {
     // 如果已经在协作中，停止协作
     if (isCollaborating.value) {
       // 停止协作
-      if (window.debugCanvas?.stopCollaboration) {
-        window.debugCanvas.stopCollaboration()
+      if (canvasRef.value) {
+        await canvasRef.value.stopCollaboration()
       }
       isCollaborating.value = false
       ElMessage.success('已停止协作')
     } else {
       // 开始协作
-      if (window.debugCanvas?.startCollaboration) {
+      if (canvasRef.value) {
         // 传递通过链接加入的标志
-        window.debugCanvas.startCollaboration(viaLink)
+        await canvasRef.value.startCollaboration(viaLink)
       }
       isCollaborating.value = true
       ElMessage.success('已开始协作')
@@ -658,34 +655,16 @@ const toggleCollaboration = async (viaLink = false) => {
   }
 }
 
-// 处理协作路由
-const handleCollaborationRoute = async () => {
-  const currentRoute = route
+// 检查URL参数中是否有协作邀请
+const checkCollaborationInvite = async () => {
+  const urlParams = new URLSearchParams(window.location.search)
+  const isCollaboration = urlParams.get('collaboration') === 'true'
+  const designId = urlParams.get('designId')
 
-  // 处理URL中的协作参数
-  if (currentRoute.query.collaboration) {
-    const designId = currentRoute.query.designId as string
-
-    if (!designId) {
-      console.error('协作链接缺少设计ID')
-      ElMessage.error('协作链接无效：缺少设计ID')
-      return
-    }
-
-    // 确保用户已登录
-    if (!userStore.isAuthenticated) {
-      loginDialogVisible.value = true
-      return
-    }
-
+  if (isCollaboration && designId) {
     try {
-      courseStore.setCurrentCourseId(designId)
-
-      // 等待Canvas组件加载
-      await nextTick()
-
-      // 显示加入协作的确认对话框
-      ElMessageBox.confirm(
+      // 先显示确认对话框
+      await ElMessageBox.confirm(
         '您收到了一个协作邀请，是否加入该协作会话？',
         '协作邀请',
         {
@@ -694,51 +673,42 @@ const handleCollaborationRoute = async () => {
           type: 'info',
         }
       )
-        .then(() => {
-          // 启动协作，标记为通过链接加入
-          toggleCollaboration(true)
-        })
-        .catch(() => {
-          ElMessage({
-            type: 'info',
-            message: '已取消加入协作',
-          })
-        })
-    } catch (error) {
-      console.error('处理协作链接时出错:', error)
-      ElMessage.error('加入协作失败，请稍后重试')
-    }
-  }
-}
 
-// 检查URL参数中是否有协作邀请
-const checkCollaborationInvite = () => {
-  const urlParams = new URLSearchParams(window.location.search)
-  const isCollaboration = urlParams.get('collaboration') === 'true'
-  const designId = urlParams.get('designId')
+      // 用户点击确认后，检查登录状态
+      if (!userStore.isAuthenticated) {
+        ElMessage.warning('请先登录后再加入协作会话')
+        loginDialogVisible.value = true
+        return
+      }
 
-  if (isCollaboration && designId) {
-    // 如果用户已登录，自动进入协作模式
-    if (userStore.isAuthenticated) {
       // 加载设计
       courseStore.setCurrentCourseId(designId)
 
-      // 延迟一点时间后开启协作模式
-      setTimeout(() => {
-        isCollaborating.value = true
-        ElMessage.success('已自动加入协作会话')
-      }, 1000)
-    } else {
-      ElMessage.warning('请先登录后再加入协作会话')
-      // 跳转到登录页面
-      router.push('/')
-    }
+      // 等待Canvas组件加载
+      await nextTick()
 
-    // 清除URL参数，避免刷新页面重复处理
-    const url = new URL(window.location.href)
-    url.searchParams.delete('collaboration')
-    url.searchParams.delete('designId')
-    window.history.replaceState({}, document.title, url.toString())
+      // 启动协作模式
+      if (canvasRef.value) {
+        await canvasRef.value.startCollaboration(true)
+        ElMessage.success('已加入协作会话')
+      } else {
+        throw new Error('Canvas组件未加载')
+      }
+
+    } catch (error) {
+      if (error === 'cancel') {
+        ElMessage.info('已取消加入协作')
+      } else {
+        console.error('处理协作邀请时出错:', error)
+        ElMessage.error('加入协作失败，请稍后重试')
+      }
+    } finally {
+      // 清除URL参数，避免刷新页面重复处理
+      const url = new URL(window.location.href)
+      url.searchParams.delete('collaboration')
+      url.searchParams.delete('designId')
+      window.history.replaceState({}, document.title, url.toString())
+    }
   }
 }
 

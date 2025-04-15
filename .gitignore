@@ -31,3 +31,5 @@ coverage
 
 staticfiles
 media
+BackEnd/logs/django-channels.log
+__pycache__

@@ -418,6 +418,13 @@
           </el-icon>
         </el-button>
       </el-tooltip>
+      <el-tooltip content="删除路线" placement="left">
+        <el-button type="danger" circle size="small" @click="handleDeletePath">
+          <el-icon>
+            <Delete />
+          </el-icon>
+        </el-button>
+      </el-tooltip>
     </div>
   </div>
 
@@ -443,7 +450,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
-import { Plus, Edit, Hide, View } from '@element-plus/icons-vue'
+import { Plus, Edit, Hide, View, Delete } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useCourseStore } from '@/stores/course'
 import { useObstacleStore } from '@/stores/obstacle'
@@ -2887,6 +2894,21 @@ const applyEnhancedCurveEffect = (pointIndex: number, controlPointNumber: 1 | 2)
   // 更新路径点
   courseStore.coursePath.points = [...points]
 }
+
+// 添加删除路线的方法
+const handleDeletePath = () => {
+  // 清除路径
+  courseStore.clearPath()
+  // 如果在协作模式下，发送路径更新
+  if (isCollaborating.value) {
+    sendPathUpdate(courseStore.currentCourse.id, {
+      visible: false,
+      points: [],
+      startPoint: courseStore.startPoint,
+      endPoint: courseStore.endPoint
+    })
+  }
+}
 </script>
 
 <style scoped lang="scss">
@@ -3533,6 +3555,8 @@ const applyEnhancedCurveEffect = (pointIndex: number, controlPointNumber: 1 | 2)
   bottom: 20px;
   right: 20px;
   z-index: 10;
+  display: flex;
+  gap: 8px;
 }
 
 .total-distance {

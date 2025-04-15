@@ -28,6 +28,23 @@ logger = logging.getLogger('django.channels')
 # 结构: {design_id: {session_info}}
 active_sessions = {}
 
+# 添加获取用户资料的异步方法
+
+
+@database_sync_to_async
+def get_user_profile_info(user):
+    """异步获取用户资料信息"""
+    if not user or not user.is_authenticated:
+        return False
+    try:
+        profile = user.profile
+        if profile.membership_plan.name == '高级会员':
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"获取用户资料失败: {str(e)}")
+        return False
+
 
 class CollaborationConsumer(AsyncWebsocketConsumer):
     """
@@ -45,84 +62,68 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         """
         处理WebSocket连接请求
-
-        主要步骤：
-        1. 获取设计ID和用户信息
-        2. 检查是否通过链接加入
-        3. 加入房间组
-        4. 初始化或获取会话信息
-        5. 接受WebSocket连接
-        6. 发送连接成功消息
-        7. 如果用户已认证，将其添加到协作者列表
-
-        注意：即使用户未认证，连接也会被接受，但不会被添加到协作者列表
+        - 验证用户权限
+        - 初始化会话
+        - 建立连接
+        - 处理协作者加入
         """
         try:
-
-            # 从URL路由参数中获取设计ID
+            # 1. 获取基本信息
             self.design_id = self.scope['url_route']['kwargs']['design_id']
-            # 设置房间组名称，用于广播消息
             self.room_group_name = f'collaboration_{self.design_id}'
-            # 获取用户对象，可能为None（未认证用户）
             self.user = self.scope.get('user', None)
 
-            # 检查是否通过链接加入（从URL查询参数中获取）
-            self.is_via_link = False
-            query_string = self.scope.get('query_string', b'').decode('utf-8')
-            if 'via_link=true' in query_string:
-                self.is_via_link = True
-                logger.info(
-                    f"用户通过链接加入: {self.user.username if self.user else 'Anonymous'}")
+            logger.info(f'信息:{self.scope}')
 
-            # 记录连接信息，包括客户端IP和端口
+            # 2. 检查是否通过链接加入
+            query_string = self.scope.get('query_string', b'').decode('utf-8')
+
+            self.is_via_link = 'via_link=true' in query_string
+
+            # 3. 记录连接信息
             client = self.scope.get('client', ['-', '-'])
             logger.info(
-                f"WebSocket连接请求: {self.design_id}, 客户端: {client[0]}:{client[1]}")
-            logger.info(f"WebSocket路由参数: {self.scope['url_route']}")
-            logger.info(f"当前用户: {self.user.username if self.user else 'None'}")
-            logger.info(f"是否通过链接加入: {self.is_via_link}")
+                f"WebSocket连接请求 - 设计ID: {self.design_id}, 客户端: {client[0]}:{client[1]}")
+            logger.info(
+                f"连接信息 - 用户: {self.user.username if self.user else 'Anonymous'}, 通过链接加入: {self.is_via_link}")
 
-            # 记录请求头，但过滤掉敏感信息（如授权令牌）
-            headers = dict(self.scope.get('headers', []))
-            if b'authorization' in headers:
-                headers[b'authorization'] = b'[FILTERED]'
-            logger.info(f"WebSocket请求头: {headers}")
+            # 4. 权限检查
+            if not self.is_via_link and self.user and self.user.is_authenticated:
+                # 检查用户是否是高级会员
+                if not await get_user_profile_info(self.user):
+                    logger.warning(f"用户 {self.user.username} 不是高级会员，无法创建会话")
+                    await self.accept()
+                    await self.send(text_data=json.dumps({
+                        'type': 'error',
+                        'message': '只有高级会员才能创建协作会话',
+                        'timestamp': datetime.now().isoformat()
+                    }))
+                    await self.close(code=4003)  # 自定义关闭代码
+                    return
 
-            # 将当前连接加入到指定的房间组，以便接收广播消息
+            # 5. 加入房间组
             await self.channel_layer.group_add(
                 self.room_group_name,
                 self.channel_name
             )
 
-            # 初始化或获取会话信息
+            # 6. 初始化或获取会话
             if self.design_id not in active_sessions:
-                # 如果会话不存在，创建新会话
                 logger.info(f"创建新的会话: {self.design_id}")
                 active_sessions[self.design_id] = {
-                    'id': str(uuid.uuid4()),  # 生成唯一会话ID
-                    'design_id': self.design_id,  # 设计ID
-                    'collaborators': [],  # 协作者列表，初始为空
-                    'owner': None,  # 会话所有者，初始为空
-                    'initiator': None,  # 会话发起者，初始为空
-                    'created_at': datetime.now().isoformat()  # 会话创建时间
+                    'id': str(uuid.uuid4()),
+                    'design_id': self.design_id,
+                    'collaborators': [],
+                    'owner': None,
+                    'initiator': None,
+                    'created_at': datetime.now().isoformat()
                 }
                 logger.info(f"新会话创建完成: {active_sessions[self.design_id]}")
-            else:
-                # 如果会话已存在，使用现有会话
-                logger.info(f"使用现有会话: {self.design_id}")
-                logger.info(
-                    f"当前协作者: {active_sessions[self.design_id]['collaborators']}")
 
-            # 接受WebSocket连接请求
+            # 7. 接受连接
             await self.accept()
-            logger.info(f"WebSocket连接已接受: {self.design_id}")
 
-            # 检查用户认证状态并记录
-            logger.info(
-                f"检查用户认证状态: {self.user.is_authenticated if self.user else False}")
-            logger.info(f"用户信息: {self.user.username if self.user else 'None'}")
-
-            # 发送连接成功消息，包含会话信息
+            # 8. 发送连接成功消息
             await self.send(text_data=json.dumps({
                 'type': 'connection_established',
                 'message': '连接已建立',
@@ -137,107 +138,89 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                     'created_at': active_sessions[self.design_id]['created_at']
                 }
             }))
-            logger.info("已发送连接成功消息")
 
-            # 如果用户已认证，将其添加到协作者列表
+            # 9. 处理认证用户加入
             if self.user and self.user.is_authenticated:
-                logger.info(f"认证用户加入: {self.user.username}")
-
-                # 确定用户角色（发起者或协作者）
-                user_role = 'collaborator'  # 默认为协作者
+                # 确定用户角色
+                user_role = 'collaborator'
                 if not self.is_via_link and not active_sessions[self.design_id]['initiator']:
-                    user_role = 'initiator'  # 如果不是通过链接加入且没有发起者，则设为发起者
+                    user_role = 'initiator'
 
-                # 创建协作者信息对象
+                # 创建协作者信息
                 collaborator = {
-                    'id': str(self.user.id),  # 用户ID
-                    'username': self.user.username,  # 用户名
-                    'color': self._generate_color(),  # 为用户生成随机颜色
-                    'role': user_role,  # 用户角色
-                    'last_active': datetime.now().isoformat()  # 最后活跃时间
+                    'id': str(self.user.id),
+                    'username': self.user.username,
+                    'color': self._generate_color(),
+                    'role': user_role,
+                    'last_active': datetime.now().isoformat()
                 }
-                logger.info(f"创建协作者信息: {collaborator}")
 
-                # 检查用户是否已经在协作者列表中
+                # 检查是否已存在
                 existing_collaborator = next(
                     (c for c in active_sessions[self.design_id]['collaborators']
-                     if c['id'] == collaborator['id']),
+                     if c['id'] == str(self.user.id)),
                     None
                 )
 
                 if not existing_collaborator:
-                    # 如果用户不在协作者列表中，添加新协作者
-                    logger.info(f"添加新协作者: {collaborator}")
+                    # 添加新协作者
                     active_sessions[self.design_id]['collaborators'].append(
                         collaborator)
-                    logger.info(
-                        f"协作者列表更新后: {active_sessions[self.design_id]['collaborators']}")
 
-                    # 如果是第一个加入的用户，设置为所有者
+                    # 设置所有者和发起者
                     if not active_sessions[self.design_id]['owner']:
-                        logger.info(f"设置会话所有者: {self.user.username}")
                         active_sessions[self.design_id]['owner'] = str(
                             self.user.id)
-
-                    # 如果是发起者角色且没有设置发起者，则设置发起者
                     if user_role == 'initiator' and not active_sessions[self.design_id]['initiator']:
-                        logger.info(f"设置会话发起者: {self.user.username}")
                         active_sessions[self.design_id]['initiator'] = str(
                             self.user.id)
 
-                    # 广播加入消息，包含完整的会话信息
-                    join_message = {
-                        'type': 'collaboration_message',
-                        'message': {
-                            'type': 'join',
-                            'senderId': str(self.user.id),
-                            'senderName': self.user.username,
-                            'sessionId': active_sessions[self.design_id]['id'],
-                            'timestamp': datetime.now().isoformat(),
-                            'payload': {
-                                'session': active_sessions[self.design_id],
-                                'user_role': user_role  # 添加用户角色信息
-                            }
-                        }
-                    }
-                    logger.info(f"准备广播加入消息: {join_message}")
+                    # 广播加入消息
                     await self.channel_layer.group_send(
                         self.room_group_name,
-                        join_message
+                        {
+                            'type': 'collaboration_message',
+                            'message': {
+                                'type': 'join',
+                                'senderId': str(self.user.id),
+                                'senderName': self.user.username,
+                                'sessionId': active_sessions[self.design_id]['id'],
+                                'timestamp': datetime.now().isoformat(),
+                                'payload': {
+                                    'session': active_sessions[self.design_id],
+                                    'user_role': user_role
+                                }
+                            }
+                        }
                     )
-                    logger.info("加入消息已广播")
                 else:
-                    # 如果用户已在协作者列表中，更新活跃时间
-                    logger.info(f"用户已在协作者列表中: {self.user.username}")
+                    # 更新现有协作者的活跃时间
                     existing_collaborator['last_active'] = datetime.now(
                     ).isoformat()
-                    logger.info(f"已更新用户活跃时间: {existing_collaborator}")
-
-                # 记录当前会话状态
-                logger.info(f"当前会话状态: {active_sessions[self.design_id]}")
-                logger.info(
-                    f"当前协作者数量: {len(active_sessions[self.design_id]['collaborators'])}")
-            else:
-                # 用户未认证，记录警告信息
-                logger.warning("用户未认证，无法添加到协作者列表")
 
         except Exception as e:
-            # 处理连接过程中的任何异常
-            logger.error(f"WebSocket连接错误: {str(e)}", exc_info=True)
-            # 尝试发送错误消息
+            # 异常处理
+            error_message = f"WebSocket连接错误: {str(e)}"
+            logger.error(error_message, exc_info=True)
+
             try:
-                await self.accept()  # 确保连接已接受
+                # 确保连接已接受
+                if not hasattr(self, 'accepted'):
+                    await self.accept()
+
+                # 发送错误消息
                 await self.send(text_data=json.dumps({
                     'type': 'error',
-                    'message': f'连接错误: {str(e)}',
+                    'message': error_message,
                     'timestamp': datetime.now().isoformat()
                 }))
-                # 短暂延迟后关闭连接
+
+                # 延迟关闭连接
                 await asyncio.sleep(1)
-                await self.close(code=1011)  # 1011 表示服务器内部错误
+                await self.close(code=4000)
             except Exception as close_error:
                 logger.error(f"发送错误消息失败: {str(close_error)}")
-            raise  # 重新抛出异常，以便上层处理
+            raise
 
     async def disconnect(self, close_code):
         """
