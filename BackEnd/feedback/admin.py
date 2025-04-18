@@ -5,7 +5,7 @@ from .models import Feedback
 @admin.register(Feedback)
 class FeedbackAdmin(admin.ModelAdmin):
     """反馈管理员配置"""
-    list_display = ('id', 'type', 'title', 'status',
+    list_display = ('title', 'type', 'status',
                     'user', 'contact', 'created_at')
     list_filter = ('type', 'status', 'created_at')
     search_fields = ('title', 'content', 'contact')
