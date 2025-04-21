@@ -12,14 +12,15 @@
       <div class="connection-status">
         <span :class="['status-indicator', connectionStatusClass]"></span>
         <span>{{ connectionStatusText }}</span>
-        <el-button v-if="connectionStatus === 3 || connectionStatus === 4" size="small" type="primary"
-          @click="reconnect">
+        <el-button
+          v-if="connectionStatus === ConnectionStatus.DISCONNECTED || connectionStatus === ConnectionStatus.ERROR"
+          size="small" type="primary" @click="reconnect">
           重新连接
         </el-button>
       </div>
 
-      <!-- 邀请链接 -->
-      <div v-if="isConnected" class="invite-section">
+      <!-- 邀请链接（只有所有者可见） -->
+      <div v-if="isConnected && isCurrentUserOwner()" class="invite-section">
         <h4>邀请他人</h4>
         <div class="invite-link-container">
           <div class="invite-link-display">
@@ -37,15 +38,15 @@
             </el-icon> 链接已复制到剪贴板
           </div>
         </div>
+      </div>
 
-        <!-- 所有者信息 -->
-        <div class="owner-info" v-if="session">
-          <div class="owner-label">所有者：</div>
-          <div class="owner-value">
-            <span v-if="ownerName" class="owner-name">{{ ownerName }}</span>
-            <span v-else class="owner-unknown">未知</span>
-            <span v-if="isCurrentUserOwner()" class="owner-badge">(我)</span>
-          </div>
+      <!-- 所有者信息（所有人可见） -->
+      <div v-if="isConnected && session" class="owner-info">
+        <div class="owner-label">所有者：</div>
+        <div class="owner-value">
+          <span v-if="ownerName" class="owner-name">{{ ownerName }}</span>
+          <span v-else class="owner-unknown">未知</span>
+          <span v-if="isCurrentUserOwner()" class="owner-badge">(我)</span>
         </div>
       </div>
     </div>
@@ -55,7 +56,7 @@
       <h4>当前协作者 ({{ collaborators.length }})</h4>
       <div v-if="collaborators.length === 0" class="no-collaborators">
         暂无其他协作者
-        <div class="invite-suggestion">
+        <div v-if="isCurrentUserOwner()" class="invite-suggestion">
           <el-alert type="success" :closable="false" effect="light">
             <template #title>
               <span>复制上方邀请链接，邀请他人加入协作</span>
@@ -66,10 +67,10 @@
       <ul v-else class="collaborators-list">
         <li v-for="collaborator in collaborators" :key="collaborator.id" class="collaborator-item">
           <div class="collaborator-avatar" :style="{ backgroundColor: collaborator.color }">
-            {{ collaborator.username.charAt(0).toUpperCase() }}
+            {{ collaborator.username ? collaborator.username.charAt(0).toUpperCase() : '?' }}
           </div>
           <div class="collaborator-info">
-            <span class="collaborator-name">{{ collaborator.username }}</span>
+            <span class="collaborator-name">{{ collaborator.username || '未知用户' }}</span>
           </div>
           <div v-if="String(currentUser?.id) === collaborator.id" class="collaborator-badge">
             (我)
@@ -100,16 +101,17 @@
         </div>
       </div>
       <div class="chat-input">
-        <el-input v-model="chatInput" placeholder="输入消息..." :disabled="connectionStatus !== 1"
+        <el-input v-model="chatInput" placeholder="输入消息..." :disabled="connectionStatus !== ConnectionStatus.CONNECTED"
           @keyup.enter="sendMessage" />
-        <el-button type="primary" :disabled="connectionStatus !== 1 || !chatInput.trim()" @click="sendMessage">
+        <el-button type="primary" :disabled="connectionStatus !== ConnectionStatus.CONNECTED || !chatInput.trim()"
+          @click="sendMessage">
           发送
         </el-button>
       </div>
     </div>
 
     <!-- 连接错误提示 -->
-    <div v-if="connectionStatus === 4" class="connection-error">
+    <div v-if="connectionStatus === ConnectionStatus.ERROR" class="connection-error">
       <el-alert title="连接错误" type="error" description="无法连接到协作服务器，请检查网络连接或后端服务是否正常运行。" show-icon :closable="false" />
       <div class="error-actions">
         <el-button type="primary" @click="reconnect">重试连接</el-button>
@@ -121,36 +123,72 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useUserStore } from '@/stores/user'
-import {
-  useWebSocketConnection,
-  ConnectionStatus,
-  type CollaboratorInfo,
-  MessageType
-} from '@/utils/websocket'
+import { useWebSocketStore, ConnectionStatus, type CollaboratorInfo } from '@/stores/websocket'
 import { ElMessage } from 'element-plus'
 import { Document, Check } from '@element-plus/icons-vue'
 // 导入API配置
 import apiConfig from '@/config/api'
 
-const props = defineProps({
-  designId: {
-    type: String,
-    required: true
-  }
-})
+/**
+ * 协作面板组件类型定义
+ */
+interface CollaborationPanelProps {
+  designId: string
+}
+
+const props = defineProps<CollaborationPanelProps>()
 
 const userStore = useUserStore()
+const webSocketStore = useWebSocketStore()
 
-// 从useWebSocketConnection获取状态和方法
-const {
-  connectionStatus,
-  socket,
-  chatMessages,
-  collaborators,
-  sendChatMessage,
-  connect,
-  session,
-} = useWebSocketConnection(props.designId)
+const connectionStatus = ref(webSocketStore.connectionStatus)
+const chatMessages = ref(webSocketStore.chatMessages)
+const collaborators = ref(webSocketStore.collaborators)
+const session = ref(webSocketStore.session)
+const chatInput = ref('') // 添加聊天输入框的值
+const chatMessagesRef = ref<HTMLElement | null>(null) // 添加聊天消息容器引用
+
+// 监听webSocketStore中的值变化并同步到本地ref
+watch(
+  () => webSocketStore.connectionStatus,
+  (newStatus) => {
+    connectionStatus.value = newStatus
+    console.log('CollaborationPanel: 连接状态已更新', connectionStatus.value)
+  },
+  { immediate: true }
+)
+
+watch(
+  () => webSocketStore.chatMessages,
+  (newMessages) => {
+    chatMessages.value = newMessages
+    console.log('CollaborationPanel: 聊天消息已更新，数量:', chatMessages.value.length)
+  },
+  { immediate: true }
+)
+
+watch(
+  () => webSocketStore.collaborators,
+  (newCollaborators) => {
+    collaborators.value = newCollaborators
+    console.log('CollaborationPanel: 协作者列表已更新', JSON.stringify(collaborators.value))
+  },
+  { immediate: true }
+)
+
+watch(
+  () => webSocketStore.session,
+  (newSession) => {
+    session.value = newSession
+    console.log('CollaborationPanel: 会话信息已更新', session.value)
+  },
+  { immediate: true }
+)
+
+// 使用store的方法
+const { connect, sendChatMessage } = webSocketStore
+
+console.log(props.designId)
 
 // 当前用户
 const currentUser = computed(() => userStore.currentUser)
@@ -354,8 +392,6 @@ const copyInviteLink = async () => {
 const copySuccess = ref(false)
 
 // 聊天输入
-const chatInput = ref('')
-const chatMessagesRef = ref<HTMLElement | null>(null)
 
 // 计算连接状态类
 const connectionStatusClass = computed(() => {
@@ -366,10 +402,12 @@ const connectionStatusClass = computed(() => {
       return 'status-connecting'
     case ConnectionStatus.DISCONNECTED:
       return 'status-disconnected'
+    case ConnectionStatus.DISCONNECTING:
+      return 'status-disconnecting'
     case ConnectionStatus.ERROR:
       return 'status-error'
     default:
-      return ''
+      return 'status-unknown'
   }
 })
 
@@ -381,7 +419,9 @@ const connectionStatusText = computed(() => {
     case ConnectionStatus.CONNECTING:
       return '连接中...'
     case ConnectionStatus.DISCONNECTED:
-      return '未连接'
+      return '已断开'
+    case ConnectionStatus.DISCONNECTING:
+      return '断开中...'
     case ConnectionStatus.ERROR:
       return '连接错误'
     default:
@@ -395,28 +435,40 @@ const connectionStatusType = computed(() => {
 
   if (status === ConnectionStatus.CONNECTED) {
     return 'success';
-  } else if (status === ConnectionStatus.CONNECTING) {
+  } else if (status === ConnectionStatus.CONNECTING || status === ConnectionStatus.DISCONNECTING) {
     return 'warning';
-  } else if (status === ConnectionStatus.DISCONNECTING) {
-    return 'warning';
-  } else if (status === ConnectionStatus.ERROR) {
+  } else {
     return 'danger';
-  } else if (status === ConnectionStatus.DISCONNECTED) {
-    return 'info';
   }
-
-  return 'info';
 })
 
 // 检查是否已连接
 const isConnected = computed(() => {
-  return connectionStatus.value === 1 // ConnectionStatus.CONNECTED的值为1
+  return connectionStatus.value === ConnectionStatus.CONNECTED
 })
 
 // 在组件挂载时初始化面板位置
 onMounted(() => {
+  console.log('CollaborationPanel 组件已挂载，初始状态:')
+  console.log('- 设计ID:', props.designId)
+  console.log('- 连接状态:', connectionStatus.value)
+  console.log('- 协作者列表:', JSON.stringify(collaborators.value))
+  console.log('- 会话信息:', session.value)
+
+  // 如果协作者列表为空但连接状态为已连接，尝试刷新协作者列表
+  if (connectionStatus.value === ConnectionStatus.CONNECTED && collaborators.value.length === 0) {
+    console.log('连接已建立但协作者列表为空，尝试刷新协作者列表')
+    nextTick(() => {
+      refreshCollaborators()
+    })
+  }
+
   // 自动连接WebSocket
-  connect() // 自动连接WebSocket
+  // 检查URL中是否有collaboration参数，如果有则表示是通过链接加入
+  const urlParams = new URLSearchParams(window.location.search)
+  const isViaLink = urlParams.has('collaboration') && urlParams.has('designId')
+  console.log('自动连接WebSocket，是否通过链接加入:', isViaLink)
+  connect(props.designId, isViaLink) // 连接到指定设计ID，并传递是否通过链接加入
   console.log('当前连接状态:', connectionStatus.value)
 
   // 使用nextTick确保DOM已完全渲染后再获取元素尺寸
@@ -530,83 +582,7 @@ let statusCheckInterval: number | null = null
 
 // 检查WebSocket连接状态
 const checkConnectionStatus = () => {
-  // 先检查socket变量是否存在
-  if (!socket) {
-    if (connectionStatus.value !== ConnectionStatus.DISCONNECTED) {
-      connectionStatus.value = ConnectionStatus.DISCONNECTED
-
-      // 触发断开连接事件
-      try {
-        const event = new CustomEvent('collaboration-stopped', {
-          bubbles: true,
-          detail: {
-            timestamp: new Date().toISOString(),
-            reason: 'socket变量不存在',
-          },
-        })
-        document.dispatchEvent(event)
-      } catch (error) {
-        console.error('发送socket变量不存在事件失败:', error)
-      }
-    }
-    return
-  }
-
-  // 检查socket实例是否存在
-  if (!socket.value) {
-    if (connectionStatus.value !== ConnectionStatus.DISCONNECTED) {
-      connectionStatus.value = ConnectionStatus.DISCONNECTED
-
-      // 触发断开连接事件
-      try {
-        const event = new CustomEvent('collaboration-stopped', {
-          bubbles: true,
-          detail: {
-            timestamp: new Date().toISOString(),
-            reason: 'WebSocket实例不存在',
-          },
-        })
-        document.dispatchEvent(event)
-      } catch (error) {
-        console.error('发送WebSocket实例不存在事件失败:', error)
-      }
-    }
-    return
-  }
-
-  // 根据WebSocket的readyState更新连接状态
-  if (socket.value.readyState === WebSocket.OPEN) {
-    // 如果WebSocket是OPEN状态，但connectionStatus不是CONNECTED，则更新
-    if (connectionStatus.value !== ConnectionStatus.CONNECTED) {
-      connectionStatus.value = ConnectionStatus.CONNECTED
-    }
-  } else if (socket.value.readyState === WebSocket.CONNECTING) {
-    if (connectionStatus.value !== ConnectionStatus.CONNECTING) {
-      connectionStatus.value = ConnectionStatus.CONNECTING
-    }
-  } else if (socket.value.readyState === WebSocket.CLOSING) {
-    if (connectionStatus.value !== ConnectionStatus.DISCONNECTING) {
-      connectionStatus.value = ConnectionStatus.DISCONNECTING
-    }
-  } else if (socket.value.readyState === WebSocket.CLOSED) {
-    if (connectionStatus.value !== ConnectionStatus.DISCONNECTED) {
-      connectionStatus.value = ConnectionStatus.DISCONNECTED
-
-      // 触发断开连接事件
-      try {
-        const event = new CustomEvent('collaboration-stopped', {
-          bubbles: true,
-          detail: {
-            timestamp: new Date().toISOString(),
-            reason: 'WebSocket已关闭',
-          },
-        })
-        document.dispatchEvent(event)
-      } catch (error) {
-        console.error('发送WebSocket已关闭事件失败:', error)
-      }
-    }
-  }
+  webSocketStore.checkConnection(true)
 }
 
 // 尝试获取会话信息
@@ -625,11 +601,40 @@ const getLastActiveText = (collaborator: CollaboratorInfo) => {
 
 // 获取所有者名称
 const getOwnerName = () => {
-  if (!session.value || !session.value.owner) return null
+  console.log('获取所有者名称', session.value)
 
-  // 在协作者列表中查找所有者
-  const owner = collaborators.value.find(c => c.id === session.value?.owner)
-  return owner ? owner.username : null
+  // 如果会话不存在，返回null
+  if (!session.value) {
+    console.log('会话信息不存在')
+    return null
+  }
+
+  // 如果有owner字段且不为空，尝试查找对应的协作者
+  if (session.value?.owner) {
+    const owner = collaborators.value.find(c => c.id === session.value?.owner)
+    console.log('根据owner字段找到的所有者:', owner)
+    if (owner) {
+      return owner.username
+    }
+  }
+
+  // 如果没有owner字段或者找不到对应的协作者，尝试查找角色为'initiator'的协作者
+  const initiator = collaborators.value.find(c => c.role === 'initiator')
+  console.log('找到的发起者:', initiator)
+  if (initiator) {
+    return initiator.username
+  }
+
+  // 如果连接状态正常但仍然找不到所有者，尝试刷新协作者列表
+  if (connectionStatus.value === ConnectionStatus.CONNECTED) {
+    console.log('找不到所有者或发起者，尝试刷新协作者列表')
+    // 延迟执行，避免频繁刷新
+    setTimeout(() => {
+      refreshCollaborators()
+    }, 500)
+  }
+
+  return null
 }
 
 // 使用计算属性缓存所有者名称
@@ -637,9 +642,19 @@ const ownerName = computed(() => getOwnerName())
 
 // 检查当前用户是否是所有者
 const isCurrentUserOwner = () => {
-  return session.value &&
-    userStore.currentUser &&
-    session.value.owner === String(userStore.currentUser.id)
+  // 如果会话或用户不存在，返回false
+  if (!session.value || !userStore.currentUser) {
+    return false
+  }
+
+  // 检查当前用户ID是否与所有者ID匹配
+  if (session.value.owner && session.value.owner === String(userStore.currentUser.id)) {
+    return true
+  }
+
+  // 如果没有所有者信息或者不匹配，检查当前用户是否是发起者
+  const currentUserCollaborator = collaborators.value.find(c => c.id === String(userStore.currentUser?.id))
+  return currentUserCollaborator?.role === 'initiator'
 }
 
 // 格式化消息时间
@@ -654,25 +669,7 @@ const formatMessageTime = (timestamp: Date) => {
 const refreshCollaborators = () => {
   if (connectionStatus.value === ConnectionStatus.CONNECTED && userStore.currentUser) {
     try {
-      // 检查WebSocket连接状态
-      if (!socket || !socket.value || socket.value.readyState !== WebSocket.OPEN) {
-        console.error('WebSocket未连接，无法发送同步请求')
-        ElMessage.error('WebSocket未连接，无法刷新')
-        return
-      }
-
-      // 构造同步请求消息
-      const syncRequestMessage = {
-        type: MessageType.SYNC_REQUEST,
-        senderId: String(userStore.currentUser.id),
-        senderName: userStore.currentUser.username,
-        sessionId: props.designId,
-        timestamp: new Date().toISOString(),
-        payload: {},
-      }
-
-      // 直接发送消息，不通过sendMessage函数，避免在聊天中显示
-      socket.value.send(JSON.stringify(syncRequestMessage))
+      webSocketStore.sendSyncRequest()
       ElMessage.success('已刷新协作者列表')
     } catch (error) {
       console.error('刷新协作者列表失败:', error)
@@ -689,7 +686,11 @@ const reconnect = () => {
   if (connectionStatus.value === ConnectionStatus.ERROR ||
     connectionStatus.value === ConnectionStatus.DISCONNECTED) {
     console.log('尝试重新连接WebSocket')
-    connect() // 调用useWebSocketConnection中的connect方法
+    // 检查URL中是否有collaboration参数，如果有则表示是通过链接加入
+    const urlParams = new URLSearchParams(window.location.search)
+    const isViaLink = urlParams.has('collaboration') && urlParams.has('designId')
+    console.log('重新连接WebSocket，是否通过链接加入:', isViaLink)
+    connect(props.designId, isViaLink) // 调用WebSocketStore中的connect方法，并传递是否通过链接加入
   }
 }
 
@@ -736,20 +737,6 @@ watch(
   }
 )
 
-// 监听WebSocket实例变化
-watch(
-  () => socket.value,
-  (newSocket) => {
-    if (newSocket) {
-      // 如果WebSocket已经打开但连接状态不是CONNECTED，更新状态
-      if (newSocket.readyState === WebSocket.OPEN &&
-        connectionStatus.value !== ConnectionStatus.CONNECTED) {
-        connectionStatus.value = ConnectionStatus.CONNECTED
-      }
-    }
-  }
-)
-
 // 发送消息
 const sendMessage = () => {
   // 检查消息是否为空
@@ -758,51 +745,9 @@ const sendMessage = () => {
   }
 
   // 检查WebSocket连接状态
-  if (connectionStatus.value !== 1) { // ConnectionStatus.CONNECTED的值为1
+  if (connectionStatus.value !== ConnectionStatus.CONNECTED) {
     console.error('WebSocket未连接，无法发送消息，当前状态:', connectionStatus.value)
     ElMessage.error('未连接到协作服务器，无法发送消息')
-
-    // 触发断开连接事件，确保所有组件同步状态
-    try {
-      const event = new CustomEvent('collaboration-stopped', {
-        bubbles: true,
-        detail: {
-          timestamp: new Date().toISOString(),
-          error: true,
-          reason: 'WebSocket实例不存在',
-        },
-      })
-      document.dispatchEvent(event)
-    } catch (error) {
-      console.error('发送状态不一致的collaboration-stopped事件失败:', error)
-    }
-    return
-  }
-
-  // 检查socket实例是否存在
-  if (!socket || !socket.value) {
-    console.error('WebSocket实例不存在，无法发送消息')
-    ElMessage.error('协作连接异常，请尝试重新连接')
-
-    // 确保状态为DISCONNECTED
-    if (connectionStatus.value !== ConnectionStatus.DISCONNECTED) {
-      connectionStatus.value = ConnectionStatus.DISCONNECTED
-
-      // 触发断开连接事件，确保所有组件同步状态
-      try {
-        const event = new CustomEvent('collaboration-stopped', {
-          bubbles: true,
-          detail: {
-            timestamp: new Date().toISOString(),
-            error: true,
-            reason: 'WebSocket实例不存在',
-          },
-        })
-        document.dispatchEvent(event)
-      } catch (error) {
-        console.error('发送状态不一致的collaboration-stopped事件失败:', error)
-      }
-    }
     return
   }
 
@@ -819,40 +764,6 @@ const sendMessage = () => {
   } catch (error) {
     console.error('发送聊天消息失败:', error)
     ElMessage.error('发送消息失败，请稍后重试')
-
-    // 如果是因为WebSocket未连接导致的错误，更新状态
-    if (error instanceof Error &&
-      (error.message.includes('WebSocket未连接') ||
-        error.message.includes('WebSocket实例不存在'))) {
-      connectionStatus.value = ConnectionStatus.DISCONNECTED
-
-      // 触发断开连接事件
-      try {
-        const event = new CustomEvent('collaboration-stopped', {
-          bubbles: true,
-          detail: {
-            timestamp: new Date().toISOString(),
-            error: true,
-            reason: 'WebSocket连接问题',
-          },
-        })
-        document.dispatchEvent(event)
-      } catch (eventError) {
-        console.error('发送WebSocket连接问题事件失败:', eventError)
-      }
-
-      // 尝试重新初始化状态
-      nextTick(() => {
-        if (socket && socket.value) {
-          // 如果socket存在但状态不一致，尝试关闭它
-          try {
-            socket.value.close()
-          } catch (closeError) {
-            console.error('关闭不一致的WebSocket连接失败:', closeError)
-          }
-        }
-      })
-    }
   }
 }
 

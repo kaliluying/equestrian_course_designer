@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { CollaboratorInfo, CollaborationSession, ChatMessage } from '@/utils/websocket'
+import type { CollaboratorInfo, CollaborationSession, ChatMessage } from '@/stores/websocket'
 
 export const useCollaborationStore = defineStore('collaboration', () => {
   // 协作会话状态

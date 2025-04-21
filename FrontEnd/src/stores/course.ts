@@ -868,7 +868,8 @@ export const useCourseStore = defineStore('course', () => {
       // 如果启用了发送更新消息且存在协作功能，则发送更新消息
       if (sendUpdate && typeof window !== 'undefined') {
         // 检查是否存在协作功能
-        const isCollaborating = false
+        // 从 localStorage 中获取协作状态
+        const isCollaborating = localStorage.getItem('isCollaborating') === 'true'
         if (isCollaborating) {
           try {
             // 尝试获取 sendObstacleUpdate 函数

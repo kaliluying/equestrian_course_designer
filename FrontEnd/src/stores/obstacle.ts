@@ -32,7 +32,6 @@ import {
   ErrorSeverity,
   type ErrorResponse,
   createErrorResponse,
-  extractErrorFromResponse,
 } from '@/types/error'
 
 // 将API返回的ObstacleData转换为CustomObstacleTemplate

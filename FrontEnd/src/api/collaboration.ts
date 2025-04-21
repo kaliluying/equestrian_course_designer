@@ -1,5 +1,5 @@
 import { request } from '@/utils/request'
-import type { CollaborationSession } from '@/utils/websocket'
+import type { CollaborationSession } from '@/stores/websocket'
 
 // 创建协作会话
 export const createCollaborationSession = async (

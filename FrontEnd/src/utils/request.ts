@@ -113,14 +113,26 @@ axiosInstance.interceptors.response.use(
           const userStore = useUserStore()
           userStore.logout(router)
 
-          window.dispatchEvent(new Event('token-expired'))
+          // 显示友好的错误提示
+          ElMessage.error({
+            message: '登录已过期，请重新登录',
+            duration: 3000,
+            showClose: true,
+            grouping: true,
+          })
         }
       } else {
         // 没有refresh token，直接登出
-
         const userStore = useUserStore()
         userStore.logout(router)
-        window.dispatchEvent(new Event('token-expired'))
+
+        // 显示友好的错误提示
+        ElMessage.error({
+          message: '登录已过期，请重新登录',
+          duration: 3000,
+          showClose: true,
+          grouping: true,
+        })
       }
     }
 
@@ -156,7 +168,14 @@ axiosInstance.interceptors.response.use(
       }
     }
 
-    ElMessage.error(errorMessage)
+    // 显示错误消息
+    ElMessage.error({
+      message: errorMessage,
+      duration: 5000,
+      showClose: true,
+      grouping: true,
+    })
+
     return Promise.reject(error)
   },
 )

@@ -68,3 +68,5 @@ BackEnd/logs/*
 
 # Media and user uploads
 BackEnd/media/*
+back.bat
+front.bat

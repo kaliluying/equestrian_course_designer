@@ -209,7 +209,7 @@ import { Position, User, ChatDotRound, SwitchButton, Connection, Key, UserFilled
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { useCourseStore } from '@/stores/course'
-import type { CollaborationSession } from '@/utils/websocket'
+import type { CollaborationSession } from '@/stores/websocket'
 import ResizableDivider from '@/components/ResizableDivider.vue'
 
 const userStore = useUserStore()
