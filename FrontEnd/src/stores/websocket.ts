@@ -9,9 +9,10 @@ import { ref, shallowRef } from 'vue'
 import { useUserStore } from './user'
 import { useCourseStore } from './course'
 import apiConfig from '@/config/api'
-import { ElMessage } from 'element-plus'
+// import { ElMessage } from 'element-plus' // 不再需要
 import { v4 as uuidv4 } from 'uuid'
-import type { Obstacle } from '@/types/obstacle'
+import type { Obstacle, PathPoint } from '@/types/obstacle'
+import { ObstacleType } from '@/types/obstacle'
 
 /**
  * WebSocket连接状态枚举
@@ -173,18 +174,23 @@ export const useWebSocketStore = defineStore('websocket', () => {
    */
   const sendMessage = (type: MessageType, payload: Record<string, unknown>) => {
     if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
-      console.error('WebSocket未连接，无法发送消息')
-      messageQueue.value.push({
-        type:
-          type === MessageType.UPDATE_OBSTACLE || type === MessageType.UPDATE_PATH
-            ? 'update'
-            : type === MessageType.ADD_OBSTACLE
-              ? 'add'
-              : type === MessageType.REMOVE_OBSTACLE
-                ? 'remove'
-                : 'path',
-        data: payload,
-      })
+      // 只记录日志，不显示错误消息
+      console.log('WebSocket未连接，消息已加入队列')
+
+      // 如果是同步请求或加入消息，不加入队列
+      if (type !== MessageType.SYNC_REQUEST && type !== MessageType.JOIN) {
+        messageQueue.value.push({
+          type:
+            type === MessageType.UPDATE_OBSTACLE || type === MessageType.UPDATE_PATH
+              ? 'update'
+              : type === MessageType.ADD_OBSTACLE
+                ? 'add'
+                : type === MessageType.REMOVE_OBSTACLE
+                  ? 'remove'
+                  : 'path',
+          data: payload,
+        })
+      }
       return false
     }
 
@@ -460,11 +466,63 @@ export const useWebSocketStore = defineStore('websocket', () => {
         updates.position = { ...(updates.position as { x: number; y: number }) }
       }
 
-      // 更新本地障碍物
-      courseStore.updateObstacle(obstacleId, updates as Partial<Obstacle>)
+      // 检查障碍物是否存在
+      const course = courseStore.currentCourse
+      const obstacleExists = course.obstacles.some((obs) => obs.id === obstacleId)
+
+      if (!obstacleExists) {
+        console.warn('收到更新消息的障碍物不存在:', obstacleId)
+
+        // 尝试从updates中创建一个新的障碍物
+        if (updates.position && typeof updates.position === 'object') {
+          try {
+            // 创建一个基本的障碍物对象
+            const newObstacle: Obstacle = {
+              id: obstacleId,
+              type: ObstacleType.SINGLE, // 默认类型为SINGLE
+              position: updates.position as { x: number; y: number },
+              rotation: (updates.rotation as number) || 0,
+              poles: [
+                {
+                  width: 20,
+                  height: 120,
+                  color: '#FF0000',
+                },
+              ],
+              customId: '',
+            }
+
+            console.log('尝试添加缺失的障碍物:', newObstacle)
+            // 使用addObstacleWithId保留原始ID
+            if (typeof courseStore.addObstacleWithId === 'function') {
+              console.log('使用addObstacleWithId添加障碍物，保留原始ID:', obstacleId)
+              courseStore.addObstacleWithId(newObstacle)
+            } else {
+              // 如果addObstacleWithId不可用，回退到addObstacle
+              console.log('addObstacleWithId不可用，使用addObstacle添加障碍物')
+              courseStore.addObstacle(newObstacle)
+            }
+
+            // 添加成功后，不需要再更新，因为已经使用了updates中的数据
+            return
+          } catch (error) {
+            console.error('尝试添加缺失的障碍物失败:', error)
+          }
+        }
+
+        // 如果无法创建障碍物，请求完整同步
+        console.log('请求完整同步以获取最新障碍物数据')
+        sendSyncRequest()
+        return
+      }
+
+      // 更新本地障碍物，但不触发事件
+      // 使用sendUpdate=false参数，避免触发事件
+      courseStore.updateObstacle(obstacleId, updates as Partial<Obstacle>, false)
       console.log('成功更新本地障碍物:', obstacleId, updates)
 
-      // 触发一个自定义事件，通知组件障碍物已更新
+      // 不再触发自定义事件，避免循环更新
+      /*
       try {
         const event = new CustomEvent('obstacle-updated', {
           bubbles: true,
@@ -479,6 +537,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
       } catch (eventError) {
         console.error('触发障碍物更新事件失败:', eventError)
       }
+      */
     } catch (error) {
       console.error('更新本地障碍物失败:', obstacleId, updates, error)
     }
@@ -503,7 +562,25 @@ export const useWebSocketStore = defineStore('websocket', () => {
     // 先转成 unknown，再转成 Obstacle 类型
     const obstacleData = message.payload as unknown as Obstacle
 
-    courseStore.addObstacle(obstacleData)
+    // 检查障碍物是否已存在
+    const obstacleExists = courseStore.currentCourse.obstacles.some(
+      (obs) => obs.id === obstacleData.id,
+    )
+
+    if (obstacleExists) {
+      console.log('障碍物已存在，不重复添加:', obstacleData.id)
+      return
+    }
+
+    // 使用addObstacleWithId而不是addObstacle，保留原始ID
+    if (typeof courseStore.addObstacleWithId === 'function') {
+      console.log('使用addObstacleWithId添加障碍物，保留原始ID:', obstacleData.id)
+      courseStore.addObstacleWithId(obstacleData)
+    } else {
+      // 如果addObstacleWithId不可用，回退到addObstacle
+      console.log('addObstacleWithId不可用，使用addObstacle添加障碍物')
+      courseStore.addObstacle(obstacleData)
+    }
   }
 
   /**
@@ -662,11 +739,61 @@ export const useWebSocketStore = defineStore('websocket', () => {
     console.log('处理同步响应消息:', message)
 
     try {
-      // 仅记录接收到的消息
-      console.log('接收到同步响应消息:', message.payload)
+      // 获取同步响应数据
+      const payload = message.payload as {
+        obstacles?: Array<Obstacle>
+        path?: {
+          visible: boolean
+          points: Array<PathPoint>
+          startPoint?: { x: number; y: number; rotation: number }
+          endPoint?: { x: number; y: number; rotation: number }
+        }
+      }
 
-      // 这里简化处理，避免可能的API不匹配问题
-      // 如果需要实际处理同步响应，请根据courseStore提供的方法再次实现
+      console.log('接收到同步响应消息:', payload)
+
+      // 处理障碍物数据
+      if (payload.obstacles && Array.isArray(payload.obstacles) && payload.obstacles.length > 0) {
+        console.log('同步响应包含障碍物数据，数量:', payload.obstacles.length)
+
+        // 清除当前障碍物
+        courseStore.currentCourse.obstacles = []
+
+        // 添加从服务器接收到的障碍物
+        payload.obstacles.forEach((obstacle) => {
+          courseStore.addObstacle(obstacle)
+        })
+
+        console.log('已同步障碍物数据')
+      } else {
+        console.log('同步响应不包含障碍物数据或障碍物为空')
+      }
+
+      // 处理路径数据
+      if (payload.path) {
+        console.log('同步响应包含路径数据')
+
+        // 更新路径可见性
+        courseStore.togglePathVisibility(payload.path.visible)
+
+        // 更新路径点
+        if (payload.path.points && Array.isArray(payload.path.points)) {
+          courseStore.coursePath.points = payload.path.points
+        }
+
+        // 更新起点和终点
+        if (payload.path.startPoint) {
+          courseStore.startPoint = payload.path.startPoint
+        }
+
+        if (payload.path.endPoint) {
+          courseStore.endPoint = payload.path.endPoint
+        }
+
+        console.log('已同步路径数据')
+      } else {
+        console.log('同步响应不包含路径数据')
+      }
     } catch (error) {
       console.error('处理同步响应消息失败:', error)
     }
@@ -683,8 +810,8 @@ export const useWebSocketStore = defineStore('websocket', () => {
       message: string
     }
 
-    // 显示错误提示
-    ElMessage.error(`协作错误 (${code}): ${errorMessage}`)
+    // 不显示错误提示，只记录到控制台
+    console.error(`协作错误 (${code}): ${errorMessage}`)
   }
 
   /**
@@ -1072,7 +1199,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
     // 检查连接状态
     if (socket.value.readyState !== WebSocket.OPEN) {
-      if (autoReconnect && isCollaborating.value) {
+      if (autoReconnect && isCollaborating.value && reconnectAttempts.value < 5) {
         reconnect()
       }
       return false
@@ -1089,6 +1216,31 @@ export const useWebSocketStore = defineStore('websocket', () => {
     reconnectAttempts.value++
 
     console.log(`尝试重新连接 (${reconnectAttempts.value}/5)...`)
+
+    // 如果达到最大重连次数，停止协作
+    if (reconnectAttempts.value >= 5) {
+      console.log('达到最大重连次数，停止协作')
+      isCollaborating.value = false
+      localStorage.setItem('isCollaborating', 'false')
+      connectionStatus.value = ConnectionStatus.DISCONNECTED
+
+      // 触发协作停止事件
+      try {
+        const event = new CustomEvent('collaboration-stopped', {
+          bubbles: true,
+          detail: {
+            timestamp: new Date().toISOString(),
+            error: true,
+            reason: '达到最大重连次数',
+          },
+        })
+        document.dispatchEvent(event)
+      } catch (error) {
+        console.error('发送协作停止事件失败:', error)
+      }
+
+      return
+    }
 
     // 延迟重连，时间随尝试次数增加
     const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.value - 1), 30000)

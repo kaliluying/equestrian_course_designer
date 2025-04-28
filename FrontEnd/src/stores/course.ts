@@ -865,7 +865,9 @@ export const useCourseStore = defineStore('course', () => {
 
       updateCourse()
 
-      // 如果启用了发送更新消息且存在协作功能，则发送更新消息
+      // 完全禁用自动触发事件，避免循环更新
+      // 注释掉原有代码，不再自动触发事件
+      /*
       if (sendUpdate && typeof window !== 'undefined') {
         // 检查是否存在协作功能
         // 从 localStorage 中获取协作状态
@@ -886,6 +888,7 @@ export const useCourseStore = defineStore('course', () => {
           }
         }
       }
+      */
     }
   }
 

@@ -373,8 +373,8 @@ const handleCollaborationConnected = (event: CustomEvent) => {
     console.log('更新会话信息:', event.detail.session)
   }
 
-  // 显示成功消息
-  ElMessage.success('已成功连接到协作会话')
+  // 不显示成功消息
+  console.log('已成功连接到协作会话')
 
   // 同步当前画布状态
   nextTick(() => {
@@ -400,14 +400,14 @@ const handleCollaborationConnected = (event: CustomEvent) => {
 const handleCollaborationFailed = (event: CustomEvent) => {
   console.error('协作连接失败:', event.detail)
   isCollaborating.value = false
-  ElMessage.error('协作连接失败，请重试')
+  console.log('协作连接失败，请重试')
 }
 
 // 监听协作断开连接事件
 const handleCollaborationDisconnected = (event: CustomEvent) => {
   console.log('协作断开连接:', event.detail)
   isCollaborating.value = false
-  ElMessage.warning('协作已断开连接')
+  console.log('协作已断开连接')
 }
 
 // 监听协作状态同步事件
@@ -573,14 +573,110 @@ const switchToRegister = () => {
   registerDialogVisible.value = true
 }
 
-const handleAuthSuccess = () => {
+const handleAuthSuccess = async () => {
   loginDialogVisible.value = false
   ElMessage.success('登录成功')
+
+  // 检查是否有待处理的协作邀请
+  const pendingInvitation = localStorage.getItem('pendingInvitation')
+  if (pendingInvitation) {
+    try {
+      const { designId, timestamp } = JSON.parse(pendingInvitation)
+      const inviteTime = new Date(timestamp)
+      const now = new Date()
+
+      // 检查邀请是否在有效期内（30分钟）
+      if (now.getTime() - inviteTime.getTime() < 30 * 60 * 1000) {
+        console.log('检测到待处理的协作邀请，正在处理:', designId)
+
+        // 显示确认对话框
+        try {
+          await ElMessageBox.confirm(
+            '检测到您有一个未处理的协作邀请，是否立即加入？',
+            '继续协作邀请',
+            {
+              confirmButtonText: '加入',
+              cancelButtonText: '忽略',
+              type: 'info',
+              distinguishCancelAndClose: true
+            }
+          )
+
+          // 如果用户点击确认按钮，代码会继续执行到这里
+          console.log('用户点击加入按钮，开始处理协作邀请')
+          // 处理协作邀请
+          await processCollaborationInvite(designId)
+        } catch (error) {
+          // 如果用户点击取消按钮或关闭对话框，会抛出异常并进入这里
+          if (error === 'cancel') {
+            console.log('用户选择忽略协作邀请')
+          } else {
+            console.error('处理协作邀请确认对话框时出错:', error)
+          }
+        }
+      } else {
+        console.log('协作邀请已过期，忽略处理')
+      }
+    } catch (error) {
+      console.error('处理登录后的协作邀请时出错:', error)
+    } finally {
+      // 无论处理成功与否，都清除待处理的邀请信息
+      localStorage.removeItem('pendingInvitation')
+    }
+  }
 }
 
-const handleRegisterSuccess = () => {
+const handleRegisterSuccess = async () => {
   registerDialogVisible.value = false
   ElMessage.success('注册成功，已自动登录')
+
+  // 与 handleAuthSuccess 相同的逻辑，处理待处理的协作邀请
+  const pendingInvitation = localStorage.getItem('pendingInvitation')
+  if (pendingInvitation) {
+    try {
+      const { designId, timestamp } = JSON.parse(pendingInvitation)
+      const inviteTime = new Date(timestamp)
+      const now = new Date()
+
+      // 检查邀请是否在有效期内（30分钟）
+      if (now.getTime() - inviteTime.getTime() < 30 * 60 * 1000) {
+        console.log('检测到待处理的协作邀请，正在处理:', designId)
+
+        // 显示确认对话框
+        try {
+          await ElMessageBox.confirm(
+            '检测到您有一个未处理的协作邀请，是否立即加入？',
+            '继续协作邀请',
+            {
+              confirmButtonText: '加入',
+              cancelButtonText: '忽略',
+              type: 'info',
+              distinguishCancelAndClose: true
+            }
+          )
+
+          // 如果用户点击确认按钮，代码会继续执行到这里
+          console.log('用户点击加入按钮，开始处理协作邀请')
+          // 处理协作邀请
+          await processCollaborationInvite(designId)
+        } catch (error) {
+          // 如果用户点击取消按钮或关闭对话框，会抛出异常并进入这里
+          if (error === 'cancel') {
+            console.log('用户选择忽略协作邀请')
+          } else {
+            console.error('处理协作邀请确认对话框时出错:', error)
+          }
+        }
+      } else {
+        console.log('协作邀请已过期，忽略处理')
+      }
+    } catch (error) {
+      console.error('处理注册后的协作邀请时出错:', error)
+    } finally {
+      // 无论处理成功与否，都清除待处理的邀请信息
+      localStorage.removeItem('pendingInvitation')
+    }
+  }
 }
 
 const handleLogout = () => {
@@ -637,7 +733,7 @@ const toggleCollaboration = async (viaLink = false) => {
         await canvasRef.value.stopCollaboration()
       }
       isCollaborating.value = false
-      ElMessage.success('已停止协作')
+      console.log('已停止协作')
     } else {
       // 开始协作
       if (canvasRef.value) {
@@ -645,11 +741,11 @@ const toggleCollaboration = async (viaLink = false) => {
         await canvasRef.value.startCollaboration(viaLink)
       }
       isCollaborating.value = true
-      ElMessage.success('已开始协作')
+      console.log('已开始协作')
     }
   } catch (error) {
     console.error('切换协作状态时出错:', error)
-    ElMessage.error('操作失败，请稍后重试')
+    console.error('操作失败，请稍后重试')
   } finally {
     isTogglingCollaboration = false
   }
@@ -664,44 +760,50 @@ const checkCollaborationInvite = async () => {
   if (isCollaboration && designId) {
     try {
       // 先显示确认对话框
-      await ElMessageBox.confirm(
-        '您收到了一个协作邀请，是否加入该协作会话？',
-        '协作邀请',
-        {
-          confirmButtonText: '加入',
-          cancelButtonText: '取消',
-          type: 'info',
+      try {
+        await ElMessageBox.confirm(
+          '您收到了一个协作邀请，是否加入该协作会话？',
+          '协作邀请',
+          {
+            confirmButtonText: '加入',
+            cancelButtonText: '取消',
+            type: 'info',
+          }
+        )
+
+        // 用户点击确认后，检查登录状态
+        if (!userStore.isAuthenticated) {
+          // 保存邀请信息到本地存储，以便登录后继续处理
+          localStorage.setItem('pendingInvitation', JSON.stringify({
+            designId,
+            timestamp: new Date().toISOString()
+          }))
+          console.log('已保存协作邀请信息到本地存储:', designId)
+
+          console.log('请先登录后再加入协作会话')
+          loginDialogVisible.value = true
+          return
         }
-      )
 
-      // 用户点击确认后，检查登录状态
-      if (!userStore.isAuthenticated) {
-        ElMessage.warning('请先登录后再加入协作会话')
-        loginDialogVisible.value = true
-        return
-      }
-
-      // 加载设计
-      courseStore.setCurrentCourseId(designId)
-
-      // 等待Canvas组件加载
-      await nextTick()
-
-      // 启动协作模式
-      if (canvasRef.value) {
-        await canvasRef.value.startCollaboration(true)
-        ElMessage.success('已加入协作会话')
-      } else {
-        throw new Error('Canvas组件未加载')
+        // 如果已登录，直接处理协作邀请
+        console.log('用户已登录，直接处理协作邀请')
+        await processCollaborationInvite(designId)
+      } catch (confirmError) {
+        // 如果用户点击取消按钮或关闭对话框
+        if (confirmError === 'cancel') {
+          console.log('用户取消加入协作')
+          ElMessage.info('已取消加入协作')
+          return
+        } else {
+          // 其他错误，重新抛出以便外层catch捕获
+          throw confirmError
+        }
       }
 
     } catch (error) {
-      if (error === 'cancel') {
-        ElMessage.info('已取消加入协作')
-      } else {
-        console.error('处理协作邀请时出错:', error)
-        ElMessage.error('加入协作失败，请稍后重试')
-      }
+      // 处理其他非取消类型的错误
+      console.error('处理协作邀请时出错:', error)
+      ElMessage.error('加入协作失败，请稍后重试')
     } finally {
       // 清除URL参数，避免刷新页面重复处理
       const url = new URL(window.location.href)
@@ -709,6 +811,29 @@ const checkCollaborationInvite = async () => {
       url.searchParams.delete('designId')
       window.history.replaceState({}, document.title, url.toString())
     }
+  }
+}
+
+// 处理协作邀请的共用函数
+const processCollaborationInvite = async (designId: string) => {
+  try {
+    // 加载设计
+    courseStore.setCurrentCourseId(designId)
+
+    // 等待Canvas组件加载
+    await nextTick()
+
+    // 启动协作模式
+    if (canvasRef.value) {
+      await canvasRef.value.startCollaboration(true)
+      console.log('已加入协作会话')
+    } else {
+      throw new Error('Canvas组件未加载')
+    }
+  } catch (error) {
+    console.error('处理协作邀请时出错:', error)
+    console.error('加入协作失败，请稍后重试')
+    throw error
   }
 }
 

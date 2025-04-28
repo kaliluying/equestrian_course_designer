@@ -512,7 +512,7 @@ onMounted(() => {
   // 设置定时器检查WebSocket连接状态
   statusCheckInterval = setInterval(() => {
     checkConnectionStatus()
-  }, 1000) // 每1秒检查一次
+  }, 5000) // 每5秒检查一次
 
   // 添加窗口大小变化监听
   window.addEventListener('resize', handleResize)
@@ -626,8 +626,12 @@ const getOwnerName = () => {
   }
 
   // 如果连接状态正常但仍然找不到所有者，尝试刷新协作者列表
-  if (connectionStatus.value === ConnectionStatus.CONNECTED) {
+  // 但只在最近5秒内没有刷新过的情况下才刷新
+  if (connectionStatus.value === ConnectionStatus.CONNECTED &&
+    (!lastRefreshTime.value || (Date.now() - lastRefreshTime.value) > 5000)) {
     console.log('找不到所有者或发起者，尝试刷新协作者列表')
+    // 更新最后刷新时间
+    lastRefreshTime.value = Date.now()
     // 延迟执行，避免频繁刷新
     setTimeout(() => {
       refreshCollaborators()
@@ -670,14 +674,17 @@ const refreshCollaborators = () => {
   if (connectionStatus.value === ConnectionStatus.CONNECTED && userStore.currentUser) {
     try {
       webSocketStore.sendSyncRequest()
-      ElMessage.success('已刷新协作者列表')
+      // 更新最后刷新时间
+      lastRefreshTime.value = Date.now()
+      // 不显示成功消息，只记录日志
+      console.log('已发送刷新协作者列表请求')
     } catch (error) {
       console.error('刷新协作者列表失败:', error)
-      ElMessage.error('刷新协作者列表失败')
+      // 不显示错误消息
     }
   } else {
-    console.error('未连接到协作服务器，无法刷新，当前状态:', connectionStatus.value)
-    ElMessage.error('未连接到协作服务器，无法刷新')
+    console.log('未连接到协作服务器，无法刷新，当前状态:', connectionStatus.value)
+    // 不显示错误消息
   }
 }
 
@@ -698,6 +705,7 @@ const reconnect = () => {
 const isConnecting = ref(false)
 const connectionError = ref<string | null>(null)
 const previousStatus = ref<ConnectionStatus>(ConnectionStatus.DISCONNECTED)
+const lastRefreshTime = ref<number | null>(null)
 
 // 监听WebSocket连接状态变化
 watch(
@@ -708,8 +716,8 @@ watch(
       isConnecting.value = false
       connectionError.value = null
 
-      // 显示成功消息
-      ElMessage.success('协作连接已建立')
+      // 不显示成功消息
+      console.log('协作连接已建立')
     } else if (newStatus === ConnectionStatus.CONNECTING) {
       isConnecting.value = true
       connectionError.value = null
@@ -718,8 +726,8 @@ watch(
       connectionError.value = '连接失败，请检查网络连接'
       console.error('WebSocket连接错误')
 
-      // 显示错误消息
-      ElMessage.error('协作连接失败，请检查网络连接')
+      // 不显示错误消息
+      console.log('协作连接失败，请检查网络连接')
     } else if (newStatus === ConnectionStatus.DISCONNECTED) {
       isConnecting.value = false
 
@@ -727,8 +735,8 @@ watch(
       if (previousStatus.value === ConnectionStatus.CONNECTED) {
         connectionError.value = '连接已断开'
 
-        // 显示断开连接消息
-        ElMessage.warning('协作连接已断开')
+        // 不显示断开连接消息
+        console.log('协作连接已断开')
       }
     }
 
@@ -746,8 +754,8 @@ const sendMessage = () => {
 
   // 检查WebSocket连接状态
   if (connectionStatus.value !== ConnectionStatus.CONNECTED) {
-    console.error('WebSocket未连接，无法发送消息，当前状态:', connectionStatus.value)
-    ElMessage.error('未连接到协作服务器，无法发送消息')
+    console.log('WebSocket未连接，无法发送消息，当前状态:', connectionStatus.value)
+    // 不显示错误消息
     return
   }
 
@@ -763,7 +771,7 @@ const sendMessage = () => {
     })
   } catch (error) {
     console.error('发送聊天消息失败:', error)
-    ElMessage.error('发送消息失败，请稍后重试')
+    // 不显示错误消息
   }
 }
 

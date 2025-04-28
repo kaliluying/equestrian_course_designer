@@ -293,12 +293,21 @@ const updateObstacleWithCollaboration = (
   obstacleId: string,
   updates: Partial<Obstacle>
 ) => {
-  // 更新本地障碍物
-  courseStore.updateObstacle(obstacleId, updates)
+  // 更新本地障碍物，但不触发事件
+  courseStore.updateObstacle(obstacleId, updates, false)
 
-  // 如果在协作模式下，发送障碍物更新消息
+  // 如果在协作模式下，直接发送障碍物更新消息
   if (isCollaborating) {
-    sendObstacleUpdate(obstacleId, updates)
+    // 创建一个新的更新对象，避免引用问题
+    const updatesToSend = { ...updates }
+
+    // 如果包含position，创建一个新的position对象
+    if (updatesToSend.position) {
+      updatesToSend.position = { ...updatesToSend.position }
+    }
+
+    // 发送更新消息
+    sendObstacleUpdate(obstacleId, updatesToSend)
   }
 }
 

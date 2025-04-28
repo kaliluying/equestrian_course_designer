@@ -444,7 +444,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { Plus, Edit, Hide, View, Delete } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+// import { ElMessage } from 'element-plus' // 不再需要
 import { useCourseStore } from '@/stores/course'
 import { useObstacleStore } from '@/stores/obstacle'
 import { ObstacleType, DecorationCategory } from '@/types/obstacle'
@@ -566,7 +566,6 @@ const startCollaboration = async (viaLink = false) => {
   // 验证设计ID
   if (!designId) {
     console.error('无法开始协作：设计ID为空')
-    ElMessage.error('无法开始协作：设计ID为空')
     return false
   }
 
@@ -622,13 +621,13 @@ const startCollaboration = async (viaLink = false) => {
   return true
 }
 
-const stopCollaboration = () => {
+const stopCollaboration = async (): Promise<boolean> => {
   console.log('停止协作，当前协作状态:', isCollaborating.value)
 
   // 添加检查，如果当前不在协作中，直接返回
   if (!isCollaborating.value) {
     console.log('当前不在协作中，无需停止')
-    return
+    return true
   }
 
   try {
@@ -655,6 +654,8 @@ const stopCollaboration = () => {
     } catch (hookError) {
       console.error('移除协作钩子时出错:', hookError)
     }
+
+    return true
   } catch (error) {
     console.error('停止协作时出错:', error)
 
@@ -668,6 +669,8 @@ const stopCollaboration = () => {
     } catch (eventError) {
       console.error('发送错误状态的collaboration-stopped事件失败:', eventError)
     }
+
+    return false
   }
 }
 
@@ -898,9 +901,18 @@ const handleMouseMove = (event: MouseEvent) => {
             Math.abs(newPosition.x - lastSentPosition.x) > 1 ||
             Math.abs(newPosition.y - lastSentPosition.y) > 1
 
-          // 使用当前时间戳来节流发送消息，每25毫秒发送一次
+          // 使用当前时间戳来节流发送消息，每500毫秒发送一次（增加节流时间）
           const now = Date.now()
-          if (hasPositionChanged && (!obstacle.lastUpdateTime || now - obstacle.lastUpdateTime > 25)) {
+          // 从localStorage获取上次更新时间，而不是从obstacle对象上获取
+          const lastUpdateTimeStr = localStorage.getItem(`lastUpdateTime_${obstacle.id}`)
+          const lastUpdateTime = lastUpdateTimeStr ? parseInt(lastUpdateTimeStr) : 0
+
+          // 增加位置变化的阈值，只有移动超过3像素才发送更新
+          const hasSignificantPositionChange = !lastSentPosition ||
+            Math.abs(newPosition.x - lastSentPosition.x) > 3 ||
+            Math.abs(newPosition.y - lastSentPosition.y) > 3
+
+          if (hasPositionChanged && hasSignificantPositionChange && (now - lastUpdateTime > 500)) {
             // 创建一个新的位置对象，避免引用问题
             const positionToSend = { ...newPosition }
             console.log('发送障碍物位置更新消息:', obstacle.id, positionToSend)
@@ -910,8 +922,8 @@ const handleMouseMove = (event: MouseEvent) => {
               const result = sendObstacleUpdate(obstacle.id, { position: positionToSend })
               if (result) {
                 console.log('障碍物位置更新消息发送成功')
-                // 更新最后发送时间
-                obstacle.lastUpdateTime = now
+                // 更新最后发送时间到localStorage
+                localStorage.setItem(`lastUpdateTime_${obstacle.id}`, now.toString())
                 // 将最后发送的位置保存到localStorage，以便在需要时重新发送
                 localStorage.setItem(`lastPosition_${obstacle.id}`, JSON.stringify(positionToSend))
               } else {
@@ -969,17 +981,25 @@ const handleMouseMove = (event: MouseEvent) => {
       const hasRotationChanged = lastSentRotation === null ||
         Math.abs(newRotation - lastSentRotation) > 1
 
-      // 使用当前时间戳来节流发送消息，每25毫秒发送一次
+      // 使用当前时间戳来节流发送消息，每500毫秒发送一次（增加节流时间）
       const now = Date.now()
-      if (hasRotationChanged && (!draggingObstacle.value.lastRotationTime || now - draggingObstacle.value.lastRotationTime > 25)) {
+      // 从localStorage获取上次更新时间，而不是从obstacle对象上获取
+      const lastRotationTimeStr = localStorage.getItem(`lastRotationTime_${draggingObstacle.value.id}`)
+      const lastRotationTime = lastRotationTimeStr ? parseInt(lastRotationTimeStr) : 0
+
+      // 增加角度变化的阈值，只有旋转超过3度才发送更新
+      const hasSignificantRotationChange = lastSentRotation === null ||
+        Math.abs(newRotation - lastSentRotation) > 3
+
+      if (hasRotationChanged && hasSignificantRotationChange && (now - lastRotationTime > 500)) {
         console.log('发送障碍物旋转更新消息:', draggingObstacle.value.id, newRotation)
 
         try {
           const result = sendObstacleUpdate(draggingObstacle.value.id, { rotation: newRotation })
           if (result) {
             console.log('障碍物旋转更新消息发送成功')
-            // 更新最后发送时间
-            draggingObstacle.value.lastRotationTime = now
+            // 更新最后发送时间到localStorage
+            localStorage.setItem(`lastRotationTime_${draggingObstacle.value.id}`, now.toString())
             // 将最后发送的旋转角度保存到localStorage
             localStorage.setItem(`lastRotation_${draggingObstacle.value.id}`, JSON.stringify(newRotation))
           } else {
@@ -1309,7 +1329,7 @@ const handleDrop = (event: DragEvent) => {
         // 立即选中新添加的障碍物
         if (addedObstacle) {
           selectObstacle(addedObstacle, false)
-          ElMessage.success('已添加共享障碍物到设计中')
+          console.log('已添加共享障碍物到设计中')
         }
 
         // 如果在协作模式下，发送添加障碍物的消息
@@ -2001,7 +2021,7 @@ const handleGlobalMouseUp = (event: MouseEvent) => {
     if (isCollaborating.value) {
       console.log('拖拽结束，检查是否需要发送最终位置')
       try {
-        // 为所有选中的障碍物检查并发送最终位置
+        // 为所有选中的障碍物检查位置是否有变化，只有变化时才发送
         selectedObstacles.value.forEach((obstacle) => {
           // 获取上次发送的位置
           let lastSentPosition = null
@@ -2014,12 +2034,12 @@ const handleGlobalMouseUp = (event: MouseEvent) => {
             }
           }
 
-          // 检查位置是否有实际变化（至少1像素）
+          // 检查位置是否有实际变化（至少移动1像素）
           const hasPositionChanged = !lastSentPosition ||
             Math.abs(obstacle.position.x - lastSentPosition.x) > 1 ||
             Math.abs(obstacle.position.y - lastSentPosition.y) > 1
 
-          // 只有当位置实际变化时才发送最终位置
+          // 只有位置有变化时才发送更新
           if (hasPositionChanged) {
             // 创建一个新的位置对象，避免引用问题
             const positionToSend = { ...obstacle.position }
@@ -2030,6 +2050,8 @@ const handleGlobalMouseUp = (event: MouseEvent) => {
               console.log('障碍物', obstacle.id, '的最终位置更新消息发送成功')
               // 更新最后发送的位置
               localStorage.setItem(`lastPosition_${obstacle.id}`, JSON.stringify(positionToSend))
+              // 清除节流时间戳，确保下次拖拽可以立即发送
+              localStorage.removeItem(`lastUpdateTime_${obstacle.id}`)
             } else {
               console.error('障碍物', obstacle.id, '的最终位置更新消息发送失败')
               // 尝试重新发送
@@ -2059,7 +2081,8 @@ const handleGlobalMouseUp = (event: MouseEvent) => {
       try {
         // 获取上次发送的旋转角度
         let lastSentRotation = null
-        const lastRotationStr = localStorage.getItem(`lastRotation_${draggingObstacle.value.id}`)
+        const obstacleId = draggingObstacle.value.id // 保存ID以便在setTimeout中使用
+        const lastRotationStr = localStorage.getItem(`lastRotation_${obstacleId}`)
         if (lastRotationStr) {
           try {
             lastSentRotation = JSON.parse(lastRotationStr)
@@ -2069,30 +2092,31 @@ const handleGlobalMouseUp = (event: MouseEvent) => {
         }
 
         // 检查旋转角度是否有实际变化（至少1度）
+        const rotationToSend = draggingObstacle.value.rotation
         const hasRotationChanged = lastSentRotation === null ||
-          Math.abs(draggingObstacle.value.rotation - lastSentRotation) > 1
+          Math.abs(rotationToSend - lastSentRotation) > 1
 
-        // 只有当旋转角度实际变化时才发送最终角度
+        // 只有角度有变化时才发送更新
         if (hasRotationChanged) {
-          // 创建一个新的旋转角度值，避免引用问题
-          const rotationToSend = draggingObstacle.value.rotation
-          console.log('发送障碍物最终旋转角度:', draggingObstacle.value.id, rotationToSend)
+          console.log('发送障碍物最终旋转角度:', obstacleId, rotationToSend)
 
-          const result = sendObstacleUpdate(draggingObstacle.value.id, { rotation: rotationToSend })
+          const result = sendObstacleUpdate(obstacleId, { rotation: rotationToSend })
           if (result) {
             console.log('最终角度更新消息发送成功')
             // 更新最后发送的旋转角度
-            localStorage.setItem(`lastRotation_${draggingObstacle.value.id}`, JSON.stringify(rotationToSend))
+            localStorage.setItem(`lastRotation_${obstacleId}`, JSON.stringify(rotationToSend))
+            // 清除节流时间戳，确保下次旋转可以立即发送
+            localStorage.removeItem(`lastRotationTime_${obstacleId}`)
           } else {
             console.error('最终角度更新消息发送失败')
             // 尝试重新发送
             setTimeout(() => {
-              console.log('尝试重新发送最终角度:', draggingObstacle.value.id, rotationToSend)
-              sendObstacleUpdate(draggingObstacle.value.id, { rotation: rotationToSend })
+              console.log('尝试重新发送最终角度:', obstacleId, rotationToSend)
+              sendObstacleUpdate(obstacleId, { rotation: rotationToSend })
             }, 100)
           }
         } else {
-          console.log('障碍物', draggingObstacle.value.id, '旋转角度未变化，不发送更新')
+          console.log('障碍物', obstacleId, '角度未变化，不发送更新')
         }
       } catch (error) {
         console.error('发送最终角度更新失败:', error)
@@ -2426,7 +2450,7 @@ const endStyle = computed(() => {
 // 修改生成路线的方法
 const handleGenerateCoursePath = () => {
   if (courseStore.currentCourse.obstacles.length === 0) {
-    ElMessage.warning('请先添加障碍物')
+    console.log('请先添加障碍物')
     return
   }
 
@@ -2835,16 +2859,32 @@ const totalDistance = computed(() => {
 
 // 定义障碍物更新事件处理函数
 const handleObstacleUpdated = (event: Event) => {
+  // 完全禁用此函数，不再处理障碍物更新事件
+  // 这样可以避免循环更新问题
+  console.log('障碍物更新事件已被禁用，不再处理')
+  return
+
+  /*
   const customEvent = event as CustomEvent
   if (isCollaborating.value && customEvent.detail) {
-    const { obstacleId, updates } = customEvent.detail
-    console.log('收到障碍物更新事件:', obstacleId, updates)
-    // 避免重复发送自己刚刚在拖拽中发送的更新
-    if (!isDragging.value && !isRotating.value) {
+    const { obstacleId, updates, senderId } = customEvent.detail
+    console.log('收到障碍物更新事件:', obstacleId, updates, '发送者:', senderId)
+
+    // 检查是否是从WebSocket接收到的消息
+    // 如果是从WebSocket接收到的消息，senderId会存在且不为空
+    // 这种情况下不需要再发送回去，因为这是其他协作者发来的消息
+    const isFromWebSocket = senderId !== undefined && senderId !== null
+
+    // 只有当不是从WebSocket接收到的消息，且当前不在拖拽或旋转状态时，才发送更新
+    if (!isFromWebSocket && !isDragging.value && !isRotating.value) {
       console.log('发送障碍物更新消息:', obstacleId, updates)
       sendObstacleUpdate(obstacleId, updates)
+    } else {
+      console.log('不发送障碍物更新消息，原因:',
+        isFromWebSocket ? '消息来自WebSocket' : '当前正在拖拽或旋转')
     }
   }
+  */
 }
 
 // 设置 inheritAttrs 为 false，防止属性自动继承
