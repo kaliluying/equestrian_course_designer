@@ -11,6 +11,7 @@
 """
 
 import json  # 用于JSON数据的序列化和反序列化
+
 # Django Channels的异步WebSocket消费者基类
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async  # 用于在异步环境中执行同步数据库操作

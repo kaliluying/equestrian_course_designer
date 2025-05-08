@@ -84,27 +84,53 @@
 
     <!-- 聊天区域 -->
     <div v-if="isConnected" class="chat-section">
-      <h4>聊天</h4>
-      <div class="chat-messages" ref="chatMessagesRef">
+      <div class="chat-header">
+        <h4>聊天消息</h4>
+        <el-button size="small" @click="toggleChatExpand">
+          {{ isChatExpanded ? '收起' : '展开' }}
+        </el-button>
+      </div>
+
+      <div class="chat-messages" ref="chatMessagesRef" :class="{ 'expanded': isChatExpanded }">
         <div v-if="chatMessages.length === 0" class="no-messages">
-          暂无消息，发送第一条消息开始聊天
+          <el-empty description="暂无消息，发送第一条消息开始聊天" :image-size="60">
+            <template #image>
+              <el-icon style="font-size: 30px">
+                <ChatDotRound />
+              </el-icon>
+            </template>
+          </el-empty>
         </div>
         <div v-else class="message-list">
-          <div v-for="message in chatMessages" :key="message.id"
-            :class="['message-item', { 'system-message': message.senderId === 'system', 'my-message': String(message.senderId) === String(currentUser?.id) }]">
+          <div v-for="message in chatMessages" :key="message.id" :class="['message-item', {
+            'system-message': message.senderId === 'system',
+            'my-message': String(message.senderId) === String(currentUser?.id)
+          }]">
             <div class="message-header">
-              <span class="message-sender">{{ message.senderName }}</span>
+              <div class="message-sender-info">
+                <div class="message-avatar" :style="{ backgroundColor: getCollaboratorColor(message.senderId) }">
+                  {{ message.senderName ? message.senderName.charAt(0).toUpperCase() : '?' }}
+                </div>
+                <span class="message-sender">{{ message.senderName }}</span>
+              </div>
               <span class="message-time">{{ formatMessageTime(message.timestamp) }}</span>
             </div>
             <div class="message-content">{{ message.content }}</div>
           </div>
         </div>
       </div>
+
       <div class="chat-input">
         <el-input v-model="chatInput" placeholder="输入消息..." :disabled="connectionStatus !== ConnectionStatus.CONNECTED"
-          @keyup.enter="sendMessage" />
+          @keyup.enter="sendMessage" class="chat-input-field">
+          <template #prefix>
+            <el-icon>
+              <ChatLineRound />
+            </el-icon>
+          </template>
+        </el-input>
         <el-button type="primary" :disabled="connectionStatus !== ConnectionStatus.CONNECTED || !chatInput.trim()"
-          @click="sendMessage">
+          @click="sendMessage" class="send-button">
           发送
         </el-button>
       </div>
@@ -125,7 +151,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useWebSocketStore, ConnectionStatus, type CollaboratorInfo } from '@/stores/websocket'
 import { ElMessage } from 'element-plus'
-import { Document, Check } from '@element-plus/icons-vue'
+import { Document, Check, ChatDotRound, ChatLineRound } from '@element-plus/icons-vue'
 // 导入API配置
 import apiConfig from '@/config/api'
 
@@ -147,6 +173,7 @@ const collaborators = ref(webSocketStore.collaborators)
 const session = ref(webSocketStore.session)
 const chatInput = ref('') // 添加聊天输入框的值
 const chatMessagesRef = ref<HTMLElement | null>(null) // 添加聊天消息容器引用
+const isChatExpanded = ref(false) // 聊天区域是否展开
 
 // 监听webSocketStore中的值变化并同步到本地ref
 watch(
@@ -582,7 +609,43 @@ let statusCheckInterval: number | null = null
 
 // 检查WebSocket连接状态
 const checkConnectionStatus = () => {
-  webSocketStore.checkConnection(true)
+  webSocketStore.checkConnection()
+}
+
+// 切换聊天区域的展开状态
+const toggleChatExpand = () => {
+  isChatExpanded.value = !isChatExpanded.value
+
+  // 如果展开聊天区域，滚动到最新消息
+  if (isChatExpanded.value) {
+    nextTick(() => {
+      scrollToBottom()
+    })
+  }
+}
+
+// 获取协作者的颜色
+const getCollaboratorColor = (senderId: string) => {
+  // 如果是系统消息，返回灰色
+  if (senderId === 'system') {
+    return '#909399'
+  }
+
+  // 如果是当前用户，返回主题色
+  if (String(senderId) === String(currentUser.value?.id)) {
+    return '#409EFF'
+  }
+
+  // 查找协作者
+  const collaborator = collaborators.value.find(c => String(c.id) === String(senderId))
+
+  // 如果找到协作者，返回其颜色
+  if (collaborator && collaborator.color) {
+    return collaborator.color
+  }
+
+  // 默认颜色
+  return '#67c23a'
 }
 
 // 尝试获取会话信息
@@ -673,10 +736,67 @@ const formatMessageTime = (timestamp: Date) => {
 const refreshCollaborators = () => {
   if (connectionStatus.value === ConnectionStatus.CONNECTED && userStore.currentUser) {
     try {
-      webSocketStore.sendSyncRequest()
+      // 检查是否在短时间内已经刷新过
+      const now = Date.now()
+      const refreshKey = 'collaborators_refresh_time'
+      const lastRefreshTime = parseInt(localStorage.getItem(refreshKey) || '0')
+      const debounceTime = 5000 // 5秒内不重复刷新
+
+      if (now - lastRefreshTime < debounceTime) {
+        console.log(`已在${debounceTime / 1000}秒内刷新过协作者列表，跳过刷新`)
+        return
+      }
+
+      // 记录本次刷新时间
+      localStorage.setItem(refreshKey, now.toString())
+
+      // 设置刷新标志，避免触发不必要的消息
+      localStorage.setItem('refreshing_collaborators', 'true')
+
+      // 发送同步请求，但不触发画布同步
+      try {
+        // 使用特殊的同步请求，只请求协作者列表，不请求画布状态
+        // 使用类型断言访问sendMessage方法
+        if (typeof (webSocketStore as any).sendMessage === 'function') {
+          (webSocketStore as any).sendMessage('sync_request', {
+            requestType: 'collaborators_only', // 只请求协作者列表
+            includeObstacles: false, // 不包括障碍物
+            includePaths: false, // 不包括路径
+            timestamp: new Date().toISOString(),
+            refreshOnly: true, // 标记这是一个刷新请求
+            skipCanvasSync: true, // 标记不需要画布同步
+          })
+          console.log('已发送刷新协作者列表请求（不包含画布状态）')
+        } else {
+          // 使用修改后的sendSyncRequest方法，只请求协作者列表
+          if (typeof webSocketStore.sendSyncRequest === 'function') {
+            // 添加临时标记，表示这是一个只刷新协作者列表的请求
+            localStorage.setItem('collaborators_only_sync', 'true')
+
+            // 设置定时器，5秒后清除标记
+            setTimeout(() => {
+              localStorage.removeItem('collaborators_only_sync')
+            }, 5000)
+
+            // 发送请求
+            webSocketStore.sendSyncRequest()
+            console.log('已发送只刷新协作者列表的同步请求')
+          } else {
+            console.error('无法访问sendSyncRequest方法')
+          }
+        }
+      } catch (innerError) {
+        console.error('发送刷新请求失败:', innerError)
+      }
+
       // 更新最后刷新时间
-      lastRefreshTime.value = Date.now()
-      // 不显示成功消息，只记录日志
+      localStorage.setItem('last_refresh_time', now.toString())
+
+      // 设置定时器，5秒后清除刷新标志
+      setTimeout(() => {
+        localStorage.removeItem('refreshing_collaborators')
+      }, 5000)
+
       console.log('已发送刷新协作者列表请求')
     } catch (error) {
       console.error('刷新协作者列表失败:', error)
@@ -693,9 +813,35 @@ const reconnect = () => {
   if (connectionStatus.value === ConnectionStatus.ERROR ||
     connectionStatus.value === ConnectionStatus.DISCONNECTED) {
     console.log('尝试重新连接WebSocket')
+
     // 检查URL中是否有collaboration参数，如果有则表示是通过链接加入
     const urlParams = new URLSearchParams(window.location.search)
     const isViaLink = urlParams.has('collaboration') && urlParams.has('designId')
+
+    // 检查用户是否为高级会员或通过链接加入
+    const isPremiumOrViaLink = userStore.currentUser?.is_premium_active || isViaLink
+
+    if (!isPremiumOrViaLink) {
+      // 非高级会员且不是通过链接加入，触发自定义事件
+      console.error('非高级会员用户尝试使用协作功能')
+
+      // 触发自定义事件，通知App.vue显示会员提示
+      try {
+        const event = new CustomEvent('collaboration-premium-required', {
+          bubbles: true,
+          detail: {
+            timestamp: new Date().toISOString(),
+            error: true,
+            reason: '协作功能是会员专属功能'
+          }
+        })
+        document.dispatchEvent(event)
+      } catch (error) {
+        console.error('触发会员提示事件失败:', error)
+      }
+      return
+    }
+
     console.log('重新连接WebSocket，是否通过链接加入:', isViaLink)
     connect(props.designId, isViaLink) // 调用WebSocketStore中的connect方法，并传递是否通过链接加入
   }
@@ -807,15 +953,17 @@ watch(chatMessages, () => {
 .collaboration-panel {
   position: fixed;
   /* 移除top和right定位，完全依赖transform */
-  width: 300px;
+  width: 380px;
+  /* 增加宽度，从300px增加到380px */
   height: auto;
-  max-height: calc(100vh - 100px);
+  max-height: calc(100vh - 80px);
+  /* 增加最大高度 */
   background-color: #fff;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   z-index: 1000;
   display: flex;
   flex-direction: column;
-  transition: transform 0.05s cubic-bezier(0.17, 0.84, 0.44, 1), box-shadow 0.3s ease;
+  transition: transform 0.05s cubic-bezier(0.17, 0.84, 0.44, 1), box-shadow 0.3s ease, width 0.3s ease;
   border-radius: 12px;
   overflow: hidden;
   will-change: transform;
@@ -1016,15 +1164,18 @@ watch(chatMessages, () => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background-color: #fafafa;
+  background-color: #f5f7fa;
   border-radius: 8px;
-  padding: 12px;
-  margin-top: 10px;
+  padding: 14px;
+  margin-top: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  min-height: 400px;
+  /* 设置最小高度 */
 }
 
 .chat-section h4 {
   margin: 0 0 10px 0;
-  font-size: 14px;
+  font-size: 16px;
   color: #409EFF;
   font-weight: 600;
 }
@@ -1032,13 +1183,25 @@ watch(chatMessages, () => {
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 10px;
+  padding: 12px;
   background-color: #fff;
   border-radius: 8px;
-  margin-bottom: 10px;
-  max-height: 300px;
+  margin-bottom: 12px;
+  max-height: 450px;
+  /* 增加最大高度，从300px增加到450px */
+  min-height: 300px;
+  /* 设置最小高度 */
   scroll-behavior: smooth;
   box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.05);
+  transition: max-height 0.3s ease, min-height 0.3s ease;
+}
+
+/* 聊天区域展开时的样式 */
+.chat-messages.expanded {
+  max-height: 600px;
+  /* 展开时的最大高度 */
+  min-height: 450px;
+  /* 展开时的最小高度 */
 }
 
 .no-messages {
@@ -1053,18 +1216,22 @@ watch(chatMessages, () => {
 .message-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  padding: 4px;
 }
 
 .message-item {
   margin-bottom: 8px;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: 12px;
   background-color: #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  max-width: 85%;
+  max-width: 90%;
+  /* 增加最大宽度，从85%增加到90% */
   word-break: break-word;
-  transition: transform 0.2s ease;
+  transition: all 0.2s ease;
+  position: relative;
+  border: 1px solid #f0f0f0;
 }
 
 .message-item:hover {
@@ -1079,6 +1246,7 @@ watch(chatMessages, () => {
   border-top-right-radius: 12px;
   border-top-left-radius: 12px;
   border-bottom-left-radius: 12px;
+  border-color: #d9ecff;
 }
 
 .system-message {
@@ -1088,39 +1256,68 @@ watch(chatMessages, () => {
   text-align: center;
   max-width: 100%;
   box-shadow: none;
-  padding: 6px 10px;
-  font-size: 12px;
+  padding: 8px 12px;
+  font-size: 13px;
   border-radius: 20px;
+  margin: 8px 0;
+  border: none;
 }
 
 .chat-input {
   display: flex;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 10px;
+  padding: 6px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
 }
 
 .message-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+  padding-bottom: 6px;
+}
+
+.message-sender-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.message-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  font-size: 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .message-sender {
   font-weight: bold;
-  font-size: 13px;
+  font-size: 14px;
   color: #303133;
 }
 
 .message-time {
-  font-size: 11px;
+  font-size: 12px;
   color: #909399;
+  margin-left: 4px;
 }
 
 .message-content {
-  font-size: 14px;
+  font-size: 15px;
   word-break: break-word;
-  line-height: 1.5;
+  line-height: 1.6;
+  padding: 2px 0;
 }
 
 .connection-error {

@@ -209,6 +209,7 @@ import { Position, User, ChatDotRound, SwitchButton, Connection, Key, UserFilled
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { useCourseStore } from '@/stores/course'
+import { useWebSocketStore, MessageType } from '@/stores/websocket'
 import type { CollaborationSession } from '@/stores/websocket'
 import ResizableDivider from '@/components/ResizableDivider.vue'
 
@@ -380,16 +381,45 @@ const handleCollaborationConnected = (event: CustomEvent) => {
   nextTick(() => {
     if (canvasRef.value) {
       console.log('准备同步画布状态')
-      // 触发画布状态同步
-      const event = new CustomEvent('sync-canvas-state', {
-        detail: {
-          course: courseStore.currentCourse,
-          obstacles: courseStore.currentCourse.obstacles,
-          timestamp: Date.now()
+
+      // 如果是通过链接加入（协作者），发送同步请求获取完整画布状态
+      const viaLink = localStorage.getItem('via_link') === 'true'
+      if (viaLink) {
+        console.log('通过链接加入，发送同步请求获取完整画布状态')
+
+        // 检查是否已经发送过同步请求
+        const syncRequested = localStorage.getItem('sync_requested') === 'true'
+        if (!syncRequested) {
+          // 使用WebSocket store发送同步请求
+          const webSocketStore = useWebSocketStore()
+
+          // 延迟1秒后发送同步请求，确保WebSocket连接已完全建立
+          setTimeout(() => {
+            console.log('延迟1秒后发送同步请求')
+            localStorage.setItem('sync_requested', 'true')
+            // 使用类型断言访问sendSyncRequest方法
+            if (typeof (webSocketStore as any).sendSyncRequest === 'function') {
+              (webSocketStore as any).sendSyncRequest()
+            } else {
+              console.warn('webSocketStore中没有sendSyncRequest方法')
+            }
+          }, 1000)
+        } else {
+          console.log('已经发送过同步请求，不再重复发送')
         }
-      })
-      document.dispatchEvent(event)
-      console.log('已触发画布状态同步事件')
+      } else {
+        // 如果是创建者，触发画布状态同步
+        console.log('作为创建者，触发画布状态同步')
+        const event = new CustomEvent('sync-canvas-state', {
+          detail: {
+            course: courseStore.currentCourse,
+            obstacles: courseStore.currentCourse.obstacles,
+            timestamp: Date.now()
+          }
+        })
+        document.dispatchEvent(event)
+        console.log('已触发画布状态同步事件')
+      }
     } else {
       console.warn('canvasRef 不存在，无法同步画布状态')
     }
@@ -473,6 +503,190 @@ const handleRouteGenerated = () => {
   }
 }
 
+// 监听新协作者加入事件
+const handleCollaboratorJoined = (event: CustomEvent) => {
+  console.log('收到新协作者加入事件:', event.detail)
+
+  // 防抖处理：检查是否在短时间内已经处理过该协作者的加入事件
+  const collaborator = event.detail.collaborator
+  if (!collaborator || !collaborator.id) {
+    console.error('事件中缺少协作者信息')
+    return
+  }
+
+  const responseKey = `sync_response_sent_${collaborator.id}`
+  const lastResponseTime = parseInt(localStorage.getItem(responseKey) || '0')
+  const now = Date.now()
+  const debounceTime = 10000 // 10秒内不重复发送
+
+  if (now - lastResponseTime < debounceTime) {
+    console.log(`已在${debounceTime / 1000}秒内响应过该协作者，跳过:`, collaborator.username)
+    return
+  }
+
+  // 记录本次响应时间
+  localStorage.setItem(responseKey, now.toString())
+
+  // 获取当前用户ID和WebSocket会话信息
+  const userStore = useUserStore()
+  const webSocketStore = useWebSocketStore()
+  const currentUserId = userStore.currentUser?.id
+
+  // 从事件中获取更多信息
+  const eventSession = event.detail.session
+  const eventIsOwner = event.detail.isOwner
+  const eventCurrentUserId = event.detail.currentUserId
+
+  console.log('事件中的会话信息:', eventSession)
+  console.log('事件中的isOwner值:', eventIsOwner)
+  console.log('事件中的当前用户ID:', eventCurrentUserId)
+
+  // 获取会话信息，包括所有者ID
+  const session = (webSocketStore as any).session || eventSession
+  const sessionOwnerId = session?.owner
+
+  console.log('当前用户ID:', currentUserId)
+  console.log('会话所有者ID:', sessionOwnerId)
+
+  // 判断当前用户是否为所有者
+  const isOwner = (currentUserId && sessionOwnerId && String(currentUserId) === String(sessionOwnerId)) || eventIsOwner === true
+  console.log('当前用户是否为所有者:', isOwner)
+
+  // 检查是否通过链接加入
+  const viaLink = localStorage.getItem('via_link') === 'true'
+  console.log('是否通过链接加入:', viaLink)
+
+  // 如果当前用户是所有者（或创建者）且在协作状态，则发送完整画布状态
+  if (isCollaborating.value) {
+    // 使用Canvas组件的isCreator方法判断当前用户是否为创建者
+    if (canvasRef.value && typeof canvasRef.value.isCreator === 'function') {
+      const isCreator = canvasRef.value.isCreator()
+      console.log('Canvas组件判断当前用户是否为创建者:', isCreator)
+
+      if (isCreator) {
+        console.log('当前用户是创建者，准备发送完整画布状态给新加入的协作者')
+
+        // 使用Canvas组件的sendFullCanvasState方法发送完整画布状态
+        if (typeof canvasRef.value.sendFullCanvasState === 'function') {
+          // 发送给特定用户
+          canvasRef.value.sendFullCanvasState(event.detail.collaborator.id)
+          console.log('已使用Canvas组件方法发送完整画布状态给:', event.detail.collaborator.username)
+        } else {
+          console.warn('Canvas组件没有sendFullCanvasState方法')
+        }
+      } else {
+        console.log('当前用户不是创建者，跳过发送完整画布状态')
+      }
+    } else if (isOwner || !viaLink) {
+      // 回退到原来的判断逻辑
+      console.log('使用回退逻辑判断当前用户是所有者或创建者，准备发送完整画布状态')
+
+      if (canvasRef.value) {
+        console.log('canvasRef 存在，准备发送完整画布状态')
+
+        // 确保 courseStore.currentCourse 存在
+        if (!courseStore.currentCourse) {
+          console.error('courseStore.currentCourse 不存在，无法发送完整画布状态')
+          return
+        }
+
+        // 构建同步响应消息
+        const syncResponse = {
+          obstacles: JSON.parse(JSON.stringify(courseStore.currentCourse.obstacles)),
+          path: {
+            visible: courseStore.coursePath.visible,
+            points: JSON.parse(JSON.stringify(courseStore.coursePath.points)),
+            startPoint: courseStore.startPoint ? JSON.parse(JSON.stringify(courseStore.startPoint)) : null,
+            endPoint: courseStore.endPoint ? JSON.parse(JSON.stringify(courseStore.endPoint)) : null
+          },
+          timestamp: new Date().toISOString(),
+          targetUser: event.detail.collaborator.id // 指定目标用户
+        }
+
+        // 发送同步响应
+        console.log('发送同步响应给新加入的协作者:', event.detail.collaborator.username)
+
+        // 为确保消息能够正确发送，尝试直接发送
+        try {
+          // 使用类型断言访问socket属性
+          const socket = (webSocketStore as any).$state?.socket
+          const userStore = useUserStore()
+          const currentUserId = userStore.currentUser?.id
+
+          if (socket && socket.readyState === WebSocket.OPEN) {
+            const directMessage = {
+              type: 'sync_response',
+              senderId: String(currentUserId),
+              senderName: userStore.currentUser?.username || '未知用户',
+              // 使用类型断言访问session属性
+              sessionId: (webSocketStore as any).session?.id || '',
+              timestamp: new Date().toISOString(),
+              payload: syncResponse
+            }
+
+            socket.send(JSON.stringify(directMessage))
+            console.log('同步响应消息直接发送成功')
+          }
+        } catch (error) {
+          console.error('直接发送同步响应失败:', error)
+        }
+      } else {
+        console.warn('canvasRef 不存在，无法发送完整画布状态')
+      }
+    } else {
+      console.log('当前用户不是所有者或创建者，跳过发送完整画布状态')
+    }
+  } else {
+    console.log('当前不在协作状态，跳过发送完整画布状态')
+  }
+}
+
+// 防抖变量，避免短时间内多次触发弹窗
+let premiumPromptDebounceTimer: number | null = null;
+let premiumPromptShowing = false;
+
+// 监听会员检查事件
+const handleCollaborationPremiumRequired = (event: CustomEvent) => {
+  console.log('收到会员检查事件:', event.detail)
+  isCollaborating.value = false
+
+  // 如果已经在显示弹窗，不再重复显示
+  if (premiumPromptShowing) {
+    console.log('已经在显示会员提示弹窗，跳过')
+    return
+  }
+
+  // 如果在短时间内已经触发过，不再重复显示
+  if (premiumPromptDebounceTimer !== null) {
+    console.log('短时间内已经触发过会员提示，跳过')
+    return
+  }
+
+  // 设置防抖标记
+  premiumPromptShowing = true
+  premiumPromptDebounceTimer = window.setTimeout(() => {
+    premiumPromptDebounceTimer = null
+  }, 5000) // 5秒内不重复触发
+
+  // 显示会员提示对话框
+  ElMessageBox.confirm(
+    '协作功能是会员专属功能，请升级到会员以使用此功能。',
+    '会员专属功能',
+    {
+      confirmButtonText: '立即升级',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(() => {
+    // 跳转到用户资料页面
+    router.push('/profile')
+    premiumPromptShowing = false
+  }).catch(() => {
+    // 用户取消操作
+    premiumPromptShowing = false
+  })
+}
+
 onMounted(() => {
   userStore.initializeAuth()
 
@@ -493,8 +707,10 @@ onMounted(() => {
   document.addEventListener('collaboration-connected', handleCollaborationConnected as EventListener)
   document.addEventListener('collaboration-failed', handleCollaborationFailed as EventListener)
   document.addEventListener('collaboration-disconnected', handleCollaborationDisconnected as EventListener)
+  document.addEventListener('collaboration-premium-required', handleCollaborationPremiumRequired as EventListener)
   document.addEventListener('sync-canvas-state', handleCollaborationSync as EventListener)
   document.addEventListener('route-generated', handleRouteGenerated as EventListener)
+  document.addEventListener('collaborator-joined', handleCollaboratorJoined as EventListener)
 
   // 检查URL参数中是否有协作邀请
   checkCollaborationInvite()
@@ -555,6 +771,7 @@ onUnmounted(() => {
   document.removeEventListener('collaboration-connected', handleCollaborationConnected as EventListener)
   document.removeEventListener('collaboration-failed', handleCollaborationFailed as EventListener)
   document.removeEventListener('collaboration-disconnected', handleCollaborationDisconnected as EventListener)
+  document.removeEventListener('collaboration-premium-required', handleCollaborationPremiumRequired as EventListener)
   document.removeEventListener('course-autosaved', showAutosaveNotificationHandler as EventListener)
   document.removeEventListener('route-generated', handleRouteGenerated as EventListener)
 })

@@ -252,6 +252,9 @@ export const useWebSocketStore = defineStore('websocket', () => {
         case MessageType.SESSION_UPDATE:
           handleSessionUpdateMessage(message)
           break
+        case MessageType.SYNC_REQUEST:
+          handleSyncRequestMessage(message)
+          break
         case MessageType.SYNC_RESPONSE:
           handleSyncResponseMessage(message)
           break
@@ -287,6 +290,12 @@ export const useWebSocketStore = defineStore('websocket', () => {
         username: string
         color: string
         role: string
+      }
+      requestCanvasState?: boolean // 是否请求画布状态
+      clientInfo?: {
+        browser: string
+        screenSize: string
+        timestamp: string
       }
     }
 
@@ -420,6 +429,152 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
     // 更新协作者列表后输出日志
     console.log('协作者列表已更新:', JSON.stringify(collaborators.value))
+
+    // 触发新协作者加入事件，通知所有者发送完整画布状态
+    try {
+      // 获取当前用户ID
+      const currentUserId = userStore.currentUser?.id
+
+      // 如果不是自己加入，触发事件
+      if (collaborator.id !== String(currentUserId)) {
+        console.log('准备触发新协作者加入事件:', collaborator.username)
+
+        // 添加更多日志，帮助调试
+        console.log('当前用户ID:', currentUserId)
+        console.log('会话所有者ID:', session.value?.owner)
+        console.log('当前用户是否为所有者:', isOwner.value)
+
+        // 检查是否已经触发过该协作者的加入事件
+        const joinedCollaboratorsKey = 'joined_collaborators'
+        let joinedCollaborators: string[] = []
+
+        try {
+          const storedCollaborators = localStorage.getItem(joinedCollaboratorsKey)
+          if (storedCollaborators) {
+            joinedCollaborators = JSON.parse(storedCollaborators)
+          }
+        } catch (e) {
+          console.error('解析已加入协作者列表失败:', e)
+          joinedCollaborators = []
+        }
+
+        // 检查该协作者是否已经触发过加入事件
+        if (joinedCollaborators.includes(collaborator.id)) {
+          console.log('该协作者已经触发过加入事件，跳过:', collaborator.username)
+          return
+        }
+
+        // 将该协作者添加到已触发列表
+        joinedCollaborators.push(collaborator.id)
+        localStorage.setItem(joinedCollaboratorsKey, JSON.stringify(joinedCollaborators))
+
+        // 创建事件对象，包含更多信息
+        const event = new CustomEvent('collaborator-joined', {
+          bubbles: true,
+          detail: {
+            collaborator,
+            timestamp: new Date().toISOString(),
+            session: session.value,
+            isOwner: isOwner.value,
+            currentUserId: currentUserId,
+          },
+        })
+
+        // 使用防抖机制，避免短时间内多次触发
+        const debounceKey = `collaborator_joined_${collaborator.id}`
+        const lastTriggerTime = parseInt(localStorage.getItem(debounceKey) || '0')
+        const now = Date.now()
+        const debounceTime = 5000 // 5秒内不重复触发
+
+        if (now - lastTriggerTime > debounceTime) {
+          // 更新最后触发时间
+          localStorage.setItem(debounceKey, now.toString())
+
+          // 延迟触发事件，确保会话信息已更新
+          setTimeout(() => {
+            document.dispatchEvent(event)
+            console.log('已触发新协作者加入事件:', collaborator.username)
+          }, 500)
+        } else {
+          console.log('防抖期内，跳过触发协作者加入事件:', collaborator.username)
+        }
+      }
+    } catch (error) {
+      console.error('触发新协作者加入事件失败:', error)
+    }
+
+    // 检查是否请求画布状态
+    if (payload.requestCanvasState) {
+      console.log('收到画布状态请求，发送当前画布状态')
+
+      // 获取当前用户ID
+      const currentUserId = userStore.currentUser?.id
+
+      // 如果是其他用户请求画布状态，发送同步响应
+      if (message.senderId !== String(currentUserId)) {
+        console.log('发送画布状态给新加入的协作者:', message.senderId)
+
+        // 记录当前障碍物数量
+        const obstaclesCount = courseStore.currentCourse.obstacles.length
+        console.log('当前障碍物数量:', obstaclesCount)
+
+        // 记录当前路径点数量
+        const pathPointsCount = courseStore.coursePath.points.length
+        console.log('当前路径点数量:', pathPointsCount)
+
+        // 深拷贝障碍物数据，避免引用问题
+        const obstaclesCopy = JSON.parse(JSON.stringify(courseStore.currentCourse.obstacles))
+
+        // 构建同步响应消息
+        const syncResponse = {
+          obstacles: obstaclesCopy,
+          path: {
+            visible: courseStore.coursePath.visible,
+            points: JSON.parse(JSON.stringify(courseStore.coursePath.points)),
+            startPoint: courseStore.startPoint
+              ? JSON.parse(JSON.stringify(courseStore.startPoint))
+              : null,
+            endPoint: courseStore.endPoint
+              ? JSON.parse(JSON.stringify(courseStore.endPoint))
+              : null,
+          },
+          timestamp: new Date().toISOString(),
+          sender: {
+            id: String(currentUserId),
+            username: userStore.currentUser?.username || '未知用户',
+          },
+        }
+
+        // 发送同步响应
+        console.log('发送同步响应，包含障碍物数量:', obstaclesCount)
+        console.log('发送同步响应，包含路径点数量:', pathPointsCount)
+        console.log('同步响应数据示例:', JSON.stringify(syncResponse).substring(0, 200) + '...')
+
+        // 直接发送消息，不使用sendMessage函数，避免可能的问题
+        try {
+          if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+            const directMessage = {
+              type: MessageType.SYNC_RESPONSE,
+              senderId: String(currentUserId),
+              senderName: userStore.currentUser?.username || '未知用户',
+              sessionId: session.value?.id || '',
+              timestamp: new Date().toISOString(),
+              payload: syncResponse,
+            }
+
+            socket.value.send(JSON.stringify(directMessage))
+            console.log('同步响应消息直接发送成功')
+          } else {
+            console.error('WebSocket未连接，无法发送同步响应')
+            sendMessage(MessageType.SYNC_RESPONSE, syncResponse)
+          }
+        } catch (error) {
+          console.error('直接发送同步响应失败:', error)
+          // 尝试使用sendMessage函数
+          sendMessage(MessageType.SYNC_RESPONSE, syncResponse)
+        }
+      }
+    }
   }
 
   /**
@@ -490,6 +645,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
                 },
               ],
               customId: '',
+              number: (updates.number as string) || undefined, // 如果有编号，使用传递的编号
             }
 
             console.log('尝试添加缺失的障碍物:', newObstacle)
@@ -611,11 +767,69 @@ export const useWebSocketStore = defineStore('websocket', () => {
     console.log('处理更新路径消息:', message)
 
     try {
-      // 仅记录接收到的消息
-      console.log('接收到路径更新消息:', message.payload)
+      // 获取当前用户ID
+      const userStore = useUserStore()
+      const currentUserId = userStore.currentUser?.id
 
-      // 这里简化处理，避免可能的API不匹配问题
-      // 如果需要实际处理路径更新，请根据courseStore提供的方法再次实现
+      // 如果是自己发送的消息，忽略它
+      if (message.senderId === String(currentUserId)) {
+        console.log('忽略自己发送的路径更新消息')
+        return
+      }
+
+      // 解析路径更新消息
+      const { pathId, updates } = message.payload as {
+        pathId: string
+        updates: {
+          visible: boolean
+          points: Array<PathPoint>
+          startPoint?: { x: number; y: number; rotation: number }
+          endPoint?: { x: number; y: number; rotation: number }
+        }
+      }
+
+      console.log('从其他协作者收到路径更新消息:', pathId, updates)
+
+      // 获取Canvas组件的引用，以便设置路径更新标志
+      const canvasElement = document.querySelector('.course-canvas')
+      if (canvasElement) {
+        // 获取Canvas组件实例
+        const canvasInstance = (canvasElement as any).__vueParentComponent?.ctx
+        if (canvasInstance && canvasInstance.isPathUpdateFromWebSocket !== undefined) {
+          // 设置标志，表示路径更新来自WebSocket
+          console.log('设置路径更新标志为true，表示更新来自WebSocket')
+          canvasInstance.isPathUpdateFromWebSocket.value = true
+        }
+      }
+
+      // 更新路径可见性
+      if (updates.visible !== undefined) {
+        courseStore.togglePathVisibility(updates.visible)
+        console.log('更新路径可见性:', updates.visible)
+      }
+
+      // 更新路径点
+      if (updates.points && Array.isArray(updates.points)) {
+        // 使用深拷贝避免引用问题
+        courseStore.coursePath.points = JSON.parse(JSON.stringify(updates.points))
+        console.log('更新路径点:', updates.points.length)
+      }
+
+      // 更新起点
+      if (updates.startPoint) {
+        // 使用深拷贝避免引用问题
+        courseStore.startPoint = JSON.parse(JSON.stringify(updates.startPoint))
+        console.log('更新起点:', updates.startPoint)
+      }
+
+      // 更新终点
+      if (updates.endPoint) {
+        // 使用深拷贝避免引用问题
+        courseStore.endPoint = JSON.parse(JSON.stringify(updates.endPoint))
+        console.log('更新终点:', updates.endPoint)
+      }
+
+      console.log('成功更新本地路径数据')
     } catch (error) {
       console.error('处理路径更新消息失败:', error)
     }
@@ -748,46 +962,180 @@ export const useWebSocketStore = defineStore('websocket', () => {
           startPoint?: { x: number; y: number; rotation: number }
           endPoint?: { x: number; y: number; rotation: number }
         }
+        session?: any // 会话信息
+        collaboratorsOnly?: boolean // 标记是否只包含协作者列表
       }
 
-      console.log('接收到同步响应消息:', payload)
+      console.log('接收到同步响应消息，payload类型:', typeof payload)
+
+      // 检查payload是否为空
+      if (!payload) {
+        console.error('同步响应消息的payload为空')
+        return
+      }
+
+      // 检查payload中是否包含obstacles或path
+      if (!payload.obstacles && !payload.path && payload.session) {
+        console.log('同步响应只包含会话信息')
+
+        // 检查是否是只刷新协作者列表的请求
+        const isCollaboratorsOnly =
+          payload.collaboratorsOnly === true ||
+          localStorage.getItem('collaborators_only_sync') === 'true' ||
+          localStorage.getItem('refreshing_collaborators') === 'true'
+
+        if (isCollaboratorsOnly) {
+          console.log('这是一个只刷新协作者列表的请求，不需要获取画布数据')
+          // 更新会话信息
+          if (payload.session) {
+            // 处理会话信息
+            console.log('处理会话信息:', payload.session)
+
+            // 如果有协作者列表，更新它
+            if (payload.session.collaborators && Array.isArray(payload.session.collaborators)) {
+              const mappedCollaborators: CollaboratorInfo[] = payload.session.collaborators.map(
+                (collab: any) => ({
+                  id: collab.id,
+                  username: collab.username,
+                  color: collab.color,
+                  lastActive: collab.last_active ? new Date(collab.last_active) : new Date(),
+                  role: collab.role || 'collaborator',
+                }),
+              )
+
+              // 更新协作者列表
+              collaborators.value = mappedCollaborators
+
+              // 如果有会话对象，也更新它
+              if (session.value) {
+                session.value.collaborators = mappedCollaborators
+
+                // 如果有所有者信息，更新它
+                if (payload.session.owner !== undefined) {
+                  session.value.owner = payload.session.owner
+                }
+              }
+
+              console.log('已更新协作者列表，数量:', collaborators.value.length)
+            }
+          }
+        } else {
+          console.log('同步响应只包含会话信息，但需要画布数据，尝试再次发送同步请求')
+          // 延迟1秒后再次发送同步请求
+          setTimeout(() => {
+            sendSyncRequest()
+          }, 1000)
+        }
+        return
+      }
 
       // 处理障碍物数据
-      if (payload.obstacles && Array.isArray(payload.obstacles) && payload.obstacles.length > 0) {
+      if (payload.obstacles && Array.isArray(payload.obstacles)) {
         console.log('同步响应包含障碍物数据，数量:', payload.obstacles.length)
+        console.log('障碍物数据示例:', JSON.stringify(payload.obstacles.slice(0, 1)))
 
-        // 清除当前障碍物
-        courseStore.currentCourse.obstacles = []
+        // 记录当前障碍物数量
+        const currentObstaclesCount = courseStore.currentCourse.obstacles.length
+        console.log('当前本地障碍物数量:', currentObstaclesCount)
 
-        // 添加从服务器接收到的障碍物
-        payload.obstacles.forEach((obstacle) => {
-          courseStore.addObstacle(obstacle)
-        })
+        // 如果收到的障碍物数量大于0，或者本地没有障碍物但收到了空数组（表示清空障碍物）
+        if (
+          payload.obstacles.length > 0 ||
+          (payload.obstacles.length === 0 && currentObstaclesCount > 0)
+        ) {
+          console.log('需要更新障碍物数据')
 
-        console.log('已同步障碍物数据')
+          try {
+            // 清除当前障碍物
+            courseStore.currentCourse.obstacles = []
+            console.log('已清除本地障碍物')
+
+            // 添加从服务器接收到的障碍物
+            if (payload.obstacles.length > 0) {
+              // 使用for循环而不是forEach，避免可能的undefined错误
+              for (let i = 0; i < payload.obstacles.length; i++) {
+                const obstacle = payload.obstacles[i]
+                if (obstacle) {
+                  console.log(`添加障碍物 ${i + 1}/${payload.obstacles.length}:`, obstacle.id)
+                  try {
+                    // 使用深拷贝避免引用问题
+                    const obstacleClone = JSON.parse(JSON.stringify(obstacle))
+
+                    // 检查障碍物是否已存在
+                    const exists = courseStore.currentCourse.obstacles.some(
+                      (o) => o.id === obstacleClone.id,
+                    )
+                    if (!exists) {
+                      // 使用addObstacleWithId保留原始ID
+                      if (typeof courseStore.addObstacleWithId === 'function') {
+                        courseStore.addObstacleWithId(obstacleClone)
+                      } else {
+                        courseStore.addObstacle(obstacleClone)
+                      }
+                    } else {
+                      console.log(`障碍物 ${obstacleClone.id} 已存在，跳过添加`)
+                    }
+                  } catch (error) {
+                    console.error(`添加障碍物 ${i + 1} 失败:`, error)
+                  }
+                } else {
+                  console.warn(`障碍物 ${i + 1} 为undefined，跳过添加`)
+                }
+              }
+            }
+
+            console.log(
+              '已同步障碍物数据，当前障碍物数量:',
+              courseStore.currentCourse.obstacles.length,
+            )
+          } catch (error) {
+            console.error('处理障碍物数据时出错:', error)
+          }
+        } else {
+          console.log('无需更新障碍物数据')
+        }
       } else {
-        console.log('同步响应不包含障碍物数据或障碍物为空')
+        console.log('同步响应不包含障碍物数据')
       }
 
       // 处理路径数据
       if (payload.path) {
-        console.log('同步响应包含路径数据')
+        console.log('同步响应包含路径数据:', payload.path)
+
+        // 获取Canvas组件的引用，以便设置路径更新标志
+        const canvasElement = document.querySelector('.course-canvas')
+        if (canvasElement) {
+          // 获取Canvas组件实例
+          const canvasInstance = (canvasElement as any).__vueParentComponent?.ctx
+          if (canvasInstance && canvasInstance.isPathUpdateFromWebSocket !== undefined) {
+            // 设置标志，表示路径更新来自WebSocket
+            console.log('设置路径更新标志为true，表示更新来自WebSocket')
+            canvasInstance.isPathUpdateFromWebSocket.value = true
+          }
+        }
 
         // 更新路径可见性
         courseStore.togglePathVisibility(payload.path.visible)
+        console.log('更新路径可见性:', payload.path.visible)
 
         // 更新路径点
         if (payload.path.points && Array.isArray(payload.path.points)) {
-          courseStore.coursePath.points = payload.path.points
+          // 使用深拷贝避免引用问题
+          courseStore.coursePath.points = JSON.parse(JSON.stringify(payload.path.points))
+          console.log('更新路径点数量:', payload.path.points.length)
         }
 
         // 更新起点和终点
         if (payload.path.startPoint) {
-          courseStore.startPoint = payload.path.startPoint
+          // 使用深拷贝避免引用问题
+          courseStore.startPoint = JSON.parse(JSON.stringify(payload.path.startPoint))
+          console.log('更新起点:', payload.path.startPoint)
         }
 
         if (payload.path.endPoint) {
-          courseStore.endPoint = payload.path.endPoint
+          // 使用深拷贝避免引用问题
+          courseStore.endPoint = JSON.parse(JSON.stringify(payload.path.endPoint))
+          console.log('更新终点:', payload.path.endPoint)
         }
 
         console.log('已同步路径数据')
@@ -826,6 +1174,12 @@ export const useWebSocketStore = defineStore('websocket', () => {
       '静默模式:',
       silentMode,
     )
+
+    // 如果是新的连接（非重连），重置重连尝试次数
+    if (!silentMode) {
+      reconnectAttempts.value = 0
+      console.log('重置重连尝试次数')
+    }
 
     // 保存设计ID
     currentDesignId.value = designId
@@ -996,35 +1350,76 @@ export const useWebSocketStore = defineStore('websocket', () => {
       // 更新连接状态
       if (connectionStatus.value !== ConnectionStatus.DISCONNECTING) {
         connectionStatus.value = ConnectionStatus.DISCONNECTED
-      }
 
-      // 如果不是静默模式，则触发事件
-      if (!silentMode) {
-        try {
-          console.log('发送连接关闭事件')
-          const customEvent = new CustomEvent('collaboration-stopped', {
-            bubbles: true,
-            detail: {
-              timestamp: new Date().toISOString(),
-              error: closeEvent.code !== 1000, // 1000是正常关闭的代码
-              reason: closeEvent.reason || '连接已关闭',
-            },
-          })
-          document.dispatchEvent(customEvent)
-        } catch (error) {
-          console.error('发送连接关闭事件失败:', error)
+        // 如果不是静默模式，则触发事件
+        if (!silentMode) {
+          try {
+            console.log('发送连接关闭事件')
+            const customEvent = new CustomEvent('collaboration-stopped', {
+              bubbles: true,
+              detail: {
+                timestamp: new Date().toISOString(),
+                error: closeEvent.code !== 1000, // 1000是正常关闭的代码
+                reason: closeEvent.reason || '连接已关闭',
+              },
+            })
+            document.dispatchEvent(customEvent)
+          } catch (error) {
+            console.error('发送连接关闭事件失败:', error)
+          }
         }
-      }
 
-      // 尝试重连
-      if (
-        closeEvent.code !== 1000 && // 非正常关闭
-        closeEvent.code !== 1001 && // 非主动关闭
-        isCollaborating.value &&
-        reconnectAttempts.value < 5
-      ) {
-        console.log('尝试重新连接...')
-        reconnect()
+        // 检查用户是否为高级会员或通过链接加入
+        const isPremiumOrViaLink = userStore.currentUser?.is_premium_active || viaLink.value
+
+        // 只有在非正常关闭且用户仍在协作模式下才尝试重连
+        if (
+          closeEvent.code !== 1000 && // 非正常关闭
+          closeEvent.code !== 1001 && // 非主动关闭
+          isCollaborating.value &&
+          reconnectAttempts.value < 3 && // 限制重连次数为3次
+          isPremiumOrViaLink // 只有高级会员或通过链接加入的用户才能重连
+        ) {
+          console.log(`尝试重连 (${reconnectAttempts.value + 1}/3)...`)
+          reconnectAttempts.value++
+
+          // 使用固定的重连延迟，确保快速重连
+          setTimeout(() => {
+            connect(currentDesignId.value, viaLink.value, silentMode)
+          }, 1000) // 固定1秒重连延迟
+        } else if (reconnectAttempts.value >= 3) {
+          connectionStatus.value = ConnectionStatus.ERROR
+          connectionError.value = '重连失败，请刷新页面重试'
+          console.error('WebSocket重连失败，已达到最大尝试次数')
+
+          // 重置协作状态，避免继续尝试重连
+          isCollaborating.value = false
+          localStorage.setItem('isCollaborating', 'false')
+        } else if (!isPremiumOrViaLink && isCollaborating.value) {
+          // 非高级会员且不是通过链接加入，显示错误信息
+          connectionStatus.value = ConnectionStatus.ERROR
+          connectionError.value = '协作功能是会员专属功能，请升级到会员以使用此功能'
+          console.error('非高级会员用户尝试使用协作功能')
+
+          // 重置协作状态，避免继续尝试重连
+          isCollaborating.value = false
+          localStorage.setItem('isCollaborating', 'false')
+
+          // 触发自定义事件，通知App.vue更新状态
+          try {
+            const event = new CustomEvent('collaboration-premium-required', {
+              bubbles: true,
+              detail: {
+                timestamp: new Date().toISOString(),
+                error: true,
+                reason: '协作功能是会员专属功能',
+              },
+            })
+            document.dispatchEvent(event)
+          } catch (error) {
+            console.error('触发会员提示事件失败:', error)
+          }
+        }
       }
     }
 
@@ -1122,12 +1517,29 @@ export const useWebSocketStore = defineStore('websocket', () => {
     const randomColor = colors[Math.floor(Math.random() * colors.length)]
 
     console.log('发送加入消息，通过链接加入:', viaLink.value)
-    return sendMessage(MessageType.JOIN, {
+
+    // 如果是通过链接加入，在加入消息中请求画布状态
+    const joinPayload = {
       userId: userStore.currentUser.id,
       username: userStore.currentUser.username || '未知用户',
       color: randomColor,
       viaLink: viaLink.value,
-    })
+    }
+
+    // 如果是通过链接加入，添加请求画布状态的标志
+    if (viaLink.value) {
+      console.log('通过链接加入，在加入消息中请求画布状态')
+      Object.assign(joinPayload, {
+        requestCanvasState: true,
+        clientInfo: {
+          browser: navigator.userAgent,
+          screenSize: `${window.innerWidth}x${window.innerHeight}`,
+          timestamp: new Date().toISOString(),
+        },
+      })
+    }
+
+    return sendMessage(MessageType.JOIN, joinPayload)
   }
 
   /**
@@ -1144,6 +1556,28 @@ export const useWebSocketStore = defineStore('websocket', () => {
    * 发送添加障碍物消息
    */
   const sendAddObstacle = (obstacle: Record<string, unknown>) => {
+    // 确保障碍物对象包含编号信息
+    if (obstacle.type !== ObstacleType.DECORATION && !obstacle.number) {
+      // 获取当前非装饰物的数量，用于生成新编号
+      const nonDecorationObstacles = courseStore.currentCourse.obstacles.filter(
+        (obs) => obs.type !== ObstacleType.DECORATION,
+      )
+
+      // 查找当前最大编号
+      let maxNumber = 0
+      nonDecorationObstacles.forEach((obs) => {
+        if (obs.number && /^\d+$/.test(obs.number)) {
+          const num = parseInt(obs.number)
+          if (!isNaN(num) && num > maxNumber) {
+            maxNumber = num
+          }
+        }
+      })
+
+      // 新编号为当前最大编号+1
+      obstacle.number = String(maxNumber + 1)
+    }
+
     return sendMessage(MessageType.ADD_OBSTACLE, obstacle)
   }
 
@@ -1179,29 +1613,180 @@ export const useWebSocketStore = defineStore('websocket', () => {
    * 发送同步请求
    */
   const sendSyncRequest = () => {
-    console.log('发送同步请求，尝试获取最新的障碍物和路径数据')
-    // 构造更完整的同步请求
-    return sendMessage(MessageType.SYNC_REQUEST, {
-      requestType: 'full', // 请求完整同步
-      includeObstacles: true, // 包括障碍物
-      includePaths: true, // 包括路径
-      timestamp: new Date().toISOString(), // 请求时间戳
-    })
+    // 检查是否是只刷新协作者列表的请求
+    const isCollaboratorsOnly = localStorage.getItem('collaborators_only_sync') === 'true'
+
+    if (isCollaboratorsOnly) {
+      console.log('发送同步请求，只请求协作者列表')
+    } else {
+      console.log('发送同步请求，尝试获取最新的障碍物和路径数据')
+    }
+
+    // 检查WebSocket连接状态
+    if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
+      console.error('WebSocket未连接，无法发送同步请求')
+
+      // 如果WebSocket未连接，尝试重新连接
+      if (currentDesignId.value) {
+        console.log('尝试重新连接WebSocket')
+        connect(currentDesignId.value, viaLink.value)
+
+        // 延迟2秒后再次尝试发送同步请求
+        setTimeout(() => {
+          if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+            console.log('WebSocket已重新连接，再次发送同步请求')
+            sendSyncRequest()
+          } else {
+            console.error('WebSocket重连失败，无法发送同步请求')
+          }
+        }, 2000)
+      }
+
+      return false
+    }
+
+    // 构造同步请求
+    if (isCollaboratorsOnly) {
+      console.log('发送同步请求，只请求协作者列表')
+      return sendMessage(MessageType.SYNC_REQUEST, {
+        requestType: 'collaborators_only', // 只请求协作者列表
+        includeObstacles: false, // 不包括障碍物
+        includePaths: false, // 不包括路径
+        timestamp: new Date().toISOString(), // 请求时间戳
+        refreshOnly: true, // 标记这是一个刷新请求
+        skipCanvasSync: true, // 标记不需要画布同步
+        clientInfo: {
+          // 添加客户端信息，帮助服务器识别请求
+          browser: navigator.userAgent,
+          screenSize: `${window.innerWidth}x${window.innerHeight}`,
+          viaLink: viaLink.value,
+        },
+      })
+    } else {
+      // 构造完整的同步请求
+      console.log('发送同步请求，请求完整画布数据')
+      return sendMessage(MessageType.SYNC_REQUEST, {
+        requestType: 'full', // 请求完整同步
+        includeObstacles: true, // 包括障碍物
+        includePaths: true, // 包括路径
+        timestamp: new Date().toISOString(), // 请求时间戳
+        clientInfo: {
+          // 添加客户端信息，帮助服务器识别请求
+          browser: navigator.userAgent,
+          screenSize: `${window.innerWidth}x${window.innerHeight}`,
+          viaLink: viaLink.value,
+        },
+      })
+    }
+  }
+
+  /**
+   * 处理同步请求消息
+   * 当收到其他用户的同步请求时，发送当前画布状态
+   */
+  const handleSyncRequestMessage = (message: WebSocketMessage) => {
+    console.log('处理同步请求消息:', message)
+
+    try {
+      // 获取当前用户ID
+      const userStore = useUserStore()
+      const currentUserId = userStore.currentUser?.id
+
+      // 如果是自己发送的消息，忽略它
+      if (message.senderId === String(currentUserId)) {
+        console.log('忽略自己发送的同步请求消息')
+        return
+      }
+
+      // 检查是否是刷新协作者列表的请求
+      const payload = message.payload as {
+        requestType?: string
+        includeObstacles?: boolean
+        includePaths?: boolean
+        refreshOnly?: boolean
+        skipCanvasSync?: boolean
+        timestamp?: string
+        clientInfo?: {
+          browser: string
+          screenSize: string
+          viaLink: boolean
+        }
+      }
+
+      // 检查是否正在刷新协作者列表
+      const isRefreshingCollaborators = localStorage.getItem('refreshing_collaborators') === 'true'
+      const isCollaboratorsOnly = localStorage.getItem('collaborators_only_sync') === 'true'
+
+      // 如果是刷新协作者列表的请求，或者本地标记为正在刷新，则只发送会话信息
+      if (
+        payload.requestType === 'collaborators_only' ||
+        payload.refreshOnly === true ||
+        payload.skipCanvasSync === true ||
+        isRefreshingCollaborators ||
+        isCollaboratorsOnly
+      ) {
+        console.log('收到刷新协作者列表的请求，只发送会话信息')
+
+        // 构建只包含会话信息的同步响应
+        const sessionResponse = {
+          session: session.value,
+          timestamp: new Date().toISOString(),
+          sender: {
+            id: String(currentUserId),
+            username: userStore.currentUser?.username || '未知用户',
+          },
+          // 添加标记，表明这是一个只包含会话信息的响应
+          collaboratorsOnly: true,
+        }
+
+        // 发送同步响应
+        console.log('发送会话信息同步响应')
+        sendMessage(MessageType.SYNC_RESPONSE, sessionResponse)
+        return
+      }
+
+      console.log('收到来自其他用户的同步请求，准备发送当前画布状态')
+      console.log('当前障碍物数量:', courseStore.currentCourse.obstacles.length)
+      console.log('当前路径可见性:', courseStore.coursePath.visible)
+      console.log('当前路径点数量:', courseStore.coursePath.points.length)
+
+      // 构建同步响应消息
+      const syncResponse = {
+        obstacles: courseStore.currentCourse.obstacles,
+        path: {
+          visible: courseStore.coursePath.visible,
+          points: courseStore.coursePath.points,
+          startPoint: courseStore.startPoint,
+          endPoint: courseStore.endPoint,
+        },
+        timestamp: new Date().toISOString(),
+        sender: {
+          id: String(currentUserId),
+          username: userStore.currentUser?.username || '未知用户',
+        },
+      }
+
+      // 发送同步响应
+      console.log('发送同步响应，包含障碍物数量:', courseStore.currentCourse.obstacles.length)
+      console.log('发送同步响应，包含路径点数量:', courseStore.coursePath.points.length)
+      sendMessage(MessageType.SYNC_RESPONSE, syncResponse)
+    } catch (error) {
+      console.error('处理同步请求消息失败:', error)
+    }
   }
 
   /**
    * 检查连接状态
    */
-  const checkConnection = (autoReconnect = true) => {
+  const checkConnection = () => {
     if (!socket.value) {
       return false
     }
 
     // 检查连接状态
     if (socket.value.readyState !== WebSocket.OPEN) {
-      if (autoReconnect && isCollaborating.value && reconnectAttempts.value < 5) {
-        reconnect()
-      }
+      // 不再自动重连，避免重复重连
+      // 连接关闭事件会自动处理重连
       return false
     }
 
@@ -1210,46 +1795,13 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
   /**
    * 重新连接
+   * 注意：此函数已被弃用，不再使用
+   * 所有重连逻辑已移至onclose事件处理中，避免重复重连
    */
   const reconnect = () => {
-    // 增加重连尝试次数
-    reconnectAttempts.value++
-
-    console.log(`尝试重新连接 (${reconnectAttempts.value}/5)...`)
-
-    // 如果达到最大重连次数，停止协作
-    if (reconnectAttempts.value >= 5) {
-      console.log('达到最大重连次数，停止协作')
-      isCollaborating.value = false
-      localStorage.setItem('isCollaborating', 'false')
-      connectionStatus.value = ConnectionStatus.DISCONNECTED
-
-      // 触发协作停止事件
-      try {
-        const event = new CustomEvent('collaboration-stopped', {
-          bubbles: true,
-          detail: {
-            timestamp: new Date().toISOString(),
-            error: true,
-            reason: '达到最大重连次数',
-          },
-        })
-        document.dispatchEvent(event)
-      } catch (error) {
-        console.error('发送协作停止事件失败:', error)
-      }
-
-      return
-    }
-
-    // 延迟重连，时间随尝试次数增加
-    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.value - 1), 30000)
-
-    setTimeout(() => {
-      if (isCollaborating.value) {
-        connect(currentDesignId.value, viaLink.value, true)
-      }
-    }, delay)
+    console.log('reconnect函数已被弃用，不再使用')
+    // 不执行任何操作，避免重复重连
+    return
   }
 
   /**
@@ -1273,39 +1825,43 @@ export const useWebSocketStore = defineStore('websocket', () => {
     const messagesToProcess = [...messageQueue.value]
     messageQueue.value = []
 
-    for (const item of messagesToProcess) {
-      try {
-        switch (item.type) {
-          case 'update':
-            if ('obstacleId' in item.data && 'updates' in item.data) {
-              sendObstacleUpdate(
-                item.data.obstacleId as string,
-                item.data.updates as Record<string, unknown>,
-              )
-            } else if ('pathId' in item.data && 'updates' in item.data) {
-              sendPathUpdate(
-                item.data.pathId as string,
-                item.data.updates as Record<string, unknown>,
-              )
-            }
-            break
-          case 'add':
-            sendAddObstacle(item.data)
-            break
-          case 'remove':
-            if ('obstacleId' in item.data) {
-              sendRemoveObstacle(item.data.obstacleId as string)
-            }
-            break
-          default:
-            console.warn('未知的队列消息类型:', item.type)
+    // 使用Promise.all并行处理所有消息，提高处理效率
+    Promise.all(
+      messagesToProcess.map(async (item) => {
+        try {
+          switch (item.type) {
+            case 'update':
+              if ('obstacleId' in item.data && 'updates' in item.data) {
+                return sendObstacleUpdate(
+                  item.data.obstacleId as string,
+                  item.data.updates as Record<string, unknown>,
+                )
+              } else if ('pathId' in item.data && 'updates' in item.data) {
+                return sendPathUpdate(
+                  item.data.pathId as string,
+                  item.data.updates as Record<string, unknown>,
+                )
+              }
+              break
+            case 'add':
+              return sendAddObstacle(item.data)
+            case 'remove':
+              if ('obstacleId' in item.data) {
+                return sendRemoveObstacle(item.data.obstacleId as string)
+              }
+              break
+            default:
+              console.warn('未知的队列消息类型:', item.type)
+          }
+        } catch (error) {
+          console.error('处理队列消息失败:', error)
+          // 失败的消息重新加入队列
+          messageQueue.value.push(item)
         }
-      } catch (error) {
-        console.error('处理队列消息失败:', error)
-        // 失败的消息重新加入队列
-        messageQueue.value.push(item)
-      }
-    }
+      }),
+    ).catch((error) => {
+      console.error('处理消息队列时发生错误:', error)
+    })
   }
 
   // 返回状态和方法

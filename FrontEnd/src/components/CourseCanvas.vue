@@ -251,7 +251,7 @@
               justifyContent: 'space-between',
             }">
               <!-- 栅栏柱子 -->
-              <template v-for="n in 5" :key="n">
+              <template v-for="i in 5" :key="i">
                 <div :style="{
                   width: '4px',
                   height: '100%',
@@ -444,9 +444,10 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { Plus, Edit, Hide, View, Delete } from '@element-plus/icons-vue'
-// import { ElMessage } from 'element-plus' // 不再需要
+import { ElMessage } from 'element-plus'
 import { useCourseStore } from '@/stores/course'
 import { useObstacleStore } from '@/stores/obstacle'
+import { useUserStore } from '@/stores/user'
 import { ObstacleType, DecorationCategory } from '@/types/obstacle'
 import type { Obstacle, PathPoint, CustomObstacleTemplate } from '@/types/obstacle'
 import { ConnectionStatus, useWebSocketStore } from '@/stores/websocket'
@@ -545,9 +546,20 @@ const getCustomTemplate = (obstacle: Obstacle): CustomObstacleTemplate | null =>
   }
 }
 
+// 添加一个标志，用于标识路径更新是否来自WebSocket
+const isPathUpdateFromWebSocket = ref(false)
+
 // 监听路径变化，同步到其他协作者
 watch(() => courseStore.coursePath, (newPath) => {
+  // 如果更新来自WebSocket，不再发送更新消息，避免循环更新
+  if (isPathUpdateFromWebSocket.value) {
+    console.log('路径更新来自WebSocket，不再发送更新消息')
+    isPathUpdateFromWebSocket.value = false
+    return
+  }
+
   if (wsIsCollaborating) {
+    console.log('本地路径变化，发送更新消息')
     // 使用路径ID和更新内容调用sendPathUpdate
     sendPathUpdate(courseStore.currentCourse.id, {
       visible: newPath.visible,
@@ -594,6 +606,9 @@ const startCollaboration = async (viaLink = false) => {
   // 设置协作钩子
   setupCollaborationHooks()
 
+  // 保存通过链接加入的标志到localStorage，以便其他组件可以使用
+  localStorage.setItem('via_link', viaLink.toString())
+
   // 连接WebSocket，传递通过链接加入的标志
   courseStore.setCurrentCourseId(designId)
   connect(designId, viaLink)
@@ -616,6 +631,65 @@ const startCollaboration = async (viaLink = false) => {
 
   // 检查协作者列表
   console.log('协作启动后的协作者列表:', JSON.stringify(collaborators))
+
+  // 如果是通过链接加入（即协作者），直接请求创建者的画布状态
+  if (viaLink && connectionStatus === ConnectionStatus.CONNECTED) {
+    console.log('通过链接加入，直接请求创建者的画布状态')
+
+    // 延迟一秒发送请求，确保连接已完全建立
+    setTimeout(() => {
+      console.log('延迟1秒后发送直接请求')
+
+      // 创建一个特殊的JOIN消息，包含请求画布状态的标志
+      const userStore = useUserStore()
+      if (!userStore.currentUser) {
+        console.error('用户未登录，无法发送请求')
+        return
+      }
+
+      // 生成随机颜色
+      const colors = [
+        '#3498db', '#2ecc71', '#e74c3c', '#f39c12', '#9b59b6',
+        '#1abc9c', '#d35400', '#c0392b', '#16a085', '#8e44ad'
+      ]
+      const randomColor = colors[Math.floor(Math.random() * colors.length)]
+
+      // 构建JOIN消息
+      const joinMessage = {
+        type: 'join',
+        senderId: String(userStore.currentUser.id),
+        senderName: userStore.currentUser.username || '未知用户',
+        sessionId: '',
+        timestamp: new Date().toISOString(),
+        payload: {
+          userId: userStore.currentUser.id,
+          username: userStore.currentUser.username || '未知用户',
+          color: randomColor,
+          viaLink: true,
+          requestCanvasState: true, // 请求画布状态的标志
+          clientInfo: {
+            browser: navigator.userAgent,
+            screenSize: `${window.innerWidth}x${window.innerHeight}`,
+            timestamp: new Date().toISOString()
+          }
+        }
+      }
+
+      // 发送JOIN消息
+      console.log('发送特殊JOIN消息，请求画布状态:', joinMessage)
+      try {
+        const socket = webSocketStore.$state.socket
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify(joinMessage))
+          console.log('特殊JOIN消息发送成功')
+        } else {
+          console.error('WebSocket未连接，无法发送特殊JOIN消息')
+        }
+      } catch (error) {
+        console.error('发送特殊JOIN消息失败:', error)
+      }
+    }, 1000)
+  }
 
   // 返回成功
   return true
@@ -645,6 +719,24 @@ const stopCollaboration = async (): Promise<boolean> => {
     // 然后断开连接
     disconnect()
     console.log('WebSocket连接已断开')
+
+    // 清除通过链接加入的标志
+    localStorage.removeItem('via_link')
+    localStorage.removeItem('sync_requested')
+
+    // 清除已加入协作者列表
+    localStorage.removeItem('joined_collaborators')
+
+    // 清除防抖相关的存储
+    // 查找并清除所有以sync_response_sent_和canvas_state_sent_开头的项
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('sync_response_sent_') ||
+        key.startsWith('canvas_state_sent_') ||
+        key.startsWith('collaborator_joined_')) {
+        localStorage.removeItem(key)
+        console.log('已清除存储项:', key)
+      }
+    })
 
     // 移除协作功能的钩子
     console.log('移除协作钩子')
@@ -731,12 +823,137 @@ const toggleDistanceLabels = () => {
   })
 }
 
-// 暴露协作控制方法
+/**
+ * 发送完整画布状态给指定用户
+ * @param targetUserId 目标用户ID，如果不指定则发送给所有协作者
+ */
+const sendFullCanvasState = (targetUserId?: string) => {
+  console.log('发送完整画布状态', targetUserId ? `给用户 ${targetUserId}` : '给所有协作者')
+
+  // 防抖处理：检查是否在短时间内已经发送过画布状态给该用户
+  if (targetUserId) {
+    const responseKey = `canvas_state_sent_${targetUserId}`
+    const lastResponseTime = parseInt(localStorage.getItem(responseKey) || '0')
+    const now = Date.now()
+    const debounceTime = 10000 // 10秒内不重复发送
+
+    if (now - lastResponseTime < debounceTime) {
+      console.log(`已在${debounceTime / 1000}秒内发送过画布状态给该用户，跳过`)
+      return
+    }
+
+    // 记录本次发送时间
+    localStorage.setItem(responseKey, now.toString())
+  }
+
+  if (!isCollaborating.value) {
+    console.warn('当前不在协作状态，无法发送画布状态')
+    return
+  }
+
+  // 获取WebSocket store
+  const webSocketStore = useWebSocketStore()
+
+  // 获取当前用户信息
+  const userStore = useUserStore()
+  const currentUserId = userStore.currentUser?.id
+
+  // 构建同步响应消息
+  const syncResponse = {
+    obstacles: JSON.parse(JSON.stringify(courseStore.currentCourse.obstacles)),
+    path: {
+      visible: courseStore.coursePath.visible,
+      points: JSON.parse(JSON.stringify(courseStore.coursePath.points)),
+      startPoint: courseStore.startPoint ? JSON.parse(JSON.stringify(courseStore.startPoint)) : null,
+      endPoint: courseStore.endPoint ? JSON.parse(JSON.stringify(courseStore.endPoint)) : null
+    },
+    timestamp: new Date().toISOString(),
+    targetUser: targetUserId // 指定目标用户
+  }
+
+  console.log('准备发送的同步响应:', syncResponse)
+  console.log('障碍物数量:', courseStore.currentCourse.obstacles.length)
+  console.log('路径点数量:', courseStore.coursePath.points.length)
+
+  // 尝试使用WebSocket store的方法发送
+  try {
+    // 使用类型断言，但提供更具体的类型
+    interface WebSocketStoreWithSendMessage {
+      sendMessage: (type: string, payload: Record<string, unknown>) => boolean;
+    }
+
+    // 检查是否有sendMessage方法
+    if (typeof (webSocketStore as unknown as WebSocketStoreWithSendMessage).sendMessage === 'function') {
+      (webSocketStore as unknown as WebSocketStoreWithSendMessage).sendMessage('sync_response', syncResponse)
+      console.log('使用sendMessage方法发送同步响应成功')
+    } else {
+      console.warn('webSocketStore中没有sendMessage方法，尝试直接发送')
+    }
+  } catch (error) {
+    console.error('使用sendMessage方法发送同步响应失败:', error)
+  }
+
+  // 为确保消息能够正确发送，再次尝试直接发送
+  try {
+    interface WebSocketStoreWithState {
+      $state: { socket: WebSocket | null };
+      session?: { id: string };
+    }
+
+    const socket = (webSocketStore as unknown as WebSocketStoreWithState).$state?.socket
+
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      const directMessage = {
+        type: 'sync_response',
+        senderId: String(currentUserId),
+        senderName: userStore.currentUser?.username || '未知用户',
+        sessionId: (webSocketStore as unknown as WebSocketStoreWithState).session?.id || '',
+        timestamp: new Date().toISOString(),
+        payload: syncResponse
+      }
+
+      socket.send(JSON.stringify(directMessage))
+      console.log('同步响应消息直接发送成功')
+    }
+  } catch (error) {
+    console.error('直接发送同步响应失败:', error)
+  }
+}
+
+// 判断当前用户是否为创建者
+const isCreator = () => {
+  // 获取WebSocket store
+  const webSocketStore = useWebSocketStore()
+
+  // 获取当前用户信息
+  const userStore = useUserStore()
+  const currentUserId = userStore.currentUser?.id
+
+  // 获取会话信息
+  interface WebSocketStoreWithSession {
+    session?: { owner: string; id: string };
+  }
+  const session = (webSocketStore as unknown as WebSocketStoreWithSession).session
+  const sessionOwnerId = session?.owner
+
+  // 判断当前用户是否为所有者
+  const isOwner = currentUserId && sessionOwnerId && String(currentUserId) === String(sessionOwnerId)
+
+  // 检查是否通过链接加入
+  const viaLink = localStorage.getItem('via_link') === 'true'
+
+  return isOwner || !viaLink
+}
+
+// 暴露协作控制方法和路径更新标志
 defineExpose({
   startCollaboration,
   stopCollaboration,
   handleClearCanvas,
-  toggleDistanceLabels
+  toggleDistanceLabels,
+  isPathUpdateFromWebSocket, // 导出路径更新标志，供WebSocket处理函数使用
+  sendFullCanvasState, // 导出发送完整画布状态方法
+  isCreator // 导出判断当前用户是否为创建者的方法
 })
 
 // 确保stopCollaboration方法可以被外部访问
@@ -901,18 +1118,18 @@ const handleMouseMove = (event: MouseEvent) => {
             Math.abs(newPosition.x - lastSentPosition.x) > 1 ||
             Math.abs(newPosition.y - lastSentPosition.y) > 1
 
-          // 使用当前时间戳来节流发送消息，每500毫秒发送一次（增加节流时间）
+          // 使用当前时间戳来节流发送消息，每100毫秒发送一次（减少节流时间，提高流畅度）
           const now = Date.now()
           // 从localStorage获取上次更新时间，而不是从obstacle对象上获取
           const lastUpdateTimeStr = localStorage.getItem(`lastUpdateTime_${obstacle.id}`)
           const lastUpdateTime = lastUpdateTimeStr ? parseInt(lastUpdateTimeStr) : 0
 
-          // 增加位置变化的阈值，只有移动超过3像素才发送更新
+          // 减小位置变化的阈值，只要移动超过1像素就发送更新，提高流畅度
           const hasSignificantPositionChange = !lastSentPosition ||
-            Math.abs(newPosition.x - lastSentPosition.x) > 3 ||
-            Math.abs(newPosition.y - lastSentPosition.y) > 3
+            Math.abs(newPosition.x - lastSentPosition.x) > 1 ||
+            Math.abs(newPosition.y - lastSentPosition.y) > 1
 
-          if (hasPositionChanged && hasSignificantPositionChange && (now - lastUpdateTime > 500)) {
+          if (hasPositionChanged && hasSignificantPositionChange && (now - lastUpdateTime > 100)) {
             // 创建一个新的位置对象，避免引用问题
             const positionToSend = { ...newPosition }
             console.log('发送障碍物位置更新消息:', obstacle.id, positionToSend)
@@ -981,17 +1198,17 @@ const handleMouseMove = (event: MouseEvent) => {
       const hasRotationChanged = lastSentRotation === null ||
         Math.abs(newRotation - lastSentRotation) > 1
 
-      // 使用当前时间戳来节流发送消息，每500毫秒发送一次（增加节流时间）
+      // 使用当前时间戳来节流发送消息，每100毫秒发送一次（减少节流时间，提高流畅度）
       const now = Date.now()
       // 从localStorage获取上次更新时间，而不是从obstacle对象上获取
       const lastRotationTimeStr = localStorage.getItem(`lastRotationTime_${draggingObstacle.value.id}`)
       const lastRotationTime = lastRotationTimeStr ? parseInt(lastRotationTimeStr) : 0
 
-      // 增加角度变化的阈值，只有旋转超过3度才发送更新
+      // 减小角度变化的阈值，只要旋转超过1度就发送更新，提高流畅度
       const hasSignificantRotationChange = lastSentRotation === null ||
-        Math.abs(newRotation - lastSentRotation) > 3
+        Math.abs(newRotation - lastSentRotation) > 1
 
-      if (hasRotationChanged && hasSignificantRotationChange && (now - lastRotationTime > 500)) {
+      if (hasRotationChanged && hasSignificantRotationChange && (now - lastRotationTime > 100)) {
         console.log('发送障碍物旋转更新消息:', draggingObstacle.value.id, newRotation)
 
         try {
@@ -1578,17 +1795,19 @@ const scaleWidth = computed(() => {
 const pathScaleFactor = computed(() => {
   // 获取原始设计的视口信息
   const originalViewportInfo = courseStore.currentCourse.viewportInfo;
+
   // 确保 originalViewportInfo 和其属性存在且有效
   if (!originalViewportInfo || !originalViewportInfo.canvasWidth || !originalViewportInfo.canvasHeight || originalViewportInfo.canvasWidth <= 0 || originalViewportInfo.canvasHeight <= 0) {
-    console.warn("原始视口信息缺失或无效，使用默认缩放因子 1。");
-    return 1;
+    console.warn("原始视口信息缺失或无效，使用基于场地尺寸的缩放因子。");
+    // 使用基于场地尺寸的缩放因子作为备选方案
+    return meterScale.value / 20; // 假设默认每米20像素
   }
 
   // 获取当前画布元素
   const currentCanvas = canvasContainerRef.value;
   if (!currentCanvas) {
-    console.warn("当前画布引用不可用，使用默认缩放因子 1。");
-    return 1;
+    console.warn("当前画布引用不可用，使用基于场地尺寸的缩放因子。");
+    return meterScale.value / 20; // 假设默认每米20像素
   }
 
   // 获取当前画布的尺寸
@@ -1598,8 +1817,8 @@ const pathScaleFactor = computed(() => {
 
   // 防止除以零或无效尺寸
   if (currentWidth <= 0 || currentHeight <= 0) {
-    console.warn("当前画布尺寸无效，使用默认缩放因子 1。");
-    return 1;
+    console.warn("当前画布尺寸无效，使用基于场地尺寸的缩放因子。");
+    return meterScale.value / 20; // 假设默认每米20像素
   }
 
   // 计算宽度和高度的缩放比例
@@ -1609,32 +1828,101 @@ const pathScaleFactor = computed(() => {
   // 使用较小的缩放比例以保持宽高比并适应较小维度的缩放
   const scale = Math.min(widthScale, heightScale);
 
-  // 检查计算出的缩放因子是否有效
-  if (scale <= 0 || !isFinite(scale)) {
-    console.warn(`计算出无效的缩放因子: ${scale}。将使用 1 代替。 W: ${currentWidth}/${originalViewportInfo.canvasWidth}, H: ${currentHeight}/${originalViewportInfo.canvasHeight}`);
-    return 1;
-  }
-  // 可选的调试日志
-  // console.log(`路径缩放因子: ${scale} (当前: ${currentWidth}x${currentHeight}, 原始: ${originalViewportInfo.canvasWidth}x${originalViewportInfo.canvasHeight})`);
+  // 考虑设备像素比的影响
+  const devicePixelRatio = window.devicePixelRatio || 1;
+  const originalDevicePixelRatio = originalViewportInfo.devicePixelRatio || 1;
+  const pixelRatioAdjustment = devicePixelRatio / originalDevicePixelRatio;
 
-  return scale;
+  // 应用像素比调整
+  const adjustedScale = scale * pixelRatioAdjustment;
+
+  // 检查计算出的缩放因子是否有效
+  if (adjustedScale <= 0 || !isFinite(adjustedScale)) {
+    console.warn(`计算出无效的缩放因子: ${adjustedScale}。将使用基于场地尺寸的缩放因子代替。
+      W: ${currentWidth}/${originalViewportInfo.canvasWidth},
+      H: ${currentHeight}/${originalViewportInfo.canvasHeight},
+      DPR: ${devicePixelRatio}/${originalDevicePixelRatio}`);
+    return meterScale.value / 20; // 假设默认每米20像素
+  }
+
+  // 添加详细的调试日志
+  console.log(`路径缩放因子: ${adjustedScale}
+    (当前: ${currentWidth}x${currentHeight},
+    原始: ${originalViewportInfo.canvasWidth}x${originalViewportInfo.canvasHeight},
+    DPR调整: ${pixelRatioAdjustment})`);
+
+  return adjustedScale;
 });
 
 // 添加坐标点缩放函数
 const scalePoint = (point: { x: number; y: number }) => {
+  if (!point) {
+    console.warn('尝试缩放空点，返回默认值 {x: 0, y: 0}')
+    return { x: 0, y: 0 }
+  }
+
   const scale = pathScaleFactor.value
+
+  // 检查坐标是否有效
+  if (typeof point.x !== 'number' || typeof point.y !== 'number' ||
+    isNaN(point.x) || isNaN(point.y)) {
+    console.warn(`尝试缩放无效点 ${JSON.stringify(point)}，返回默认值 {x: 0, y: 0}`)
+    return { x: 0, y: 0 }
+  }
+
+  // 应用缩放
+  const scaledX = point.x * scale
+  const scaledY = point.y * scale
+
+  // 检查缩放后的坐标是否有效
+  if (isNaN(scaledX) || isNaN(scaledY) || !isFinite(scaledX) || !isFinite(scaledY)) {
+    console.warn(`缩放后的坐标无效 {x: ${scaledX}, y: ${scaledY}}，使用原始坐标`)
+    return { ...point }
+  }
+
+  // 返回缩放后的坐标
   return {
-    x: point.x * scale,
-    y: point.y * scale
+    x: scaledX,
+    y: scaledY
   }
 }
 
 // 添加反向缩放函数
 const unscalePoint = (point: { x: number; y: number }) => {
+  if (!point) {
+    console.warn('尝试反向缩放空点，返回默认值 {x: 0, y: 0}')
+    return { x: 0, y: 0 }
+  }
+
   const scale = pathScaleFactor.value
+
+  // 防止除以零
+  if (scale === 0) {
+    console.warn('缩放因子为零，无法进行反向缩放，返回原始坐标')
+    return { ...point }
+  }
+
+  // 检查坐标是否有效
+  if (typeof point.x !== 'number' || typeof point.y !== 'number' ||
+    isNaN(point.x) || isNaN(point.y)) {
+    console.warn(`尝试反向缩放无效点 ${JSON.stringify(point)}，返回默认值 {x: 0, y: 0}`)
+    return { x: 0, y: 0 }
+  }
+
+  // 应用反向缩放
+  const unscaledX = point.x / scale
+  const unscaledY = point.y / scale
+
+  // 检查反向缩放后的坐标是否有效
+  if (isNaN(unscaledX) || isNaN(unscaledY) || !isFinite(unscaledX) || !isFinite(unscaledY)) {
+    console.warn(`反向缩放后的坐标无效 {x: ${unscaledX}, y: ${unscaledY}}，使用原始坐标`)
+    return { ...point }
+  }
+
+  // 返回反向缩放后的坐标
   return {
-    x: point.x / scale,
-    y: point.y / scale
+    x: unscaledX,
+    y: unscaledY
   }
 }
 
@@ -1650,6 +1938,9 @@ const canvasStyle = computed(() => {
   // 获取原始设计的视口信息
   const originalViewportInfo = courseStore.currentCourse.viewportInfo
 
+  // 检测设备方向
+  const isLandscape = viewportWidth > viewportHeight
+
   // 计算比例调整因子
   let scaleFactor = 1
   if (originalViewportInfo) {
@@ -1659,33 +1950,70 @@ const canvasStyle = computed(() => {
     const heightRatio = viewportHeight / originalViewportInfo.height
     // 使用较小的比例作为缩放因子，确保内容完全显示
     scaleFactor = Math.min(widthRatio, heightRatio)
+
+    // 考虑设备像素比
+    const devicePixelRatio = window.devicePixelRatio || 1
+    const originalDevicePixelRatio = originalViewportInfo.devicePixelRatio || 1
+
+    // 应用像素比调整
+    if (originalDevicePixelRatio > 0) {
+      scaleFactor = scaleFactor * (devicePixelRatio / originalDevicePixelRatio)
+    }
+
+    console.log(`画布缩放因子: ${scaleFactor} (视口: ${viewportWidth}x${viewportHeight}, 原始: ${originalViewportInfo.width}x${originalViewportInfo.height})`)
   }
 
-  // 最大宽度是视口的95%，预留一些空间给边距和滚动条
-  const maxWidth = viewportWidth * 0.95
+  // 根据设备方向调整最大尺寸
+  let maxWidth, maxHeight
+  if (isLandscape) {
+    // 横屏模式
+    maxWidth = viewportWidth * 0.9 // 横屏时可以使用更多宽度
+    maxHeight = viewportHeight * 0.85 // 横屏时高度限制稍微放宽
+  } else {
+    // 竖屏模式
+    maxWidth = viewportWidth * 0.95 // 竖屏时宽度几乎占满
+    maxHeight = viewportHeight * 0.7 // 竖屏时高度限制更严格，留出更多空间给其他UI元素
+  }
 
   // 根据当前视口和场地比例，确定最合适的尺寸
-  let width = maxWidth
-  let height = width / idealRatio
+  let width, height
 
-  // 如果高度超出了视口高度的80%，调整宽度以适应高度
-  if (height > viewportHeight * 0.8) {
-    height = viewportHeight * 0.8
+  // 先尝试基于宽度计算
+  width = maxWidth
+  height = width / idealRatio
+
+  // 如果高度超出了最大高度，则基于高度计算
+  if (height > maxHeight) {
+    height = maxHeight
     width = height * idealRatio
   }
 
-  // 如果有原始视口信息并且缩放因子不为1，调整画布大小
-  if (originalViewportInfo && scaleFactor !== 1 && originalViewportInfo.canvasWidth > 0) {
+  // 如果有原始视口信息并且缩放因子不为1，尝试使用原始画布尺寸和缩放因子
+  if (originalViewportInfo && Math.abs(scaleFactor - 1) > 0.1 && originalViewportInfo.canvasWidth > 0) {
     // 基于原始画布尺寸和缩放因子计算新尺寸
-    const adjustedWidth = Math.min(originalViewportInfo.canvasWidth * scaleFactor, width)
-    width = Math.max(Math.min(adjustedWidth, maxWidth), viewportWidth * 0.5)
-    height = width / idealRatio
+    const adjustedWidth = originalViewportInfo.canvasWidth * scaleFactor
+    const adjustedHeight = originalViewportInfo.canvasHeight * scaleFactor
 
-    // 调整后的尺寸不应超过视口高度的80%
-    if (height > viewportHeight * 0.8) {
-      height = viewportHeight * 0.8
-      width = height * idealRatio
+    // 检查调整后的尺寸是否在允许范围内
+    if (adjustedWidth <= maxWidth && adjustedHeight <= maxHeight) {
+      // 如果在允许范围内，直接使用调整后的尺寸
+      width = adjustedWidth
+      height = adjustedHeight
+    } else {
+      // 否则，保持宽高比，但缩小到允许范围内
+      const widthRatio = maxWidth / adjustedWidth
+      const heightRatio = maxHeight / adjustedHeight
+      const adjustmentRatio = Math.min(widthRatio, heightRatio)
+
+      width = adjustedWidth * adjustmentRatio
+      height = adjustedHeight * adjustmentRatio
     }
+
+    // 确保尺寸不会太小
+    width = Math.max(width, viewportWidth * 0.5)
+    height = Math.max(height, viewportHeight * 0.3)
+
+    console.log(`调整后的画布尺寸: ${width}x${height} (原始: ${originalViewportInfo.canvasWidth}x${originalViewportInfo.canvasHeight}, 缩放: ${scaleFactor})`)
   }
 
   // 返回最终的样式
@@ -2019,49 +2347,28 @@ const handleGlobalMouseUp = (event: MouseEvent) => {
   if (isDragging.value) {
     // 在拖拽结束时发送所有选中障碍物的最终位置，确保其他协作者能看到最终位置
     if (isCollaborating.value) {
-      console.log('拖拽结束，检查是否需要发送最终位置')
+      console.log('拖拽结束，发送最终位置')
       try {
-        // 为所有选中的障碍物检查位置是否有变化，只有变化时才发送
+        // 为所有选中的障碍物发送最终位置，无论是否有变化
         selectedObstacles.value.forEach((obstacle) => {
-          // 获取上次发送的位置
-          let lastSentPosition = null
-          const lastPositionStr = localStorage.getItem(`lastPosition_${obstacle.id}`)
-          if (lastPositionStr) {
-            try {
-              lastSentPosition = JSON.parse(lastPositionStr)
-            } catch (e) {
-              console.error('解析上次位置失败:', e)
-            }
-          }
+          // 创建一个新的位置对象，避免引用问题
+          const positionToSend = { ...obstacle.position }
+          console.log('发送障碍物最终位置:', obstacle.id, positionToSend)
 
-          // 检查位置是否有实际变化（至少移动1像素）
-          const hasPositionChanged = !lastSentPosition ||
-            Math.abs(obstacle.position.x - lastSentPosition.x) > 1 ||
-            Math.abs(obstacle.position.y - lastSentPosition.y) > 1
-
-          // 只有位置有变化时才发送更新
-          if (hasPositionChanged) {
-            // 创建一个新的位置对象，避免引用问题
-            const positionToSend = { ...obstacle.position }
-            console.log('发送障碍物最终位置:', obstacle.id, positionToSend)
-
-            const result = sendObstacleUpdate(obstacle.id, { position: positionToSend })
-            if (result) {
-              console.log('障碍物', obstacle.id, '的最终位置更新消息发送成功')
-              // 更新最后发送的位置
-              localStorage.setItem(`lastPosition_${obstacle.id}`, JSON.stringify(positionToSend))
-              // 清除节流时间戳，确保下次拖拽可以立即发送
-              localStorage.removeItem(`lastUpdateTime_${obstacle.id}`)
-            } else {
-              console.error('障碍物', obstacle.id, '的最终位置更新消息发送失败')
-              // 尝试重新发送
-              setTimeout(() => {
-                console.log('尝试重新发送障碍物最终位置:', obstacle.id, positionToSend)
-                sendObstacleUpdate(obstacle.id, { position: positionToSend })
-              }, 100)
-            }
+          const result = sendObstacleUpdate(obstacle.id, { position: positionToSend })
+          if (result) {
+            console.log('障碍物', obstacle.id, '的最终位置更新消息发送成功')
+            // 更新最后发送的位置
+            localStorage.setItem(`lastPosition_${obstacle.id}`, JSON.stringify(positionToSend))
+            // 清除节流时间戳，确保下次拖拽可以立即发送
+            localStorage.removeItem(`lastUpdateTime_${obstacle.id}`)
           } else {
-            console.log('障碍物', obstacle.id, '位置未变化，不发送更新')
+            console.error('障碍物', obstacle.id, '的最终位置更新消息发送失败')
+            // 尝试重新发送
+            setTimeout(() => {
+              console.log('尝试重新发送障碍物最终位置:', obstacle.id, positionToSend)
+              sendObstacleUpdate(obstacle.id, { position: positionToSend })
+            }, 100)
           }
         })
       } catch (error) {
@@ -2077,46 +2384,28 @@ const handleGlobalMouseUp = (event: MouseEvent) => {
   if (isRotating.value && draggingObstacle.value) {
     // 在旋转结束时发送最终旋转角度，确保其他协作者能看到最终角度
     if (isCollaborating.value) {
-      console.log('旋转结束，检查是否需要发送最终角度:', draggingObstacle.value.id, draggingObstacle.value.rotation)
+      console.log('旋转结束，发送最终角度:', draggingObstacle.value.id, draggingObstacle.value.rotation)
       try {
-        // 获取上次发送的旋转角度
-        let lastSentRotation = null
+        // 直接发送最终角度，不检查是否有变化
         const obstacleId = draggingObstacle.value.id // 保存ID以便在setTimeout中使用
-        const lastRotationStr = localStorage.getItem(`lastRotation_${obstacleId}`)
-        if (lastRotationStr) {
-          try {
-            lastSentRotation = JSON.parse(lastRotationStr)
-          } catch (e) {
-            console.error('解析上次旋转角度失败:', e)
-          }
-        }
-
-        // 检查旋转角度是否有实际变化（至少1度）
         const rotationToSend = draggingObstacle.value.rotation
-        const hasRotationChanged = lastSentRotation === null ||
-          Math.abs(rotationToSend - lastSentRotation) > 1
 
-        // 只有角度有变化时才发送更新
-        if (hasRotationChanged) {
-          console.log('发送障碍物最终旋转角度:', obstacleId, rotationToSend)
+        console.log('发送障碍物最终旋转角度:', obstacleId, rotationToSend)
 
-          const result = sendObstacleUpdate(obstacleId, { rotation: rotationToSend })
-          if (result) {
-            console.log('最终角度更新消息发送成功')
-            // 更新最后发送的旋转角度
-            localStorage.setItem(`lastRotation_${obstacleId}`, JSON.stringify(rotationToSend))
-            // 清除节流时间戳，确保下次旋转可以立即发送
-            localStorage.removeItem(`lastRotationTime_${obstacleId}`)
-          } else {
-            console.error('最终角度更新消息发送失败')
-            // 尝试重新发送
-            setTimeout(() => {
-              console.log('尝试重新发送最终角度:', obstacleId, rotationToSend)
-              sendObstacleUpdate(obstacleId, { rotation: rotationToSend })
-            }, 100)
-          }
+        const result = sendObstacleUpdate(obstacleId, { rotation: rotationToSend })
+        if (result) {
+          console.log('最终角度更新消息发送成功')
+          // 更新最后发送的旋转角度
+          localStorage.setItem(`lastRotation_${obstacleId}`, JSON.stringify(rotationToSend))
+          // 清除节流时间戳，确保下次旋转可以立即发送
+          localStorage.removeItem(`lastRotationTime_${obstacleId}`)
         } else {
-          console.log('障碍物', obstacleId, '角度未变化，不发送更新')
+          console.error('最终角度更新消息发送失败')
+          // 尝试重新发送
+          setTimeout(() => {
+            console.log('尝试重新发送最终角度:', obstacleId, rotationToSend)
+            sendObstacleUpdate(obstacleId, { rotation: rotationToSend })
+          }, 100)
         }
       } catch (error) {
         console.error('发送最终角度更新失败:', error)
@@ -2450,7 +2739,30 @@ const endStyle = computed(() => {
 // 修改生成路线的方法
 const handleGenerateCoursePath = () => {
   if (courseStore.currentCourse.obstacles.length === 0) {
-    console.log('请先添加障碍物')
+    ElMessage.warning('请先添加障碍物')
+    return
+  }
+
+  // 检查障碍物编号是否都是数字
+  const obstacles = courseStore.currentCourse.obstacles.filter(
+    obstacle => obstacle.type !== ObstacleType.DECORATION
+  )
+
+  // 检查是否有非数字编号的障碍物
+  const invalidNumberObstacles = obstacles.filter(
+    obstacle => obstacle.number && !/^\d+$/.test(obstacle.number)
+  )
+
+  if (invalidNumberObstacles.length > 0) {
+    ElMessage.warning('存在非数字编号的障碍物，请修改为数字编号后再生成路线')
+    return
+  }
+
+  // 检查是否有未编号的障碍物
+  const unnumberedObstacles = obstacles.filter(obstacle => !obstacle.number)
+
+  if (unnumberedObstacles.length > 0) {
+    ElMessage.warning('存在未编号的障碍物，请为所有障碍物添加数字编号后再生成路线')
     return
   }
 
@@ -2460,6 +2772,9 @@ const handleGenerateCoursePath = () => {
   courseStore.generatePath()
   // 显示路径
   courseStore.togglePathVisibility(true)
+
+  // 显示成功消息
+  ElMessage.success('已根据障碍物编号顺序生成路线')
 
   // 如果在协作模式下，发送路径更新
   if (isCollaborating.value) {
@@ -2827,7 +3142,7 @@ const totalDistance = computed(() => {
   }, 0)
 
   // 计算障碍物总长度（包括横杆宽度和间距）
-  const obstacleTotalLength = obstacles.reduce((sum, obstacle) => {
+  const obstacleTotalLength = obstacles.reduce((accumulator, obstacle) => {
     let obstacleLength = 0
 
     // 根据障碍物类型计算长度
@@ -2844,7 +3159,7 @@ const totalDistance = computed(() => {
       obstacleLength = obstacle.poles[0]?.height || 0
     }
 
-    return obstacleLength / meterScale.value
+    return accumulator + (obstacleLength / meterScale.value)
   }, 0)
 
   // 每个障碍物需要加上6米的穿过长度（前3米+后3米）
@@ -2858,7 +3173,7 @@ const totalDistance = computed(() => {
 })
 
 // 定义障碍物更新事件处理函数
-const handleObstacleUpdated = (event: Event) => {
+const handleObstacleUpdated = () => {
   // 完全禁用此函数，不再处理障碍物更新事件
   // 这样可以避免循环更新问题
   console.log('障碍物更新事件已被禁用，不再处理')

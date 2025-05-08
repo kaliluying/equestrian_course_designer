@@ -85,43 +85,63 @@ export const useCourseStore = defineStore('course', () => {
    * @param {number} rotation - 新的旋转角度（度）
    */
   const updateStartRotation = (rotation: number) => {
-    // 计算旋转差值，确保在-180到180度之间
+    // 标准化当前角度到0-360度范围
     let currentRotation = startPoint.value.rotation % 360
     if (currentRotation < 0) currentRotation += 360
 
+    // 标准化新角度到0-360度范围
     let newRotation = rotation % 360
     if (newRotation < 0) newRotation += 360
 
-    // 计算最短路径的角度差
-    let diff = newRotation - currentRotation
-    if (diff > 180) diff -= 360
-    if (diff < -180) diff += 360
+    // 处理特殊情况：如果新角度和当前角度在数学上相同（0度和360度），则不进行旋转
+    if (
+      (newRotation === 0 && currentRotation === 360) ||
+      (newRotation === 360 && currentRotation === 0)
+    ) {
+      // 直接设置为新角度，不计算差值
+      startPoint.value.rotation = newRotation
+    } else {
+      // 特殊处理0度和360度的情况
+      if (newRotation === 0 && currentRotation > 180) {
+        // 如果新角度是0度，而当前角度接近360度，则应该向下旋转到0度
+        newRotation = 0
+      } else if (newRotation === 360 && currentRotation < 180) {
+        // 如果新角度是360度，而当前角度接近0度，则应该向上旋转到360度
+        newRotation = 360
+      }
 
-    // 更新旋转角度，保持连续性
-    startPoint.value.rotation = currentRotation + diff
+      // 计算最短路径的角度差
+      let diff = newRotation - currentRotation
+      if (diff > 180) diff -= 360
+      if (diff < -180) diff += 360
+
+      // 更新旋转角度，保持连续性
+      startPoint.value.rotation = currentRotation + diff
+    }
 
     // 如果路径存在且可见，更新起点附近的控制点
     if (coursePath.value.visible && coursePath.value.points.length > 1) {
       const points = [...coursePath.value.points]
-      const startPoint = points[0]
+      const pathStartPoint = points[0]
       const nextPoint = points[1]
 
       // 计算新的控制点位置，基于旋转角度
-      if (startPoint && nextPoint && startPoint.controlPoint2) {
-        // 使用实际旋转角度计算控制点位置
-        const angle = ((currentRotation + diff - 270) % 360) * (Math.PI / 180)
+      if (pathStartPoint && nextPoint && pathStartPoint.controlPoint2) {
+        // 使用当前旋转角度计算控制点位置
+        const angle = ((startPoint.value.rotation - 270) % 360) * (Math.PI / 180)
         const distance =
           Math.sqrt(
-            Math.pow(nextPoint.x - startPoint.x, 2) + Math.pow(nextPoint.y - startPoint.y, 2),
+            Math.pow(nextPoint.x - pathStartPoint.x, 2) +
+              Math.pow(nextPoint.y - pathStartPoint.y, 2),
           ) / 3
 
         // 更新起点的后控制点
-        startPoint.controlPoint2 = {
-          x: startPoint.x + Math.cos(angle) * distance,
-          y: startPoint.y + Math.sin(angle) * distance,
+        pathStartPoint.controlPoint2 = {
+          x: pathStartPoint.x + Math.cos(angle) * distance,
+          y: pathStartPoint.y + Math.sin(angle) * distance,
         }
         // 标记控制点为已手动移动
-        startPoint.isControlPoint2Moved = true
+        pathStartPoint.isControlPoint2Moved = true
 
         coursePath.value.points = points
       }
@@ -136,43 +156,63 @@ export const useCourseStore = defineStore('course', () => {
    * @param {number} rotation - 新的旋转角度（度）
    */
   const updateEndRotation = (rotation: number) => {
-    // 计算旋转差值，确保在-180到180度之间
+    // 标准化当前角度到0-360度范围
     let currentRotation = endPoint.value.rotation % 360
     if (currentRotation < 0) currentRotation += 360
 
+    // 标准化新角度到0-360度范围
     let newRotation = rotation % 360
     if (newRotation < 0) newRotation += 360
 
-    // 计算最短路径的角度差
-    let diff = newRotation - currentRotation
-    if (diff > 180) diff -= 360
-    if (diff < -180) diff += 360
+    // 处理特殊情况：如果新角度和当前角度在数学上相同（0度和360度），则不进行旋转
+    if (
+      (newRotation === 0 && currentRotation === 360) ||
+      (newRotation === 360 && currentRotation === 0)
+    ) {
+      // 直接设置为新角度，不计算差值
+      endPoint.value.rotation = newRotation
+    } else {
+      // 特殊处理0度和360度的情况
+      if (newRotation === 0 && currentRotation > 180) {
+        // 如果新角度是0度，而当前角度接近360度，则应该向下旋转到0度
+        newRotation = 0
+      } else if (newRotation === 360 && currentRotation < 180) {
+        // 如果新角度是360度，而当前角度接近0度，则应该向上旋转到360度
+        newRotation = 360
+      }
 
-    // 更新旋转角度，保持连续性
-    endPoint.value.rotation = currentRotation + diff
+      // 计算最短路径的角度差
+      let diff = newRotation - currentRotation
+      if (diff > 180) diff -= 360
+      if (diff < -180) diff += 360
+
+      // 更新旋转角度，保持连续性
+      endPoint.value.rotation = currentRotation + diff
+    }
 
     // 如果路径存在且可见，更新终点附近的控制点
     if (coursePath.value.visible && coursePath.value.points.length > 1) {
       const points = [...coursePath.value.points]
       const lastIndex = points.length - 1
-      const endPoint = points[lastIndex]
+      const pathEndPoint = points[lastIndex]
       const prevPoint = points[lastIndex - 1]
 
       // 计算新的控制点位置，基于旋转角度
-      if (endPoint && prevPoint && endPoint.controlPoint1) {
-        // 使用实际旋转角度计算控制点位置
-        const angle = ((currentRotation + diff - 90) % 360) * (Math.PI / 180)
+      if (pathEndPoint && prevPoint && pathEndPoint.controlPoint1) {
+        // 使用当前旋转角度计算控制点位置
+        const angle = ((endPoint.value.rotation - 90) % 360) * (Math.PI / 180)
         const distance =
-          Math.sqrt(Math.pow(prevPoint.x - endPoint.x, 2) + Math.pow(prevPoint.y - endPoint.y, 2)) /
-          3
+          Math.sqrt(
+            Math.pow(prevPoint.x - pathEndPoint.x, 2) + Math.pow(prevPoint.y - pathEndPoint.y, 2),
+          ) / 3
 
         // 更新终点的前控制点
-        endPoint.controlPoint1 = {
-          x: endPoint.x + Math.cos(angle) * distance,
-          y: endPoint.y + Math.sin(angle) * distance,
+        pathEndPoint.controlPoint1 = {
+          x: pathEndPoint.x + Math.cos(angle) * distance,
+          y: pathEndPoint.y + Math.sin(angle) * distance,
         }
         // 标记控制点为已手动移动
-        endPoint.isControlPoint1Moved = true
+        pathEndPoint.isControlPoint1Moved = true
 
         coursePath.value.points = points
       }
@@ -318,9 +358,27 @@ export const useCourseStore = defineStore('course', () => {
     if (obstacles.length === 0) return
 
     // 过滤出非装饰物类型的障碍物
-    const nonDecorationObstacles = obstacles.filter(
+    let nonDecorationObstacles = obstacles.filter(
       (obstacle) => obstacle.type !== ObstacleType.DECORATION,
     )
+
+    // 根据障碍物编号排序（如果有编号）
+    nonDecorationObstacles = nonDecorationObstacles.sort((a, b) => {
+      // 如果两个障碍物都有编号，按编号排序
+      if (a.number && b.number) {
+        const numA = parseInt(a.number)
+        const numB = parseInt(b.number)
+        // 确保编号是有效的数字
+        if (!isNaN(numA) && !isNaN(numB)) {
+          return numA - numB
+        }
+      }
+      // 如果只有一个障碍物有编号，将有编号的排在前面
+      if (a.number && !b.number) return -1
+      if (!a.number && b.number) return 1
+      // 如果都没有编号，保持原始顺序
+      return 0
+    })
 
     // 如果没有非装饰物类型的障碍物，则不生成路径
     if (nonDecorationObstacles.length === 0) return
@@ -624,6 +682,28 @@ export const useCourseStore = defineStore('course', () => {
       id: uuidv4(),
     }
 
+    // 如果是非装饰物类型且没有编号，自动添加默认编号
+    if (obstacle.type !== ObstacleType.DECORATION && !obstacle.number) {
+      // 获取当前非装饰物的数量，用于生成新编号
+      const nonDecorationObstacles = currentCourse.value.obstacles.filter(
+        (obs) => obs.type !== ObstacleType.DECORATION,
+      )
+
+      // 查找当前最大编号
+      let maxNumber = 0
+      nonDecorationObstacles.forEach((obs) => {
+        if (obs.number && /^\d+$/.test(obs.number)) {
+          const num = parseInt(obs.number)
+          if (!isNaN(num) && num > maxNumber) {
+            maxNumber = num
+          }
+        }
+      })
+
+      // 新编号为当前最大编号+1
+      newObstacle.number = String(maxNumber + 1)
+    }
+
     currentCourse.value.obstacles.push(newObstacle)
 
     // 如果路径可见，则更新路径
@@ -650,6 +730,28 @@ export const useCourseStore = defineStore('course', () => {
   function addObstacleWithId(obstacle: Obstacle) {
     // 直接使用提供的障碍物对象（包含ID）
     const newObstacle = { ...obstacle }
+
+    // 如果是非装饰物类型且没有编号，自动添加默认编号
+    if (obstacle.type !== ObstacleType.DECORATION && !obstacle.number) {
+      // 获取当前非装饰物的数量，用于生成新编号
+      const nonDecorationObstacles = currentCourse.value.obstacles.filter(
+        (obs) => obs.type !== ObstacleType.DECORATION,
+      )
+
+      // 查找当前最大编号
+      let maxNumber = 0
+      nonDecorationObstacles.forEach((obs) => {
+        if (obs.number && /^\d+$/.test(obs.number)) {
+          const num = parseInt(obs.number)
+          if (!isNaN(num) && num > maxNumber) {
+            maxNumber = num
+          }
+        }
+      })
+
+      // 新编号为当前最大编号+1
+      newObstacle.number = String(maxNumber + 1)
+    }
 
     // 添加到障碍物列表
     currentCourse.value.obstacles.push(newObstacle)
@@ -1534,8 +1636,24 @@ export const useCourseStore = defineStore('course', () => {
       const scaleFactorWidth = currentViewport.canvasWidth / (originalViewport.canvasWidth || 800)
       const scaleFactorHeight =
         currentViewport.canvasHeight / (originalViewport.canvasHeight || 600)
+
+      // 考虑设备像素比的影响
+      const currentDevicePixelRatio = window.devicePixelRatio || 1
+      const originalDevicePixelRatio = originalViewport.devicePixelRatio || 1
+      const pixelRatioAdjustment = currentDevicePixelRatio / originalDevicePixelRatio
+
       // 使用一个统一的缩放因子，防止宽高比例不同导致的变形
-      const scaleFactor = Math.min(scaleFactorWidth, scaleFactorHeight)
+      // 并应用设备像素比调整
+      const scaleFactor = Math.min(scaleFactorWidth, scaleFactorHeight) * pixelRatioAdjustment
+
+      console.log('加载路线图时的缩放计算:', {
+        scaleFactorWidth,
+        scaleFactorHeight,
+        currentDevicePixelRatio,
+        originalDevicePixelRatio,
+        pixelRatioAdjustment,
+        finalScaleFactor: scaleFactor,
+      })
 
       // 检查是否需要进行缩放调整
       const needsScaling = Math.abs(scaleFactor - 1) > 0.1
@@ -1800,6 +1918,7 @@ export const useCourseStore = defineStore('course', () => {
         canvasWidth: canvasRect ? canvasRect.width : 0,
         canvasHeight: canvasRect ? canvasRect.height : 0,
         aspectRatio: currentCourse.value.fieldWidth / currentCourse.value.fieldHeight,
+        devicePixelRatio: window.devicePixelRatio || 1, // 添加设备像素比信息
       },
     }
 
@@ -1840,15 +1959,162 @@ export const useCourseStore = defineStore('course', () => {
       canvasWidth: 800,
       canvasHeight: 600,
       aspectRatio: course.fieldWidth / course.fieldHeight,
+      devicePixelRatio: window.devicePixelRatio || 1, // 添加设备像素比信息
+    }
+
+    // 记录当前设备的视口信息
+    const currentViewportInfo = {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      canvasWidth: 800,
+      canvasHeight: 600,
+      aspectRatio: course.fieldWidth / course.fieldHeight,
+      devicePixelRatio: window.devicePixelRatio || 1,
+    }
+
+    // 获取当前画布元素
+    const canvasElement = document.querySelector('.course-canvas')
+    if (canvasElement) {
+      const rect = canvasElement.getBoundingClientRect()
+      currentViewportInfo.canvasWidth = rect.width
+      currentViewportInfo.canvasHeight = rect.height
+    }
+
+    console.log('导入课程时的视口信息:', {
+      original: viewportInfo,
+      current: currentViewportInfo,
+    })
+
+    // 计算缩放因子
+    const scaleFactorWidth = currentViewportInfo.canvasWidth / (viewportInfo.canvasWidth || 800)
+    const scaleFactorHeight = currentViewportInfo.canvasHeight / (viewportInfo.canvasHeight || 600)
+
+    // 考虑设备像素比的影响
+    const currentDevicePixelRatio = currentViewportInfo.devicePixelRatio || 1
+    const originalDevicePixelRatio = viewportInfo.devicePixelRatio || 1
+    const pixelRatioAdjustment = currentDevicePixelRatio / originalDevicePixelRatio
+
+    // 使用一个统一的缩放因子，防止宽高比例不同导致的变形
+    const scaleFactor = Math.min(scaleFactorWidth, scaleFactorHeight) * pixelRatioAdjustment
+
+    console.log('导入课程时的缩放计算:', {
+      scaleFactorWidth,
+      scaleFactorHeight,
+      currentDevicePixelRatio,
+      originalDevicePixelRatio,
+      pixelRatioAdjustment,
+      finalScaleFactor: scaleFactor,
+    })
+
+    // 检查是否需要进行缩放调整
+    const needsScaling = Math.abs(scaleFactor - 1) > 0.1
+
+    // 缩放障碍物
+    let scaledObstacles = course.obstacles
+    if (needsScaling) {
+      scaledObstacles = course.obstacles.map((obstacle: Obstacle) => {
+        const scaledObstacle = JSON.parse(JSON.stringify(obstacle)) // 深拷贝确保所有嵌套属性都能被修改
+
+        // 确保对象有position属性
+        if (!scaledObstacle.position) {
+          console.warn(`障碍物 ${obstacle.id} 缺少position属性，设置默认值`)
+          scaledObstacle.position = { x: 10, y: 10 }
+        }
+
+        // 缩放位置
+        scaledObstacle.position = {
+          x: scaledObstacle.position.x * scaleFactor,
+          y: scaledObstacle.position.y * scaleFactor,
+        }
+
+        // 如果有编号位置，也要缩放
+        if (scaledObstacle.numberPosition) {
+          scaledObstacle.numberPosition = {
+            x: scaledObstacle.numberPosition.x * scaleFactor,
+            y: scaledObstacle.numberPosition.y * scaleFactor,
+          }
+        }
+
+        // 缩放障碍物的大小 - 根据障碍物类型处理不同属性
+        // 1. 缩放横杆（poles）
+        if (scaledObstacle.poles && Array.isArray(scaledObstacle.poles)) {
+          scaledObstacle.poles = scaledObstacle.poles.map((pole: Pole) => ({
+            ...pole,
+            width: pole.width * scaleFactor,
+            height: pole.height * scaleFactor,
+            spacing: pole.spacing ? pole.spacing * scaleFactor : undefined,
+          }))
+        }
+
+        // 2. 缩放墙属性
+        if (scaledObstacle.wallProperties) {
+          scaledObstacle.wallProperties = {
+            ...scaledObstacle.wallProperties,
+            width: scaledObstacle.wallProperties.width * scaleFactor,
+            height: scaledObstacle.wallProperties.height * scaleFactor,
+          }
+        }
+
+        // 3. 缩放利物浦属性
+        if (scaledObstacle.liverpoolProperties) {
+          scaledObstacle.liverpoolProperties = {
+            ...scaledObstacle.liverpoolProperties,
+            width: scaledObstacle.liverpoolProperties.width * scaleFactor,
+            height: scaledObstacle.liverpoolProperties.height * scaleFactor,
+            railHeight: scaledObstacle.liverpoolProperties.railHeight
+              ? scaledObstacle.liverpoolProperties.railHeight * scaleFactor
+              : undefined,
+          }
+        }
+
+        // 4. 缩放水障属性
+        if (scaledObstacle.waterProperties) {
+          scaledObstacle.waterProperties = {
+            ...scaledObstacle.waterProperties,
+            width: scaledObstacle.waterProperties.width * scaleFactor,
+            depth: scaledObstacle.waterProperties.depth * scaleFactor,
+            borderWidth: scaledObstacle.waterProperties.borderWidth
+              ? scaledObstacle.waterProperties.borderWidth * scaleFactor
+              : undefined,
+          }
+        }
+
+        // 5. 缩放装饰物属性
+        if (scaledObstacle.decorationProperties) {
+          scaledObstacle.decorationProperties = {
+            ...scaledObstacle.decorationProperties,
+            width: scaledObstacle.decorationProperties.width * scaleFactor,
+            height: scaledObstacle.decorationProperties.height * scaleFactor,
+            trunkHeight: scaledObstacle.decorationProperties.trunkHeight
+              ? scaledObstacle.decorationProperties.trunkHeight * scaleFactor
+              : undefined,
+            trunkWidth: scaledObstacle.decorationProperties.trunkWidth
+              ? scaledObstacle.decorationProperties.trunkWidth * scaleFactor
+              : undefined,
+            foliageRadius: scaledObstacle.decorationProperties.foliageRadius
+              ? scaledObstacle.decorationProperties.foliageRadius * scaleFactor
+              : undefined,
+            borderWidth: scaledObstacle.decorationProperties.borderWidth
+              ? scaledObstacle.decorationProperties.borderWidth * scaleFactor
+              : undefined,
+            scale: scaledObstacle.decorationProperties.scale
+              ? scaledObstacle.decorationProperties.scale * scaleFactor
+              : undefined,
+          }
+        }
+
+        return scaledObstacle
+      })
     }
 
     // 更新课程数据
     currentCourse.value = {
       ...course,
+      obstacles: scaledObstacles,
       id: currentId,
       updatedAt: new Date().toISOString(),
-      // 保留原始设计的视口信息
-      viewportInfo,
+      // 保留原始设计的视口信息，但更新当前设备的视口信息
+      viewportInfo: currentViewportInfo,
     }
 
     // 清除选中的障碍物
@@ -1857,25 +2123,74 @@ export const useCourseStore = defineStore('course', () => {
     // 更新路径
     if (course.path) {
       console.log('导入路径数据:', course.path)
+
+      // 缩放路径点
+      let scaledPoints = []
+      if (course.path.points && needsScaling) {
+        scaledPoints = course.path.points.map((point: PathPoint) => {
+          const scaledPoint = {
+            ...point,
+            x: point.x * scaleFactor,
+            y: point.y * scaleFactor,
+          }
+
+          // 处理控制点
+          if (point.controlPoint1) {
+            scaledPoint.controlPoint1 = {
+              x: point.controlPoint1.x * scaleFactor,
+              y: point.controlPoint1.y * scaleFactor,
+            }
+          }
+
+          if (point.controlPoint2) {
+            scaledPoint.controlPoint2 = {
+              x: point.controlPoint2.x * scaleFactor,
+              y: point.controlPoint2.y * scaleFactor,
+            }
+          }
+
+          return scaledPoint
+        })
+      } else {
+        scaledPoints = course.path.points ? [...course.path.points] : []
+      }
+
       // 更新路径数据
       coursePath.value = {
         visible: course.path.visible ?? false,
-        points: course.path.points ? [...course.path.points] : [],
+        points: scaledPoints,
       }
 
       // 更新起点和终点
       if (course.path.startPoint) {
-        startPoint.value = {
-          x: course.path.startPoint.x,
-          y: course.path.startPoint.y,
-          rotation: course.path.startPoint.rotation || 270,
+        if (needsScaling) {
+          startPoint.value = {
+            x: course.path.startPoint.x * scaleFactor,
+            y: course.path.startPoint.y * scaleFactor,
+            rotation: course.path.startPoint.rotation || 270,
+          }
+        } else {
+          startPoint.value = {
+            x: course.path.startPoint.x,
+            y: course.path.startPoint.y,
+            rotation: course.path.startPoint.rotation || 270,
+          }
         }
       }
+
       if (course.path.endPoint) {
-        endPoint.value = {
-          x: course.path.endPoint.x,
-          y: course.path.endPoint.y,
-          rotation: course.path.endPoint.rotation || 270,
+        if (needsScaling) {
+          endPoint.value = {
+            x: course.path.endPoint.x * scaleFactor,
+            y: course.path.endPoint.y * scaleFactor,
+            rotation: course.path.endPoint.rotation || 270,
+          }
+        } else {
+          endPoint.value = {
+            x: course.path.endPoint.x,
+            y: course.path.endPoint.y,
+            rotation: course.path.endPoint.rotation || 270,
+          }
         }
       }
 

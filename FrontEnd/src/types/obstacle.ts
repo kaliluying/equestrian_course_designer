@@ -132,6 +132,7 @@ export interface CourseDesign {
     canvasWidth: number // 导出时的画布宽度
     canvasHeight: number // 导出时的画布高度
     aspectRatio: number // 导出时的宽高比
+    devicePixelRatio?: number // 设备像素比
   }
 }
 

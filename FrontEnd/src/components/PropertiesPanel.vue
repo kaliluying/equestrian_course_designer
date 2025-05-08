@@ -18,8 +18,11 @@
           <div class="form-section">
             <h3 class="section-title">基本信息</h3>
             <el-form-item label="障碍编号">
-              <el-input v-model="selectedObstacle.number" maxlength="3" placeholder="输入编号（如：1, A, 2A）"
-                class="full-width" />
+              <el-input v-model="selectedObstacle.number" maxlength="3" placeholder="输入编号（仅限数字）" class="full-width"
+                @input="validateObstacleNumber" />
+              <div v-if="numberError" class="error-message" style="color: #F56C6C; font-size: 12px; margin-top: 5px;">
+                {{ numberError }}
+              </div>
             </el-form-item>
 
             <el-form-item label="旋转角度">
@@ -131,7 +134,12 @@
               </div>
 
               <el-form-item label="编号">
-                <el-input v-model="pole.number" maxlength="3" placeholder="输入编号（如：1, A, 2A）" class="full-width" />
+                <el-input v-model="pole.number" maxlength="3" placeholder="输入编号（仅限数字）" class="full-width"
+                  @input="(value) => validatePoleNumber(index, value)" />
+                <div v-if="poleNumberErrors[index]" class="error-message"
+                  style="color: #F56C6C; font-size: 12px; margin-top: 5px;">
+                  {{ poleNumberErrors[index] }}
+                </div>
               </el-form-item>
 
               <el-form-item label="宽度 (cm)">
@@ -205,12 +213,89 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Delete, Plus } from '@element-plus/icons-vue'
 import { useCourseStore } from '@/stores/course'
 import type { Pole, Obstacle } from '@/types/obstacle'
 import { ObstacleType } from '@/types/obstacle'
 import { useWebSocketStore } from '@/stores/websocket'
+
+// 添加障碍物编号错误提示
+const numberError = ref('')
+// 添加横木编号错误提示
+const poleNumberErrors = ref<Record<number, string>>({})
+
+/**
+ * 验证障碍物编号，确保只能输入数字
+ * @param value 输入的编号值
+ */
+const validateObstacleNumber = (value: string) => {
+  if (!selectedObstacle.value) return
+
+  // 如果输入为空，清除错误
+  if (!value) {
+    numberError.value = ''
+    return
+  }
+
+  // 检查是否只包含数字
+  if (!/^\d+$/.test(value)) {
+    numberError.value = '障碍编号只能包含数字'
+    // 移除非数字字符
+    selectedObstacle.value.number = value.replace(/\D/g, '')
+  } else {
+    numberError.value = ''
+    // 更新障碍物编号
+    updateObstacleWithCollaboration(
+      selectedObstacle.value.id,
+      { number: value }
+    )
+  }
+}
+
+/**
+ * 验证横木编号，确保只能输入数字
+ * @param index 横木索引
+ * @param value 输入的编号值
+ */
+const validatePoleNumber = (index: number, value: string) => {
+  if (!selectedObstacle.value) return
+
+  // 如果输入为空，清除错误
+  if (!value) {
+    poleNumberErrors.value[index] = ''
+    return
+  }
+
+  // 检查是否只包含数字
+  if (!/^\d+$/.test(value)) {
+    poleNumberErrors.value[index] = '横木编号只能包含数字'
+    // 移除非数字字符
+    const newPoles = [...selectedObstacle.value.poles]
+    newPoles[index] = {
+      ...newPoles[index],
+      number: value.replace(/\D/g, '')
+    }
+    // 更新障碍物
+    updateObstacleWithCollaboration(
+      selectedObstacle.value.id,
+      { poles: newPoles }
+    )
+  } else {
+    poleNumberErrors.value[index] = ''
+    // 更新横木编号
+    const newPoles = [...selectedObstacle.value.poles]
+    newPoles[index] = {
+      ...newPoles[index],
+      number: value
+    }
+    // 更新障碍物
+    updateObstacleWithCollaboration(
+      selectedObstacle.value.id,
+      { poles: newPoles }
+    )
+  }
+}
 
 // 获取课程存储
 const courseStore = useCourseStore()
