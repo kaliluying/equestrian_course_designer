@@ -70,3 +70,4 @@ BackEnd/logs/*
 BackEnd/media/*
 back.bat
 front.bat
+.cursor/
