@@ -37,8 +37,8 @@
         </div>
         <template v-if="obstacle.type === ObstacleType.WALL">
           <div class="wall" :style="{
-            width: `${obstacle.wallProperties?.width}px`,
-            height: `${obstacle.wallProperties?.height}px`,
+            width: `${scalePoint({x: obstacle.wallProperties?.width || 0, y: 0}).x}px`,
+            height: `${scalePoint({x: 0, y: obstacle.wallProperties?.height || 0}).y}px`,
             background: obstacle.wallProperties?.color,
           }">
             <div class="wall-texture"></div>
@@ -46,22 +46,22 @@
         </template>
         <template v-else-if="obstacle.type === ObstacleType.LIVERPOOL">
           <div class="liverpool" :style="{
-            width: `${obstacle.poles[0]?.width}px`,
+            width: `${scalePoint({x: obstacle.poles[0]?.width || 0, y: 0}).x}px`,
           }">
             <template v-if="obstacle.liverpoolProperties?.hasRail">
               <div v-for="(pole, index) in obstacle.poles" :key="index" class="pole" :style="{
                 width: '100%',
-                height: `${pole.height}px`,
+                height: `${scalePoint({x: 0, y: pole.height || 0}).y}px`,
                 background: `linear-gradient(90deg, ${pole.color} 0%, ${adjustColor(pole.color, 20)} 100%)`,
               }">
                 <div class="pole-shadow"></div>
               </div>
             </template>
             <div class="water" :style="{
-              width: `${obstacle.liverpoolProperties?.width}px`,
-              height: `${obstacle.liverpoolProperties?.waterDepth}px`,
+              width: `${scalePoint({x: obstacle.liverpoolProperties?.width || 0, y: 0}).x}px`,
+              height: `${scalePoint({x: 0, y: obstacle.liverpoolProperties?.waterDepth || 0}).y}px`,
               background: obstacle.liverpoolProperties?.waterColor,
-              marginLeft: `${(obstacle.poles[0]?.width - (obstacle.liverpoolProperties?.width || 0)) / 2}px`,
+              marginLeft: `${(scalePoint({x: obstacle.poles[0]?.width || 0, y: 0}).x - scalePoint({x: obstacle.liverpoolProperties?.width || 0, y: 0}).x) / 2}px`,
             }"></div>
           </div>
         </template>
@@ -69,8 +69,8 @@
           <!-- 自定义障碍物渲染 -->
           <template v-if="getCustomTemplate(obstacle) && getCustomTemplate(obstacle)?.baseType === ObstacleType.WALL">
             <div class="wall" :style="{
-              width: `${obstacle.wallProperties?.width}px`,
-              height: `${obstacle.wallProperties?.height}px`,
+              width: `${scalePoint({x: obstacle.wallProperties?.width || 0, y: 0}).x}px`,
+              height: `${scalePoint({x: 0, y: obstacle.wallProperties?.height || 0}).y}px`,
               background: obstacle.wallProperties?.color,
             }">
               <div class="wall-texture"></div>
@@ -79,32 +79,32 @@
           <template
             v-else-if="getCustomTemplate(obstacle) && getCustomTemplate(obstacle)?.baseType === ObstacleType.LIVERPOOL">
             <div class="liverpool" :style="{
-              width: `${obstacle.poles[0]?.width}px`,
+              width: `${scalePoint({x: obstacle.poles[0]?.width || 0, y: 0}).x}px`,
             }">
               <template v-if="obstacle.liverpoolProperties?.hasRail">
                 <div v-for="(pole, index) in obstacle.poles" :key="index" class="pole" :style="{
                   width: '100%',
-                  height: `${pole.height}px`,
+                  height: `${scalePoint({x: 0, y: pole.height || 0}).y}px`,
                   background: `linear-gradient(90deg, ${pole.color} 0%, ${adjustColor(pole.color, 20)} 100%)`,
                 }">
                   <div class="pole-shadow"></div>
                 </div>
               </template>
               <div class="water" :style="{
-                width: `${obstacle.liverpoolProperties?.width}px`,
-                height: `${obstacle.liverpoolProperties?.waterDepth}px`,
+                width: `${scalePoint({x: obstacle.liverpoolProperties?.width || 0, y: 0}).x}px`,
+                height: `${scalePoint({x: 0, y: obstacle.liverpoolProperties?.waterDepth || 0}).y}px`,
                 background: obstacle.liverpoolProperties?.waterColor,
-                marginLeft: `${(obstacle.poles[0]?.width - (obstacle.liverpoolProperties?.width || 0)) / 2}px`,
+                marginLeft: `${(scalePoint({x: obstacle.poles[0]?.width || 0, y: 0}).x - scalePoint({x: obstacle.liverpoolProperties?.width || 0, y: 0}).x) / 2}px`,
               }"></div>
             </div>
           </template>
           <template v-else>
             <!-- 默认使用横杆渲染 -->
             <div v-for="(pole, index) in obstacle.poles" :key="index" class="pole" :style="{
-              width: `${pole.width}px`,
-              height: `${pole.height}px`,
+              width: `${scalePoint({x: pole.width || 0, y: 0}).x}px`,
+              height: `${scalePoint({x: 0, y: pole.height || 0}).y}px`,
               background: `linear-gradient(90deg, ${pole.color} 0%, ${adjustColor(pole.color, 20)} 100%)`,
-              marginBottom: pole.spacing ? `${pole.spacing}px` : '0',
+              marginBottom: pole.spacing ? `${scalePoint({x: 0, y: pole.spacing}).y}px` : '0',
             }">
               <div class="pole-shadow"></div>
             </div>
@@ -112,53 +112,23 @@
         </template>
         <template v-else-if="obstacle.type === ObstacleType.WATER">
           <div class="water-obstacle" :style="{
-            width: `${obstacle.waterProperties?.width}px`,
-            height: `${obstacle.waterProperties?.depth}px`,
+            width: `${scalePoint({x: obstacle.waterProperties?.width || 0, y: 0}).x}px`,
+            height: `${scalePoint({x: 0, y: obstacle.waterProperties?.depth || 0}).y}px`,
             background: obstacle.waterProperties?.color,
             borderColor: obstacle.waterProperties?.borderColor,
-            borderWidth: `${obstacle.waterProperties?.borderWidth}px`,
+            borderWidth: `${scalePoint({x: 0, y: obstacle.waterProperties?.borderWidth || 0}).y}px`,
             borderStyle: 'solid'
           }"></div>
         </template>
+        <!-- 装饰物缩放 -->
         <template v-else-if="obstacle.type === ObstacleType.DECORATION">
-          <!-- 裁判桌 -->
-          <template v-if="obstacle.decorationProperties?.category === DecorationCategory.TABLE">
-            <div class="decoration-table" :style="{
-              width: `${obstacle.decorationProperties?.width}px`,
-              height: `${obstacle.decorationProperties?.height}px`,
-              backgroundColor: obstacle.decorationProperties?.color,
-              border: obstacle.decorationProperties?.borderWidth
-                ? `${obstacle.decorationProperties.borderWidth}px solid ${obstacle.decorationProperties.borderColor}`
-                : 'none',
-              borderRadius: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              overflow: 'hidden',
-            }">
-              <div v-if="obstacle.decorationProperties?.text" :style="{
-                color: obstacle.decorationProperties?.textColor,
-                fontSize: '14px',
-                fontWeight: 'bold',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                maxWidth: '90%',
-                textAlign: 'center'
-              }">
-                {{ obstacle.decorationProperties.text }}
-              </div>
-            </div>
-          </template>
-
-          <!-- 树 -->
-          <template v-else-if="obstacle.decorationProperties?.category === DecorationCategory.TREE">
+          <template v-if="obstacle.decorationProperties?.category === DecorationCategory.TREE">
             <div class="decoration-tree"
               style="position: relative; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;">
               <!-- 树冠 -->
               <div :style="{
-                width: `${(obstacle.decorationProperties?.foliageRadius ?? 0) * 2}px`,
-                height: `${(obstacle.decorationProperties?.foliageRadius ?? 0) * 2}px`,
+                width: `${scalePoint({x: (obstacle.decorationProperties?.foliageRadius ?? 0) * 2, y: 0}).x}px`,
+                height: `${scalePoint({x: 0, y: (obstacle.decorationProperties?.foliageRadius ?? 0) * 2}).y}px`,
                 borderRadius: '50%',
                 backgroundColor: obstacle.decorationProperties?.secondaryColor,
                 position: 'absolute',
@@ -167,8 +137,8 @@
               }"></div>
               <!-- 树干 -->
               <div :style="{
-                width: `${obstacle.decorationProperties?.trunkWidth}px`,
-                height: `${obstacle.decorationProperties?.trunkHeight}px`,
+                width: `${scalePoint({x: obstacle.decorationProperties?.trunkWidth || 0, y: 0}).x}px`,
+                height: `${scalePoint({x: 0, y: obstacle.decorationProperties?.trunkHeight || 0}).y}px`,
                 backgroundColor: obstacle.decorationProperties?.color,
                 position: 'absolute',
                 bottom: '0',
@@ -176,104 +146,18 @@
               }"></div>
             </div>
           </template>
-
-          <!-- 入口/出口 -->
-          <template v-else-if="obstacle.decorationProperties?.category === DecorationCategory.ENTRANCE ||
-            obstacle.decorationProperties?.category === DecorationCategory.EXIT">
-            <div class="decoration-gate" :style="{
-              width: `${obstacle.decorationProperties?.width}px`,
-              height: `${obstacle.decorationProperties?.height}px`,
-              backgroundColor: obstacle.decorationProperties?.color,
-              border: obstacle.decorationProperties?.borderWidth
-                ? `${obstacle.decorationProperties.borderWidth}px solid ${obstacle.decorationProperties.borderColor}`
-                : 'none',
-              borderRadius: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }">
-              <div :style="{
-                color: obstacle.decorationProperties?.textColor,
-                fontSize: '16px',
-                fontWeight: 'bold',
-              }">
-                {{ obstacle.decorationProperties?.text ||
-                  (obstacle.decorationProperties?.category === DecorationCategory.ENTRANCE ? '入口' : '出口') }}
-              </div>
-            </div>
-          </template>
-
-          <!-- 花 -->
-          <template v-else-if="obstacle.decorationProperties?.category === DecorationCategory.FLOWER">
-            <div class="decoration-flower"
-              style="position: relative; height: 100%; display: flex; flex-direction: column; align-items: center;">
-              <!-- 花朵 -->
-              <div :style="{
-                width: `${obstacle.decorationProperties?.width}px`,
-                height: `${obstacle.decorationProperties?.width}px`,
-                borderRadius: '50%',
-                backgroundColor: obstacle.decorationProperties?.color,
-                marginBottom: '-10px'
-              }"></div>
-              <!-- 叶子容器 -->
-              <div style="position: relative; width: 40px; height: 30px;">
-                <!-- 左叶子 -->
-                <div :style="{
-                  width: '20px',
-                  height: '30px',
-                  backgroundColor: obstacle.decorationProperties?.secondaryColor,
-                  borderRadius: '50% 0 50% 50%',
-                  transform: 'rotate(45deg)',
-                  position: 'absolute',
-                  left: '-10px'
-                }"></div>
-                <!-- 右叶子 -->
-                <div :style="{
-                  width: '20px',
-                  height: '30px',
-                  backgroundColor: obstacle.decorationProperties?.secondaryColor,
-                  borderRadius: '0 50% 50% 50%',
-                  transform: 'rotate(-45deg)',
-                  position: 'absolute',
-                  right: '-10px'
-                }"></div>
-              </div>
-            </div>
-          </template>
-
-          <!-- 围栏 -->
-          <template v-else-if="obstacle.decorationProperties?.category === DecorationCategory.FENCE">
-            <div class="decoration-fence" :style="{
-              width: `${obstacle.decorationProperties?.width}px`,
-              height: `${obstacle.decorationProperties?.height}px`,
-              backgroundColor: obstacle.decorationProperties?.color,
-              display: 'flex',
-              justifyContent: 'space-between',
-            }">
-              <!-- 栅栏柱子 -->
-              <template v-for="i in 5" :key="i">
-                <div :style="{
-                  width: '4px',
-                  height: '100%',
-                  backgroundColor: obstacle.decorationProperties?.borderColor
-                }"></div>
-              </template>
-            </div>
-          </template>
-
-          <!-- 自定义 -->
           <template v-else-if="obstacle.decorationProperties?.category === DecorationCategory.CUSTOM">
             <div v-if="obstacle.decorationProperties?.imageUrl" class="decoration-custom-image" :style="{
-              width: `${obstacle.decorationProperties?.width}px`,
-              height: `${obstacle.decorationProperties?.height}px`,
+              width: `${scalePoint({x: obstacle.decorationProperties?.width || 0, y: 0}).x}px`,
+              height: `${scalePoint({x: 0, y: obstacle.decorationProperties?.height || 0}).y}px`,
               backgroundImage: `url(${obstacle.decorationProperties.imageUrl})`,
               backgroundSize: 'contain',
               backgroundPosition: 'center',
               backgroundRepeat: 'no-repeat'
             }"></div>
             <div v-else class="decoration-custom-placeholder" :style="{
-              width: `${obstacle.decorationProperties?.width}px`,
-              height: `${obstacle.decorationProperties?.height}px`,
+              width: `${scalePoint({x: obstacle.decorationProperties?.width || 0, y: 0}).x}px`,
+              height: `${scalePoint({x: 0, y: obstacle.decorationProperties?.height || 0}).y}px`,
               backgroundColor: '#f0f0f0',
               display: 'flex',
               alignItems: 'center',
@@ -285,15 +169,29 @@
               自定义
             </div>
           </template>
+          <template v-else>
+            <!-- 其他装饰物类型 -->
+            <div class="decoration-table" :style="{
+              width: `${scalePoint({x: obstacle.decorationProperties?.width || 0, y: 0}).x}px`,
+              height: `${scalePoint({x: 0, y: obstacle.decorationProperties?.height || 0}).y}px`,
+              backgroundColor: obstacle.decorationProperties?.color,
+              borderColor: obstacle.decorationProperties?.borderColor,
+              borderWidth: `${scalePoint({x: 0, y: obstacle.decorationProperties?.borderWidth || 0}).y}px`,
+              borderStyle: 'solid',
+              color: obstacle.decorationProperties?.textColor
+            }">
+              <span class="decoration-text">{{ obstacle.decorationProperties?.text }}</span>
+            </div>
+          </template>
         </template>
         <!-- 添加对基础横杆障碍物类型(SINGLE、DOUBLE、COMBINATION)的渲染条件 -->
         <template v-else>
           <!-- 默认使用横杆渲染 -->
           <div v-for="(pole, index) in obstacle.poles" :key="index" class="pole" :style="{
-            width: `${pole.width}px`,
-            height: `${pole.height}px`,
+            width: `${scalePoint({x: pole.width || 0, y: 0}).x}px`,
+            height: `${scalePoint({x: 0, y: pole.height || 0}).y}px`,
             background: `linear-gradient(90deg, ${pole.color} 0%, ${adjustColor(pole.color, 20)} 100%)`,
-            marginBottom: pole.spacing ? `${pole.spacing}px` : '0',
+            marginBottom: pole.spacing ? `${scalePoint({x: 0, y: pole.spacing}).y}px` : '0',
           }">
             <div class="pole-shadow"></div>
           </div>

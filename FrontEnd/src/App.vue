@@ -193,6 +193,9 @@
         </el-form-item>
       </el-form>
     </el-drawer>
+
+    <!-- 首次访问引导 -->
+    <OnboardingTour :show="showOnboarding" @complete="handleOnboardingComplete" @close="handleOnboardingClose" />
   </div>
 </template>
 
@@ -205,6 +208,7 @@ import PropertiesPanel from '@/components/PropertiesPanel.vue'
 import LoginForm from '@/components/LoginForm.vue'
 import RegisterForm from '@/components/RegisterForm.vue'
 import CollaborationPanel from '@/components/CollaborationPanel.vue'
+import OnboardingTour from '@/components/OnboardingTour.vue'
 import { Position, User, ChatDotRound, SwitchButton, Connection, Key, UserFilled, Check, InfoFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
@@ -702,6 +706,9 @@ onMounted(() => {
     })
   }
 
+  // 检查是否需要显示首次访问引导
+  checkOnboarding()
+
   // 添加事件监听
   window.addEventListener('token-expired', handleTokenExpired)
   document.addEventListener('collaboration-connected', handleCollaborationConnected as EventListener)
@@ -1095,6 +1102,9 @@ const showLoginDialog = () => {
 // 添加抽屉控制变量
 const showCompetitionDrawer = ref(false)
 
+// 首次访问引导
+const showOnboarding = ref(false)
+
 // 处理抽屉关闭
 const handleDrawerClose = (done: () => void) => {
   done()
@@ -1107,6 +1117,42 @@ watch(rightPanelWidth, (newWidth) => {
     toggle.style.right = `${newWidth + 10}px`
   }
 })
+
+// 检查是否需要显示首次访问引导
+const checkOnboarding = () => {
+  // 只在首页显示引导
+  if (route.path !== '/') return
+
+  // 检查是否已经完成过引导
+  const onboardingCompleted = localStorage.getItem('onboarding_completed')
+
+  // 延迟显示，确保页面完全加载
+  setTimeout(() => {
+    if (!onboardingCompleted) {
+      showOnboarding.value = true
+    }
+  }, 1000)
+}
+
+// 监听路由变化，如果用户回到首页且没有完成过引导，则显示
+watch(() => route.path, (newPath) => {
+  if (newPath === '/') {
+    checkOnboarding()
+  } else {
+    showOnboarding.value = false
+  }
+})
+
+// 处理引导完成
+const handleOnboardingComplete = () => {
+  showOnboarding.value = false
+  ElMessage.success('欢迎使用！如有问题，请随时查看反馈页面。')
+}
+
+// 处理引导关闭
+const handleOnboardingClose = () => {
+  showOnboarding.value = false
+}
 
 </script>
 
