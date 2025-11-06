@@ -104,7 +104,7 @@ const steps: TourStep[] = [
   },
   {
     title: '左侧工具栏',
-    content: '在<strong>左侧工具栏</strong>中，您可以添加各种障碍物到设计区域。<strong>点击障碍物图标</strong>即可添加到画布中。',
+    content: '在<strong>左侧工具栏</strong>中，您可以添加各种障碍物到设计区域。<strong>拖动障碍物图标</strong>即可添加到画布中。',
     target: '.toolbar',
     position: 'right',
     image: Tools,

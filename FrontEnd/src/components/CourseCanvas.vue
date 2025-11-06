@@ -25,7 +25,7 @@
         left: `${scalePoint(obstacle.position).x}px`,
         top: `${scalePoint(obstacle.position).y}px`,
         transform: `rotate(${obstacle.rotation}deg)`,
-      }" @click="selectObstacle(obstacle, $event.ctrlKey || $event.metaKey)"
+      }" @click="handleObstacleClick($event, obstacle)"
       @mousedown="startDragging($event, obstacle)">
       <div class="obstacle-content">
         <!-- 仅对非装饰物类型显示方向箭头，或装饰物但设置了showDirectionArrow属性 -->
@@ -205,11 +205,16 @@
     <template v-for="obstacle in courseStore.currentCourse.obstacles" :key="`numbers-${obstacle.id}`">
       <div v-for="(pole, filteredIndex) in obstacle.poles.filter((p) => p.number)" :key="`number-${filteredIndex}`"
         class="pole-number"
+        :class="{
+          'dragging': isDraggingNumber && draggingNumberObstacle?.id === obstacle.id && draggingPoleIndex === obstacle.poles.findIndex(p => p === pole),
+          'obstacle-dragging': isDragging && selectedObstacles.some(obs => obs.id === obstacle.id)
+        }"
         @mousedown.stop="startDraggingPoleNumber($event, obstacle, obstacle.poles.findIndex(p => p === pole))" :style="{
           position: 'absolute',
           left: `${scalePoint({ x: obstacle.position.x + (pole.numberPosition?.x ?? 0), y: 0 }).x}px`,
           top: `${scalePoint({ x: 0, y: obstacle.position.y + (pole.numberPosition?.y ?? 50) }).y}px`,
           transform: 'translate(-50%, -50%)',
+          transition: isDragging && selectedObstacles.some(obs => obs.id === obstacle.id) ? 'none' : 'all 0.1s ease',
         }">
         {{ pole.number }}
       </div>
@@ -859,8 +864,26 @@ window.debugCanvas = {
   startCollaboration,
   stopCollaboration
 }
+// 处理障碍物点击事件
+const handleObstacleClick = (event: MouseEvent, obstacle: Obstacle) => {
+  // 如果正在拖拽编号，阻止障碍物选择
+  if (isDraggingNumber.value) {
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    return
+  }
+
+  selectObstacle(obstacle, event.ctrlKey || event.metaKey)
+}
+
 // 选择障碍物
 const selectObstacle = (obstacle: Obstacle, multiSelect = false) => {
+  // 如果正在拖拽编号，阻止障碍物选择
+  if (isDraggingNumber.value) {
+    return
+  }
+
   if (multiSelect) {
     // 如果是多选模式
     const index = selectedObstacles.value.findIndex((o) => o.id === obstacle.id)
@@ -904,6 +927,14 @@ const adjustColor = (color: string, amount: number) => {
 
 // 开始拖动障碍物
 const startDragging = (event: MouseEvent, obstacle: Obstacle) => {
+  // 如果正在拖拽编号，阻止障碍物拖拽
+  if (isDraggingNumber.value) {
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    return
+  }
+
   if (isRotating.value) return
 
   isDragging.value = true
@@ -927,6 +958,14 @@ const startDragging = (event: MouseEvent, obstacle: Obstacle) => {
 
 // 开始旋转障碍物
 const startRotating = (event: MouseEvent, obstacle: Obstacle) => {
+  // 如果正在拖拽编号，阻止障碍物旋转
+  if (isDraggingNumber.value) {
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    return
+  }
+
   isRotating.value = true
   draggingObstacle.value = obstacle
 
@@ -949,9 +988,28 @@ const startRotating = (event: MouseEvent, obstacle: Obstacle) => {
   event.preventDefault()
 }
 
+// 编号位置边界限制函数
+// 优化的编号位置边界限制函数
+const applyNumberPositionBounds = (position: { x: number; y: number }) => {
+  // 简化边界限制，只做基本的范围检查，避免复杂计算
+  const maxOffset = 200 // 简化为固定的最大偏移值
+  const minOffset = -200
+
+  // 应用简单的边界限制
+  const boundedX = Math.max(minOffset, Math.min(maxOffset, position.x))
+  const boundedY = Math.max(minOffset, Math.min(maxOffset, position.y))
+
+  return { x: boundedX, y: boundedY }
+}
+
 // 开始拖动编号
 const startDraggingPoleNumber = (event: MouseEvent, obstacle: Obstacle, poleIndex: number) => {
+  // 阻止事件冒泡和默认行为，确保不会触发其他交互
+  event.preventDefault()
   event.stopPropagation()
+  event.stopImmediatePropagation()
+
+  // 设置编号拖拽状态
   isDraggingNumber.value = true
   draggingNumberObstacle.value = obstacle
   draggingPoleIndex.value = poleIndex
@@ -965,10 +1023,84 @@ const startDraggingPoleNumber = (event: MouseEvent, obstacle: Obstacle, poleInde
       y: pole.numberPosition?.y ?? 50,
     },
   }
+
+  // 确保其他拖拽状态被清除
+  isDragging.value = false
+  isRotating.value = false
+  isSelecting.value = false
+  draggingObstacle.value = null
 }
 
 // 处理鼠标移动
 const handleMouseMove = (event: MouseEvent) => {
+  // 如果正在拖拽编号，阻止其他交互操作
+  if (isDraggingNumber.value) {
+    event.preventDefault()
+    event.stopPropagation()
+
+    // 处理编号拖拽逻辑
+    if (draggingNumberObstacle.value && draggingPoleIndex.value !== null) {
+      // 计算鼠标移动距离
+      const deltaX = event.clientX - startMousePos.value.x
+      const deltaY = event.clientY - startMousePos.value.y
+
+      // 将屏幕坐标转换为相对于障碍物的坐标
+      const canvasRect = canvasContainerRef.value?.getBoundingClientRect()
+      if (!canvasRect) return
+
+      // 获取初始编号位置
+      const initialPosition = startPos.value[draggingNumberObstacle.value.id]
+      if (!initialPosition) return
+
+      // 缓存缩放因子，避免重复计算
+      const scaleFactor = pathScaleFactor.value
+
+      // 计算新的相对位置（考虑缩放因子）
+      const newRelativePosition = {
+        x: initialPosition.x + deltaX / scaleFactor,
+        y: initialPosition.y + deltaY / scaleFactor
+      }
+
+      // 应用边界限制
+      const boundedPosition = applyNumberPositionBounds(newRelativePosition)
+
+      // 直接更新障碍物的编号位置，避免通过store造成延迟
+      const pole = draggingNumberObstacle.value.poles[draggingPoleIndex.value]
+      if (pole) {
+        // 直接修改pole对象的numberPosition属性，确保响应式更新
+        if (!pole.numberPosition) {
+          pole.numberPosition = { x: 0, y: 50 }
+        }
+        // 直接赋值，避免Object.assign的开销
+        pole.numberPosition.x = boundedPosition.x
+        pole.numberPosition.y = boundedPosition.y
+      }
+
+      // 如果在协作模式下，发送编号位置更新
+      if (isCollaborating.value) {
+        // 使用防抖机制避免过度发送消息
+        const now = Date.now()
+        const lastUpdateTimeStr = localStorage.getItem(`lastNumberUpdateTime_${draggingNumberObstacle.value.id}_${draggingPoleIndex.value}`)
+        const lastUpdateTime = lastUpdateTimeStr ? parseInt(lastUpdateTimeStr) : 0
+
+        if (now - lastUpdateTime > 100) { // 100ms防抖
+          try {
+            // 发送更新后的poles数组
+            const result = sendObstacleUpdate(draggingNumberObstacle.value.id, {
+              poles: [...draggingNumberObstacle.value.poles]
+            })
+            if (result) {
+              localStorage.setItem(`lastNumberUpdateTime_${draggingNumberObstacle.value.id}_${draggingPoleIndex.value}`, now.toString())
+            }
+          } catch (error) {
+            console.error('发送编号位置更新消息时出错:', error)
+          }
+        }
+      }
+    }
+    return // 早期返回，阻止其他事件处理
+  }
+
   // 更新框选区域
   if (isSelecting.value) {
     updateSelection(event)
@@ -989,14 +1121,15 @@ const handleMouseMove = (event: MouseEvent) => {
           y: startPosition.y + deltaY,
         }
 
-        // 直接修改障碍物对象的位置属性
-        obstacle.position = newPosition
+        // 直接修改障碍物对象的位置属性，确保标号能够实时跟随
+        // 使用 Object.assign 来确保响应式更新
+        Object.assign(obstacle.position, newPosition)
 
-        // 使用一个新的对象更新本地障碍物位置
-        // 这样可以确保对象引用不会导致问题
+        // 在拖拽过程中，只更新位置，不触发路径重新计算和其他复杂操作
+        // 使用 sendUpdate = false 来避免协作消息的频繁发送
         courseStore.updateObstacle(obstacle.id, {
           position: { ...newPosition },
-        })
+        }, false)
 
         // 如果在协作模式下，发送障碍物更新消息
         if (isCollaborating.value) {
@@ -1242,6 +1375,8 @@ const handleMouseMove = (event: MouseEvent) => {
       })
     }
   }
+
+
 }
 
 // 处理拖放新障碍物
@@ -1933,6 +2068,23 @@ const gridSize = computed(() => ({
 const handleKeyDown = (event: KeyboardEvent) => {
   if ((event.target as HTMLElement)?.tagName === 'INPUT') return
 
+  // 如果正在拖拽编号，阻止所有键盘快捷键操作
+  if (isDraggingNumber.value) {
+    // 只允许Escape键来取消编号拖拽
+    if (event.key === 'Escape') {
+      isDraggingNumber.value = false
+      draggingNumberObstacle.value = null
+      draggingPoleIndex.value = null
+      event.preventDefault()
+      event.stopPropagation()
+    } else {
+      // 阻止其他所有键盘操作
+      event.preventDefault()
+      event.stopPropagation()
+    }
+    return
+  }
+
   // 如果按下Delete键，删除选中的障碍物
   if ((event.key === 'Delete' || event.key === 'Backspace') && selectedObstacles.value.length > 0) {
     selectedObstacles.value.forEach((obstacle) => {
@@ -2001,6 +2153,13 @@ const selectionStyle = computed(() => {
 
 // 开始框选
 const startSelection = (event: MouseEvent) => {
+  // 如果正在拖拽编号，阻止框选操作
+  if (isDraggingNumber.value) {
+    event.preventDefault()
+    event.stopPropagation()
+    return
+  }
+
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   const x = event.clientX - rect.left
   const y = event.clientY - rect.top
@@ -2137,6 +2296,14 @@ const endSelection = () => {
 
 // 修改事件监听
 const handleGlobalMouseMove = (event: MouseEvent) => {
+  // 如果正在拖拽编号，优先处理编号拖拽，阻止其他所有交互
+  if (isDraggingNumber.value) {
+    event.preventDefault()
+    event.stopPropagation()
+    handleMouseMove(event)
+    return // 早期返回，阻止其他事件处理
+  }
+
   handleMouseMove(event)
   updateSelection(event)
 
@@ -2243,6 +2410,14 @@ const handleGlobalMouseUp = (event: MouseEvent) => {
 
   // 结束障碍物拖拽
   if (isDragging.value) {
+    // 在拖拽结束时，确保所有障碍物的最终位置都正确更新到store中
+    selectedObstacles.value.forEach((obstacle) => {
+      // 最终更新到store，触发所有必要的计算和同步
+      courseStore.updateObstacle(obstacle.id, {
+        position: { ...obstacle.position },
+      }, true) // 允许发送协作消息
+    })
+
     // 在拖拽结束时发送所有选中障碍物的最终位置，确保其他协作者能看到最终位置
     if (isCollaborating.value) {
       console.log('拖拽结束，发送最终位置')
@@ -2322,6 +2497,14 @@ const handleGlobalMouseUp = (event: MouseEvent) => {
 
   // 结束杆号拖拽
   if (isDraggingNumber.value) {
+    // 在编号拖拽结束时，确保最终位置同步到store
+    if (draggingNumberObstacle.value && draggingPoleIndex.value !== null) {
+      // 最终同步到store，确保数据一致性
+      courseStore.updateObstacle(draggingNumberObstacle.value.id, {
+        poles: [...draggingNumberObstacle.value.poles]
+      }, true) // 允许发送协作消息
+    }
+
     isDraggingNumber.value = false
     draggingNumberObstacle.value = null
     draggingPoleIndex.value = null
@@ -2472,6 +2655,14 @@ const pasteObstacle = () => {
 
 // 开始拖拽起点或终点
 const startDraggingPoint = (point: 'start' | 'end', event: MouseEvent) => {
+  // 如果正在拖拽编号，阻止起终点拖拽
+  if (isDraggingNumber.value) {
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    return
+  }
+
   draggingPoint.value = point
 
   // 记录鼠标点击位置相对于起点/终点的偏移
@@ -2491,6 +2682,14 @@ const startDraggingPoint = (point: 'start' | 'end', event: MouseEvent) => {
 
 // 开始旋转起点或终点
 const startRotatingPoint = (point: 'start' | 'end', event: MouseEvent) => {
+  // 如果正在拖拽编号，阻止起终点旋转
+  if (isDraggingNumber.value) {
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    return
+  }
+
   draggingPoint.value = point === 'start' ? 'start-rotate' : 'end-rotate'
 
   const pointPos = point === 'start' ? courseStore.startPoint : courseStore.endPoint
@@ -2519,6 +2718,14 @@ const startDraggingControlPoint = (
   controlPointNumber: 1 | 2,
   event: MouseEvent,
 ) => {
+  // 如果正在拖拽编号，阻止控制点拖拽
+  if (isDraggingNumber.value) {
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation()
+    return
+  }
+
   draggingControlPoint.value = { pointIndex, controlPointNumber }
   const canvas = document.querySelector('.course-canvas')
   if (!canvas) return
@@ -3290,6 +3497,58 @@ const handleDeletePath = () => {
   z-index: 4;
   transform-origin: center center;
   pointer-events: auto;
+  transition: all 0.2s ease;
+  user-select: none;
+
+  /* 确保在不同背景下的可见性 */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+
+  /* 悬停状态 */
+  &:hover {
+    cursor: grab;
+    background: var(--primary-light, #eef2ff);
+    color: var(--primary-color);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    transform: translate(-50%, -50%) scale(1.05);
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+
+  /* 拖拽状态 - 优化性能 */
+  &.dragging {
+    cursor: grabbing !important;
+    background: var(--primary-dark, #2d54c5);
+    color: white;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.25);
+    transform: translate(-50%, -50%) scale(1.1);
+    z-index: 1000;
+    transition: none !important;
+    border-color: rgba(255, 255, 255, 0.3);
+    /* 启用硬件加速，确保流畅拖拽 */
+    will-change: transform;
+    /* 简化动画，减少性能开销 */
+    animation: none;
+  }
+
+  /* 障碍物拖拽时的状态 - 标号跟随障碍物移动 */
+  &.obstacle-dragging {
+    transition: none !important;
+    z-index: 5;
+    /* 确保在障碍物拖拽时标号能够流畅跟随 */
+    will-change: transform;
+    /* 轻微的视觉提示表明标号正在跟随障碍物移动 */
+    opacity: 0.9;
+  }
+}
+
+/* 拖拽时的脉冲动画 */
+@keyframes pulse-drag {
+  0%, 100% {
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.25), 0 0 0 0 rgba(58, 106, 248, 0.4);
+  }
+  50% {
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.25), 0 0 0 4px rgba(58, 106, 248, 0.1);
+  }
 }
 
 .obstacle-controls {

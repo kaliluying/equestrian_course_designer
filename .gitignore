@@ -71,3 +71,4 @@ BackEnd/media/*
 back.bat
 front.bat
 .cursor/
+.kiro/
