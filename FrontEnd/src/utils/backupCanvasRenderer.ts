@@ -3,7 +3,7 @@
  * 使用Canvas 2D API提供替代渲染方法，用于主渲染器失败时的回退
  */
 
-import { BackupRenderOptions } from '@/types/export'
+import type { BackupRenderOptions } from '@/types/export'
 
 /**
  * 备用画布渲染器类

@@ -3,9 +3,10 @@
  * 提供统一的画布渲染接口，支持主渲染器和备用渲染器
  */
 
-import { MainCanvasRenderer, EnhancedHtml2CanvasOptions } from './enhancedHtml2CanvasConfig'
+import { MainCanvasRenderer } from './enhancedHtml2CanvasConfig'
+import type { EnhancedHtml2CanvasOptions } from './enhancedHtml2CanvasConfig'
 import { BackupCanvasRenderer } from './backupCanvasRenderer'
-import { RenderOptions, BackupRenderOptions } from '@/types/export'
+import type { RenderOptions, BackupRenderOptions } from '@/types/export'
 
 /**
  * 统一画布渲染器类

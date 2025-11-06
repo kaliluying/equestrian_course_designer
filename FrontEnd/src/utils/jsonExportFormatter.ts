@@ -4,7 +4,7 @@
  */
 
 import { CourseDesign, Obstacle, CoursePathData } from '@/types/obstacle'
-import { JSONExportOptions } from '@/types/export'
+import type { JSONExportOptions } from '@/types/export'
 
 /**
  * JSON格式化选项接口
