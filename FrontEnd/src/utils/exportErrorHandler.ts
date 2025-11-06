@@ -1,409 +1,463 @@
 /**
- * 导出错误处理系统
- * 负责处理导出过程中的各种错误情况，提供用户友好的错误信息和重试机制
+ * 增强导出系统 - 错误处理基础设施
+ * 提供详细的错误处理、重试机制和回退策略
  */
 
-import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
+import type {
+  ExportError,
+  ExportContext,
+  RecoveryStrategy,
+  RecoveryResult,
+  AlternativeApproach,
+  RetryConfig
+} from '@/types/export'
+import {
+  ExportErrorType,
+  ExportStage
+} from '@/types/export'
 
-// 错误类型定义
-export interface ExportError {
-  type: 'svg_rendering' | 'html2canvas' | 'canvas_backup' | 'file_generation' | 'network' | 'permission' | 'unknown'
-  severity: 'low' | 'medium' | 'high' | 'critical'
-  message: string
-  originalError?: Error
-  context?: ExportContext
-  recoverable: boolean
-  retryable: boolean
-}
+/**
+ * 导出错误类 - 扩展标准Error以包含详细上下文
+ */
+export class ExportErrorImpl extends Error implements ExportError {
+  public readonly type: ExportErrorType
+  public readonly stage: ExportStage
+  public readonly recoverable: boolean
+  public readonly context: any
+  public readonly suggestedActions: string[]
 
-export interface ExportContext {
-  operation: 'png_export' | 'pdf_export' | 'json_export' | 'save_design'
-  canvas?: HTMLElement
-  fileName?: string
-  options?: Record<string, unknown>
-  attempt: number
-  maxAttempts: number
-}
+  constructor(
+    message: string,
+    type: ExportErrorType,
+    stage: ExportStage,
+    recoverable: boolean = true,
+    context: any = {},
+    suggestedActions: string[] = []
+  ) {
+    super(message)
+    this.name = 'ExportError'
+    this.type = type
+    this.stage = stage
+    this.recoverable = recoverable
+    this.context = {
+      timestamp: new Date().toISOString(),
+      userAgent: navigator.userAgent,
+      ...context
+    }
+    this.suggestedActions = suggestedActions.length > 0 ? suggestedActions : this.getDefaultSuggestedActions()
+  }
 
-export interface RecoveryResult {
-  success: boolean
-  result?: unknown
-  error?: ExportError
-  usedFallback: boolean
-  fallbackMethod?: string
-}
-
-export interface RetryOptions {
-  maxAttempts: number
-  delayMs: number
-  backoffMultiplier: number
-  retryableErrors: ExportError['type'][]
+  /**
+   * 获取默认的建议操作
+   */
+  private getDefaultSuggestedActions(): string[] {
+    switch (this.type) {
+      case ExportErrorType.CANVAS_ACCESS_ERROR:
+        return ['检查画布元素是否存在', '确认画布内容已完全加载', '尝试刷新页面']
+      case ExportErrorType.SVG_RENDERING_ERROR:
+        return ['检查SVG元素样式', '尝试使用备用渲染器', '简化设计复杂度']
+      case ExportErrorType.HTML2CANVAS_ERROR:
+        return ['检查浏览器兼容性', '尝试降低导出质量', '使用备用渲染方法']
+      case ExportErrorType.FILE_GENERATION_ERROR:
+        return ['检查可用存储空间', '尝试降低导出分辨率', '重新尝试导出']
+      case ExportErrorType.MEMORY_ERROR:
+        return ['关闭其他浏览器标签页', '降低导出分辨率', '简化设计内容']
+      case ExportErrorType.TIMEOUT_ERROR:
+        return ['增加超时时间', '简化设计复杂度', '检查网络连接']
+      default:
+        return ['重新尝试操作', '检查浏览器控制台错误', '联系技术支持']
+    }
+  }
 }
 
 /**
- * 导出错误处理器类
+ * 重试管理器 - 处理指数退避重试逻辑
  */
-export class ExportErrorHandler {
-  private defaultRetryOptions: RetryOptions = {
-    maxAttempts: 3,
-    delayMs: 1000,
-    backoffMultiplier: 1.5,
-    retryableErrors: ['svg_rendering', 'html2canvas', 'network']
-  }
+export class RetryManager {
+  private config: RetryConfig
 
-  /**
-   * 处理SVG渲染错误
-   * @param error 原始错误
-   * @param context 导出上下文
-   * @returns 恢复结果
-   */
-  async handleSVGRenderingError(error: Error, context: ExportContext): Promise<RecoveryResult> {
-    const exportError: ExportError = {
-      type: 'svg_rendering',
-      severity: 'high',
-      message: 'SVG元素渲染失败，路径可能无法正确显示',
-      originalError: error,
-      context,
-      recoverable: true,
-      retryable: true
+  constructor(config?: Partial<RetryConfig>) {
+    this.config = {
+      maxRetries: 3,
+      baseDelay: 1000, // 1秒
+      maxDelay: 10000, // 10秒
+      backoffMultiplier: 2,
+      retryableErrors: [
+        ExportErrorType.HTML2CANVAS_ERROR,
+        ExportErrorType.SVG_RENDERING_ERROR,
+        ExportErrorType.TIMEOUT_ERROR,
+        ExportErrorType.MEMORY_ERROR
+      ],
+      ...config
     }
-
-    console.warn('SVG渲染错误:', exportError)
-
-    // 尝试多种恢复方案
-    const recoveryMethods = [
-      () => this.tryStyleInlineRecovery(context),
-      () => this.tryCanvasBackupRendering(context),
-      () => this.trySimplifiedRendering(context)
-    ]
-
-    for (const [index, recoveryMethod] of recoveryMethods.entries()) {
-      try {
-        const result = await recoveryMethod()
-        if (result.success) {
-          this.showRecoverySuccess(`使用备用方案${index + 1}成功导出`)
-          return { ...result, usedFallback: true, fallbackMethod: `recovery_method_${index + 1}` }
-        }
-      } catch (recoveryError) {
-        console.warn(`恢复方案${index + 1}失败:`, recoveryError)
-      }
-    }
-
-    // 所有恢复方案都失败
-    this.showUserFriendlyError(exportError)
-    return { success: false, error: exportError, usedFallback: false }
-  }
-
-  /**
-   * 处理html2canvas错误
-   * @param error 原始错误
-   * @param context 导出上下文
-   * @returns 恢复结果
-   */
-  async handleHtml2CanvasError(error: Error, context: ExportContext): Promise<RecoveryResult> {
-    const exportError: ExportError = {
-      type: 'html2canvas',
-      severity: 'high',
-      message: 'html2canvas库处理失败，可能是由于复杂的SVG元素或样式问题',
-      originalError: error,
-      context,
-      recoverable: true,
-      retryable: true
-    }
-
-    console.warn('html2canvas错误:', exportError)
-
-    // 尝试Canvas备用渲染
-    try {
-      const backupResult = await this.tryCanvasBackupRendering(context)
-      if (backupResult.success) {
-        this.showRecoverySuccess('使用Canvas备用渲染成功导出')
-        return { ...backupResult, usedFallback: true, fallbackMethod: 'canvas_backup' }
-      }
-    } catch (backupError) {
-      console.warn('Canvas备用渲染失败:', backupError)
-    }
-
-    // 尝试简化配置重试
-    try {
-      const simplifiedResult = await this.trySimplifiedRendering(context)
-      if (simplifiedResult.success) {
-        this.showRecoverySuccess('使用简化配置成功导出')
-        return { ...simplifiedResult, usedFallback: true, fallbackMethod: 'simplified_config' }
-      }
-    } catch (simplifiedError) {
-      console.warn('简化配置重试失败:', simplifiedError)
-    }
-
-    this.showUserFriendlyError(exportError)
-    return { success: false, error: exportError, usedFallback: false }
-  }
-
-  /**
-   * 处理文件生成错误
-   * @param error 原始错误
-   * @param context 导出上下文
-   * @returns 恢复结果
-   */
-  async handleFileGenerationError(error: Error, context: ExportContext): Promise<RecoveryResult> {
-    const exportError: ExportError = {
-      type: 'file_generation',
-      severity: 'medium',
-      message: '文件生成失败，可能是由于内存不足或文件过大',
-      originalError: error,
-      context,
-      recoverable: true,
-      retryable: true
-    }
-
-    console.warn('文件生成错误:', exportError)
-
-    // 尝试降低质量重新生成
-    try {
-      const lowerQualityResult = await this.tryLowerQualityGeneration(context)
-      if (lowerQualityResult.success) {
-        this.showRecoverySuccess('使用较低质量设置成功导出')
-        return { ...lowerQualityResult, usedFallback: true, fallbackMethod: 'lower_quality' }
-      }
-    } catch (lowerQualityError) {
-      console.warn('降低质量重试失败:', lowerQualityError)
-    }
-
-    this.showUserFriendlyError(exportError)
-    return { success: false, error: exportError, usedFallback: false }
-  }
-
-  /**
-   * 处理网络错误
-   * @param error 原始错误
-   * @param context 导出上下文
-   * @returns 恢复结果
-   */
-  async handleNetworkError(error: Error, context: ExportContext): Promise<RecoveryResult> {
-    const exportError: ExportError = {
-      type: 'network',
-      severity: 'medium',
-      message: '网络连接失败，请检查网络连接后重试',
-      originalError: error,
-      context,
-      recoverable: true,
-      retryable: true
-    }
-
-    console.warn('网络错误:', exportError)
-
-    // 网络错误通常需要用户手动重试
-    this.showNetworkErrorDialog(exportError)
-    return { success: false, error: exportError, usedFallback: false }
   }
 
   /**
    * 执行带重试的操作
-   * @param operation 要执行的操作
-   * @param context 导出上下文
-   * @param options 重试选项
-   * @returns 操作结果
    */
   async executeWithRetry<T>(
     operation: () => Promise<T>,
     context: ExportContext,
-    options: Partial<RetryOptions> = {}
+    onRetry?: (attempt: number, error: ExportError) => void
   ): Promise<T> {
-    const retryOptions = { ...this.defaultRetryOptions, ...options }
-    let lastError: Error | null = null
+    let lastError: ExportError | null = null
 
-    for (let attempt = 1; attempt <= retryOptions.maxAttempts; attempt++) {
+    for (let attempt = 0; attempt <= this.config.maxRetries; attempt++) {
       try {
-        context.attempt = attempt
-        context.maxAttempts = retryOptions.maxAttempts
+        if (attempt > 0) {
+          // 等待退避时间
+          const delay = this.calculateDelay(attempt)
+          await this.sleep(delay)
+
+          if (onRetry) {
+            onRetry(attempt, lastError!)
+          }
+        }
 
         return await operation()
       } catch (error) {
-        lastError = error as Error
-        console.warn(`导出尝试 ${attempt}/${retryOptions.maxAttempts} 失败:`, error)
+        lastError = this.normalizeError(error, context)
 
-        // 如果不是最后一次尝试，等待后重试
-        if (attempt < retryOptions.maxAttempts) {
-          const delay = retryOptions.delayMs * Math.pow(retryOptions.backoffMultiplier, attempt - 1)
-          await this.delay(delay)
-
-          // 显示重试提示
-          ElMessage.info(`导出失败，正在进行第 ${attempt + 1} 次尝试...`)
+        // 检查是否可重试
+        if (!this.isRetryable(lastError) || attempt === this.config.maxRetries) {
+          throw lastError
         }
+
+        console.warn(`导出操作失败，将进行第 ${attempt + 1} 次重试:`, lastError.message)
       }
     }
 
-    // 所有重试都失败，抛出最后的错误
-    throw lastError || new Error('导出操作失败')
+    throw lastError!
   }
 
   /**
-   * 显示用户友好的错误信息
-   * @param error 导出错误
+   * 检查错误是否可重试
    */
-  private showUserFriendlyError(error: ExportError): void {
-    const userMessage = this.getUserFriendlyMessage(error)
-    const suggestions = this.getErrorSuggestions(error)
+  isRetryable(error: ExportError): boolean {
+    return error.recoverable && this.config.retryableErrors.includes(error.type)
+  }
 
-    ElMessageBox.alert(
-      `${userMessage}\n\n建议解决方案：\n${suggestions.join('\n')}`,
-      '导出失败',
-      {
-        confirmButtonText: '确定',
-        type: 'error',
-        dangerouslyUseHTMLString: false
-      }
+  /**
+   * 计算退避延迟时间
+   */
+  private calculateDelay(attempt: number): number {
+    const delay = this.config.baseDelay * Math.pow(this.config.backoffMultiplier, attempt - 1)
+    return Math.min(delay, this.config.maxDelay)
+  }
+
+  /**
+   * 睡眠函数
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms))
+  }
+
+  /**
+   * 标准化错误对象
+   */
+  private normalizeError(error: any, context: ExportContext): ExportError {
+    if (error instanceof ExportErrorImpl) {
+      return error
+    }
+
+    // 根据错误消息推断错误类型
+    let errorType = ExportErrorType.HTML2CANVAS_ERROR
+    let stage = ExportStage.RENDERING
+
+    if (error.message?.includes('canvas')) {
+      errorType = ExportErrorType.CANVAS_ACCESS_ERROR
+      stage = ExportStage.PREPARING_CANVAS
+    } else if (error.message?.includes('svg')) {
+      errorType = ExportErrorType.SVG_RENDERING_ERROR
+      stage = ExportStage.PROCESSING_SVG
+    } else if (error.message?.includes('memory') || error.message?.includes('Memory')) {
+      errorType = ExportErrorType.MEMORY_ERROR
+    } else if (error.message?.includes('timeout') || error.message?.includes('Timeout')) {
+      errorType = ExportErrorType.TIMEOUT_ERROR
+    }
+
+    return new ExportErrorImpl(
+      error.message || '未知导出错误',
+      errorType,
+      stage,
+      true,
+      { originalError: error, context }
     )
   }
+}
+
+/**
+ * 回退管理器 - 提供替代渲染方法
+ */
+export class FallbackManager implements RecoveryStrategy {
+  /**
+   * 检查是否可以恢复
+   */
+  canRecover(error: ExportError): boolean {
+    // 大多数渲染错误都可以通过回退方法恢复
+    return [
+      ExportErrorType.HTML2CANVAS_ERROR,
+      ExportErrorType.SVG_RENDERING_ERROR,
+      ExportErrorType.CANVAS_ACCESS_ERROR,
+      ExportErrorType.MEMORY_ERROR
+    ].includes(error.type)
+  }
 
   /**
-   * 显示网络错误对话框
-   * @param error 导出错误
+   * 执行恢复操作
    */
-  private showNetworkErrorDialog(error: ExportError): void {
-    ElMessageBox.confirm(
-      '网络连接失败，无法完成导出操作。请检查网络连接后重试。',
-      '网络错误',
-      {
-        confirmButtonText: '重试',
-        cancelButtonText: '取消',
-        type: 'warning'
+  async recover(error: ExportError, context: ExportContext): Promise<RecoveryResult> {
+    const approach = this.getAlternativeApproach(error)
+
+    try {
+      console.log(`尝试使用回退方法: ${approach.method}`)
+
+      // 这里将在后续任务中实现具体的回退渲染逻辑
+      const result = await this.executeAlternativeApproach(approach, context)
+
+      return {
+        success: true,
+        result,
+        fallbackUsed: true,
+        qualityDegraded: approach.expectedQuality < 0.9
       }
-    ).then(() => {
-      // 用户选择重试，可以触发重新导出
-      ElMessage.info('请重新点击导出按钮')
-    }).catch(() => {
-      // 用户取消
-    })
-  }
+    } catch (fallbackError) {
+      console.error('回退方法也失败了:', fallbackError)
 
-  /**
-   * 显示恢复成功提示
-   * @param message 成功消息
-   */
-  private showRecoverySuccess(message: string): void {
-    ElNotification({
-      title: '导出成功',
-      message: message,
-      type: 'success',
-      duration: 3000
-    })
-  }
-
-  /**
-   * 获取用户友好的错误消息
-   * @param error 导出错误
-   * @returns 用户友好的消息
-   */
-  private getUserFriendlyMessage(error: ExportError): string {
-    switch (error.type) {
-      case 'svg_rendering':
-        return '路线图导出时遇到问题，部分路径可能无法正确显示。'
-      case 'html2canvas':
-        return '图片生成过程中遇到技术问题，可能是由于复杂的图形元素。'
-      case 'canvas_backup':
-        return '备用渲染方案也失败了，建议简化设计后重试。'
-      case 'file_generation':
-        return '文件生成失败，可能是由于设计过于复杂或系统资源不足。'
-      case 'network':
-        return '网络连接失败，无法完成导出操作。'
-      case 'permission':
-        return '没有足够的权限执行导出操作。'
-      default:
-        return '导出过程中遇到未知错误。'
+      return {
+        success: false,
+        fallbackUsed: true,
+        qualityDegraded: true
+      }
     }
   }
 
   /**
-   * 获取错误建议
-   * @param error 导出错误
-   * @returns 建议列表
+   * 获取替代方法
    */
-  private getErrorSuggestions(error: ExportError): string[] {
-    const suggestions: string[] = []
-
+  getAlternativeApproach(error: ExportError): AlternativeApproach {
     switch (error.type) {
-      case 'svg_rendering':
-        suggestions.push('• 尝试简化路线设计，减少复杂的路径')
-        suggestions.push('• 检查是否有重叠或过于复杂的SVG元素')
-        suggestions.push('• 尝试使用不同的导出格式')
-        break
-      case 'html2canvas':
-        suggestions.push('• 尝试降低导出质量设置')
-        suggestions.push('• 简化画布内容，移除不必要的元素')
-        suggestions.push('• 刷新页面后重试')
-        break
-      case 'file_generation':
-        suggestions.push('• 尝试降低导出质量或分辨率')
-        suggestions.push('• 关闭其他占用内存的应用程序')
-        suggestions.push('• 简化设计内容')
-        break
-      case 'network':
-        suggestions.push('• 检查网络连接是否正常')
-        suggestions.push('• 稍后重试')
-        suggestions.push('• 尝试使用其他网络环境')
-        break
+      case ExportErrorType.HTML2CANVAS_ERROR:
+        return {
+          method: 'backup_renderer',
+          options: {
+            useCanvas2D: true,
+            elementByElement: true,
+            simplifyPaths: false
+          },
+          expectedQuality: 0.85
+        }
+
+      case ExportErrorType.SVG_RENDERING_ERROR:
+        return {
+          method: 'simplified_svg',
+          options: {
+            removeComplexPaths: true,
+            inlineStyles: true,
+            convertToBasicShapes: true
+          },
+          expectedQuality: 0.75
+        }
+
+      case ExportErrorType.MEMORY_ERROR:
+        return {
+          method: 'reduced_quality',
+          options: {
+            scale: 1,
+            quality: 0.7,
+            removeNonEssentialElements: true
+          },
+          expectedQuality: 0.6
+        }
+
+      case ExportErrorType.CANVAS_ACCESS_ERROR:
+        return {
+          method: 'canvas_fallback',
+          options: {
+            recreateCanvas: true,
+            waitForLoad: true,
+            useAlternativeSelector: true
+          },
+          expectedQuality: 0.9
+        }
+
       default:
-        suggestions.push('• 刷新页面后重试')
-        suggestions.push('• 检查浏览器控制台是否有更多错误信息')
-        suggestions.push('• 联系技术支持')
+        return {
+          method: 'backup_renderer',
+          options: {
+            useCanvas2D: true,
+            simplifyPaths: true
+          },
+          expectedQuality: 0.7
+        }
+    }
+  }
+
+  /**
+   * 执行替代方法（占位符实现）
+   */
+  private async executeAlternativeApproach(
+    approach: AlternativeApproach,
+    context: ExportContext
+  ): Promise<any> {
+    // 这里将在后续任务中实现具体的替代渲染逻辑
+    throw new ExportErrorImpl(
+      '替代渲染方法尚未实现',
+      ExportErrorType.HTML2CANVAS_ERROR,
+      ExportStage.RENDERING,
+      false
+    )
+  }
+}
+
+/**
+ * 错误分析器 - 分析错误模式和趋势
+ */
+export class ErrorAnalyzer {
+  private errorHistory: ExportError[] = []
+  private readonly maxHistorySize = 100
+
+  /**
+   * 记录错误
+   */
+  recordError(error: ExportError): void {
+    this.errorHistory.push(error)
+
+    // 保持历史记录大小限制
+    if (this.errorHistory.length > this.maxHistorySize) {
+      this.errorHistory.shift()
+    }
+  }
+
+  /**
+   * 获取错误统计
+   */
+  getErrorStatistics(): {
+    totalErrors: number
+    errorsByType: Record<ExportErrorType, number>
+    errorsByStage: Record<ExportStage, number>
+    recentErrorRate: number
+  } {
+    const now = Date.now()
+    const oneHourAgo = now - 60 * 60 * 1000
+
+    const recentErrors = this.errorHistory.filter(error =>
+      new Date(error.context.timestamp).getTime() > oneHourAgo
+    )
+
+    const errorsByType = {} as Record<ExportErrorType, number>
+    const errorsByStage = {} as Record<ExportStage, number>
+
+    this.errorHistory.forEach(error => {
+      errorsByType[error.type] = (errorsByType[error.type] || 0) + 1
+      errorsByStage[error.stage] = (errorsByStage[error.stage] || 0) + 1
+    })
+
+    return {
+      totalErrors: this.errorHistory.length,
+      errorsByType,
+      errorsByStage,
+      recentErrorRate: recentErrors.length
+    }
+  }
+
+  /**
+   * 获取最常见的错误类型
+   */
+  getMostCommonErrorType(): ExportErrorType | null {
+    if (this.errorHistory.length === 0) return null
+
+    const stats = this.getErrorStatistics()
+    const entries = Object.entries(stats.errorsByType) as [ExportErrorType, number][]
+
+    return entries.reduce((max, current) =>
+      current[1] > max[1] ? current : max
+    )[0]
+  }
+
+  /**
+   * 检查是否存在错误模式
+   */
+  detectErrorPatterns(): {
+    hasPattern: boolean
+    pattern?: string
+    recommendation?: string
+  } {
+    const recentErrors = this.errorHistory.slice(-10)
+
+    if (recentErrors.length < 3) {
+      return { hasPattern: false }
     }
 
-    return suggestions
+    // 检查连续的相同错误类型
+    const sameTypeCount = recentErrors.filter(error =>
+      error.type === recentErrors[recentErrors.length - 1].type
+    ).length
+
+    if (sameTypeCount >= 3) {
+      const errorType = recentErrors[recentErrors.length - 1].type
+      return {
+        hasPattern: true,
+        pattern: `连续出现 ${sameTypeCount} 次 ${errorType} 错误`,
+        recommendation: this.getPatternRecommendation(errorType)
+      }
+    }
+
+    return { hasPattern: false }
   }
 
   /**
-   * 尝试样式内联恢复
-   * @param context 导出上下文
-   * @returns 恢复结果
+   * 获取模式建议
    */
-  private async tryStyleInlineRecovery(context: ExportContext): Promise<RecoveryResult> {
-    // 这里应该调用样式内联转换系统
-    // 由于这是一个模拟实现，我们返回失败
-    return { success: false }
-  }
-
-  /**
-   * 尝试Canvas备用渲染
-   * @param context 导出上下文
-   * @returns 恢复结果
-   */
-  private async tryCanvasBackupRendering(context: ExportContext): Promise<RecoveryResult> {
-    // 这里应该调用Canvas备用渲染系统
-    // 由于这是一个模拟实现，我们返回失败
-    return { success: false }
-  }
-
-  /**
-   * 尝试简化渲染
-   * @param context 导出上下文
-   * @returns 恢复结果
-   */
-  private async trySimplifiedRendering(context: ExportContext): Promise<RecoveryResult> {
-    // 这里应该使用简化的渲染配置
-    // 由于这是一个模拟实现，我们返回失败
-    return { success: false }
-  }
-
-  /**
-   * 尝试降低质量生成
-   * @param context 导出上下文
-   * @returns 恢复结果
-   */
-  private async tryLowerQualityGeneration(context: ExportContext): Promise<RecoveryResult> {
-    // 这里应该使用较低的质量设置重新生成
-    // 由于这是一个模拟实现，我们返回失败
-    return { success: false }
-  }
-
-  /**
-   * 延迟函数
-   * @param ms 延迟毫秒数
-   */
-  private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms))
+  private getPatternRecommendation(errorType: ExportErrorType): string {
+    switch (errorType) {
+      case ExportErrorType.MEMORY_ERROR:
+        return '考虑降低导出分辨率或简化设计复杂度'
+      case ExportErrorType.SVG_RENDERING_ERROR:
+        return '检查SVG元素的样式和结构，考虑使用备用渲染器'
+      case ExportErrorType.TIMEOUT_ERROR:
+        return '增加超时时间或优化渲染性能'
+      default:
+        return '检查浏览器兼容性和网络连接'
+    }
   }
 }
 
 // 创建全局实例
-export const exportErrorHandler = new ExportErrorHandler()
+export const retryManager = new RetryManager()
+export const fallbackManager = new FallbackManager()
+export const errorAnalyzer = new ErrorAnalyzer()
+
+// 创建统一的错误处理器实例
+export const exportErrorHandler = {
+  retryManager,
+  fallbackManager,
+  errorAnalyzer,
+  createError: createExportError
+}
+
+// 导出工厂函数
+export function createExportError(
+  message: string,
+  type: ExportErrorType,
+  stage: ExportStage,
+  recoverable: boolean = true,
+  context: any = {},
+  suggestedActions: string[] = []
+): ExportError {
+  return new ExportErrorImpl(message, type, stage, recoverable, context, suggestedActions)
+}
+
+// 导出类型和实例
+// 注意：ExportError 类型应该从 @/types/export 导入
+// ExportErrorImpl 类已在上面通过 export class 导出
+export type { ExportContext }
+export default {
+  RetryManager,
+  FallbackManager,
+  ErrorAnalyzer,
+  createExportError,
+  retryManager,
+  fallbackManager,
+  errorAnalyzer
+}

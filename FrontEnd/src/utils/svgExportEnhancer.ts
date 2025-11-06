@@ -732,3 +732,627 @@ export class SVGExportEnhancer {
     }
   }
 }
+/**
+ * SVG元素检测和优化工具
+ * 扩展现有功能以支持更全面的SVG检测和优化
+ */
+
+// 新增接口定义
+export interface SVGOptimizationResult {
+  optimizedElements: number
+  pathsOptimized: number
+  stylesInlined: number
+  viewBoxesPreserved: number
+  aspectRatiosHandled: number
+  issues: OptimizationIssue[]
+}
+
+export interface OptimizationIssue {
+  type: 'path_optimization' | 'style_inlining' | 'viewbox_missing' | 'aspect_ratio_issue'
+  severity: 'low' | 'medium' | 'high'
+  element: SVGElement
+  message: string
+  suggestedFix?: string
+}
+
+export interface SVGDetectionResult {
+  svgElements: SVGElement[]
+  pathElements: SVGPathElement[]
+  totalElements: number
+  visibleElements: number
+  hiddenElements: number
+  complexElements: number
+}
+
+export interface ViewBoxInfo {
+  element: SVGSVGElement
+  originalViewBox: string | null
+  computedViewBox: string
+  aspectRatio: number
+  needsPreservation: boolean
+}
+
+/**
+ * 扩展SVG导出增强器类的功能
+ */
+export class SVGExportEnhancerExtended extends SVGExportEnhancer {
+  private optimizationCache = new Map<string, SVGOptimizationResult>()
+
+  /**
+   * 高级SVG元素检测和分析
+   * @param canvas 画布元素
+   * @returns 详细的检测结果
+   */
+  detectAndAnalyzeSVGElements(canvas: HTMLElement): SVGDetectionResult {
+    const svgElements: SVGElement[] = []
+    const pathElements: SVGPathElement[] = []
+    let visibleElements = 0
+    let hiddenElements = 0
+    let complexElements = 0
+
+    // 检测所有SVG相关元素
+    const allSVGs = canvas.querySelectorAll('svg')
+    const allPaths = canvas.querySelectorAll('path')
+    const allSVGShapes = canvas.querySelectorAll('circle, rect, line, ellipse, polygon, polyline, text')
+
+    // 处理SVG根元素
+    allSVGs.forEach(svg => {
+      if (svg instanceof SVGElement) {
+        svgElements.push(svg)
+
+        if (this.isElementVisible(svg)) {
+          visibleElements++
+        } else {
+          hiddenElements++
+        }
+
+        if (this.isComplexSVGElement(svg)) {
+          complexElements++
+        }
+      }
+    })
+
+    // 处理路径元素
+    allPaths.forEach(path => {
+      if (path instanceof SVGPathElement) {
+        pathElements.push(path)
+        svgElements.push(path)
+
+        if (this.isElementVisible(path)) {
+          visibleElements++
+        } else {
+          hiddenElements++
+        }
+
+        if (this.isComplexSVGElement(path)) {
+          complexElements++
+        }
+      }
+    })
+
+    // 处理其他SVG形状元素
+    allSVGShapes.forEach(shape => {
+      if (shape instanceof SVGElement) {
+        svgElements.push(shape)
+
+        if (this.isElementVisible(shape)) {
+          visibleElements++
+        } else {
+          hiddenElements++
+        }
+
+        if (this.isComplexSVGElement(shape)) {
+          complexElements++
+        }
+      }
+    })
+
+    return {
+      svgElements,
+      pathElements,
+      totalElements: svgElements.length,
+      visibleElements,
+      hiddenElements,
+      complexElements
+    }
+  }
+
+  /**
+   * 优化SVG路径数据
+   * @param pathElements 路径元素数组
+   * @returns 优化结果
+   */
+  optimizeSVGPaths(pathElements: SVGPathElement[]): SVGOptimizationResult {
+    const result: SVGOptimizationResult = {
+      optimizedElements: 0,
+      pathsOptimized: 0,
+      stylesInlined: 0,
+      viewBoxesPreserved: 0,
+      aspectRatiosHandled: 0,
+      issues: []
+    }
+
+    pathElements.forEach(pathElement => {
+      try {
+        const originalPath = pathElement.getAttribute('d')
+        if (!originalPath) {
+          result.issues.push({
+            type: 'path_optimization',
+            severity: 'medium',
+            element: pathElement,
+            message: '路径元素缺少d属性',
+            suggestedFix: '检查SVG路径数据的完整性'
+          })
+          return
+        }
+
+        // 优化路径数据
+        const optimizedPath = this.optimizePathData(originalPath)
+        if (optimizedPath !== originalPath) {
+          pathElement.setAttribute('d', optimizedPath)
+          result.pathsOptimized++
+        }
+
+        // 确保路径可见性
+        this.ensurePathVisibility(pathElement)
+        result.optimizedElements++
+
+      } catch (error) {
+        result.issues.push({
+          type: 'path_optimization',
+          severity: 'high',
+          element: pathElement,
+          message: `路径优化失败: ${error instanceof Error ? error.message : String(error)}`,
+          suggestedFix: '检查路径数据格式是否正确'
+        })
+      }
+    })
+
+    return result
+  }
+
+  /**
+   * 实现样式内联以提高导出兼容性
+   * @param svgElements SVG元素数组
+   * @returns 样式内联结果
+   */
+  implementStyleInlining(svgElements: SVGElement[]): SVGOptimizationResult {
+    const result: SVGOptimizationResult = {
+      optimizedElements: 0,
+      pathsOptimized: 0,
+      stylesInlined: 0,
+      viewBoxesPreserved: 0,
+      aspectRatiosHandled: 0,
+      issues: []
+    }
+
+    svgElements.forEach(element => {
+      try {
+        // 获取计算样式
+        const computedStyle = window.getComputedStyle(element)
+
+        // 内联关键样式属性
+        const inlinedCount = this.inlineComputedStyles(element, computedStyle)
+        result.stylesInlined += inlinedCount
+
+        // 处理CSS变量
+        this.resolveCSSVariablesInElement(element)
+
+        // 处理继承样式
+        this.handleInheritedStyles(element)
+
+        result.optimizedElements++
+
+      } catch (error) {
+        result.issues.push({
+          type: 'style_inlining',
+          severity: 'medium',
+          element,
+          message: `样式内联失败: ${error instanceof Error ? error.message : String(error)}`,
+          suggestedFix: '检查元素的样式定义是否正确'
+        })
+      }
+    })
+
+    return result
+  }
+
+  /**
+   * 添加SVG viewBox保留和宽高比处理
+   * @param svgElements SVG元素数组
+   * @returns 处理结果
+   */
+  preserveViewBoxAndAspectRatio(svgElements: SVGElement[]): SVGOptimizationResult {
+    const result: SVGOptimizationResult = {
+      optimizedElements: 0,
+      pathsOptimized: 0,
+      stylesInlined: 0,
+      viewBoxesPreserved: 0,
+      aspectRatiosHandled: 0,
+      issues: []
+    }
+
+    svgElements.forEach(element => {
+      if (element.tagName.toLowerCase() === 'svg') {
+        const svgElement = element as SVGSVGElement
+
+        try {
+          // 处理viewBox
+          const viewBoxInfo = this.analyzeViewBox(svgElement)
+          if (viewBoxInfo.needsPreservation) {
+            this.preserveViewBox(svgElement, viewBoxInfo)
+            result.viewBoxesPreserved++
+          }
+
+          // 处理宽高比
+          this.handleAspectRatio(svgElement, viewBoxInfo)
+          result.aspectRatiosHandled++
+
+          result.optimizedElements++
+
+        } catch (error) {
+          result.issues.push({
+            type: 'viewbox_missing',
+            severity: 'medium',
+            element,
+            message: `ViewBox处理失败: ${error instanceof Error ? error.message : String(error)}`,
+            suggestedFix: '检查SVG的viewBox和尺寸属性'
+          })
+        }
+      }
+    })
+
+    return result
+  }
+
+  /**
+   * 综合SVG优化处理
+   * @param canvas 画布元素
+   * @returns 综合优化结果
+   */
+  comprehensiveSVGOptimization(canvas: HTMLElement): SVGOptimizationResult {
+    // 1. 检测和分析SVG元素
+    const detectionResult = this.detectAndAnalyzeSVGElements(canvas)
+
+    // 2. 路径优化
+    const pathOptimization = this.optimizeSVGPaths(detectionResult.pathElements)
+
+    // 3. 样式内联
+    const styleInlining = this.implementStyleInlining(detectionResult.svgElements)
+
+    // 4. ViewBox和宽高比处理
+    const viewBoxHandling = this.preserveViewBoxAndAspectRatio(detectionResult.svgElements)
+
+    // 5. 合并结果
+    const combinedResult: SVGOptimizationResult = {
+      optimizedElements: pathOptimization.optimizedElements + styleInlining.optimizedElements + viewBoxHandling.optimizedElements,
+      pathsOptimized: pathOptimization.pathsOptimized,
+      stylesInlined: styleInlining.stylesInlined,
+      viewBoxesPreserved: viewBoxHandling.viewBoxesPreserved,
+      aspectRatiosHandled: viewBoxHandling.aspectRatiosHandled,
+      issues: [
+        ...pathOptimization.issues,
+        ...styleInlining.issues,
+        ...viewBoxHandling.issues
+      ]
+    }
+
+    // 缓存结果
+    const canvasId = this.generateCanvasId(canvas)
+    this.optimizationCache.set(canvasId, combinedResult)
+
+    return combinedResult
+  }
+
+  /**
+   * 判断SVG元素是否复杂
+   * @param element SVG元素
+   * @returns 是否复杂
+   */
+  private isComplexSVGElement(element: SVGElement): boolean {
+    // 检查是否有复杂的变换
+    const transform = element.getAttribute('transform') || element.style.transform
+    if (transform && transform !== 'none' && transform.includes('matrix')) {
+      return true
+    }
+
+    // 检查是否有复杂的路径
+    if (element.tagName.toLowerCase() === 'path') {
+      const pathData = element.getAttribute('d') || ''
+      // 如果路径包含贝塞尔曲线或弧线，认为是复杂的
+      if (pathData.match(/[CSQTAcsqta]/)) {
+        return true
+      }
+    }
+
+    // 检查是否有渐变或滤镜
+    const fill = element.getAttribute('fill') || element.style.fill
+    const stroke = element.getAttribute('stroke') || element.style.stroke
+    if ((fill && fill.startsWith('url(')) || (stroke && stroke.startsWith('url('))) {
+      return true
+    }
+
+    // 检查子元素数量
+    const childElements = element.querySelectorAll('*')
+    if (childElements.length > 10) {
+      return true
+    }
+
+    return false
+  }
+
+  /**
+   * 优化路径数据
+   * @param pathData 原始路径数据
+   * @returns 优化后的路径数据
+   */
+  private optimizePathData(pathData: string): string {
+    return pathData
+      // 移除多余的空格和换行
+      .replace(/\s+/g, ' ')
+      .replace(/\n/g, ' ')
+      // 优化数字精度（保留2位小数）
+      .replace(/(\d+\.\d{3,})/g, (match) => {
+        return parseFloat(match).toFixed(2)
+      })
+      // 移除命令字母前后的空格
+      .replace(/\s*([MLHVCSQTAZ])\s*/gi, '$1')
+      // 移除逗号周围的空格
+      .replace(/\s*,\s*/g, ',')
+      // 移除连续的相同命令字母
+      .replace(/([MLHVCSQTAZ])\1+/gi, '$1')
+      .trim()
+  }
+
+  /**
+   * 确保路径可见性
+   * @param pathElement 路径元素
+   */
+  private ensurePathVisibility(pathElement: SVGPathElement): void {
+    const computedStyle = window.getComputedStyle(pathElement)
+
+    // 检查stroke和fill
+    const stroke = computedStyle.stroke
+    const fill = computedStyle.fill
+    const strokeWidth = computedStyle.strokeWidth
+
+    // 如果既没有stroke也没有fill，设置默认stroke
+    if ((!stroke || stroke === 'none') && (!fill || fill === 'none')) {
+      pathElement.style.stroke = '#2563eb'
+      pathElement.style.strokeWidth = '2'
+      pathElement.style.fill = 'none'
+    }
+
+    // 如果有stroke但strokeWidth为0，设置默认宽度
+    if (stroke && stroke !== 'none' && (!strokeWidth || strokeWidth === '0')) {
+      pathElement.style.strokeWidth = '1'
+    }
+
+    // 确保opacity不为0
+    if (computedStyle.opacity === '0') {
+      pathElement.style.opacity = '1'
+    }
+  }
+
+  /**
+   * 内联计算样式
+   * @param element SVG元素
+   * @param computedStyle 计算样式
+   * @returns 内联的样式数量
+   */
+  private inlineComputedStyles(element: SVGElement, computedStyle: CSSStyleDeclaration): number {
+    let inlinedCount = 0
+
+    const criticalProps = [
+      'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-dashoffset',
+      'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'stroke-opacity',
+      'fill-opacity', 'opacity', 'visibility', 'display'
+    ]
+
+    criticalProps.forEach(prop => {
+      const value = computedStyle.getPropertyValue(prop)
+      if (value && value !== 'none' && value !== 'auto' && value !== 'initial') {
+        const resolvedValue = this.resolveCSSVariables(value, element)
+
+        // 设置内联样式
+        element.style.setProperty(prop, resolvedValue, 'important')
+
+        // 同时设置为属性（提高兼容性）
+        const attrName = prop === 'stroke-width' ? 'stroke-width' :
+                        prop === 'stroke-dasharray' ? 'stroke-dasharray' :
+                        prop === 'stroke-opacity' ? 'stroke-opacity' :
+                        prop === 'fill-opacity' ? 'fill-opacity' : prop
+
+        if (['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'opacity'].includes(prop)) {
+          element.setAttribute(attrName, resolvedValue)
+        }
+
+        inlinedCount++
+      }
+    })
+
+    return inlinedCount
+  }
+
+  /**
+   * 解析元素中的CSS变量
+   * @param element SVG元素
+   */
+  private resolveCSSVariablesInElement(element: SVGElement): void {
+    const style = element.style
+
+    for (let i = 0; i < style.length; i++) {
+      const prop = style.item(i)
+      const value = style.getPropertyValue(prop)
+
+      if (value.includes('var(')) {
+        const resolvedValue = this.resolveCSSVariables(value, element)
+        if (resolvedValue !== value) {
+          style.setProperty(prop, resolvedValue)
+        }
+      }
+    }
+  }
+
+  /**
+   * 处理继承样式
+   * @param element SVG元素
+   */
+  private handleInheritedStyles(element: SVGElement): void {
+    const computedStyle = window.getComputedStyle(element)
+
+    // 检查可能被继承的样式
+    const inheritableProps = ['fill', 'stroke', 'stroke-width', 'opacity', 'font-family', 'font-size']
+
+    inheritableProps.forEach(prop => {
+      const value = computedStyle.getPropertyValue(prop)
+      const inlineValue = element.style.getPropertyValue(prop)
+
+      // 如果没有内联样式但有计算样式，且值不是默认值，则内联它
+      if (!inlineValue && value && value !== 'none' && value !== 'auto' && value !== 'initial') {
+        element.style.setProperty(prop, value)
+      }
+    })
+  }
+
+  /**
+   * 分析ViewBox信息
+   * @param svgElement SVG元素
+   * @returns ViewBox信息
+   */
+  private analyzeViewBox(svgElement: SVGSVGElement): ViewBoxInfo {
+    const originalViewBox = svgElement.getAttribute('viewBox')
+    const width = svgElement.getAttribute('width')
+    const height = svgElement.getAttribute('height')
+
+    let computedViewBox = originalViewBox || ''
+    let aspectRatio = 1
+    let needsPreservation = false
+
+    // 如果没有viewBox但有width和height，计算viewBox
+    if (!originalViewBox && width && height) {
+      const w = parseFloat(width)
+      const h = parseFloat(height)
+      if (!isNaN(w) && !isNaN(h)) {
+        computedViewBox = `0 0 ${w} ${h}`
+        aspectRatio = w / h
+        needsPreservation = true
+      }
+    } else if (originalViewBox) {
+      // 解析现有viewBox计算宽高比
+      const viewBoxValues = originalViewBox.split(/\s+|,/).map(Number)
+      if (viewBoxValues.length === 4) {
+        const [, , vbWidth, vbHeight] = viewBoxValues
+        aspectRatio = vbWidth / vbHeight
+      }
+    }
+
+    return {
+      element: svgElement,
+      originalViewBox,
+      computedViewBox,
+      aspectRatio,
+      needsPreservation
+    }
+  }
+
+  /**
+   * 保留ViewBox
+   * @param svgElement SVG元素
+   * @param viewBoxInfo ViewBox信息
+   */
+  private preserveViewBox(svgElement: SVGSVGElement, viewBoxInfo: ViewBoxInfo): void {
+    if (viewBoxInfo.computedViewBox) {
+      svgElement.setAttribute('viewBox', viewBoxInfo.computedViewBox)
+    }
+
+    // 确保preserveAspectRatio属性
+    if (!svgElement.getAttribute('preserveAspectRatio')) {
+      svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet')
+    }
+  }
+
+  /**
+   * 处理宽高比
+   * @param svgElement SVG元素
+   * @param viewBoxInfo ViewBox信息
+   */
+  private handleAspectRatio(svgElement: SVGSVGElement, viewBoxInfo: ViewBoxInfo): void {
+    const currentWidth = svgElement.getAttribute('width')
+    const currentHeight = svgElement.getAttribute('height')
+
+    // 如果只有一个尺寸，根据宽高比计算另一个
+    if (currentWidth && !currentHeight && viewBoxInfo.aspectRatio) {
+      const width = parseFloat(currentWidth)
+      if (!isNaN(width)) {
+        const height = width / viewBoxInfo.aspectRatio
+        svgElement.setAttribute('height', height.toString())
+      }
+    } else if (currentHeight && !currentWidth && viewBoxInfo.aspectRatio) {
+      const height = parseFloat(currentHeight)
+      if (!isNaN(height)) {
+        const width = height * viewBoxInfo.aspectRatio
+        svgElement.setAttribute('width', width.toString())
+      }
+    }
+  }
+
+  /**
+   * 生成画布ID（重写父类方法以支持缓存）
+   * @param canvas 画布元素
+   * @returns 画布ID
+   */
+  private generateCanvasId(canvas: HTMLElement): string {
+    const existingId = canvas.id
+    if (existingId) {
+      return existingId
+    }
+
+    const className = canvas.className || 'canvas'
+    const timestamp = Date.now()
+    const rect = canvas.getBoundingClientRect()
+
+    return `canvas-${className.replace(/\s+/g, '-')}-${Math.round(rect.width)}-${Math.round(rect.height)}-${timestamp}`
+  }
+
+  /**
+   * 获取优化缓存
+   * @param canvasId 画布ID
+   * @returns 优化结果或null
+   */
+  getCachedOptimization(canvasId: string): SVGOptimizationResult | null {
+    return this.optimizationCache.get(canvasId) || null
+  }
+
+  /**
+   * 清除优化缓存
+   */
+  clearOptimizationCache(): void {
+    this.optimizationCache.clear()
+  }
+
+  /**
+   * 获取扩展统计信息
+   * @returns 统计信息
+   */
+  getExtendedStats(): {
+    cacheStats: { snapshots: number; backups: number; optimizations: number }
+    optimizationStats: { totalOptimizations: number; averageElementsPerOptimization: number }
+  } {
+    const baseStats = this.getCacheStats()
+    const optimizations = Array.from(this.optimizationCache.values())
+
+    return {
+      cacheStats: {
+        ...baseStats,
+        optimizations: this.optimizationCache.size
+      },
+      optimizationStats: {
+        totalOptimizations: optimizations.length,
+        averageElementsPerOptimization: optimizations.length > 0
+          ? optimizations.reduce((sum, opt) => sum + opt.optimizedElements, 0) / optimizations.length
+          : 0
+      }
+    }
+  }
+}

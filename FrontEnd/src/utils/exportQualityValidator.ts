@@ -12,8 +12,162 @@ export interface ValidationResult {
   continuityScore: number // 路径连续性评分
 }
 
+// 路径完整性验证器接口
+export interface PathIntegrityValidator {
+  validatePathCompleteness(exportedCanvas: HTMLCanvasElement, originalCanvas: HTMLElement): Promise<ValidationResult>
+  extractPathsFromCanvas(canvas: HTMLElement): PathInfo[]
+  extractPathsFromExportedCanvas(canvas: HTMLCanvasElement): Promise<PathInfo[]>
+  comparePathIntegrity(originalPaths: PathInfo[], exportedPaths: PathInfo[]): PathComparisonResult
+}
+
+// 路径比较结果接口
+export interface PathComparisonResult {
+  completenessPercentage: number
+  validatedKeyPoints: number
+  continuityScore: number
+  missingPaths: PathInfo[]
+  matchedPaths: Array<{ original: PathInfo; exported: PathInfo; similarity: number }>
+  issues: ValidationIssue[]
+}
+
+// SVG渲染验证器接口
+export interface SVGRenderingValidator {
+  checkSVGRendering(exportedCanvas: HTMLCanvasElement, originalCanvas?: HTMLElement): Promise<SVGRenderingCheck>
+  detectSVGElements(canvas: HTMLElement): SVGElementInfo[]
+  validateSVGElementRendering(element: SVGElement, exportedCanvas: HTMLCanvasElement): Promise<SVGElementRenderingResult>
+  analyzePixelAccuracy(originalRegion: ImageData, exportedRegion: ImageData): PixelAccuracyResult
+}
+
+// SVG元素信息接口
+export interface SVGElementInfo {
+  element: SVGElement
+  type: 'svg' | 'path' | 'circle' | 'rect' | 'line' | 'polygon' | 'polyline' | 'text' | 'other'
+  boundingBox: DOMRect
+  styles: {
+    fill: string
+    stroke: string
+    strokeWidth: number
+    opacity: number
+    visibility: string
+  }
+  pathData?: string // 对于path元素
+  textContent?: string // 对于text元素
+}
+
+// SVG元素渲染结果接口
+export interface SVGElementRenderingResult {
+  element: SVGElement
+  isRendered: boolean
+  renderingQuality: number // 0-1
+  issues: RenderingIssue[]
+  pixelAccuracy: PixelAccuracyResult
+}
+
+// 像素准确性结果接口
+export interface PixelAccuracyResult {
+  accuracy: number // 0-1
+  pixelDifferences: number
+  totalPixels: number
+  colorVariance: number
+  structuralSimilarity: number
+}
+
+// 质量报告生成器接口
+export interface QualityReportGenerator {
+  generateQualityReport(validationResults: ValidationResult[]): QualityReport
+  generateComprehensiveReport(
+    pathValidation: ValidationResult,
+    svgValidation: SVGRenderingCheck,
+    additionalMetrics?: QualityMetrics
+  ): ComprehensiveQualityReport
+  calculateOverallQualityScore(metrics: QualityMetrics): number
+  generateRecommendations(issues: ValidationIssue[], metrics: QualityMetrics): RecommendationSet
+}
+
+// 质量指标接口
+export interface QualityMetrics {
+  pathCompleteness: number
+  renderingAccuracy: number
+  styleConsistency: number
+  performanceScore: number
+  elementCoverage: number
+  visualFidelity: number
+}
+
+// 综合质量报告接口
+export interface ComprehensiveQualityReport extends QualityReport {
+  executionTime: number
+  memoryUsage?: number
+  browserCompatibility: BrowserCompatibilityInfo
+  exportMetadata: ExportQualityMetadata
+  visualComparison?: VisualComparisonResult
+}
+
+// 推荐集合接口
+export interface RecommendationSet {
+  critical: Recommendation[]
+  important: Recommendation[]
+  suggested: Recommendation[]
+  optimizations: Recommendation[]
+}
+
+// 推荐接口
+export interface Recommendation {
+  id: string
+  category: 'rendering' | 'performance' | 'quality' | 'compatibility'
+  priority: 'critical' | 'high' | 'medium' | 'low'
+  title: string
+  description: string
+  actionItems: string[]
+  expectedImprovement: string
+  technicalDetails?: string
+}
+
+// 浏览器兼容性信息接口
+export interface BrowserCompatibilityInfo {
+  browser: string
+  version: string
+  supportedFeatures: string[]
+  limitations: string[]
+  recommendations: string[]
+}
+
+// 导出质量元数据接口
+export interface ExportQualityMetadata {
+  timestamp: string
+  exportFormat: string
+  canvasSize: { width: number; height: number }
+  elementCount: number
+  svgElementCount: number
+  pathElementCount: number
+  validationDuration: number
+}
+
+// 视觉比较结果接口
+export interface VisualComparisonResult {
+  overallSimilarity: number
+  regionComparisons: RegionComparison[]
+  differenceMap?: ImageData
+  significantDifferences: VisualDifference[]
+}
+
+// 区域比较接口
+export interface RegionComparison {
+  region: { x: number; y: number; width: number; height: number }
+  similarity: number
+  issues: string[]
+}
+
+// 视觉差异接口
+export interface VisualDifference {
+  location: { x: number; y: number }
+  type: 'color' | 'structure' | 'missing' | 'extra'
+  severity: 'low' | 'medium' | 'high'
+  description: string
+}
+
 export interface ValidationIssue {
-  type: 'missing_path' | 'incomplete_path' | 'style_mismatch' | 'position_offset' | 'visibility_issue'
+  type: 'missing_path' | 'incomplete_path' | 'style_mismatch' | 'position_offset' | 'visibility_issue' | 'rendering_error'
   severity: 'low' | 'medium' | 'high' | 'critical'
   message: string
   element?: Element
@@ -75,11 +229,14 @@ export interface QualityReport {
 
 /**
  * 导出质量验证器类
+ * 实现路径完整性验证、SVG渲染验证和质量报告生成
  */
-export class ExportQualityValidator {
+export class ExportQualityValidator implements PathIntegrityValidator, SVGRenderingValidator, QualityReportGenerator {
   private pixelTolerance = 2 // 像素容差
   private colorTolerance = 10 // 颜色容差
   private pathSamplePoints = 20 // 路径采样点数量
+  private similarityThreshold = 0.5 // 路径相似度阈值
+  private continuityGapThreshold = 50 // 连续性间隙阈值（像素）
 
   /**
    * 验证路径完整性
@@ -173,7 +330,238 @@ export class ExportQualityValidator {
   }
 
   /**
-   * 检查SVG元素是否正确渲染
+   * 检测SVG元素 - 公共接口实现
+   * @param canvas 画布元素
+   * @returns SVG元素信息数组
+   */
+  detectSVGElements(canvas: HTMLElement): SVGElementInfo[] {
+    const svgElements: SVGElementInfo[] = []
+
+    // 查找所有SVG相关元素
+    const elements = canvas.querySelectorAll('svg, svg *, [data-svg]')
+
+    elements.forEach(element => {
+      if (element instanceof SVGElement) {
+        const rect = element.getBoundingClientRect()
+        const computedStyle = window.getComputedStyle(element)
+
+        // 确定元素类型
+        let type: SVGElementInfo['type'] = 'other'
+        const tagName = element.tagName.toLowerCase()
+        if (['svg', 'path', 'circle', 'rect', 'line', 'polygon', 'polyline', 'text'].includes(tagName)) {
+          type = tagName as SVGElementInfo['type']
+        }
+
+        const svgInfo: SVGElementInfo = {
+          element,
+          type,
+          boundingBox: rect,
+          styles: {
+            fill: computedStyle.fill || 'none',
+            stroke: computedStyle.stroke || 'none',
+            strokeWidth: parseFloat(computedStyle.strokeWidth) || 0,
+            opacity: parseFloat(computedStyle.opacity) || 1,
+            visibility: computedStyle.visibility || 'visible'
+          }
+        }
+
+        // 添加特定元素的额外信息
+        if (type === 'path' && element instanceof SVGPathElement) {
+          svgInfo.pathData = element.getAttribute('d') || ''
+        }
+
+        if (type === 'text') {
+          svgInfo.textContent = element.textContent || ''
+        }
+
+        svgElements.push(svgInfo)
+      }
+    })
+
+    return svgElements
+  }
+
+  /**
+   * 验证SVG元素渲染 - 公共接口实现
+   * @param element SVG元素
+   * @param exportedCanvas 导出的画布
+   * @returns SVG元素渲染结果
+   */
+  async validateSVGElementRendering(
+    element: SVGElement,
+    exportedCanvas: HTMLCanvasElement
+  ): Promise<SVGElementRenderingResult> {
+    const issues: RenderingIssue[] = []
+    const rect = element.getBoundingClientRect()
+
+    try {
+      const context = exportedCanvas.getContext('2d')
+      if (!context) {
+        throw new Error('无法获取画布上下文')
+      }
+
+      // 获取元素区域的像素数据
+      const x = Math.max(0, Math.floor(rect.x))
+      const y = Math.max(0, Math.floor(rect.y))
+      const width = Math.min(exportedCanvas.width - x, Math.ceil(rect.width))
+      const height = Math.min(exportedCanvas.height - y, Math.ceil(rect.height))
+
+      if (width <= 0 || height <= 0) {
+        return {
+          element,
+          isRendered: false,
+          renderingQuality: 0,
+          issues: [{
+            element,
+            issue: 'not_rendered',
+            description: '元素边界框无效或超出画布范围'
+          }],
+          pixelAccuracy: {
+            accuracy: 0,
+            pixelDifferences: 0,
+            totalPixels: 0,
+            colorVariance: 0,
+            structuralSimilarity: 0
+          }
+        }
+      }
+
+      const exportedImageData = context.getImageData(x, y, width, height)
+
+      // 创建参考渲染用于比较
+      const referenceImageData = await this.createReferenceRendering(element, width, height)
+
+      // 分析像素准确性
+      const pixelAccuracy = this.analyzePixelAccuracy(referenceImageData, exportedImageData)
+
+      // 检查是否渲染
+      const pixelAnalysis = this.analyzePixelData(exportedImageData)
+      const isRendered = pixelAnalysis.hasContent
+
+      // 计算渲染质量
+      const renderingQuality = this.calculateRenderingQuality(pixelAccuracy, isRendered)
+
+      // 生成问题报告
+      if (!isRendered) {
+        issues.push({
+          element,
+          issue: 'not_rendered',
+          description: `SVG元素 ${element.tagName} 未在导出画布中渲染`
+        })
+      } else if (pixelAccuracy.accuracy < 0.8) {
+        issues.push({
+          element,
+          issue: 'partially_rendered',
+          description: `SVG元素渲染质量较低 (准确性: ${(pixelAccuracy.accuracy * 100).toFixed(1)}%)`
+        })
+      }
+
+      if (pixelAccuracy.structuralSimilarity < 0.7) {
+        issues.push({
+          element,
+          issue: 'style_missing',
+          description: '元素结构与预期不符，可能存在样式丢失'
+        })
+      }
+
+      return {
+        element,
+        isRendered,
+        renderingQuality,
+        issues,
+        pixelAccuracy
+      }
+
+    } catch (error) {
+      console.error('SVG元素渲染验证失败:', error)
+
+      return {
+        element,
+        isRendered: false,
+        renderingQuality: 0,
+        issues: [{
+          element,
+          issue: 'not_rendered',
+          description: `验证失败: ${error instanceof Error ? error.message : String(error)}`
+        }],
+        pixelAccuracy: {
+          accuracy: 0,
+          pixelDifferences: 0,
+          totalPixels: 0,
+          colorVariance: 0,
+          structuralSimilarity: 0
+        }
+      }
+    }
+  }
+
+  /**
+   * 分析像素准确性 - 公共接口实现
+   * @param originalRegion 原始区域图像数据
+   * @param exportedRegion 导出区域图像数据
+   * @returns 像素准确性结果
+   */
+  analyzePixelAccuracy(originalRegion: ImageData, exportedRegion: ImageData): PixelAccuracyResult {
+    const originalData = originalRegion.data
+    const exportedData = exportedRegion.data
+
+    // 确保两个图像数据大小相同
+    const minLength = Math.min(originalData.length, exportedData.length)
+    const totalPixels = minLength / 4
+
+    let pixelDifferences = 0
+    let colorVarianceSum = 0
+    let structuralDifferences = 0
+
+    // 逐像素比较
+    for (let i = 0; i < minLength; i += 4) {
+      const origR = originalData[i]
+      const origG = originalData[i + 1]
+      const origB = originalData[i + 2]
+      const origA = originalData[i + 3]
+
+      const expR = exportedData[i]
+      const expG = exportedData[i + 1]
+      const expB = exportedData[i + 2]
+      const expA = exportedData[i + 3]
+
+      // 计算颜色差异
+      const colorDiff = Math.sqrt(
+        Math.pow(origR - expR, 2) +
+        Math.pow(origG - expG, 2) +
+        Math.pow(origB - expB, 2) +
+        Math.pow(origA - expA, 2)
+      )
+
+      if (colorDiff > this.colorTolerance) {
+        pixelDifferences++
+      }
+
+      colorVarianceSum += colorDiff
+
+      // 检查结构差异（透明度变化）
+      const origVisible = origA > 0
+      const expVisible = expA > 0
+      if (origVisible !== expVisible) {
+        structuralDifferences++
+      }
+    }
+
+    const accuracy = totalPixels > 0 ? 1 - (pixelDifferences / totalPixels) : 0
+    const colorVariance = totalPixels > 0 ? colorVarianceSum / totalPixels : 0
+    const structuralSimilarity = totalPixels > 0 ? 1 - (structuralDifferences / totalPixels) : 0
+
+    return {
+      accuracy,
+      pixelDifferences,
+      totalPixels,
+      colorVariance,
+      structuralSimilarity
+    }
+  }
+
+  /**
+   * 检查SVG元素是否正确渲染 - 增强版实现
    * @param exportedCanvas 导出的画布
    * @param originalCanvas 原始画布
    * @returns SVG渲染检查结果
@@ -275,7 +663,7 @@ export class ExportQualityValidator {
   }
 
   /**
-   * 生成质量报告
+   * 生成质量报告 - 基础版本
    * @param validationResults 验证结果数组
    * @returns 质量报告
    */
@@ -291,7 +679,7 @@ export class ExportQualityValidator {
       }
     }
 
-    // 计算平均分数 (using pathCompleteness as base score since score property was removed)
+    // 计算平均分数
     const overallScore = validationResults.reduce((sum, result) => sum + (result.pathCompleteness / 100), 0) / validationResults.length
     const pathCompleteness = validationResults.reduce((sum, result) => sum + result.pathCompleteness, 0) / validationResults.length
     const avgContinuityScore = validationResults.reduce((sum, result) => sum + result.continuityScore, 0) / validationResults.length
@@ -309,7 +697,7 @@ export class ExportQualityValidator {
     const styleAccuracy = Math.max(0, 1 - (styleIssues.length * 0.2))
 
     // 生成建议
-    const recommendations = this.generateRecommendations(allIssues, overallScore, pathCompleteness)
+    const recommendations = this.generateBasicRecommendations(allIssues, overallScore, pathCompleteness)
 
     return {
       overallScore,
@@ -322,11 +710,221 @@ export class ExportQualityValidator {
   }
 
   /**
-   * 从画布中提取路径信息
+   * 生成综合质量报告 - 增强版本
+   * @param pathValidation 路径验证结果
+   * @param svgValidation SVG验证结果
+   * @param additionalMetrics 额外指标
+   * @returns 综合质量报告
+   */
+  generateComprehensiveReport(
+    pathValidation: ValidationResult,
+    svgValidation: SVGRenderingCheck,
+    additionalMetrics?: QualityMetrics
+  ): ComprehensiveQualityReport {
+    const startTime = performance.now()
+
+    // 计算质量指标
+    const metrics: QualityMetrics = additionalMetrics || this.calculateQualityMetrics(pathValidation, svgValidation)
+
+    // 计算总体质量分数
+    const overallScore = this.calculateOverallQualityScore(metrics)
+
+    // 合并所有问题
+    const allIssues = [
+      ...pathValidation.issues,
+      ...svgValidation.renderingIssues.map(issue => ({
+        type: 'rendering_error' as const,
+        severity: 'medium' as const,
+        message: issue.description,
+        element: issue.element,
+        expectedValue: '正确渲染',
+        actualValue: issue.issue
+      }))
+    ]
+
+    // 生成推荐集合
+    const recommendationSet = this.generateRecommendations(allIssues, metrics)
+
+    // 获取浏览器兼容性信息
+    const browserCompatibility = this.getBrowserCompatibilityInfo()
+
+    // 创建导出质量元数据
+    const exportMetadata: ExportQualityMetadata = {
+      timestamp: new Date().toISOString(),
+      exportFormat: 'unknown', // 这将由调用者提供
+      canvasSize: { width: 0, height: 0 }, // 这将由调用者提供
+      elementCount: 0, // 这将由调用者提供
+      svgElementCount: svgValidation.svgElementsFound,
+      pathElementCount: svgValidation.pathElementsFound,
+      validationDuration: performance.now() - startTime
+    }
+
+    const baseReport = this.generateQualityReport([pathValidation])
+
+    return {
+      ...baseReport,
+      overallScore,
+      pathCompleteness: metrics.pathCompleteness,
+      renderingQuality: metrics.renderingAccuracy,
+      styleAccuracy: metrics.styleConsistency,
+      recommendations: this.flattenRecommendations(recommendationSet),
+      executionTime: performance.now() - startTime,
+      memoryUsage: this.getMemoryUsage(),
+      browserCompatibility,
+      exportMetadata
+    }
+  }
+
+  /**
+   * 计算总体质量分数
+   * @param metrics 质量指标
+   * @returns 总体质量分数 (0-1)
+   */
+  calculateOverallQualityScore(metrics: QualityMetrics): number {
+    const weights = {
+      pathCompleteness: 0.25,
+      renderingAccuracy: 0.25,
+      styleConsistency: 0.20,
+      performanceScore: 0.10,
+      elementCoverage: 0.10,
+      visualFidelity: 0.10
+    }
+
+    return (
+      metrics.pathCompleteness * weights.pathCompleteness +
+      metrics.renderingAccuracy * weights.renderingAccuracy +
+      metrics.styleConsistency * weights.styleConsistency +
+      metrics.performanceScore * weights.performanceScore +
+      metrics.elementCoverage * weights.elementCoverage +
+      metrics.visualFidelity * weights.visualFidelity
+    )
+  }
+
+  /**
+   * 生成推荐集合
+   * @param issues 问题列表
+   * @param metrics 质量指标
+   * @returns 推荐集合
+   */
+  generateRecommendations(issues: ValidationIssue[], metrics: QualityMetrics): RecommendationSet {
+    const critical: Recommendation[] = []
+    const important: Recommendation[] = []
+    const suggested: Recommendation[] = []
+    const optimizations: Recommendation[] = []
+
+    // 分析严重问题
+    const criticalIssues = issues.filter(issue => issue.severity === 'critical')
+    if (criticalIssues.length > 0) {
+      critical.push({
+        id: 'critical-rendering-issues',
+        category: 'rendering',
+        priority: 'critical',
+        title: '严重渲染问题',
+        description: `发现 ${criticalIssues.length} 个严重渲染问题，可能导致导出失败或内容缺失`,
+        actionItems: [
+          '检查SVG元素的可见性和样式设置',
+          '验证路径数据的完整性',
+          '考虑使用备用渲染方法'
+        ],
+        expectedImprovement: '解决后可显著提升导出质量',
+        technicalDetails: criticalIssues.map(issue => issue.message).join('; ')
+      })
+    }
+
+    // 分析路径完整性
+    if (metrics.pathCompleteness < 0.8) {
+      important.push({
+        id: 'path-completeness-low',
+        category: 'quality',
+        priority: 'high',
+        title: '路径完整性不足',
+        description: `路径完整性仅为 ${(metrics.pathCompleteness * 100).toFixed(1)}%，部分路径可能未正确导出`,
+        actionItems: [
+          '启用SVG样式内联转换',
+          '使用Canvas备用渲染器',
+          '检查路径元素的CSS样式'
+        ],
+        expectedImprovement: '提升路径渲染准确性至90%以上'
+      })
+    }
+
+    // 分析渲染准确性
+    if (metrics.renderingAccuracy < 0.7) {
+      important.push({
+        id: 'rendering-accuracy-low',
+        category: 'rendering',
+        priority: 'high',
+        title: '渲染准确性较低',
+        description: `渲染准确性为 ${(metrics.renderingAccuracy * 100).toFixed(1)}%，导出图像与原始设计存在差异`,
+        actionItems: [
+          '增加导出分辨率和缩放比例',
+          '优化SVG元素的渲染设置',
+          '使用更高质量的渲染引擎'
+        ],
+        expectedImprovement: '提升视觉保真度和细节表现'
+      })
+    }
+
+    // 分析样式一致性
+    if (metrics.styleConsistency < 0.8) {
+      suggested.push({
+        id: 'style-consistency-issues',
+        category: 'quality',
+        priority: 'medium',
+        title: '样式一致性问题',
+        description: '部分元素的样式在导出时可能发生变化',
+        actionItems: [
+          '强制内联所有CSS样式',
+          '检查CSS变量和自定义属性',
+          '验证字体和颜色的渲染'
+        ],
+        expectedImprovement: '确保导出结果与原始设计完全一致'
+      })
+    }
+
+    // 性能优化建议
+    if (metrics.performanceScore < 0.6) {
+      optimizations.push({
+        id: 'performance-optimization',
+        category: 'performance',
+        priority: 'medium',
+        title: '性能优化建议',
+        description: '导出过程可以进一步优化以提升速度',
+        actionItems: [
+          '启用元素缓存机制',
+          '使用Web Worker进行后台处理',
+          '减少不必要的重复计算'
+        ],
+        expectedImprovement: '减少导出时间30-50%'
+      })
+    }
+
+    // 元素覆盖率建议
+    if (metrics.elementCoverage < 0.9) {
+      suggested.push({
+        id: 'element-coverage-improvement',
+        category: 'quality',
+        priority: 'medium',
+        title: '元素覆盖率改进',
+        description: '部分设计元素可能未被正确识别或处理',
+        actionItems: [
+          '扩展元素检测算法',
+          '添加对自定义元素的支持',
+          '改进复杂图形的处理逻辑'
+        ],
+        expectedImprovement: '确保所有设计元素都被正确导出'
+      })
+    }
+
+    return { critical, important, suggested, optimizations }
+  }
+
+  /**
+   * 从画布中提取路径信息 - 公共接口实现
    * @param canvas 画布元素
    * @returns 路径信息数组
    */
-  private extractPathsFromCanvas(canvas: HTMLElement): PathInfo[] {
+  extractPathsFromCanvas(canvas: HTMLElement): PathInfo[] {
     const paths: PathInfo[] = []
 
     // 查找所有SVG路径元素
@@ -362,11 +960,11 @@ export class ExportQualityValidator {
   }
 
   /**
-   * 从导出的画布中提取路径信息
+   * 从导出的画布中提取路径信息 - 公共接口实现
    * @param canvas 导出的画布
    * @returns 路径信息数组
    */
-  private async extractPathsFromExportedCanvas(canvas: HTMLCanvasElement): Promise<PathInfo[]> {
+  async extractPathsFromExportedCanvas(canvas: HTMLCanvasElement): Promise<PathInfo[]> {
     const context = canvas.getContext('2d')
     if (!context) {
       throw new Error('无法获取画布上下文')
@@ -708,7 +1306,75 @@ export class ExportQualityValidator {
   }
 
   /**
-   * 分析路径完整性
+   * 比较路径完整性 - 公共接口实现
+   * @param originalPaths 原始路径
+   * @param exportedPaths 导出的路径
+   * @returns 路径比较结果
+   */
+  comparePathIntegrity(originalPaths: PathInfo[], exportedPaths: PathInfo[]): PathComparisonResult {
+    const issues: ValidationIssue[] = []
+    const missingPaths: PathInfo[] = []
+    const matchedPaths: Array<{ original: PathInfo; exported: PathInfo; similarity: number }> = []
+
+    if (originalPaths.length === 0) {
+      return {
+        completenessPercentage: 100,
+        validatedKeyPoints: 0,
+        continuityScore: 100,
+        missingPaths: [],
+        matchedPaths: [],
+        issues: []
+      }
+    }
+
+    let totalKeyPoints = 0
+    let validatedKeyPoints = 0
+
+    // 为每个原始路径寻找匹配的导出路径
+    for (const originalPath of originalPaths) {
+      const matchingPath = this.findMatchingPath(originalPath, exportedPaths)
+      totalKeyPoints += originalPath.keyPoints.length
+
+      if (matchingPath) {
+        const similarity = this.calculatePathSimilarity(originalPath, matchingPath)
+        matchedPaths.push({ original: originalPath, exported: matchingPath, similarity })
+
+        // 验证关键点
+        const keyPointValidation = this.validatePathKeyPoints(originalPath, matchingPath)
+        validatedKeyPoints += keyPointValidation.validatedPoints
+        issues.push(...keyPointValidation.issues)
+
+        // 验证路径连续性
+        const continuityValidation = this.validatePathContinuity(matchingPath)
+        issues.push(...continuityValidation.issues)
+      } else {
+        missingPaths.push(originalPath)
+        issues.push({
+          type: 'missing_path',
+          severity: 'critical',
+          message: `路径缺失: ${originalPath.id}`,
+          element: originalPath.element || undefined,
+          expectedValue: originalPath.pathData,
+          actualValue: null
+        })
+      }
+    }
+
+    const completenessPercentage = ((originalPaths.length - missingPaths.length) / originalPaths.length) * 100
+    const continuityScore = totalKeyPoints > 0 ? (validatedKeyPoints / totalKeyPoints) * 100 : 100
+
+    return {
+      completenessPercentage,
+      validatedKeyPoints,
+      continuityScore,
+      missingPaths,
+      matchedPaths,
+      issues
+    }
+  }
+
+  /**
+   * 分析路径完整性 - 内部方法
    * @param originalPaths 原始路径
    * @param exportedPaths 导出的路径
    * @returns 路径分析结果
@@ -717,39 +1383,13 @@ export class ExportQualityValidator {
     originalPaths: PathInfo[],
     exportedPaths: PathInfo[]
   ): Promise<PathCompletenessAnalysis> {
-    let completenessPercentage = 0
-    let validatedKeyPoints = 0
-    let continuityScore = 0
+    const comparisonResult = this.comparePathIntegrity(originalPaths, exportedPaths)
 
-    if (originalPaths.length === 0) {
-      return { completenessPercentage: 100, validatedKeyPoints: 0, continuityScore: 100 }
+    return {
+      completenessPercentage: comparisonResult.completenessPercentage,
+      validatedKeyPoints: comparisonResult.validatedKeyPoints,
+      continuityScore: comparisonResult.continuityScore
     }
-
-    const totalPaths = originalPaths.length
-    let completePaths = 0
-    let totalKeyPoints = 0
-    let validKeyPoints = 0
-
-    for (const originalPath of originalPaths) {
-      const matchingPath = this.findMatchingPath(originalPath, exportedPaths)
-
-      if (matchingPath) {
-        completePaths++
-
-        // 验证关键点
-        const keyPointValidation = this.validatePathKeyPoints(originalPath, matchingPath)
-        totalKeyPoints += originalPath.keyPoints.length
-        validKeyPoints += keyPointValidation.validatedPoints
-      }
-
-      totalKeyPoints += originalPath.keyPoints.length
-    }
-
-    completenessPercentage = (completePaths / totalPaths) * 100
-    validatedKeyPoints = validKeyPoints
-    continuityScore = totalKeyPoints > 0 ? (validKeyPoints / totalKeyPoints) * 100 : 100
-
-    return { completenessPercentage, validatedKeyPoints, continuityScore }
   }
 
   /**
@@ -1065,13 +1705,13 @@ export class ExportQualityValidator {
   }
 
   /**
-   * 生成建议
+   * 生成基础建议 - 原有方法重命名
    * @param issues 问题列表
    * @param overallScore 总体评分
    * @param pathCompleteness 路径完整性
    * @returns 建议列表
    */
-  private generateRecommendations(
+  private generateBasicRecommendations(
     issues: ValidationIssue[],
     overallScore: number,
     pathCompleteness: number
@@ -1106,6 +1746,253 @@ export class ExportQualityValidator {
     }
 
     return recommendations
+  }
+
+  /**
+   * 创建参考渲染用于比较
+   * @param element SVG元素
+   * @param width 宽度
+   * @param height 高度
+   * @returns 参考图像数据
+   */
+  private async createReferenceRendering(
+    element: SVGElement,
+    width: number,
+    height: number
+  ): Promise<ImageData> {
+    try {
+      // 创建临时画布用于渲染参考图像
+      const tempCanvas = document.createElement('canvas')
+      tempCanvas.width = width
+      tempCanvas.height = height
+      const tempContext = tempCanvas.getContext('2d')
+
+      if (!tempContext) {
+        throw new Error('无法创建临时画布上下文')
+      }
+
+      // 清空画布
+      tempContext.clearRect(0, 0, width, height)
+
+      // 尝试使用SVG序列化和图像渲染
+      const svgData = this.serializeSVGElement(element)
+      const blob = new Blob([svgData], { type: 'image/svg+xml' })
+      const url = URL.createObjectURL(blob)
+
+      return new Promise((resolve) => {
+        const img = new Image()
+        img.onload = () => {
+          tempContext.drawImage(img, 0, 0, width, height)
+          const imageData = tempContext.getImageData(0, 0, width, height)
+          URL.revokeObjectURL(url)
+          resolve(imageData)
+        }
+        img.onerror = () => {
+          URL.revokeObjectURL(url)
+          // 如果SVG渲染失败，创建一个基本的参考图像
+          const fallbackImageData = tempContext.createImageData(width, height)
+          resolve(fallbackImageData)
+        }
+        img.src = url
+      })
+
+    } catch (error) {
+      console.warn('创建参考渲染失败，使用空白参考:', error)
+
+      // 创建空白参考图像
+      const tempCanvas = document.createElement('canvas')
+      tempCanvas.width = width
+      tempCanvas.height = height
+      const tempContext = tempCanvas.getContext('2d')!
+      return tempContext.createImageData(width, height)
+    }
+  }
+
+  /**
+   * 序列化SVG元素
+   * @param element SVG元素
+   * @returns SVG字符串
+   */
+  private serializeSVGElement(element: SVGElement): string {
+    try {
+      const serializer = new XMLSerializer()
+      let svgString = serializer.serializeToString(element)
+
+      // 如果不是完整的SVG，包装在SVG标签中
+      if (!svgString.startsWith('<svg')) {
+        const rect = element.getBoundingClientRect()
+        svgString = `<svg xmlns="http://www.w3.org/2000/svg" width="${rect.width}" height="${rect.height}" viewBox="0 0 ${rect.width} ${rect.height}">${svgString}</svg>`
+      }
+
+      return svgString
+    } catch (error) {
+      console.warn('SVG序列化失败:', error)
+      return '<svg xmlns="http://www.w3.org/2000/svg"></svg>'
+    }
+  }
+
+  /**
+   * 计算渲染质量
+   * @param pixelAccuracy 像素准确性结果
+   * @param isRendered 是否已渲染
+   * @returns 渲染质量分数 (0-1)
+   */
+  private calculateRenderingQuality(pixelAccuracy: PixelAccuracyResult, isRendered: boolean): number {
+    if (!isRendered) {
+      return 0
+    }
+
+    // 综合考虑像素准确性和结构相似性
+    const accuracyWeight = 0.6
+    const structuralWeight = 0.4
+
+    return (pixelAccuracy.accuracy * accuracyWeight) + (pixelAccuracy.structuralSimilarity * structuralWeight)
+  }
+
+/**
+   * 计算质量指标
+   * @param pathValidation 路径验证结果
+   * @param svgValidation SVG验证结果
+   * @returns 质量指标
+   */
+  private calculateQualityMetrics(pathValidation: ValidationResult, svgValidation: SVGRenderingCheck): QualityMetrics {
+    const pathCompleteness = pathValidation.pathCompleteness / 100
+    const continuityScore = pathValidation.continuityScore / 100
+
+    // 计算渲染准确性
+    const renderingAccuracy = svgValidation.svgElementsFound > 0
+      ? svgValidation.svgElementsRendered / svgValidation.svgElementsFound
+      : 1
+
+    // 计算样式一致性（基于问题类型）
+    const styleIssues = pathValidation.issues.filter(issue => issue.type === 'style_mismatch')
+    const styleConsistency = Math.max(0, 1 - (styleIssues.length * 0.1))
+
+    // 计算性能分数（基于验证速度和复杂度）
+    const performanceScore = Math.min(1, continuityScore * renderingAccuracy)
+
+    // 计算元素覆盖率
+    const totalElements = svgValidation.svgElementsFound + svgValidation.pathElementsFound
+    const renderedElements = svgValidation.svgElementsRendered + svgValidation.pathElementsRendered
+    const elementCoverage = totalElements > 0 ? renderedElements / totalElements : 1
+
+    // 计算视觉保真度（综合指标）
+    const visualFidelity = (pathCompleteness + renderingAccuracy + styleConsistency) / 3
+
+    return {
+      pathCompleteness,
+      renderingAccuracy,
+      styleConsistency,
+      performanceScore,
+      elementCoverage,
+      visualFidelity
+    }
+  }
+
+  /**
+   * 获取浏览器兼容性信息
+   * @returns 浏览器兼容性信息
+   */
+  private getBrowserCompatibilityInfo(): BrowserCompatibilityInfo {
+    const userAgent = navigator.userAgent
+    const browser = this.detectBrowser(userAgent)
+    const version = this.detectBrowserVersion(userAgent)
+
+    const supportedFeatures: string[] = []
+    const limitations: string[] = []
+    const recommendations: string[] = []
+
+    // 检测HTML2Canvas支持
+    if (typeof window !== 'undefined' && 'HTMLCanvasElement' in window) {
+      supportedFeatures.push('Canvas API')
+    } else {
+      limitations.push('Canvas API不可用')
+      recommendations.push('使用支持Canvas API的现代浏览器')
+    }
+
+    // 检测SVG支持
+    if (document.implementation.hasFeature('http://www.w3.org/TR/SVG11/feature#BasicStructure', '1.1')) {
+      supportedFeatures.push('SVG 1.1')
+    } else {
+      limitations.push('SVG支持有限')
+      recommendations.push('升级到支持SVG的浏览器版本')
+    }
+
+    // 检测Web Workers支持
+    if (typeof Worker !== 'undefined') {
+      supportedFeatures.push('Web Workers')
+    } else {
+      limitations.push('Web Workers不可用')
+      recommendations.push('某些性能优化功能可能不可用')
+    }
+
+    // 检测Blob支持
+    if (typeof Blob !== 'undefined') {
+      supportedFeatures.push('Blob API')
+    } else {
+      limitations.push('Blob API不可用')
+      recommendations.push('文件下载功能可能受限')
+    }
+
+    return {
+      browser,
+      version,
+      supportedFeatures,
+      limitations,
+      recommendations
+    }
+  }
+
+  /**
+   * 检测浏览器类型
+   * @param userAgent 用户代理字符串
+   * @returns 浏览器名称
+   */
+  private detectBrowser(userAgent: string): string {
+    if (userAgent.includes('Chrome')) return 'Chrome'
+    if (userAgent.includes('Firefox')) return 'Firefox'
+    if (userAgent.includes('Safari')) return 'Safari'
+    if (userAgent.includes('Edge')) return 'Edge'
+    if (userAgent.includes('Opera')) return 'Opera'
+    return 'Unknown'
+  }
+
+  /**
+   * 检测浏览器版本
+   * @param userAgent 用户代理字符串
+   * @returns 浏览器版本
+   */
+  private detectBrowserVersion(userAgent: string): string {
+    const matches = userAgent.match(/(Chrome|Firefox|Safari|Edge|Opera)\/(\d+\.\d+)/)
+    return matches ? matches[2] : 'Unknown'
+  }
+
+  /**
+   * 获取内存使用情况
+   * @returns 内存使用量（字节）
+   */
+  private getMemoryUsage(): number | undefined {
+    if ('memory' in performance) {
+      const memory = (performance as unknown as { memory: { usedJSHeapSize: number } }).memory
+      return memory.usedJSHeapSize
+    }
+    return undefined
+  }
+
+  /**
+   * 扁平化推荐集合
+   * @param recommendationSet 推荐集合
+   * @returns 推荐字符串数组
+   */
+  private flattenRecommendations(recommendationSet: RecommendationSet): string[] {
+    const allRecommendations = [
+      ...recommendationSet.critical,
+      ...recommendationSet.important,
+      ...recommendationSet.suggested,
+      ...recommendationSet.optimizations
+    ]
+
+    return allRecommendations.map(rec => `${rec.title}: ${rec.description}`)
   }
 }
 

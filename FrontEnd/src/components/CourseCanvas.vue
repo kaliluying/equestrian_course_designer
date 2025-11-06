@@ -848,6 +848,80 @@ const isCreator = () => {
   return isOwner || !viaLink
 }
 
+// 导出系统集成方法
+const getCanvasElement = (): HTMLElement | null => {
+  return canvasContainerRef.value
+}
+
+const getCanvasInfo = () => {
+  const canvas = canvasContainerRef.value
+  if (!canvas) return null
+
+  const rect = canvas.getBoundingClientRect()
+  return {
+    element: canvas,
+    bounds: rect,
+    obstacles: courseStore.currentCourse.obstacles,
+    pathData: {
+      visible: courseStore.coursePath.visible,
+      points: courseStore.coursePath.points,
+      startPoint: courseStore.startPoint,
+      endPoint: courseStore.endPoint
+    },
+    fieldDimensions: {
+      width: courseStore.currentCourse.fieldWidth,
+      height: courseStore.currentCourse.fieldHeight
+    },
+    scaleFactor: pathScaleFactor.value
+  }
+}
+
+const prepareCanvasForExport = () => {
+  const canvas = canvasContainerRef.value
+  if (!canvas) return null
+
+  // 隐藏控制元素
+  const controlElements = canvas.querySelectorAll('.control-point, .control-line, .path-indicator .rotation-handle, .distance-toggle')
+  const originalStyles: { element: HTMLElement, display: string, visibility: string }[] = []
+
+  controlElements.forEach(element => {
+    const el = element as HTMLElement
+    originalStyles.push({
+      element: el,
+      display: el.style.display,
+      visibility: el.style.visibility
+    })
+    el.style.display = 'none'
+    el.style.visibility = 'hidden'
+  })
+
+  return {
+    canvas,
+    restore: () => {
+      originalStyles.forEach(({ element, display, visibility }) => {
+        element.style.display = display
+        element.style.visibility = visibility
+      })
+    }
+  }
+}
+
+const triggerExportEvent = (eventType: string, data?: unknown) => {
+  const canvas = canvasContainerRef.value
+  if (!canvas) return
+
+  const event = new CustomEvent(`canvas-export-${eventType}`, {
+    bubbles: true,
+    detail: {
+      canvasInfo: getCanvasInfo(),
+      timestamp: new Date().toISOString(),
+      ...data
+    }
+  })
+
+  canvas.dispatchEvent(event)
+}
+
 // 暴露协作控制方法和路径更新标志
 defineExpose({
   startCollaboration,
@@ -856,7 +930,12 @@ defineExpose({
   toggleDistanceLabels,
   isPathUpdateFromWebSocket, // 导出路径更新标志，供WebSocket处理函数使用
   sendFullCanvasState, // 导出发送完整画布状态方法
-  isCreator // 导出判断当前用户是否为创建者的方法
+  isCreator, // 导出判断当前用户是否为创建者的方法
+  // 导出系统集成方法
+  getCanvasElement,
+  getCanvasInfo,
+  prepareCanvasForExport,
+  triggerExportEvent
 })
 
 // 确保stopCollaboration方法可以被外部访问

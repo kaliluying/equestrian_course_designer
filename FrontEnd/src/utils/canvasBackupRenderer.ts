@@ -1,17 +1,16 @@
 /**
- * Canvas备用渲染方案
- * 当html2canvas无法正确处理SVG元素时的完整备用渲染解决方案
- * 集成SVG到Canvas转换、样式处理和质量验证功能
+ * 备用画布渲染器
+ * 使用Canvas 2D API创建替代渲染，为复杂场景构建逐元素渲染，为大型设计添加性能优化
  */
 
-import { CanvasFallbackRenderer, type CanvasRenderOptions, type CanvasRenderResult } from './canvasFallbackRenderer'
-import { SVGToCanvasConverter, type SVGElementStyles } from './svgToCanvasConverter'
+import { SVGToCanvasConverter } from './svgToCanvasConverter'
+import { ExportQualityValidator } from './exportQualityValidator'
 import { SVGExportEnhancer, type SVGProcessingResult } from './svgExportEnhancer'
-import { convertSVGStyles, restoreSVGStyles } from './svgStyleInlineConverter'
+import { convertSVGStyles, restoreSVGStyles, type StyleConversionResult } from './svgStyleInlineConverter'
+import { CanvasFallbackRenderer, type CanvasRenderOptions } from './canvasFallbackRenderer'
 
 // 备用渲染配置接口
 export interface BackupRenderConfig {
-  // 基础渲染选项
   backgroundColor?: string
   scale?: number
   quality?: number
@@ -100,7 +99,7 @@ export class CanvasBackupRenderer {
     try {
       // 1. 预处理阶段：SVG元素检测和增强
       let svgProcessingResult: SVGProcessingResult | null = null
-      let styleConversionResults: any[] = []
+      let styleConversionResults: StyleConversionResult[] = []
 
       if (enableSVGPreprocessing) {
         if (logProcessingSteps) {
@@ -374,6 +373,351 @@ export class CanvasBackupRenderer {
       estimatedComplexity: complexity,
       recommendedMethod
     }
+  }
+
+  /**
+   * 执行逐元素渲染（用于复杂场景的性能优化）
+   * @param sourceCanvas 源画布元素
+   * @param config 渲染配置
+   * @returns 渲染结果
+   */
+  async executeElementByElementRendering(
+    sourceCanvas: HTMLElement,
+    config: BackupRenderConfig = {}
+  ): Promise<BackupRenderResult> {
+    const startTime = performance.now()
+    const errors: string[] = []
+    const warnings: string[] = []
+
+    const {
+      backgroundColor = '#ffffff',
+      scale = 2,
+      quality = 1.0,
+      width,
+      height,
+      padding = 20,
+      enableDebugMode = this.debugMode,
+      logProcessingSteps = this.debugMode
+    } = config
+
+    if (logProcessingSteps) {
+      console.log('开始逐元素渲染...')
+    }
+
+    try {
+      const sourceRect = sourceCanvas.getBoundingClientRect()
+      const renderOptions: CanvasRenderOptions = {
+        backgroundColor,
+        scale,
+        quality,
+        width: width || sourceRect.width,
+        height: height || sourceRect.height,
+        padding,
+        enableDebugMode
+      }
+
+      // 分批处理元素以优化性能
+      const svgElements = this.svgEnhancer.detectSVGElements(sourceCanvas)
+      const batchSize = 5 // 每批处理5个元素
+      let processedElements = 0
+
+      // 创建目标Canvas
+      const targetCanvas = document.createElement('canvas')
+      const finalWidth = Math.round((renderOptions.width! + padding * 2) * scale)
+      const finalHeight = Math.round((renderOptions.height! + padding * 2) * scale)
+
+      targetCanvas.width = finalWidth
+      targetCanvas.height = finalHeight
+
+      const ctx = targetCanvas.getContext('2d')
+      if (!ctx) {
+        throw new Error('无法获取Canvas 2D上下文')
+      }
+
+      // 设置基础样式
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = 'high'
+      ctx.scale(scale, scale)
+      ctx.translate(padding, padding)
+      ctx.fillStyle = backgroundColor
+      ctx.fillRect(-padding, -padding, renderOptions.width! + padding * 2, renderOptions.height! + padding * 2)
+
+      // 分批处理SVG元素
+      for (let i = 0; i < svgElements.length; i += batchSize) {
+        const batch = svgElements.slice(i, i + batchSize)
+
+        if (logProcessingSteps) {
+          console.log(`处理批次 ${Math.floor(i / batchSize) + 1}/${Math.ceil(svgElements.length / batchSize)}: ${batch.length} 个元素`)
+        }
+
+        for (const element of batch) {
+          try {
+            // 为每个元素创建临时渲染上下文
+            const success = await this.renderSingleElementOptimized(ctx, element, sourceCanvas, renderOptions)
+            if (success) {
+              processedElements++
+            } else {
+              warnings.push(`元素渲染失败: ${element.tagName}`)
+            }
+          } catch (error) {
+            const errorMsg = `元素渲染异常: ${error instanceof Error ? error.message : String(error)}`
+            errors.push(errorMsg)
+            if (logProcessingSteps) {
+              console.warn(errorMsg, element)
+            }
+          }
+        }
+
+        // 在批次之间添加短暂延迟以避免阻塞UI
+        if (i + batchSize < svgElements.length) {
+          await new Promise(resolve => setTimeout(resolve, 1))
+        }
+      }
+
+      const processingTime = performance.now() - startTime
+
+      if (logProcessingSteps) {
+        console.log(`逐元素渲染完成: ${processedElements}/${svgElements.length} 个元素，耗时: ${processingTime.toFixed(2)}ms`)
+      }
+
+      return {
+        canvas: targetCanvas,
+        success: errors.length === 0,
+        renderMethod: 'canvas-fallback',
+        processingTime,
+        svgElementsProcessed: processedElements,
+        errors,
+        warnings
+      }
+
+    } catch (error) {
+      const errorMsg = `逐元素渲染失败: ${error instanceof Error ? error.message : String(error)}`
+      errors.push(errorMsg)
+      console.error(errorMsg)
+
+      return {
+        canvas: document.createElement('canvas'),
+        success: false,
+        renderMethod: 'canvas-fallback',
+        processingTime: performance.now() - startTime,
+        svgElementsProcessed: 0,
+        errors,
+        warnings
+      }
+    }
+  }
+
+  /**
+   * 优化的单元素渲染
+   * @param ctx Canvas上下文
+   * @param element SVG元素
+   * @param sourceCanvas 源画布
+   * @param options 渲染选项
+   * @returns 是否成功
+   */
+  private async renderSingleElementOptimized(
+    ctx: CanvasRenderingContext2D,
+    element: SVGElement,
+    sourceCanvas: HTMLElement,
+    options: CanvasRenderOptions
+  ): Promise<boolean> {
+    try {
+      // 检查元素可见性
+      const computedStyle = window.getComputedStyle(element)
+      if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden') {
+        return false
+      }
+
+      // 检查元素是否在视口内
+      const elementRect = element.getBoundingClientRect()
+      const sourceRect = sourceCanvas.getBoundingClientRect()
+
+      if (elementRect.width === 0 || elementRect.height === 0) {
+        return false
+      }
+
+      // 使用SVG转换器渲染元素
+      const pathData = this.extractPathDataFromElement(element)
+      if (!pathData) {
+        return false
+      }
+
+      // 计算相对位置
+      const relativeX = elementRect.left - sourceRect.left
+      const relativeY = elementRect.top - sourceRect.top
+
+      // 保存上下文状态
+      ctx.save()
+      ctx.translate(relativeX, relativeY)
+
+      // 提取样式
+      const styles = this.extractElementStyles(element, computedStyle)
+
+      // 渲染路径
+      const success = this.svgConverter.renderSVGPathToCanvas(pathData, ctx, styles)
+
+      // 恢复上下文状态
+      ctx.restore()
+
+      return success
+    } catch (error) {
+      console.warn('单元素渲染失败:', error, element)
+      return false
+    }
+  }
+
+  /**
+   * 从元素中提取路径数据
+   * @param element SVG元素
+   * @returns 路径数据字符串
+   */
+  private extractPathDataFromElement(element: SVGElement): string | null {
+    const tagName = element.tagName.toLowerCase()
+
+    switch (tagName) {
+      case 'path':
+        return (element as SVGPathElement).getAttribute('d')
+      case 'circle':
+        return this.convertCircleToPath(element as SVGCircleElement)
+      case 'rect':
+        return this.convertRectToPath(element as SVGRectElement)
+      case 'line':
+        return this.convertLineToPath(element as SVGLineElement)
+      case 'ellipse':
+        return this.convertEllipseToPath(element as SVGEllipseElement)
+      case 'polygon':
+        return this.convertPolygonToPath(element as SVGPolygonElement)
+      case 'polyline':
+        return this.convertPolylineToPath(element as SVGPolylineElement)
+      default:
+        // 对于复合元素，查找内部路径
+        const paths = element.querySelectorAll('path')
+        if (paths.length > 0) {
+          return Array.from(paths)
+            .map(path => path.getAttribute('d'))
+            .filter(d => d)
+            .join(' ')
+        }
+        return null
+    }
+  }
+
+  /**
+   * 提取元素样式
+   * @param element SVG元素
+   * @param computedStyle 计算样式
+   * @returns 样式对象
+   */
+  private extractElementStyles(element: SVGElement, computedStyle: CSSStyleDeclaration) {
+    return {
+      fill: this.getStyleValue(element, computedStyle, 'fill'),
+      stroke: this.getStyleValue(element, computedStyle, 'stroke'),
+      strokeWidth: this.getNumericStyleValue(element, computedStyle, 'stroke-width'),
+      strokeDasharray: this.getStrokeDashArray(element, computedStyle),
+      strokeDashoffset: this.getNumericStyleValue(element, computedStyle, 'stroke-dashoffset'),
+      strokeLinecap: this.getStyleValue(element, computedStyle, 'stroke-linecap') as any,
+      strokeLinejoin: this.getStyleValue(element, computedStyle, 'stroke-linejoin') as any,
+      opacity: this.getNumericStyleValue(element, computedStyle, 'opacity'),
+      transform: element.getAttribute('transform') || computedStyle.transform
+    }
+  }
+
+  // 几何形状转换方法
+  private convertCircleToPath(circle: SVGCircleElement): string {
+    const cx = parseFloat(circle.getAttribute('cx') || '0')
+    const cy = parseFloat(circle.getAttribute('cy') || '0')
+    const r = parseFloat(circle.getAttribute('r') || '0')
+    if (r <= 0) return ''
+    return `M ${cx - r} ${cy} A ${r} ${r} 0 1 0 ${cx + r} ${cy} A ${r} ${r} 0 1 0 ${cx - r} ${cy} Z`
+  }
+
+  private convertRectToPath(rect: SVGRectElement): string {
+    const x = parseFloat(rect.getAttribute('x') || '0')
+    const y = parseFloat(rect.getAttribute('y') || '0')
+    const width = parseFloat(rect.getAttribute('width') || '0')
+    const height = parseFloat(rect.getAttribute('height') || '0')
+    if (width <= 0 || height <= 0) return ''
+    return `M ${x} ${y} L ${x + width} ${y} L ${x + width} ${y + height} L ${x} ${y + height} Z`
+  }
+
+  private convertLineToPath(line: SVGLineElement): string {
+    const x1 = parseFloat(line.getAttribute('x1') || '0')
+    const y1 = parseFloat(line.getAttribute('y1') || '0')
+    const x2 = parseFloat(line.getAttribute('x2') || '0')
+    const y2 = parseFloat(line.getAttribute('y2') || '0')
+    return `M ${x1} ${y1} L ${x2} ${y2}`
+  }
+
+  private convertEllipseToPath(ellipse: SVGEllipseElement): string {
+    const cx = parseFloat(ellipse.getAttribute('cx') || '0')
+    const cy = parseFloat(ellipse.getAttribute('cy') || '0')
+    const rx = parseFloat(ellipse.getAttribute('rx') || '0')
+    const ry = parseFloat(ellipse.getAttribute('ry') || '0')
+    if (rx <= 0 || ry <= 0) return ''
+    return `M ${cx - rx} ${cy} A ${rx} ${ry} 0 1 0 ${cx + rx} ${cy} A ${rx} ${ry} 0 1 0 ${cx - rx} ${cy} Z`
+  }
+
+  private convertPolygonToPath(polygon: SVGPolygonElement): string {
+    const points = polygon.getAttribute('points')
+    if (!points) return ''
+    const coords = points.trim().split(/[\s,]+/)
+    if (coords.length < 4) return ''
+    let path = ''
+    for (let i = 0; i < coords.length; i += 2) {
+      const x = parseFloat(coords[i])
+      const y = parseFloat(coords[i + 1])
+      if (isNaN(x) || isNaN(y)) continue
+      path += i === 0 ? `M ${x} ${y}` : ` L ${x} ${y}`
+    }
+    return path + ' Z'
+  }
+
+  private convertPolylineToPath(polyline: SVGPolylineElement): string {
+    const points = polyline.getAttribute('points')
+    if (!points) return ''
+    const coords = points.trim().split(/[\s,]+/)
+    if (coords.length < 4) return ''
+    let path = ''
+    for (let i = 0; i < coords.length; i += 2) {
+      const x = parseFloat(coords[i])
+      const y = parseFloat(coords[i + 1])
+      if (isNaN(x) || isNaN(y)) continue
+      path += i === 0 ? `M ${x} ${y}` : ` L ${x} ${y}`
+    }
+    return path
+  }
+
+  // 样式提取辅助方法
+  private getStyleValue(element: SVGElement, computedStyle: CSSStyleDeclaration, property: string): string | undefined {
+    const attrValue = element.getAttribute(property)
+    if (attrValue && attrValue !== 'none') return attrValue
+
+    const inlineValue = element.style.getPropertyValue(property)
+    if (inlineValue && inlineValue !== 'none') return inlineValue
+
+    const computedValue = computedStyle.getPropertyValue(property)
+    if (computedValue && computedValue !== 'none' && computedValue !== 'auto') return computedValue
+
+    return undefined
+  }
+
+  private getNumericStyleValue(element: SVGElement, computedStyle: CSSStyleDeclaration, property: string): number | undefined {
+    const value = this.getStyleValue(element, computedStyle, property)
+    if (value) {
+      const numValue = parseFloat(value)
+      return isNaN(numValue) ? undefined : numValue
+    }
+    return undefined
+  }
+
+  private getStrokeDashArray(element: SVGElement, computedStyle: CSSStyleDeclaration): number[] | undefined {
+    const value = this.getStyleValue(element, computedStyle, 'stroke-dasharray')
+    if (value && value !== 'none') {
+      return value.split(/[,\s]+/)
+        .map(v => parseFloat(v))
+        .filter(v => !isNaN(v))
+    }
+    return undefined
   }
 }
 

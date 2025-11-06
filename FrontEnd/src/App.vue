@@ -100,7 +100,7 @@
       </template>
 
       <!-- 路由视图，用于显示其他页面 -->
-      <router-view v-else class="router-view"></router-view>
+      <router-view v-if="$route.path !== '/'" class="router-view"></router-view>
 
       <!-- 自动保存恢复提示 -->
       <el-dialog v-model="showRestoreDialog" title="恢复未完成的设计" width="400px" :close-on-click-modal="false"
@@ -213,7 +213,7 @@ import { Position, User, ChatDotRound, SwitchButton, Connection, Key, UserFilled
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { useCourseStore } from '@/stores/course'
-import { useWebSocketStore, MessageType } from '@/stores/websocket'
+import { useWebSocketStore } from '@/stores/websocket'
 import type { CollaborationSession } from '@/stores/websocket'
 import ResizableDivider from '@/components/ResizableDivider.vue'
 

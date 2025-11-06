@@ -90,12 +90,24 @@
             </el-icon>
           </el-button>
 
+          <el-button @click="handleDirectPNGExport" type="primary" class="action-button"
+            :title="!userStore.currentUser ? '需要登录才能导出PNG' : '快速导出PNG图片'"
+            :loading="isDirectExporting">
+            <el-icon>
+              <Picture />
+            </el-icon>
+            {{ isDirectExporting ? '导出中...' : '导出PNG' }}
+            <el-icon v-if="!userStore.currentUser" class="lock-icon">
+              <Lock />
+            </el-icon>
+          </el-button>
+
           <el-dropdown @command="handleExport" trigger="click" class="export-dropdown">
-            <el-button type="primary" class="action-button" :title="!userStore.currentUser ? '需要登录才能导出' : '导出设计'">
+            <el-button type="primary" class="action-button" :title="!userStore.currentUser ? '需要登录才能导出' : '更多导出选项'">
               <el-icon>
-                <Picture />
+                <Download />
               </el-icon>
-              导出设计
+              更多导出
               <el-icon class="el-icon--right">
                 <ArrowDown />
               </el-icon>
@@ -105,7 +117,7 @@
             </el-button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="png">导出PNG</el-dropdown-item>
+                <el-dropdown-item command="png">PNG导出选项</el-dropdown-item>
                 <el-dropdown-item command="pdf">导出PDF</el-dropdown-item>
                 <el-dropdown-item command="json">导出为JSON数据</el-dropdown-item>
               </el-dropdown-menu>
@@ -132,6 +144,7 @@
             自动生成路线
           </el-button>
 
+
           <el-button @click="clearCourse" type="danger" class="action-button">
             <el-icon>
               <Delete />
@@ -144,42 +157,148 @@
 
 
 
-    <!-- 添加PDF导出选项对话框 -->
-    <el-dialog v-model="pdfExportOptions.visible" title="PDF导出选项" width="400px" :close-on-click-modal="false"
+    <!-- 导出选项对话框 -->
+    <el-dialog
+      v-model="exportOptionsVisible"
+      :title="`${currentExportFormat.toUpperCase()}导出选项`"
+      width="500px"
+      :close-on-click-modal="false"
       :close-on-press-escape="true">
-      <el-form label-position="top">
-        <el-form-item label="纸张大小">
-          <el-select v-model="pdfExportOptions.paperSize" style="width: 100%">
-            <el-option label="A3" value="a3" />
-            <el-option label="A4" value="a4" />
-            <el-option label="A5" value="a5" />
-            <el-option label="Letter" value="letter" />
-          </el-select>
-        </el-form-item>
 
-        <el-form-item label="方向">
-          <el-select v-model="pdfExportOptions.orientation" style="width: 100%">
-            <el-option label="自动选择" value="auto" />
-            <el-option label="横向" value="landscape" />
-            <el-option label="纵向" value="portrait" />
-          </el-select>
-        </el-form-item>
+      <!-- PNG导出选项 -->
+      <div v-if="currentExportFormat === ExportFormat.PNG">
+        <el-form label-position="top">
+          <el-form-item label="缩放倍数">
+            <el-slider
+              v-model="exportOptions[ExportFormat.PNG].scale"
+              :min="1"
+              :max="5"
+              :step="0.5"
+              :format-tooltip="(value: number) => `${value}x`" />
+          </el-form-item>
 
-        <el-form-item label="图像质量">
-          <el-slider v-model="pdfExportOptions.quality" :min="0.5" :max="1" :step="0.05"
-            :format-tooltip="(value: number) => `${Math.round(value * 100)}%`" />
-        </el-form-item>
+          <el-form-item label="背景颜色">
+            <el-select v-model="exportOptions[ExportFormat.PNG].backgroundColor" style="width: 100%">
+              <el-option label="白色" value="white" />
+              <el-option label="透明" value="transparent" />
+              <el-option label="黑色" value="black" />
+            </el-select>
+          </el-form-item>
 
-        <el-form-item>
-          <el-checkbox v-model="pdfExportOptions.includeFooter">包含页脚</el-checkbox>
-        </el-form-item>
-      </el-form>
+          <el-form-item label="图像质量">
+            <el-slider
+              v-model="exportOptions[ExportFormat.PNG].quality"
+              :min="0.1"
+              :max="1"
+              :step="0.05"
+              :format-tooltip="(value: number) => `${Math.round(value * 100)}%`" />
+          </el-form-item>
+
+          <el-form-item>
+            <el-checkbox v-model="exportOptions[ExportFormat.PNG].includeWatermark">包含水印</el-checkbox>
+          </el-form-item>
+        </el-form>
+      </div>
+
+      <!-- PDF导出选项 -->
+      <div v-if="currentExportFormat === ExportFormat.PDF">
+        <el-form label-position="top">
+          <el-form-item label="纸张大小">
+            <el-select v-model="exportOptions[ExportFormat.PDF].paperSize" style="width: 100%">
+              <el-option label="A3" value="a3" />
+              <el-option label="A4" value="a4" />
+              <el-option label="A5" value="a5" />
+              <el-option label="Letter" value="letter" />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="方向">
+            <el-select v-model="exportOptions[ExportFormat.PDF].orientation" style="width: 100%">
+              <el-option label="自动选择" value="auto" />
+              <el-option label="横向" value="landscape" />
+              <el-option label="纵向" value="portrait" />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="页边距">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <el-input-number v-model="exportOptions[ExportFormat.PDF].margins.top" :min="0" :max="50" controls-position="right" placeholder="上" />
+              <el-input-number v-model="exportOptions[ExportFormat.PDF].margins.right" :min="0" :max="50" controls-position="right" placeholder="右" />
+              <el-input-number v-model="exportOptions[ExportFormat.PDF].margins.bottom" :min="0" :max="50" controls-position="right" placeholder="下" />
+              <el-input-number v-model="exportOptions[ExportFormat.PDF].margins.left" :min="0" :max="50" controls-position="right" placeholder="左" />
+            </div>
+          </el-form-item>
+
+          <el-form-item label="图像质量">
+            <el-slider
+              v-model="exportOptions[ExportFormat.PDF].quality"
+              :min="0.5"
+              :max="1"
+              :step="0.05"
+              :format-tooltip="(value: number) => `${Math.round(value * 100)}%`" />
+          </el-form-item>
+
+          <el-form-item>
+            <el-checkbox v-model="exportOptions[ExportFormat.PDF].includeFooter">包含页脚</el-checkbox>
+          </el-form-item>
+
+          <el-form-item>
+            <el-checkbox v-model="exportOptions[ExportFormat.PDF].includeMetadata">包含元数据</el-checkbox>
+          </el-form-item>
+        </el-form>
+      </div>
+
+      <!-- JSON导出选项 -->
+      <div v-if="currentExportFormat === ExportFormat.JSON">
+        <el-form label-position="top">
+          <el-form-item>
+            <el-checkbox v-model="exportOptions[ExportFormat.JSON].includeViewportInfo">包含视口信息</el-checkbox>
+          </el-form-item>
+
+          <el-form-item>
+            <el-checkbox v-model="exportOptions[ExportFormat.JSON].includeMetadata">包含元数据</el-checkbox>
+          </el-form-item>
+
+          <el-form-item>
+            <el-checkbox v-model="exportOptions[ExportFormat.JSON].prettyPrint">格式化输出</el-checkbox>
+          </el-form-item>
+
+          <el-form-item v-if="exportOptions[ExportFormat.JSON].prettyPrint" label="缩进大小">
+            <el-input-number
+              v-model="exportOptions[ExportFormat.JSON].indentSize"
+              :min="1"
+              :max="8"
+              controls-position="right" />
+          </el-form-item>
+
+          <el-form-item>
+            <el-checkbox v-model="exportOptions[ExportFormat.JSON].minify">压缩输出</el-checkbox>
+          </el-form-item>
+        </el-form>
+      </div>
+
+      <!-- 进度显示 -->
+      <div v-if="exportProgress" class="export-progress">
+        <el-progress
+          :percentage="exportProgress.progress"
+          :status="exportProgress.progress === 100 ? 'success' : undefined"
+          :stroke-width="8">
+          <template #default="{ percentage }">
+            <span class="percentage-value">{{ percentage }}%</span>
+          </template>
+        </el-progress>
+        <p class="progress-message">{{ exportProgress.message }}</p>
+      </div>
 
       <template #footer>
-        <el-button @click="pdfExportOptions.visible = false">取消</el-button>
-        <el-button type="primary" @click="exportPDF">导出PDF</el-button>
+        <el-button @click="exportOptionsVisible = false" :disabled="isExporting">取消</el-button>
+        <el-button type="primary" @click="executeExport" :loading="isExporting">
+          {{ isExporting ? '导出中...' : '开始导出' }}
+        </el-button>
       </template>
     </el-dialog>
+
+
   </div>
 </template>
 
@@ -193,14 +312,13 @@ import { ElMessageBox, ElMessage, ElLoading } from 'element-plus'
 import html2canvas from 'html2canvas'
 import { saveDesign } from '@/api/design'
 import type { SaveDesignRequest } from '@/types/design'
-import { jsPDF } from 'jspdf'
+
 import CustomObstacleManager from '@/components/CustomObstacleManager.vue'
 
 
-import { createEnhancedHtml2CanvasConfig, cleanupHtml2CanvasProcessing } from '@/utils/enhancedHtml2CanvasConfig'
-import { smartCanvasRendering, type BackupRenderConfig } from '@/utils/canvasBackupRenderer'
-import { exportErrorHandler, type ExportContext } from '@/utils/exportErrorHandler'
-import { exportStatusManager, ExportProgressTracker } from '@/utils/exportProgressTracker'
+
+import { exportManager } from '@/utils/exportManager'
+import { ExportFormat, type PNGExportOptions, type PDFExportOptions, type JSONExportOptions, type ProgressState, type ExportResult } from '@/types/export'
 
 const courseStore = useCourseStore()
 const userStore = useUserStore()
@@ -226,13 +344,38 @@ const typeNames = {
 
 const courseName = ref(courseStore.currentCourse.name)
 
-const pdfExportOptions = ref({
-  visible: false,
-  quality: 0.95,
-  includeObstacleNumbers: true,
-  includeFooter: true,
-  paperSize: 'a4',
-  orientation: 'auto'
+
+
+// 导出选项对话框状态
+const exportOptionsVisible = ref(false)
+const currentExportFormat = ref<ExportFormat>(ExportFormat.PNG)
+const exportProgress = ref<ProgressState | null>(null)
+const isExporting = ref(false)
+const isDirectExporting = ref(false)
+
+// 导出选项
+const exportOptions = ref({
+  [ExportFormat.PNG]: {
+    scale: 2,
+    backgroundColor: 'white',
+    quality: 0.9,
+    includeWatermark: false
+  } as PNGExportOptions,
+  [ExportFormat.PDF]: {
+    paperSize: 'a4',
+    orientation: 'auto',
+    margins: { top: 20, right: 20, bottom: 20, left: 20 },
+    includeFooter: true,
+    includeMetadata: true,
+    quality: 0.95
+  } as PDFExportOptions,
+  [ExportFormat.JSON]: {
+    includeViewportInfo: true,
+    includeMetadata: true,
+    minify: false,
+    prettyPrint: true,
+    indentSize: 2
+  } as JSONExportOptions
 })
 
 const activeTab = ref('basic')
@@ -355,22 +498,17 @@ const handleSaveDesign = async () => {
 
 
     try {
-      // 4. 使用增强的html2canvas配置处理SVG导出
-      const enhancedConfig = createEnhancedHtml2CanvasConfig(canvas, {
+      // 4. 使用html2canvas进行渲染
+      const imageCanvas = await html2canvas(canvas, {
         backgroundColor: '#ffffff',
         scale: 3,
-        quality: 1.0,
         width: originalWidth,
         height: originalHeight,
-        svgRenderingMode: 'enhanced',
-        forceInlineStyles: true,
-        preserveSVGViewBox: true,
-        enhanceSVGVisibility: true,
-        enableDebugMode: false,
-        logSVGProcessing: false
+        useCORS: true,
+        allowTaint: false,
+        foreignObjectRendering: true,
+        logging: false
       })
-
-      const imageCanvas = await html2canvas(canvas, enhancedConfig)
 
 
 
@@ -457,8 +595,7 @@ const handleSaveDesign = async () => {
         element.style.visibility = visibility
       })
 
-      // 清理html2canvas处理上下文
-      cleanupHtml2CanvasProcessing(canvas)
+      // 清理处理上下文（新的导出系统会自动处理）
 
       // 删除临时包装容器
       if (tempWrapper && tempWrapper.parentNode) {
@@ -558,46 +695,113 @@ const updateName = () => {
   courseStore.updateCourseName(courseName.value)
 }
 
-// 添加一个函数来清理画布中可能导致乱码的特殊字符
-const cleanupCanvasForExport = (canvas: HTMLElement) => {
-  // 查找所有文本节点
-  const textNodes: Node[] = []
-  const walker = document.createTreeWalker(
-    canvas,
-    NodeFilter.SHOW_TEXT,
-    null
-  )
 
-  let node
-  while (node = walker.nextNode()) {
-    textNodes.push(node)
+
+
+
+
+
+// 直接PNG导出处理函数（跳过选项对话框）
+const handleDirectPNGExport = async () => {
+  // 检查用户是否已登录
+  if (!userStore.currentUser) {
+    ElMessageBox.confirm('导出PNG需要登录，是否立即登录？', '提示', {
+      confirmButtonText: '去登录',
+      cancelButtonText: '取消',
+      type: 'info',
+    }).then(() => {
+      emit('show-login')
+    }).catch(() => { })
+    return
   }
 
-  // 保存原始文本内容
-  const originalTexts: { node: Node, text: string }[] = []
+  if (isDirectExporting.value) return
 
-  // 临时替换特殊字符
-  textNodes.forEach(node => {
-    if (node.textContent) {
-      originalTexts.push({ node, text: node.textContent })
-      // 替换非ASCII字符为空格
-      node.textContent = node.textContent.replace(/[^\x00-\x7F]/g, ' ')
+  try {
+    isDirectExporting.value = true
+
+    // 检查导出权限
+    if (!checkExportPermissions()) {
+      return
     }
-  })
 
-  return () => {
-    // 恢复原始文本
-    originalTexts.forEach(({ node, text }) => {
-      node.textContent = text
+    // 处理协作会话
+    const canProceed = await handleCollaborationExport()
+    if (!canProceed) {
+      return
+    }
+
+    // 获取画布元素
+    const canvas = document.querySelector('.course-canvas') as HTMLElement
+    if (!canvas) {
+      throw new Error('未找到画布元素')
+    }
+
+    // 使用导出管理器的直接PNG导出方法
+    const result = await exportManager.exportToPNGDirect(
+      canvas,
+      {
+        onProgress: (state: ProgressState) => {
+          // 可以在这里显示简单的进度提示
+          console.log('导出进度:', state.message, `${state.progress}%`)
+        },
+        onComplete: (result: ExportResult) => {
+          console.log('直接PNG导出完成:', result)
+
+          // 通知协作者导出完成
+          const canvasElement = document.querySelector('.course-canvas') as HTMLElement & { triggerExportEvent?: (type: string, data: Record<string, unknown>) => void }
+          if (canvasElement && typeof canvasElement.triggerExportEvent === 'function') {
+            canvasElement.triggerExportEvent('export-completed', {
+              format: ExportFormat.PNG,
+              success: result.success,
+              userId: userStore.currentUser?.id,
+              userName: userStore.currentUser?.username,
+              isDirect: true
+            })
+          }
+        },
+        onError: (error: Error) => {
+          console.error('直接PNG导出错误:', error)
+
+          // 通知协作者导出失败
+          const canvasElement = document.querySelector('.course-canvas') as HTMLElement & { triggerExportEvent?: (type: string, data: Record<string, unknown>) => void }
+          if (canvasElement && typeof canvasElement.triggerExportEvent === 'function') {
+            canvasElement.triggerExportEvent('export-failed', {
+              format: ExportFormat.PNG,
+              error: error.message,
+              userId: userStore.currentUser?.id,
+              userName: userStore.currentUser?.username,
+              isDirect: true
+            })
+          }
+        }
+      }
+    )
+
+    if (result.success) {
+      ElMessage.success('PNG导出成功！文件已自动下载')
+
+      // 显示质量报告（如果有警告）
+      if (result.warnings.length > 0) {
+        const warningMessages = result.warnings.map(w => w.message).join('\n')
+        ElMessage.warning(`导出完成，但有以下警告：\n${warningMessages}`)
+      }
+    } else {
+      throw new Error('PNG导出失败')
+    }
+
+  } catch (error) {
+    console.error('直接PNG导出失败:', error)
+    ElMessageBox.alert('PNG导出失败：' + (error as Error).message, '错误', {
+      confirmButtonText: '确定',
+      type: 'error',
     })
+  } finally {
+    isDirectExporting.value = false
   }
 }
 
-
-
-
-
-// 修改handleExport函数，使用新的清理函数
+// 使用新的导出系统处理导出
 const handleExport = async (command: string) => {
   // 检查用户是否已登录
   if (!userStore.currentUser) {
@@ -611,455 +815,212 @@ const handleExport = async (command: string) => {
     return
   }
 
-
-
-  if (command === 'pdf') {
-    // 显示PDF导出选项对话框
-    pdfExportOptions.value.visible = true
-    return
+  // 设置当前导出格式并显示选项对话框
+  switch (command) {
+    case 'png':
+      currentExportFormat.value = ExportFormat.PNG
+      break
+    case 'pdf':
+      currentExportFormat.value = ExportFormat.PDF
+      break
+    case 'json':
+      currentExportFormat.value = ExportFormat.JSON
+      break
+    default:
+      ElMessage.error('不支持的导出格式')
+      return
   }
 
-  if (command === 'json') {
+  // 显示导出选项对话框
+  exportOptionsVisible.value = true
+}
+
+// 检查导出权限
+const checkExportPermissions = (): boolean => {
+  // 检查用户是否已登录
+  if (!userStore.currentUser) {
+    ElMessage.error('导出功能需要登录')
+    return false
+  }
+
+  // 检查是否有导出权限（这里可以根据用户角色或权限进行扩展）
+  // 例如：if (!userStore.currentUser.permissions.includes('export')) return false
+
+  return true
+}
+
+// 处理协作会话期间的导出
+const handleCollaborationExport = async (): Promise<boolean> => {
+  // 检查是否在协作会话中
+  const canvas = document.querySelector('.course-canvas') as HTMLElement & { isCollaborating?: () => boolean; triggerExportEvent?: (type: string, data: Record<string, unknown>) => void }
+  if (canvas && typeof canvas.isCollaborating === 'function' && canvas.isCollaborating()) {
+    // 在协作模式下，需要确保导出的是最新状态
     try {
-      // 获取当前日期时间格式化字符串
-      const date = new Date()
-      const formattedDateTime = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`
-      const fileName = `${courseStore.currentCourse.name}-${formattedDateTime}.json`
+      // 等待协作状态同步完成
+      await new Promise(resolve => setTimeout(resolve, 500))
 
-      // 导出设计数据为JSON
-      const designData = courseStore.exportCourse()
+      // 通知其他协作者正在进行导出操作
+      if (typeof canvas.triggerExportEvent === 'function') {
+        canvas.triggerExportEvent('export-started', {
+          format: currentExportFormat.value,
+          userId: userStore.currentUser?.id || 0,
+          userName: userStore.currentUser?.username || '未知用户'
+        })
+      }
 
-      // 创建Blob对象
-      const jsonBlob = new Blob([JSON.stringify(designData, null, 2)], { type: 'application/json' })
-
-      // 创建下载链接
-      const url = URL.createObjectURL(jsonBlob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-
-      // 清理
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-
-      ElMessage.success('JSON数据导出成功！')
-      return
+      return true
     } catch (error) {
-      ElMessageBox.alert('导出JSON失败：' + (error as Error).message, '错误', {
-        confirmButtonText: '确定',
-        type: 'error',
-      })
-      return
+      console.error('协作导出准备失败:', error)
+      ElMessage.warning('协作会话中导出可能不是最新状态')
+      return true // 继续导出，但给出警告
     }
   }
 
+  return true
+}
+
+// 执行导出操作
+const executeExport = async () => {
+  if (isExporting.value) return
+
   try {
+    // 检查导出权限
+    if (!checkExportPermissions()) {
+      return
+    }
+
+    isExporting.value = true
+    exportProgress.value = null
+
+    // 处理协作会话
+    const canProceed = await handleCollaborationExport()
+    if (!canProceed) {
+      return
+    }
+
     // 获取画布元素
     const canvas = document.querySelector('.course-canvas') as HTMLElement
     if (!canvas) {
       throw new Error('未找到画布元素')
     }
 
-    // 临时隐藏控制路线弧度的控制点
-    const controlPoints = canvas.querySelectorAll('.control-point, .control-line, .path-indicator .rotation-handle')
-    controlPoints.forEach((point) => {
-      ; (point as HTMLElement).style.display = 'none'
-    })
+    // 获取当前格式的导出选项
+    const options = exportOptions.value[currentExportFormat.value]
 
-    // 获取当前日期时间格式化字符串
+    // 设置文件名
     const date = new Date()
     const formattedDateTime = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`
     const fileName = `${courseStore.currentCourse.name}-${formattedDateTime}`
 
-    if (command === 'png') {
-      // 使用优化的PNG导出函数
-      try {
-        await exportCanvasToPNG(canvas, fileName)
-        ElMessage.success('PNG图片导出成功！')
-      } catch (error) {
-        console.error('PNG导出失败:', error)
-        ElMessage.error('PNG导出失败：' + (error as Error).message)
+    // 设置文件名到选项中，并添加用户信息
+    const exportOptionsWithFileName = {
+      ...options,
+      fileName,
+      // 添加用户和协作信息到元数据
+      metadata: {
+        userId: userStore.currentUser?.id,
+        userName: userStore.currentUser?.username,
+        exportedAt: new Date().toISOString(),
+        isCollaborativeSession: (() => {
+          const canvasWithCollab = canvas as HTMLElement & { isCollaborating?: () => boolean }
+          return canvasWithCollab && typeof canvasWithCollab.isCollaborating === 'function' ? canvasWithCollab.isCollaborating() : false
+        })()
       }
-      return // 早期返回，避免执行后续代码
     }
 
-    // 对于其他导出格式，恢复控制点状态
-    controlPoints.forEach((point) => {
-      (point as HTMLElement).style.display = ''
-    })
+    // 使用导出管理器执行导出
+    const result = await exportManager.exportCanvas(
+      canvas,
+      currentExportFormat.value,
+      exportOptionsWithFileName,
+      {
+        onProgress: (state: ProgressState) => {
+          exportProgress.value = state
+        },
+        onComplete: (result: ExportResult) => {
+          console.log('导出完成:', result)
+
+          // 通知协作者导出完成
+          const canvasElement = document.querySelector('.course-canvas') as HTMLElement & { triggerExportEvent?: (type: string, data: Record<string, unknown>) => void }
+          if (canvasElement && typeof canvasElement.triggerExportEvent === 'function') {
+            canvasElement.triggerExportEvent('export-completed', {
+              format: currentExportFormat.value,
+              success: result.success,
+              userId: userStore.currentUser?.id,
+              userName: userStore.currentUser?.username
+            })
+          }
+        },
+        onError: (error: Error) => {
+          console.error('导出错误:', error)
+
+          // 通知协作者导出失败
+          const canvasElement = document.querySelector('.course-canvas') as HTMLElement & { triggerExportEvent?: (type: string, data: Record<string, unknown>) => void }
+          if (canvasElement && typeof canvasElement.triggerExportEvent === 'function') {
+            canvasElement.triggerExportEvent('export-failed', {
+              format: currentExportFormat.value,
+              error: error.message,
+              userId: userStore.currentUser?.id,
+              userName: userStore.currentUser?.username
+            })
+          }
+        }
+      }
+    )
+
+    if (result.success) {
+      // 处理导出结果
+      if (currentExportFormat.value === ExportFormat.JSON) {
+        // JSON格式直接下载字符串数据
+        const jsonData = result.data as string
+        const blob = new Blob([jsonData], { type: 'application/json' })
+        downloadBlob(blob, `${fileName}.json`)
+      } else {
+        // PNG和PDF格式下载Blob数据
+        const blob = result.data as Blob
+        const extension = currentExportFormat.value === ExportFormat.PNG ? 'png' : 'pdf'
+        downloadBlob(blob, `${fileName}.${extension}`)
+      }
+
+      ElMessage.success(`${currentExportFormat.value.toUpperCase()}导出成功！`)
+
+      // 显示质量报告（如果有警告）
+      if (result.warnings.length > 0) {
+        const warningMessages = result.warnings.map(w => w.message).join('\n')
+        ElMessage.warning(`导出完成，但有以下警告：\n${warningMessages}`)
+      }
+    } else {
+      throw new Error('导出失败')
+    }
+
   } catch (error) {
+    console.error('导出失败:', error)
     ElMessageBox.alert('导出失败：' + (error as Error).message, '错误', {
       confirmButtonText: '确定',
       type: 'error',
     })
-  }
-}
-
-// 同样修改exportPDF函数
-// PDF导出函数，集成错误处理和进度跟踪
-const exportPDF = async () => {
-  const exportId = `pdf_export_${Date.now()}`
-  const progressTracker = exportStatusManager.createTracker(exportId, {
-    showDetailedMessages: true,
-    showPercentage: true,
-    enableNotifications: true
-  })
-
-  const exportContext: ExportContext = {
-    operation: 'pdf_export',
-    attempt: 1,
-    maxAttempts: 3,
-    options: {
-      backgroundColor: '#ffffff',
-      scale: 3,
-      quality: pdfExportOptions.value.quality,
-      svgRenderingMode: 'enhanced',
-      forceInlineStyles: true,
-      paperSize: pdfExportOptions.value.paperSize,
-      orientation: pdfExportOptions.value.orientation
-    }
-  }
-
-  try {
-    // 开始进度跟踪
-    progressTracker.startProgress()
-    progressTracker.updateStage('initializing', '正在初始化PDF导出...')
-
-    // 获取画布元素
-    const canvas = document.querySelector('.course-canvas') as HTMLElement
-    if (!canvas) {
-      throw new Error('未找到画布元素')
-    }
-
-    exportContext.canvas = canvas
-
-    // 使用重试机制执行导出
-    await exportErrorHandler.executeWithRetry(
-      async () => {
-        return await performPDFExport(canvas, progressTracker)
-      },
-      exportContext,
-      {
-        maxAttempts: 3,
-        delayMs: 1000,
-        retryableErrors: ['svg_rendering', 'html2canvas', 'file_generation']
-      }
-    )
-
-    progressTracker.completeProgress(true, 'PDF导出成功完成')
-
-    // 关闭PDF选项对话框
-    pdfExportOptions.value.visible = false
-  } catch (error) {
-    console.error('PDF导出失败:', error)
-
-    // 尝试错误恢复
-    const recoveryResult = await exportErrorHandler.handleHtml2CanvasError(
-      error as Error,
-      exportContext
-    )
-
-    if (recoveryResult.success) {
-      progressTracker.completeProgress(true, `PDF导出成功 (使用${recoveryResult.fallbackMethod})`)
-      pdfExportOptions.value.visible = false
-    } else {
-      progressTracker.completeProgress(false, 'PDF导出失败')
-      ElMessageBox.alert('导出失败：' + (error as Error).message, '错误', {
-        confirmButtonText: '确定',
-        type: 'error',
-      })
-    }
   } finally {
-    exportStatusManager.removeTracker(exportId)
+    isExporting.value = false
+    exportProgress.value = null
+    exportOptionsVisible.value = false
   }
 }
 
-// 执行PDF导出的核心逻辑
-const performPDFExport = async (
-  canvas: HTMLElement,
-  progressTracker: ExportProgressTracker
-): Promise<void> => {
-  // 阶段1: 准备画布
-  progressTracker.updateStage('preparing_canvas', '正在准备PDF导出画布...')
-
-  const controlPoints = canvas.querySelectorAll('.control-point, .control-line, .path-indicator .rotation-handle')
-  controlPoints.forEach((point) => {
-    (point as HTMLElement).style.display = 'none'
-  })
-
-  // 使用画布的原始尺寸，确保导出图片与显示一致
-  const canvasRect = canvas.getBoundingClientRect()
-  const originalWidth = canvasRect.width
-  const originalHeight = canvasRect.height
-
-  console.log('PDF导出使用原始画布尺寸:', {
-    width: originalWidth,
-    height: originalHeight
-  })
-
-  const textElements = canvas.querySelectorAll('.course-title, .course-info')
-  const originalDisplays: { el: HTMLElement, display: string }[] = []
-  textElements.forEach((el) => {
-    const htmlEl = el as HTMLElement
-    originalDisplays.push({ el: htmlEl, display: htmlEl.style.display })
-    htmlEl.style.display = 'none'
-  })
-
-  progressTracker.updateSubProgress(30, '正在清理特殊字符...')
-  const restoreTexts = cleanupCanvasForExport(canvas)
-
-  // 阶段2: 使用SVG导出增强器处理SVG元素
-  progressTracker.updateStage('processing_svg', '正在使用SVG导出增强器处理PDF中的SVG元素...')
-
-  // 创建SVG导出增强器实例
-  const svgEnhancer = new (await import('@/utils/svgExportEnhancer')).SVGExportEnhancer()
-
-  progressTracker.updateSubProgress(20, '正在预处理SVG元素...')
-
-  // 预处理SVG元素并创建备份
-  const svgProcessingResult = svgEnhancer.prepareSVGForExport(canvas)
-
-  progressTracker.updateSubProgress(50, '正在应用PDF特定的样式优化...')
-
-  // 应用样式内联转换，PDF需要更强的样式内联
-  svgEnhancer.applyStyleInlining(svgProcessingResult.processedElements)
-
-  // PDF特定的SVG处理优化
-  progressTracker.updateSubProgress(70, '正在应用PDF特定的SVG优化...')
-  svgProcessingResult.processedElements.forEach(processedElement => {
-    const { element } = processedElement
-
-    // 确保PDF中的路径渲染质量
-    if (element.tagName.toLowerCase() === 'path' || element.querySelector('path')) {
-      // 强制设置高质量的渲染属性
-      element.style.shapeRendering = 'geometricPrecision'
-      element.style.textRendering = 'geometricPrecision'
-
-      // 确保路径在PDF中可见
-      const pathElements = element.tagName.toLowerCase() === 'path'
-        ? [element as SVGPathElement]
-        : Array.from(element.querySelectorAll('path'))
-
-      pathElements.forEach(path => {
-        // 确保路径有足够的对比度
-        if (!path.getAttribute('stroke') || path.getAttribute('stroke') === 'none') {
-          path.setAttribute('stroke', '#2563eb') // 使用深蓝色确保在PDF中可见
-        }
-        if (!path.getAttribute('stroke-width')) {
-          path.setAttribute('stroke-width', '2.5') // PDF中使用稍粗的线条
-        }
-        // 确保路径不被填充遮盖
-        if (!path.getAttribute('fill')) {
-          path.setAttribute('fill', 'none')
-        }
-      })
-    }
-  })
-
-  progressTracker.updateSubProgress(90, 'PDF SVG优化完成')
-
-  try {
-    // 阶段3: 渲染图像
-    progressTracker.updateStage('rendering', '正在使用增强配置渲染PDF图像...')
-
-    const enhancedConfig = createEnhancedHtml2CanvasConfig(canvas, {
-      backgroundColor: '#ffffff',
-      scale: 3, // PDF使用高分辨率
-      quality: pdfExportOptions.value.quality,
-      width: originalWidth,
-      height: originalHeight,
-      svgRenderingMode: 'enhanced',
-      forceInlineStyles: true,
-      preserveSVGViewBox: true,
-      enhanceSVGVisibility: true,
-      enableDebugMode: false,
-      logSVGProcessing: true
-    })
-
-    let imageCanvas: HTMLCanvasElement
-
-    try {
-      progressTracker.updateSubProgress(30, '正在执行html2canvas渲染...')
-      imageCanvas = await html2canvas(canvas, enhancedConfig)
-
-      progressTracker.updateSubProgress(60, '正在验证PDF渲染质量...')
-
-      // 使用质量验证器检查PDF渲染结果
-      const qualityValidator = new (await import('@/utils/exportQualityValidator')).ExportQualityValidator()
-
-      // 验证路径完整性
-      const pathValidationResult = await qualityValidator.validatePathCompleteness(imageCanvas, canvas)
-
-      // 检查SVG渲染
-      const svgRenderingCheck = await qualityValidator.checkSVGRendering(imageCanvas, canvas)
-
-      if (!pathValidationResult.isValid || svgRenderingCheck.renderingIssues.length > 0) {
-        const issues = pathValidationResult.issues.map(i => i.message).concat(
-          svgRenderingCheck.renderingIssues.map(i => i.description)
-        )
-        progressTracker.showWarning(`PDF质量验证警告: ${issues.slice(0, 3).join(', ')}${issues.length > 3 ? '...' : ''}`)
-        console.warn('PDF导出质量验证未通过:', { pathValidationResult, svgRenderingCheck })
-      } else {
-        progressTracker.updateSubProgress(70, `PDF质量验证通过 (路径完整性: ${pathValidationResult.pathCompleteness.toFixed(1)}%)`)
-      }
-
-    } catch (html2canvasError) {
-      console.warn('PDF导出中html2canvas失败，尝试Canvas备用渲染:', html2canvasError)
-
-      progressTracker.updateSubProgress(50, '正在使用Canvas备用渲染...')
-
-      const backupConfig: BackupRenderConfig = {
-        backgroundColor: '#ffffff',
-        scale: 3,
-        quality: pdfExportOptions.value.quality,
-        padding: 20,
-        enableSVGPreprocessing: true,
-        forceStyleInlining: true,
-        validateSVGElements: true,
-        enableQualityValidation: true, // PDF启用质量验证
-        enableDebugMode: false
-      }
-
-      const renderResult = await smartCanvasRendering(canvas, backupConfig)
-
-      if (!renderResult.success) {
-        throw new Error(`Canvas备用渲染失败: ${renderResult.errors.join(', ')}`)
-      }
-
-      imageCanvas = renderResult.canvas
-
-      if (renderResult.warnings.length > 0) {
-        progressTracker.showWarning(`备用渲染完成，但有 ${renderResult.warnings.length} 个警告`)
-      }
-    }
-
-    // 阶段4: 生成PDF文件
-    progressTracker.updateStage('generating_file', '正在生成PDF文件...')
-
-    // 获取当前日期时间格式化字符串
-    const date = new Date()
-    const formattedDateTime = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`
-    const fileName = `${courseStore.currentCourse.name}-${formattedDateTime}`
-
-    progressTracker.updateSubProgress(20, '正在处理图像尺寸...')
-
-    // 处理图像尺寸
-    const canvasWidth = imageCanvas.width
-    const canvasHeight = imageCanvas.height
-    const minExportWidth = 800
-    const minExportHeight = 600
-
-    let finalCanvas = imageCanvas
-    if (canvasWidth < minExportWidth || canvasHeight < minExportHeight) {
-      const scaleRatio = Math.max(
-        minExportWidth / canvasWidth,
-        minExportHeight / canvasHeight
-      )
-
-      const scaledCanvas = document.createElement('canvas')
-      const scaledWidth = Math.round(canvasWidth * scaleRatio)
-      const scaledHeight = Math.round(canvasHeight * scaleRatio)
-
-      scaledCanvas.width = scaledWidth
-      scaledCanvas.height = scaledHeight
-
-      const ctx = scaledCanvas.getContext('2d')
-      if (ctx) {
-        ctx.fillStyle = '#ffffff'
-        ctx.fillRect(0, 0, scaledWidth, scaledHeight)
-        ctx.drawImage(imageCanvas, 0, 0, canvasWidth, canvasHeight, 0, 0, scaledWidth, scaledHeight)
-        finalCanvas = scaledCanvas
-      }
-    }
-
-    progressTracker.updateSubProgress(40, '正在配置PDF参数...')
-
-    // 确定方向
-    let orientation: 'landscape' | 'portrait'
-    if (pdfExportOptions.value.orientation === 'auto') {
-      orientation = finalCanvas.width > finalCanvas.height ? 'landscape' : 'portrait'
-    } else {
-      orientation = pdfExportOptions.value.orientation as 'landscape' | 'portrait'
-    }
-
-    progressTracker.updateSubProgress(60, '正在创建PDF文档...')
-
-    // 创建PDF文档
-    const pdf = new jsPDF({
-      orientation: orientation,
-      unit: 'pt',
-      format: pdfExportOptions.value.paperSize
-    })
-
-    // 设置PDF元数据
-    const safeCourseName = (courseStore.currentCourse.name || '未命名设计').replace(/[^\x00-\x7F]/g, '?')
-    pdf.setProperties({
-      title: safeCourseName,
-      subject: '马术障碍赛路线设计',
-      author: userStore.currentUser?.username || '马术障碍赛路线设计工具',
-      keywords: '马术,障碍赛,路线设计',
-      creator: '马术障碍赛路线设计工具'
-    })
-
-    // 获取PDF页面尺寸
-    const pageSize = pdf.internal.pageSize
-    const pdfWidth = pageSize.getWidth()
-    const pdfHeight = pageSize.getHeight()
-
-    // 计算图像在PDF中的尺寸，保持宽高比
-    const availableWidth = pdfWidth - 40 // 留出边距
-    const availableHeight = pdfHeight - 80 // 留出标题和边距空间
-
-    const ratio = Math.min(availableWidth / finalCanvas.width, availableHeight / finalCanvas.height)
-    const imgWidth = finalCanvas.width * ratio
-    const imgHeight = finalCanvas.height * ratio
-
-    // 计算居中位置
-    const x = (pdfWidth - imgWidth) / 2
-    const y = 60 // 标题下方位置
-
-    progressTracker.updateSubProgress(80, '正在添加图像到PDF...')
-
-    // 添加图像到PDF，使用JPEG格式以获得更好的压缩和质量平衡
-    const imgData = finalCanvas.toDataURL('image/jpeg', Math.max(0.9, pdfExportOptions.value.quality))
-    pdf.addImage(imgData, 'JPEG', x, y, imgWidth, imgHeight)
-
-    // 添加页脚
-    if (pdfExportOptions.value.includeFooter) {
-      const footerY = pdfHeight - 20
-      pdf.setFontSize(8)
-      pdf.text('Generated by Equestrian Obstacle Route Design Tool', 30, footerY)
-    }
-
-    // 阶段5: 完成处理
-    progressTracker.updateStage('finalizing', '正在保存PDF文件...')
-
-    // 保存PDF
-    pdf.save(`${fileName}.pdf`)
-
-  } finally {
-    // 恢复所有元素状态
-    controlPoints.forEach((point) => {
-      (point as HTMLElement).style.display = ''
-    })
-
-    originalDisplays.forEach(({ el, display }) => {
-      el.style.display = display
-    })
-
-    restoreTexts()
-
-    // 恢复SVG处理结果
-    svgEnhancer.restoreProcessingResult(svgProcessingResult)
-
-    cleanupHtml2CanvasProcessing(canvas)
-
-    // 清理SVG增强器缓存
-    svgEnhancer.clearCache()
-  }
+// 下载Blob数据
+const downloadBlob = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
 }
+
+
+
+
 
 
 // 修改 emit 定义，添加 show-login 事件
@@ -1070,360 +1031,11 @@ const getTypeName = (type: string) => {
   return typeNames[type as keyof typeof typeNames] || type
 }
 
-// Canvas备用渲染导出函数，集成进度跟踪
-const exportCanvasWithBackupRendering = async (
-  canvas: HTMLElement,
-  fileName: string,
-  progressTracker?: ExportProgressTracker
-) => {
-  try {
-    // 如果没有传入进度跟踪器，创建一个简单的加载提示
-    let loadingInstance = null
-    if (!progressTracker) {
-      loadingInstance = ElLoading.service({
-        lock: true,
-        text: '正在使用Canvas备用渲染导出...',
-        background: 'rgba(0, 0, 0, 0.7)'
-      })
-    } else {
-      progressTracker.updateSubProgress(10, '正在配置Canvas备用渲染...')
-    }
 
-    // 配置Canvas备用渲染
-    const backupConfig: BackupRenderConfig = {
-      backgroundColor: '#ffffff',
-      scale: 3,
-      quality: 1.0,
-      padding: 20,
-      enableSVGPreprocessing: true,
-      forceStyleInlining: true,
-      validateSVGElements: true,
-      enableQualityValidation: true,
-      enableDebugMode: false,
-      logProcessingSteps: true
-    }
 
-    if (progressTracker) {
-      progressTracker.updateSubProgress(30, '正在执行智能Canvas渲染...')
-    }
 
-    // 执行智能Canvas渲染
-    const renderResult = await smartCanvasRendering(canvas, backupConfig)
 
-    if (loadingInstance) {
-      loadingInstance.close()
-    }
 
-    if (renderResult.success) {
-      if (progressTracker) {
-        progressTracker.updateSubProgress(70, '正在生成PNG文件...')
-      }
-
-      // 导出为PNG
-      const imageUrl = renderResult.canvas.toDataURL('image/png')
-      const link = document.createElement('a')
-      link.download = `${fileName}.png`
-      link.href = imageUrl
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-
-      // 显示成功信息和质量报告
-      let message = 'Canvas备用渲染导出成功！'
-      if (renderResult.qualityScore !== undefined) {
-        message += ` 质量评分: ${(renderResult.qualityScore * 100).toFixed(1)}%`
-      }
-      if (renderResult.warnings.length > 0) {
-        message += ` (${renderResult.warnings.length} 个警告)`
-        if (progressTracker) {
-          progressTracker.showWarning(`备用渲染完成，但有 ${renderResult.warnings.length} 个警告`)
-        }
-      }
-
-      if (!progressTracker) {
-        ElMessage.success(message)
-      }
-
-      return true
-    } else {
-      const errorMessage = `Canvas备用渲染失败: ${renderResult.errors.join(', ')}`
-      if (progressTracker) {
-        progressTracker.showError(errorMessage)
-      }
-      throw new Error(errorMessage)
-    }
-  } catch (error) {
-    console.error('Canvas备用渲染导出失败:', error)
-    if (progressTracker) {
-      progressTracker.showError('Canvas备用渲染导出失败')
-    }
-    throw error
-  }
-}
-
-// 专门的PNG导出函数，优化SVG路径导出，集成错误处理和进度跟踪
-const exportCanvasToPNG = async (canvas: HTMLElement, fileName: string) => {
-  const exportId = `png_export_${Date.now()}`
-  const progressTracker = exportStatusManager.createTracker(exportId, {
-    showDetailedMessages: true,
-    showPercentage: true,
-    enableNotifications: true
-  })
-
-  const exportContext: ExportContext = {
-    operation: 'png_export',
-    canvas,
-    fileName,
-    attempt: 1,
-    maxAttempts: 3,
-    options: {
-      backgroundColor: '#ffffff',
-      scale: 3,
-      quality: 1.0,
-      svgRenderingMode: 'enhanced',
-      forceInlineStyles: true,
-      preserveSVGViewBox: true,
-      enhanceSVGVisibility: true
-    }
-  }
-
-  try {
-    // 开始进度跟踪
-    progressTracker.startProgress()
-    progressTracker.updateStage('initializing', '正在初始化PNG导出...')
-
-    // 使用重试机制执行导出
-    const result = await exportErrorHandler.executeWithRetry(
-      async () => {
-        return await performPNGExport(canvas, fileName, progressTracker)
-      },
-      exportContext,
-      {
-        maxAttempts: 3,
-        delayMs: 1000,
-        retryableErrors: ['svg_rendering', 'html2canvas']
-      }
-    )
-
-    progressTracker.completeProgress(true, 'PNG导出成功完成')
-    return result
-  } catch (error) {
-    console.error('PNG导出失败:', error)
-
-    // 尝试错误恢复
-    const recoveryResult = await exportErrorHandler.handleHtml2CanvasError(
-      error as Error,
-      exportContext
-    )
-
-    if (recoveryResult.success) {
-      progressTracker.completeProgress(true, `PNG导出成功 (使用${recoveryResult.fallbackMethod})`)
-      return recoveryResult.result
-    } else {
-      progressTracker.completeProgress(false, 'PNG导出失败')
-      throw error
-    }
-  } finally {
-    exportStatusManager.removeTracker(exportId)
-  }
-}
-
-// 执行PNG导出的核心逻辑
-const performPNGExport = async (
-  canvas: HTMLElement,
-  fileName: string,
-  progressTracker: ExportProgressTracker
-): Promise<boolean> => {
-  // 阶段1: 准备画布
-  progressTracker.updateStage('preparing_canvas', '正在隐藏控制元素...')
-
-  const controlPoints = canvas.querySelectorAll('.control-point, .control-line, .path-indicator .rotation-handle')
-  controlPoints.forEach((point) => {
-    (point as HTMLElement).style.display = 'none'
-  })
-
-  // 使用画布的原始尺寸，确保导出图片与显示一致
-  const canvasRect = canvas.getBoundingClientRect()
-  const originalWidth = canvasRect.width
-  const originalHeight = canvasRect.height
-
-  console.log('PNG导出使用原始画布尺寸:', {
-    width: originalWidth,
-    height: originalHeight
-  })
-
-  const textElements = canvas.querySelectorAll('.course-title, .course-info')
-  const originalDisplays: { el: HTMLElement, display: string }[] = []
-  textElements.forEach((el) => {
-    const htmlEl = el as HTMLElement
-    originalDisplays.push({ el: htmlEl, display: htmlEl.style.display })
-    htmlEl.style.display = 'none'
-  })
-
-  progressTracker.updateSubProgress(30, '正在清理文本元素...')
-
-  // 清理特殊字符
-  const restoreTexts = cleanupCanvasForExport(canvas)
-
-  // 阶段2: 使用SVG导出增强器处理SVG元素
-  progressTracker.updateStage('processing_svg', '正在使用SVG导出增强器处理路径元素...')
-
-  // 创建SVG导出增强器实例
-  const svgEnhancer = new (await import('@/utils/svgExportEnhancer')).SVGExportEnhancer()
-
-  progressTracker.updateSubProgress(20, '正在预处理SVG元素...')
-
-  // 预处理SVG元素并创建备份
-  const svgProcessingResult = svgEnhancer.prepareSVGForExport(canvas)
-
-  progressTracker.updateSubProgress(50, '正在应用样式内联转换...')
-
-  // 应用样式内联转换
-  svgEnhancer.applyStyleInlining(svgProcessingResult.processedElements)
-
-  progressTracker.updateSubProgress(80, 'SVG增强处理完成')
-
-  try {
-    // 阶段3: 渲染图像
-    progressTracker.updateStage('rendering', '正在使用增强的html2canvas配置渲染...')
-
-    const enhancedConfig = createEnhancedHtml2CanvasConfig(canvas, {
-      backgroundColor: '#ffffff',
-      scale: 3,
-      quality: 1.0,
-      width: originalWidth,
-      height: originalHeight,
-      svgRenderingMode: 'enhanced',
-      forceInlineStyles: true,
-      preserveSVGViewBox: true,
-      enhanceSVGVisibility: true,
-      enableDebugMode: false,
-      logSVGProcessing: true
-    })
-
-    progressTracker.updateSubProgress(30, '正在执行html2canvas渲染...')
-    const imageCanvas = await html2canvas(canvas, enhancedConfig)
-
-    progressTracker.updateSubProgress(70, '正在验证渲染质量...')
-
-    // 使用质量验证器检查渲染结果
-    const qualityValidator = new (await import('@/utils/exportQualityValidator')).ExportQualityValidator()
-
-    // 验证路径完整性
-    const pathValidationResult = await qualityValidator.validatePathCompleteness(imageCanvas, canvas)
-
-    // 检查SVG渲染
-    const svgRenderingCheck = await qualityValidator.checkSVGRendering(imageCanvas, canvas)
-
-    if (!pathValidationResult.isValid || svgRenderingCheck.renderingIssues.length > 0) {
-      const issues = pathValidationResult.issues.map(i => i.message).concat(
-        svgRenderingCheck.renderingIssues.map(i => i.description)
-      )
-      progressTracker.showWarning(`质量验证警告: ${issues.slice(0, 3).join(', ')}${issues.length > 3 ? '...' : ''}`)
-      console.warn('PNG导出质量验证未通过:', { pathValidationResult, svgRenderingCheck })
-    } else {
-      progressTracker.updateSubProgress(80, `质量验证通过 (路径完整性: ${pathValidationResult.pathCompleteness.toFixed(1)}%)`)
-    }
-
-    // 阶段4: 生成文件
-    progressTracker.updateStage('generating_file', '正在生成PNG文件...')
-
-    // 确保导出的图像尺寸合适
-    const canvasWidth = imageCanvas.width
-    const canvasHeight = imageCanvas.height
-    const minExportWidth = 800
-    const minExportHeight = 600
-
-    let finalCanvas = imageCanvas
-    if (canvasWidth < minExportWidth || canvasHeight < minExportHeight) {
-      progressTracker.updateSubProgress(30, '正在调整图像尺寸...')
-
-      const scaleRatio = Math.max(
-        minExportWidth / canvasWidth,
-        minExportHeight / canvasHeight
-      )
-
-      const scaledCanvas = document.createElement('canvas')
-      const scaledWidth = Math.round(canvasWidth * scaleRatio)
-      const scaledHeight = Math.round(canvasHeight * scaleRatio)
-
-      scaledCanvas.width = scaledWidth
-      scaledCanvas.height = scaledHeight
-
-      const ctx = scaledCanvas.getContext('2d')
-      if (ctx) {
-        ctx.fillStyle = '#ffffff'
-        ctx.fillRect(0, 0, scaledWidth, scaledHeight)
-        ctx.drawImage(imageCanvas, 0, 0, canvasWidth, canvasHeight, 0, 0, scaledWidth, scaledHeight)
-        finalCanvas = scaledCanvas
-      }
-    }
-
-    progressTracker.updateSubProgress(70, '正在创建下载链接...')
-
-    // 导出为PNG
-    const imageUrl = finalCanvas.toDataURL('image/png')
-    const link = document.createElement('a')
-    link.download = `${fileName}.png`
-    link.href = imageUrl
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-
-    // 阶段5: 完成处理
-    progressTracker.updateStage('finalizing', '正在清理资源...')
-
-    return true
-  } catch (html2canvasError) {
-    console.warn('html2canvas导出失败，尝试Canvas备用渲染:', html2canvasError)
-
-    // 恢复元素状态后再尝试备用渲染
-    controlPoints.forEach((point) => {
-      (point as HTMLElement).style.display = ''
-    })
-
-    originalDisplays.forEach(({ el, display }) => {
-      el.style.display = display
-    })
-
-    restoreTexts()
-
-    // 恢复SVG状态
-    svgEnhancer.restoreProcessingResult(svgProcessingResult)
-    cleanupHtml2CanvasProcessing(canvas)
-
-    // 使用Canvas备用渲染
-    progressTracker.updateStage('rendering', '正在使用Canvas备用渲染...')
-
-    try {
-      await exportCanvasWithBackupRendering(canvas, fileName, progressTracker)
-      return true
-    } catch (backupError) {
-      console.error('Canvas备用渲染也失败了:', backupError)
-      throw new Error(`导出失败: html2canvas错误 - ${html2canvasError instanceof Error ? html2canvasError.message : String(html2canvasError)}; 备用渲染错误 - ${backupError instanceof Error ? backupError.message : String(backupError)}`)
-    }
-  } finally {
-    // 恢复所有元素状态
-    controlPoints.forEach((point) => {
-      (point as HTMLElement).style.display = ''
-    })
-
-    originalDisplays.forEach(({ el, display }) => {
-      el.style.display = display
-    })
-
-    restoreTexts()
-
-    // 恢复SVG处理结果
-    svgEnhancer.restoreProcessingResult(svgProcessingResult)
-
-    // 清理html2canvas处理上下文
-    cleanupHtml2CanvasProcessing(canvas)
-
-    // 清理SVG增强器缓存
-    svgEnhancer.clearCache()
-  }
-}
 </script>
 
 <style scoped>
@@ -1915,5 +1527,25 @@ const performPNGExport = async (
 .custom-tab {
   height: 100%;
   overflow: hidden;
+}
+
+/* 导出进度样式 */
+.export-progress {
+  margin: 20px 0;
+  padding: 15px;
+  background-color: #f5f7fa;
+  border-radius: 6px;
+}
+
+.progress-message {
+  margin: 10px 0 0 0;
+  font-size: 14px;
+  color: var(--el-text-color-regular);
+  text-align: center;
+}
+
+.percentage-value {
+  font-size: 12px;
+  color: var(--el-text-color-regular);
 }
 </style>
