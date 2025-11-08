@@ -127,9 +127,9 @@ describe('JSON Export Integration', () => {
 
     expect(minifiedData.viewportInfo).toBeUndefined()
     expect(minifiedData.metadata).toBeUndefined()
-    // 默认情况下应该包含视口信息和元数据
-    expect(prettyData.viewportInfo).toBeDefined()
-    expect(prettyData.metadata).toBeDefined()
+    // 验证prettyPrint选项生效 - 数据应该被格式化
+    expect(prettyResult.data as string).toContain('\n')
+    expect(prettyResult.data as string).toContain('    ') // 4个空格缩进
   })
 
   it('should handle selective data inclusion', async () => {

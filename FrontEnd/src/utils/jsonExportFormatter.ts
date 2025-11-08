@@ -3,7 +3,7 @@
  * 提供压缩、美化打印、选择性数据包含和验证功能
  */
 
-import { CourseDesign, Obstacle, CoursePathData } from '@/types/obstacle'
+import type { CourseDesign, Obstacle, CoursePathData } from '@/types/obstacle'
 import type { JSONExportOptions } from '@/types/export'
 
 /**

@@ -90,24 +90,13 @@
             </el-icon>
           </el-button>
 
-          <el-button @click="handleDirectPNGExport" type="primary" class="action-button"
-            :title="!userStore.currentUser ? '需要登录才能导出PNG' : '快速导出PNG图片'"
-            :loading="isDirectExporting">
-            <el-icon>
-              <Picture />
-            </el-icon>
-            {{ isDirectExporting ? '导出中...' : '导出PNG' }}
-            <el-icon v-if="!userStore.currentUser" class="lock-icon">
-              <Lock />
-            </el-icon>
-          </el-button>
-
-          <el-dropdown @command="handleExport" trigger="click" class="export-dropdown">
-            <el-button type="primary" class="action-button" :title="!userStore.currentUser ? '需要登录才能导出' : '更多导出选项'">
+          <el-dropdown @command="handleUnifiedExport" trigger="click" class="export-dropdown">
+            <el-button type="primary" class="action-button" :loading="isExporting"
+              :title="!userStore.currentUser ? '需要登录才能导出' : '导出设计'">
               <el-icon>
                 <Download />
               </el-icon>
-              更多导出
+              导出
               <el-icon class="el-icon--right">
                 <ArrowDown />
               </el-icon>
@@ -117,9 +106,9 @@
             </el-button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="png">PNG导出选项</el-dropdown-item>
+                <el-dropdown-item command="png">导出PNG</el-dropdown-item>
                 <el-dropdown-item command="pdf">导出PDF</el-dropdown-item>
-                <el-dropdown-item command="json">导出为JSON数据</el-dropdown-item>
+                <el-dropdown-item command="json">导出JSON</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -158,50 +147,11 @@
 
 
     <!-- 导出选项对话框 -->
-    <el-dialog
-      v-model="exportOptionsVisible"
-      :title="`${currentExportFormat.toUpperCase()}导出选项`"
-      width="500px"
-      :close-on-click-modal="false"
+    <el-dialog v-model="exportOptionsVisible" title="PDF导出选项" width="500px" :close-on-click-modal="false"
       :close-on-press-escape="true">
 
-      <!-- PNG导出选项 -->
-      <div v-if="currentExportFormat === ExportFormat.PNG">
-        <el-form label-position="top">
-          <el-form-item label="缩放倍数">
-            <el-slider
-              v-model="exportOptions[ExportFormat.PNG].scale"
-              :min="1"
-              :max="5"
-              :step="0.5"
-              :format-tooltip="(value: number) => `${value}x`" />
-          </el-form-item>
-
-          <el-form-item label="背景颜色">
-            <el-select v-model="exportOptions[ExportFormat.PNG].backgroundColor" style="width: 100%">
-              <el-option label="白色" value="white" />
-              <el-option label="透明" value="transparent" />
-              <el-option label="黑色" value="black" />
-            </el-select>
-          </el-form-item>
-
-          <el-form-item label="图像质量">
-            <el-slider
-              v-model="exportOptions[ExportFormat.PNG].quality"
-              :min="0.1"
-              :max="1"
-              :step="0.05"
-              :format-tooltip="(value: number) => `${Math.round(value * 100)}%`" />
-          </el-form-item>
-
-          <el-form-item>
-            <el-checkbox v-model="exportOptions[ExportFormat.PNG].includeWatermark">包含水印</el-checkbox>
-          </el-form-item>
-        </el-form>
-      </div>
-
       <!-- PDF导出选项 -->
-      <div v-if="currentExportFormat === ExportFormat.PDF">
+      <div>
         <el-form label-position="top">
           <el-form-item label="纸张大小">
             <el-select v-model="exportOptions[ExportFormat.PDF].paperSize" style="width: 100%">
@@ -222,19 +172,19 @@
 
           <el-form-item label="页边距">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-              <el-input-number v-model="exportOptions[ExportFormat.PDF].margins.top" :min="0" :max="50" controls-position="right" placeholder="上" />
-              <el-input-number v-model="exportOptions[ExportFormat.PDF].margins.right" :min="0" :max="50" controls-position="right" placeholder="右" />
-              <el-input-number v-model="exportOptions[ExportFormat.PDF].margins.bottom" :min="0" :max="50" controls-position="right" placeholder="下" />
-              <el-input-number v-model="exportOptions[ExportFormat.PDF].margins.left" :min="0" :max="50" controls-position="right" placeholder="左" />
+              <el-input-number v-model="exportOptions[ExportFormat.PDF].margins.top" :min="0" :max="50"
+                controls-position="right" placeholder="上" />
+              <el-input-number v-model="exportOptions[ExportFormat.PDF].margins.right" :min="0" :max="50"
+                controls-position="right" placeholder="右" />
+              <el-input-number v-model="exportOptions[ExportFormat.PDF].margins.bottom" :min="0" :max="50"
+                controls-position="right" placeholder="下" />
+              <el-input-number v-model="exportOptions[ExportFormat.PDF].margins.left" :min="0" :max="50"
+                controls-position="right" placeholder="左" />
             </div>
           </el-form-item>
 
           <el-form-item label="图像质量">
-            <el-slider
-              v-model="exportOptions[ExportFormat.PDF].quality"
-              :min="0.5"
-              :max="1"
-              :step="0.05"
+            <el-slider v-model="exportOptions[ExportFormat.PDF].quality" :min="0.5" :max="1" :step="0.05"
               :format-tooltip="(value: number) => `${Math.round(value * 100)}%`" />
           </el-form-item>
 
@@ -248,41 +198,10 @@
         </el-form>
       </div>
 
-      <!-- JSON导出选项 -->
-      <div v-if="currentExportFormat === ExportFormat.JSON">
-        <el-form label-position="top">
-          <el-form-item>
-            <el-checkbox v-model="exportOptions[ExportFormat.JSON].includeViewportInfo">包含视口信息</el-checkbox>
-          </el-form-item>
-
-          <el-form-item>
-            <el-checkbox v-model="exportOptions[ExportFormat.JSON].includeMetadata">包含元数据</el-checkbox>
-          </el-form-item>
-
-          <el-form-item>
-            <el-checkbox v-model="exportOptions[ExportFormat.JSON].prettyPrint">格式化输出</el-checkbox>
-          </el-form-item>
-
-          <el-form-item v-if="exportOptions[ExportFormat.JSON].prettyPrint" label="缩进大小">
-            <el-input-number
-              v-model="exportOptions[ExportFormat.JSON].indentSize"
-              :min="1"
-              :max="8"
-              controls-position="right" />
-          </el-form-item>
-
-          <el-form-item>
-            <el-checkbox v-model="exportOptions[ExportFormat.JSON].minify">压缩输出</el-checkbox>
-          </el-form-item>
-        </el-form>
-      </div>
-
       <!-- 进度显示 -->
       <div v-if="exportProgress" class="export-progress">
-        <el-progress
-          :percentage="exportProgress.progress"
-          :status="exportProgress.progress === 100 ? 'success' : undefined"
-          :stroke-width="8">
+        <el-progress :percentage="exportProgress.progress"
+          :status="exportProgress.progress === 100 ? 'success' : undefined" :stroke-width="8">
           <template #default="{ percentage }">
             <span class="percentage-value">{{ percentage }}%</span>
           </template>
@@ -292,7 +211,7 @@
 
       <template #footer>
         <el-button @click="exportOptionsVisible = false" :disabled="isExporting">取消</el-button>
-        <el-button type="primary" @click="executeExport" :loading="isExporting">
+        <el-button type="primary" @click="executePDFExport" :loading="isExporting">
           {{ isExporting ? '导出中...' : '开始导出' }}
         </el-button>
       </template>
@@ -307,7 +226,7 @@ import { ref } from 'vue'
 import { ObstacleType } from '@/types/obstacle'
 import { useCourseStore } from '@/stores/course'
 import { useUserStore } from '@/stores/user'
-import { Download, Upload, Delete, Pointer, Edit, Lock, Picture, ArrowDown } from '@element-plus/icons-vue'
+import { Download, Upload, Delete, Pointer, Edit, Lock, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage, ElLoading } from 'element-plus'
 import html2canvas from 'html2canvas'
 import { saveDesign } from '@/api/design'
@@ -318,7 +237,7 @@ import CustomObstacleManager from '@/components/CustomObstacleManager.vue'
 
 
 import { exportManager } from '@/utils/exportManager'
-import { ExportFormat, type PNGExportOptions, type PDFExportOptions, type JSONExportOptions, type ProgressState, type ExportResult } from '@/types/export'
+import { ExportFormat, type PDFExportOptions, type JSONExportOptions, type ProgressState, type ExportResult } from '@/types/export'
 
 const courseStore = useCourseStore()
 const userStore = useUserStore()
@@ -351,16 +270,19 @@ const exportOptionsVisible = ref(false)
 const currentExportFormat = ref<ExportFormat>(ExportFormat.PNG)
 const exportProgress = ref<ProgressState | null>(null)
 const isExporting = ref(false)
-const isDirectExporting = ref(false)
 
-// 导出选项
+// JSON默认配置常量
+const DEFAULT_JSON_OPTIONS: JSONExportOptions = {
+  includeViewportInfo: true,
+  includeMetadata: true,
+  minify: false,
+  prettyPrint: true,
+  indentSize: 2
+}
+
+// 导出选项（仅保留PDF配置）
+// 注意：PNG默认配置已在exportManager.exportToPNGDirect()中定义
 const exportOptions = ref({
-  [ExportFormat.PNG]: {
-    scale: 2,
-    backgroundColor: 'white',
-    quality: 0.9,
-    includeWatermark: false
-  } as PNGExportOptions,
   [ExportFormat.PDF]: {
     paperSize: 'a4',
     orientation: 'auto',
@@ -368,14 +290,7 @@ const exportOptions = ref({
     includeFooter: true,
     includeMetadata: true,
     quality: 0.95
-  } as PDFExportOptions,
-  [ExportFormat.JSON]: {
-    includeViewportInfo: true,
-    includeMetadata: true,
-    minify: false,
-    prettyPrint: true,
-    indentSize: 2
-  } as JSONExportOptions
+  } as PDFExportOptions
 })
 
 const activeTab = ref('basic')
@@ -701,24 +616,12 @@ const updateName = () => {
 
 
 
-// 直接PNG导出处理函数（跳过选项对话框）
-const handleDirectPNGExport = async () => {
-  // 检查用户是否已登录
-  if (!userStore.currentUser) {
-    ElMessageBox.confirm('导出PNG需要登录，是否立即登录？', '提示', {
-      confirmButtonText: '去登录',
-      cancelButtonText: '取消',
-      type: 'info',
-    }).then(() => {
-      emit('show-login')
-    }).catch(() => { })
-    return
-  }
-
-  if (isDirectExporting.value) return
+// PNG直接导出函数（使用默认设置）
+const executeDirectPNGExport = async () => {
+  if (isExporting.value) return
 
   try {
-    isDirectExporting.value = true
+    isExporting.value = true
 
     // 检查导出权限
     if (!checkExportPermissions()) {
@@ -737,16 +640,15 @@ const handleDirectPNGExport = async () => {
       throw new Error('未找到画布元素')
     }
 
-    // 使用导出管理器的直接PNG导出方法
+    // 使用导出管理器的直接PNG导出方法（使用默认设置）
     const result = await exportManager.exportToPNGDirect(
       canvas,
       {
         onProgress: (state: ProgressState) => {
-          // 可以在这里显示简单的进度提示
-          console.log('导出进度:', state.message, `${state.progress}%`)
+          console.log('PNG导出进度:', state.message, `${state.progress}%`)
         },
         onComplete: (result: ExportResult) => {
-          console.log('直接PNG导出完成:', result)
+          console.log('PNG直接导出完成:', result)
 
           // 通知协作者导出完成
           const canvasElement = document.querySelector('.course-canvas') as HTMLElement & { triggerExportEvent?: (type: string, data: Record<string, unknown>) => void }
@@ -761,7 +663,7 @@ const handleDirectPNGExport = async () => {
           }
         },
         onError: (error: Error) => {
-          console.error('直接PNG导出错误:', error)
+          console.error('PNG直接导出错误:', error)
 
           // 通知协作者导出失败
           const canvasElement = document.querySelector('.course-canvas') as HTMLElement & { triggerExportEvent?: (type: string, data: Record<string, unknown>) => void }
@@ -781,8 +683,8 @@ const handleDirectPNGExport = async () => {
     if (result.success) {
       ElMessage.success('PNG导出成功！文件已自动下载')
 
-      // 显示质量报告（如果有警告）
-      if (result.warnings.length > 0) {
+      // 显示质量警告（如果有）
+      if (result.warnings && result.warnings.length > 0) {
         const warningMessages = result.warnings.map(w => w.message).join('\n')
         ElMessage.warning(`导出完成，但有以下警告：\n${warningMessages}`)
       }
@@ -791,21 +693,120 @@ const handleDirectPNGExport = async () => {
     }
 
   } catch (error) {
-    console.error('直接PNG导出失败:', error)
+    console.error('PNG直接导出失败:', error)
     ElMessageBox.alert('PNG导出失败：' + (error as Error).message, '错误', {
       confirmButtonText: '确定',
       type: 'error',
     })
   } finally {
-    isDirectExporting.value = false
+    isExporting.value = false
   }
 }
 
-// 使用新的导出系统处理导出
-const handleExport = async (command: string) => {
+// JSON直接导出函数（使用默认设置）
+const executeDirectJSONExport = async () => {
+  if (isExporting.value) return
+
+  try {
+    isExporting.value = true
+
+    // 检查导出权限
+    if (!checkExportPermissions()) {
+      return
+    }
+
+    // 处理协作会话
+    const canProceed = await handleCollaborationExport()
+    if (!canProceed) {
+      return
+    }
+
+    // 获取画布元素
+    const canvas = document.querySelector('.course-canvas') as HTMLElement
+    if (!canvas) {
+      throw new Error('未找到画布元素')
+    }
+
+    // 设置文件名
+    const date = new Date()
+    const formattedDateTime = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`
+    const fileName = `${courseStore.currentCourse.name}-${formattedDateTime}`
+
+    // 执行JSON导出（使用默认配置常量）
+    const result = await exportManager.exportCanvas(
+      canvas,
+      ExportFormat.JSON,
+      { ...DEFAULT_JSON_OPTIONS, fileName },
+      {
+        onProgress: (state: ProgressState) => {
+          console.log('JSON导出进度:', state.message, `${state.progress}%`)
+        },
+        onComplete: (result: ExportResult) => {
+          console.log('JSON导出完成:', result)
+
+          // 通知协作者导出完成
+          const canvasElement = document.querySelector('.course-canvas') as HTMLElement & { triggerExportEvent?: (type: string, data: Record<string, unknown>) => void }
+          if (canvasElement && typeof canvasElement.triggerExportEvent === 'function') {
+            canvasElement.triggerExportEvent('export-completed', {
+              format: ExportFormat.JSON,
+              success: result.success,
+              userId: userStore.currentUser?.id,
+              userName: userStore.currentUser?.username,
+              isDirect: true
+            })
+          }
+        },
+        onError: (error: Error) => {
+          console.error('JSON导出错误:', error)
+
+          // 通知协作者导出失败
+          const canvasElement = document.querySelector('.course-canvas') as HTMLElement & { triggerExportEvent?: (type: string, data: Record<string, unknown>) => void }
+          if (canvasElement && typeof canvasElement.triggerExportEvent === 'function') {
+            canvasElement.triggerExportEvent('export-failed', {
+              format: ExportFormat.JSON,
+              error: error.message,
+              userId: userStore.currentUser?.id,
+              userName: userStore.currentUser?.username,
+              isDirect: true
+            })
+          }
+        }
+      }
+    )
+
+    if (result.success) {
+      // JSON格式直接下载字符串数据
+      const jsonData = result.data as string
+      const blob = new Blob([jsonData], { type: 'application/json' })
+      downloadBlob(blob, `${fileName}.json`)
+
+      ElMessage.success('JSON导出成功！文件已自动下载')
+
+      // 显示质量警告（如果有）
+      if (result.warnings && result.warnings.length > 0) {
+        const warningMessages = result.warnings.map(w => w.message).join('\n')
+        ElMessage.warning(`导出完成，但有以下警告：\n${warningMessages}`)
+      }
+    } else {
+      throw new Error('JSON导出失败')
+    }
+
+  } catch (error) {
+    console.error('JSON直接导出失败:', error)
+    ElMessageBox.alert('JSON导出失败：' + (error as Error).message, '错误', {
+      confirmButtonText: '确定',
+      type: 'error',
+    })
+  } finally {
+    isExporting.value = false
+  }
+}
+
+// 统一导出处理函数
+const handleUnifiedExport = async (command: string) => {
   // 检查用户是否已登录
   if (!userStore.currentUser) {
-    ElMessageBox.confirm('导出设计需要登录，是否立即登录？', '提示', {
+    ElMessageBox.confirm('导出功能需要登录，是否立即登录？', '提示', {
       confirmButtonText: '去登录',
       cancelButtonText: '取消',
       type: 'info',
@@ -815,24 +816,23 @@ const handleExport = async (command: string) => {
     return
   }
 
-  // 设置当前导出格式并显示选项对话框
+  // 根据命令类型路由到相应的导出函数
   switch (command) {
     case 'png':
-      currentExportFormat.value = ExportFormat.PNG
-      break
-    case 'pdf':
-      currentExportFormat.value = ExportFormat.PDF
+      await executeDirectPNGExport()
       break
     case 'json':
-      currentExportFormat.value = ExportFormat.JSON
+      await executeDirectJSONExport()
+      break
+    case 'pdf':
+      // 显示PDF选项对话框
+      currentExportFormat.value = ExportFormat.PDF
+      exportOptionsVisible.value = true
       break
     default:
       ElMessage.error('不支持的导出格式')
       return
   }
-
-  // 显示导出选项对话框
-  exportOptionsVisible.value = true
 }
 
 // 检查导出权限
@@ -879,8 +879,8 @@ const handleCollaborationExport = async (): Promise<boolean> => {
   return true
 }
 
-// 执行导出操作
-const executeExport = async () => {
+// 执行PDF导出操作
+const executePDFExport = async () => {
   if (isExporting.value) return
 
   try {
@@ -904,8 +904,8 @@ const executeExport = async () => {
       throw new Error('未找到画布元素')
     }
 
-    // 获取当前格式的导出选项
-    const options = exportOptions.value[currentExportFormat.value]
+    // 获取PDF导出选项
+    const options = exportOptions.value[ExportFormat.PDF]
 
     // 设置文件名
     const date = new Date()
@@ -928,23 +928,23 @@ const executeExport = async () => {
       }
     }
 
-    // 使用导出管理器执行导出
+    // 使用导出管理器执行PDF导出
     const result = await exportManager.exportCanvas(
       canvas,
-      currentExportFormat.value,
+      ExportFormat.PDF,
       exportOptionsWithFileName,
       {
         onProgress: (state: ProgressState) => {
           exportProgress.value = state
         },
         onComplete: (result: ExportResult) => {
-          console.log('导出完成:', result)
+          console.log('PDF导出完成:', result)
 
           // 通知协作者导出完成
           const canvasElement = document.querySelector('.course-canvas') as HTMLElement & { triggerExportEvent?: (type: string, data: Record<string, unknown>) => void }
           if (canvasElement && typeof canvasElement.triggerExportEvent === 'function') {
             canvasElement.triggerExportEvent('export-completed', {
-              format: currentExportFormat.value,
+              format: ExportFormat.PDF,
               success: result.success,
               userId: userStore.currentUser?.id,
               userName: userStore.currentUser?.username
@@ -952,13 +952,13 @@ const executeExport = async () => {
           }
         },
         onError: (error: Error) => {
-          console.error('导出错误:', error)
+          console.error('PDF导出错误:', error)
 
           // 通知协作者导出失败
           const canvasElement = document.querySelector('.course-canvas') as HTMLElement & { triggerExportEvent?: (type: string, data: Record<string, unknown>) => void }
           if (canvasElement && typeof canvasElement.triggerExportEvent === 'function') {
             canvasElement.triggerExportEvent('export-failed', {
-              format: currentExportFormat.value,
+              format: ExportFormat.PDF,
               error: error.message,
               userId: userStore.currentUser?.id,
               userName: userStore.currentUser?.username
@@ -969,33 +969,24 @@ const executeExport = async () => {
     )
 
     if (result.success) {
-      // 处理导出结果
-      if (currentExportFormat.value === ExportFormat.JSON) {
-        // JSON格式直接下载字符串数据
-        const jsonData = result.data as string
-        const blob = new Blob([jsonData], { type: 'application/json' })
-        downloadBlob(blob, `${fileName}.json`)
-      } else {
-        // PNG和PDF格式下载Blob数据
-        const blob = result.data as Blob
-        const extension = currentExportFormat.value === ExportFormat.PNG ? 'png' : 'pdf'
-        downloadBlob(blob, `${fileName}.${extension}`)
-      }
+      // PDF格式下载Blob数据
+      const blob = result.data as Blob
+      downloadBlob(blob, `${fileName}.pdf`)
 
-      ElMessage.success(`${currentExportFormat.value.toUpperCase()}导出成功！`)
+      ElMessage.success('PDF导出成功！文件已自动下载')
 
-      // 显示质量报告（如果有警告）
-      if (result.warnings.length > 0) {
+      // 显示质量警告（如果有）
+      if (result.warnings && result.warnings.length > 0) {
         const warningMessages = result.warnings.map(w => w.message).join('\n')
         ElMessage.warning(`导出完成，但有以下警告：\n${warningMessages}`)
       }
     } else {
-      throw new Error('导出失败')
+      throw new Error('PDF导出失败')
     }
 
   } catch (error) {
-    console.error('导出失败:', error)
-    ElMessageBox.alert('导出失败：' + (error as Error).message, '错误', {
+    console.error('PDF导出失败:', error)
+    ElMessageBox.alert('PDF导出失败：' + (error as Error).message, '错误', {
       confirmButtonText: '确定',
       type: 'error',
     })

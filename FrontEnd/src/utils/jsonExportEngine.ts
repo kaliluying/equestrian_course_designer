@@ -17,12 +17,12 @@ import type {
   QualityReport,
   ExportWarning
 } from '@/types/export'
-import { CourseDesign, Obstacle, CoursePathData } from '@/types/obstacle'
-import {
-  jsonExportFormatter,
+import type { CourseDesign, Obstacle, CoursePathData } from '@/types/obstacle'
+import type {
   JSONFormattingOptions,
   SelectiveDataOptions
 } from './jsonExportFormatter'
+import { jsonExportFormatter } from './jsonExportFormatter'
 
 /**
  * JSON导出数据接口
@@ -197,16 +197,72 @@ export class JSONExportEngine {
 
   /**
    * 提取课程设计数据
+   * 使用多级降级策略：Pinia Store → data属性 → DOM解析
    */
   private async extractCourseDesign(canvas: HTMLElement): Promise<CourseDesign> {
     try {
-      // 尝试从画布元素的数据属性或全局状态中获取课程数据
-      // 这里需要根据实际的应用架构来实现
+      // 方法1: 直接从Pinia Store获取（优先级最高）
+      try {
+        const { useCourseStore } = await import('@/stores/course')
+        const courseStore = useCourseStore()
 
-      // 方法1: 从画布的数据属性获取
+        if (courseStore) {
+          // 优先使用getCompleteDesign方法获取完整数据（包含路径）
+          if (typeof courseStore.getCompleteDesign === 'function') {
+            const completeDesign = courseStore.getCompleteDesign()
+            console.log('从Pinia Store的getCompleteDesign方法获取课程数据', completeDesign)
+            return completeDesign
+          }
+
+          // 备用：直接访问currentCourse
+          if (courseStore.currentCourse) {
+            console.log('从Pinia Store的currentCourse获取课程数据', courseStore.currentCourse)
+            // 手动整合路径数据
+            const design: CourseDesign = { ...courseStore.currentCourse }
+            if (courseStore.coursePath?.visible && courseStore.coursePath.points.length > 0) {
+              design.path = {
+                visible: courseStore.coursePath.visible,
+                points: courseStore.coursePath.points,
+                startPoint: courseStore.startPoint,
+                endPoint: courseStore.endPoint
+              }
+            }
+            return design
+          }
+        }
+      } catch (storeError) {
+        console.warn('无法访问Pinia Store:', storeError)
+      }
+
+      // 方法1.5: 从全局变量获取（备用方案）
+      if (typeof window !== 'undefined' && (window as any).__COURSE_STORE__) {
+        const store = (window as any).__COURSE_STORE__
+        if (typeof store.getCompleteDesign === 'function') {
+          const completeDesign = store.getCompleteDesign()
+          console.log('从全局__COURSE_STORE__的getCompleteDesign方法获取课程数据', completeDesign)
+          return completeDesign
+        }
+        if (store.currentCourse) {
+          console.log('从全局__COURSE_STORE__的currentCourse获取课程数据', store.currentCourse)
+          // 手动整合路径数据
+          const design: CourseDesign = { ...store.currentCourse }
+          if (store.coursePath?.visible && store.coursePath.points.length > 0) {
+            design.path = {
+              visible: store.coursePath.visible,
+              points: store.coursePath.points,
+              startPoint: store.startPoint,
+              endPoint: store.endPoint
+            }
+          }
+          return design
+        }
+      }
+
+      // 方法2: 从画布的数据属性获取
       const courseDataAttr = canvas.getAttribute('data-course-design')
       if (courseDataAttr) {
         const parsedData = JSON.parse(courseDataAttr)
+        console.log('从画布data属性获取课程数据')
         // 确保基本字段存在，如果不存在则提供默认值
         return {
           id: parsedData.id || `course-${Date.now()}`,
@@ -220,29 +276,31 @@ export class JSONExportEngine {
         }
       }
 
-      // 方法2: 从全局状态获取（如果有Vuex/Pinia store）
-      if (typeof window !== 'undefined' && (window as any).__COURSE_STORE__) {
-        const store = (window as any).__COURSE_STORE__
-        if (store.currentCourse) {
-          return store.currentCourse
-        }
-      }
-
-      // 方法3: 从DOM元素中解析（备用方案）
+      // 方法3: 从DOM元素中解析（最后的备用方案）
+      console.log('从DOM解析课程数据')
       return this.parseCourseFromDOM(canvas)
 
     } catch (error) {
-      // 如果所有方法都失败，返回一个基本的课程设计而不是抛出错误
+      // 如果所有方法都失败，返回默认的课程设计
       console.warn('提取课程设计数据失败，使用默认数据:', error)
-      return {
-        id: `fallback-course-${Date.now()}`,
-        name: '解析失败的课程',
-        obstacles: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        fieldWidth: 60,
-        fieldHeight: 40
-      }
+      return this.getDefaultCourseDesign()
+    }
+  }
+
+  /**
+   * 获取默认的课程设计结构
+   * 当所有数据提取方法都失败时使用
+   */
+  private getDefaultCourseDesign(): CourseDesign {
+    return {
+      id: `fallback-course-${Date.now()}`,
+      name: '解析失败的课程',
+      obstacles: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      fieldWidth: 60,
+      fieldHeight: 40,
+      path: undefined
     }
   }
 
@@ -394,10 +452,14 @@ export class JSONExportEngine {
     const results = {
       isValid: true,
       issues: [] as string[],
+      warnings: [] as string[],
+      suggestions: [] as string[],
       statistics: {
         obstacleCount: courseDesign.obstacles.length,
         hasPath: !!courseDesign.path,
         pathPointCount: courseDesign.path?.points.length || 0,
+        hasStartPoint: !!(courseDesign.path?.startPoint),
+        hasEndPoint: !!(courseDesign.path?.endPoint),
         fieldDimensions: {
           width: courseDesign.fieldWidth,
           height: courseDesign.fieldHeight
@@ -437,13 +499,150 @@ export class JSONExportEngine {
       }
     })
 
-    // 验证路径数据
+    // 增强的路径数据验证
     if (courseDesign.path) {
+      // 验证路径点数组的有效性 (需求 3.1)
       if (!Array.isArray(courseDesign.path.points)) {
-        results.issues.push('路径点数据格式无效')
+        results.issues.push('路径点数据格式无效：points必须是数组')
         results.isValid = false
-      } else if (courseDesign.path.points.length < 2) {
-        results.issues.push('路径至少需要2个点')
+      } else {
+        // 验证路径至少包含2个点 (需求 3.2)
+        if (courseDesign.path.points.length < 2) {
+          results.warnings.push('路径至少需要2个点才能形成有效路径')
+          results.suggestions.push('添加更多路径点以创建完整的路径')
+        }
+
+        // 验证路径点坐标的有效性 (需求 3.3)
+        courseDesign.path.points.forEach((point, index) => {
+          // 验证基本坐标
+          if (typeof point.x !== 'number' || isNaN(point.x)) {
+            results.issues.push(`路径点 ${index + 1} 的x坐标无效`)
+            results.isValid = false
+          }
+          if (typeof point.y !== 'number' || isNaN(point.y)) {
+            results.issues.push(`路径点 ${index + 1} 的y坐标无效`)
+            results.isValid = false
+          }
+
+          // 验证坐标是否在场地范围内
+          if (typeof point.x === 'number' && !isNaN(point.x)) {
+            if (point.x < 0 || point.x > courseDesign.fieldWidth) {
+              results.warnings.push(`路径点 ${index + 1} 的x坐标(${point.x})超出场地范围(0-${courseDesign.fieldWidth})`)
+            }
+          }
+          if (typeof point.y === 'number' && !isNaN(point.y)) {
+            if (point.y < 0 || point.y > courseDesign.fieldHeight) {
+              results.warnings.push(`路径点 ${index + 1} 的y坐标(${point.y})超出场地范围(0-${courseDesign.fieldHeight})`)
+            }
+          }
+
+          // 验证控制点（如果存在）
+          if (point.controlPoint1) {
+            if (typeof point.controlPoint1.x !== 'number' || isNaN(point.controlPoint1.x)) {
+              results.warnings.push(`路径点 ${index + 1} 的控制点1的x坐标无效`)
+            }
+            if (typeof point.controlPoint1.y !== 'number' || isNaN(point.controlPoint1.y)) {
+              results.warnings.push(`路径点 ${index + 1} 的控制点1的y坐标无效`)
+            }
+          }
+          if (point.controlPoint2) {
+            if (typeof point.controlPoint2.x !== 'number' || isNaN(point.controlPoint2.x)) {
+              results.warnings.push(`路径点 ${index + 1} 的控制点2的x坐标无效`)
+            }
+            if (typeof point.controlPoint2.y !== 'number' || isNaN(point.controlPoint2.y)) {
+              results.warnings.push(`路径点 ${index + 1} 的控制点2的y坐标无效`)
+            }
+          }
+
+          // 验证旋转角度（如果存在）
+          if (point.rotation !== undefined && (typeof point.rotation !== 'number' || isNaN(point.rotation))) {
+            results.warnings.push(`路径点 ${index + 1} 的旋转角度无效`)
+          }
+        })
+      }
+
+      // 验证起点的位置和旋转角度 (需求 3.4)
+      if (courseDesign.path.startPoint) {
+        const startPoint = courseDesign.path.startPoint
+
+        if (typeof startPoint.x !== 'number' || isNaN(startPoint.x)) {
+          results.issues.push('起点的x坐标无效')
+          results.isValid = false
+        }
+        if (typeof startPoint.y !== 'number' || isNaN(startPoint.y)) {
+          results.issues.push('起点的y坐标无效')
+          results.isValid = false
+        }
+        if (typeof startPoint.rotation !== 'number' || isNaN(startPoint.rotation)) {
+          results.issues.push('起点的旋转角度无效')
+          results.isValid = false
+        }
+
+        // 验证起点是否在场地范围内
+        if (typeof startPoint.x === 'number' && !isNaN(startPoint.x)) {
+          if (startPoint.x < 0 || startPoint.x > courseDesign.fieldWidth) {
+            results.warnings.push(`起点的x坐标(${startPoint.x})超出场地范围(0-${courseDesign.fieldWidth})`)
+          }
+        }
+        if (typeof startPoint.y === 'number' && !isNaN(startPoint.y)) {
+          if (startPoint.y < 0 || startPoint.y > courseDesign.fieldHeight) {
+            results.warnings.push(`起点的y坐标(${startPoint.y})超出场地范围(0-${courseDesign.fieldHeight})`)
+          }
+        }
+      } else {
+        results.warnings.push('路径缺少起点信息')
+        results.suggestions.push('添加起点以完善路径设计')
+      }
+
+      // 验证终点的位置和旋转角度 (需求 3.4)
+      if (courseDesign.path.endPoint) {
+        const endPoint = courseDesign.path.endPoint
+
+        if (typeof endPoint.x !== 'number' || isNaN(endPoint.x)) {
+          results.issues.push('终点的x坐标无效')
+          results.isValid = false
+        }
+        if (typeof endPoint.y !== 'number' || isNaN(endPoint.y)) {
+          results.issues.push('终点的y坐标无效')
+          results.isValid = false
+        }
+        if (typeof endPoint.rotation !== 'number' || isNaN(endPoint.rotation)) {
+          results.issues.push('终点的旋转角度无效')
+          results.isValid = false
+        }
+
+        // 验证终点是否在场地范围内
+        if (typeof endPoint.x === 'number' && !isNaN(endPoint.x)) {
+          if (endPoint.x < 0 || endPoint.x > courseDesign.fieldWidth) {
+            results.warnings.push(`终点的x坐标(${endPoint.x})超出场地范围(0-${courseDesign.fieldWidth})`)
+          }
+        }
+        if (typeof endPoint.y === 'number' && !isNaN(endPoint.y)) {
+          if (endPoint.y < 0 || endPoint.y > courseDesign.fieldHeight) {
+            results.warnings.push(`终点的y坐标(${endPoint.y})超出场地范围(0-${courseDesign.fieldHeight})`)
+          }
+        }
+      } else {
+        results.warnings.push('路径缺少终点信息')
+        results.suggestions.push('添加终点以完善路径设计')
+      }
+
+      // 验证路径可见性
+      if (typeof courseDesign.path.visible !== 'boolean') {
+        results.warnings.push('路径可见性标志格式无效')
+      }
+
+      // 提供路径质量建议
+      if (courseDesign.path.points.length >= 2 && courseDesign.path.points.length < 5) {
+        results.suggestions.push('考虑添加更多路径点以提高路径的平滑度和精确度')
+      }
+      if (courseDesign.path.points.length > 50) {
+        results.suggestions.push('路径点数量较多，可能影响性能，考虑简化路径')
+      }
+    } else {
+      // 没有路径数据时的建议
+      if (courseDesign.obstacles.length > 0) {
+        results.suggestions.push('考虑添加路径信息以完善课程设计')
       }
     }
 
@@ -568,8 +767,58 @@ export class JSONExportEngine {
       // 使用格式化器进行全面验证
       const validationResult = jsonExportFormatter.validateJSON(jsonData)
 
+      // 获取课程设计验证结果（包含路径验证）
+      const courseValidation = jsonData.metadata?.validationResults || {
+        isValid: true,
+        issues: [],
+        warnings: [],
+        suggestions: []
+      }
+
+      // 合并所有建议
+      const allRecommendations = [
+        ...validationResult.recommendations,
+        ...(courseValidation.suggestions || [])
+      ]
+
+      // 合并所有问题
+      const allIssues = [
+        // 来自格式化器的错误
+        ...validationResult.errors.map(error => ({
+          type: this.mapErrorTypeToIssueType(error.code),
+          severity: error.severity as 'low' | 'medium' | 'high' | 'critical',
+          description: error.message,
+          element: error.field,
+          suggestedFix: this.getSuggestedFix(error.code)
+        })),
+        // 来自格式化器的警告
+        ...validationResult.warnings.map(warning => ({
+          type: 'style_mismatch' as const,
+          severity: 'low' as const,
+          description: warning.message,
+          element: warning.field,
+          suggestedFix: warning.suggestion
+        })),
+        // 来自课程验证的问题（路径相关）
+        ...(courseValidation.issues || []).map((issue: string) => ({
+          type: 'missing_element' as const,
+          severity: 'high' as const,
+          description: issue,
+          element: 'courseDesign',
+          suggestedFix: '检查并修复数据完整性问题'
+        })),
+        // 来自课程验证的警告（路径相关）
+        ...(courseValidation.warnings || []).map((warning: string) => ({
+          type: 'style_mismatch' as const,
+          severity: 'medium' as const,
+          description: warning,
+          element: 'path',
+          suggestedFix: '检查路径数据的完整性和准确性'
+        }))
+      ]
+
       return {
-        overallScore: validationResult.isValid ? 1.0 : 0.8,
+        overallScore: validationResult.isValid && courseValidation.isValid ? 1.0 : 0.8,
         pathCompleteness: this.calculatePathCompleteness(originalCourse),
         renderingAccuracy: 1.0, // JSON导出总是100%准确
         performanceMetrics: {
@@ -579,27 +828,17 @@ export class JSONExportEngine {
           elementCount: validationResult.statistics.obstacleCount,
           svgElementCount: 0 // JSON导出不涉及SVG
         },
-        recommendations: validationResult.recommendations,
-        detailedIssues: [
-          ...validationResult.errors.map(error => ({
-            type: this.mapErrorTypeToIssueType(error.code),
-            severity: error.severity as 'low' | 'medium' | 'high' | 'critical',
-            description: error.message,
-            element: error.field,
-            suggestedFix: this.getSuggestedFix(error.code)
-          })),
-          ...validationResult.warnings.map(warning => ({
-            type: 'style_mismatch' as const,
-            severity: 'low' as const,
-            description: warning.message,
-            element: warning.field,
-            suggestedFix: warning.suggestion
-          }))
-        ]
+        recommendations: allRecommendations,
+        detailedIssues: allIssues
       }
     } catch (error) {
       // 如果验证失败，返回基础质量报告
-      const validation = jsonData.metadata?.validationResults || { isValid: true, issues: [] }
+      const validation = jsonData.metadata?.validationResults || {
+        isValid: true,
+        issues: [],
+        warnings: [],
+        suggestions: []
+      }
 
       return {
         overallScore: validation.isValid ? 1.0 : 0.8,
@@ -612,34 +851,150 @@ export class JSONExportEngine {
           elementCount: originalCourse.obstacles.length,
           svgElementCount: 0
         },
-        recommendations: ['JSON导出完成，但质量验证过程出现问题'],
-        detailedIssues: []
+        recommendations: [
+          'JSON导出完成，但质量验证过程出现问题',
+          ...(validation.suggestions || [])
+        ],
+        detailedIssues: (validation.issues || []).map((issue: string) => ({
+          type: 'missing_element' as const,
+          severity: 'medium' as const,
+          description: issue,
+          element: 'courseDesign',
+          suggestedFix: '检查数据完整性'
+        }))
       }
     }
   }
 
   /**
    * 计算路径完整性
+   * 考虑起点、终点信息和路径点数量 (需求 1.5, 3.5)
    */
   private calculatePathCompleteness(courseDesign: CourseDesign): number {
     if (!courseDesign.path) {
       return courseDesign.obstacles.length > 0 ? 80 : 60 // 有障碍物但无路径
     }
 
-    const pathPoints = courseDesign.path.points.length
+    let completeness = 0
+    const path = courseDesign.path
+
+    // 基础分数：路径点数量 (最高50分)
+    const pathPoints = path.points.length
     if (pathPoints < 2) {
-      return 40 // 路径点不足
+      completeness += 15 // 路径点不足，无法形成有效路径
+    } else if (pathPoints >= 2 && pathPoints < 5) {
+      completeness += 30 // 基本路径
+    } else if (pathPoints >= 5 && pathPoints < 10) {
+      completeness += 40 // 详细路径
+    } else if (pathPoints >= 10 && pathPoints < 20) {
+      completeness += 45 // 非常详细的路径
+    } else {
+      completeness += 50 // 极其详细的路径
     }
 
-    if (pathPoints >= 2 && pathPoints < 5) {
-      return 70 // 基本路径
+    // 起点信息完整性 (最高20分)
+    if (path.startPoint) {
+      const startPoint = path.startPoint
+      const hasValidX = typeof startPoint.x === 'number' && !isNaN(startPoint.x)
+      const hasValidY = typeof startPoint.y === 'number' && !isNaN(startPoint.y)
+      const hasValidRotation = typeof startPoint.rotation === 'number' && !isNaN(startPoint.rotation)
+
+      if (hasValidX && hasValidY && hasValidRotation) {
+        // 检查起点是否在场地范围内
+        const inBounds = startPoint.x >= 0 && startPoint.x <= courseDesign.fieldWidth &&
+                        startPoint.y >= 0 && startPoint.y <= courseDesign.fieldHeight
+        completeness += inBounds ? 20 : 18 // 起点信息完整，在范围内加满分
+      } else if (hasValidX && hasValidY) {
+        completeness += 12 // 起点位置有效但缺少旋转角度
+      } else {
+        completeness += 5 // 起点信息不完整
+      }
+    } else {
+      // 没有起点信息
+      completeness += 0
     }
 
-    if (pathPoints >= 5 && pathPoints < 10) {
-      return 85 // 详细路径
+    // 终点信息完整性 (最高20分)
+    if (path.endPoint) {
+      const endPoint = path.endPoint
+      const hasValidX = typeof endPoint.x === 'number' && !isNaN(endPoint.x)
+      const hasValidY = typeof endPoint.y === 'number' && !isNaN(endPoint.y)
+      const hasValidRotation = typeof endPoint.rotation === 'number' && !isNaN(endPoint.rotation)
+
+      if (hasValidX && hasValidY && hasValidRotation) {
+        // 检查终点是否在场地范围内
+        const inBounds = endPoint.x >= 0 && endPoint.x <= courseDesign.fieldWidth &&
+                        endPoint.y >= 0 && endPoint.y <= courseDesign.fieldHeight
+        completeness += inBounds ? 20 : 18 // 终点信息完整，在范围内加满分
+      } else if (hasValidX && hasValidY) {
+        completeness += 12 // 终点位置有效但缺少旋转角度
+      } else {
+        completeness += 5 // 终点信息不完整
+      }
+    } else {
+      // 没有终点信息
+      completeness += 0
     }
 
-    return 100 // 非常详细的路径
+    // 控制点信息质量评估 (最多15分)
+    let controlPointScore = 0
+    let validControlPointCount = 0
+
+    path.points.forEach(point => {
+      let pointControlScore = 0
+
+      // 检查控制点1
+      if (point.controlPoint1) {
+        const cp1Valid = typeof point.controlPoint1.x === 'number' && !isNaN(point.controlPoint1.x) &&
+                        typeof point.controlPoint1.y === 'number' && !isNaN(point.controlPoint1.y)
+        if (cp1Valid) {
+          pointControlScore += 0.5
+          validControlPointCount++
+        }
+      }
+
+      // 检查控制点2
+      if (point.controlPoint2) {
+        const cp2Valid = typeof point.controlPoint2.x === 'number' && !isNaN(point.controlPoint2.x) &&
+                        typeof point.controlPoint2.y === 'number' && !isNaN(point.controlPoint2.y)
+        if (cp2Valid) {
+          pointControlScore += 0.5
+          validControlPointCount++
+        }
+      }
+
+      controlPointScore += pointControlScore
+    })
+
+    // 根据控制点覆盖率计算分数
+    if (pathPoints > 0) {
+      const controlPointCoverage = validControlPointCount / (pathPoints * 2) // 每个点最多2个控制点
+      controlPointScore = Math.min(15, controlPointCoverage * 15)
+    }
+
+    completeness += controlPointScore
+
+    // 路径点坐标有效性检查 (最多5分)
+    let validPointCount = 0
+    path.points.forEach(point => {
+      const hasValidX = typeof point.x === 'number' && !isNaN(point.x)
+      const hasValidY = typeof point.y === 'number' && !isNaN(point.y)
+      const inBounds = hasValidX && hasValidY &&
+                      point.x >= 0 && point.x <= courseDesign.fieldWidth &&
+                      point.y >= 0 && point.y <= courseDesign.fieldHeight
+
+      if (hasValidX && hasValidY) {
+        validPointCount += inBounds ? 1 : 0.8 // 在范围内的点得分更高
+      }
+    })
+
+    if (pathPoints > 0) {
+      const pointValidityScore = (validPointCount / pathPoints) * 5
+      completeness += pointValidityScore
+    }
+
+    // 确保分数在0-100之间
+    return Math.min(100, Math.max(0, Math.round(completeness)))
   }
 
   /**
@@ -713,7 +1068,7 @@ export class JSONExportEngine {
   /**
    * 确定错误类型
    */
-  private determineErrorType(error: any, stage: ExportStage): ExportErrorType {
+  private determineErrorType(error: unknown, stage: ExportStage): ExportErrorType {
     const errorMessage = error.message?.toLowerCase() || ''
 
     if (errorMessage.includes('parse') || errorMessage.includes('json')) {
@@ -748,7 +1103,7 @@ export class JSONExportEngine {
   /**
    * 生成错误建议操作
    */
-  private generateErrorSuggestedActions(error: any, stage: ExportStage): string[] {
+  private generateErrorSuggestedActions(error: unknown, stage: ExportStage): string[] {
     const errorMessage = error.message?.toLowerCase() || ''
     const actions: string[] = []
 

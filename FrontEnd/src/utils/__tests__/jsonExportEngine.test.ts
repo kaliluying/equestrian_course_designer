@@ -193,4 +193,285 @@ describe('JSONExportEngine', () => {
     expect(prettyResult.data as string).toContain('\n')
     expect(prettyResult.data as string).toContain('  ')
   })
+
+  describe('Path Validation', () => {
+    it('should validate path with complete data', async () => {
+      // 使用包含完整路径数据的画布
+      const result = await jsonEngine.exportToJSON(mockCanvas)
+
+      expect(result.success).toBe(true)
+      expect(result.qualityReport.pathCompleteness).toBeGreaterThan(60)
+
+      // 解析导出的数据
+      const parsedData = JSON.parse(result.data as string)
+      const validation = parsedData.metadata?.validationResults
+
+      expect(validation).toBeDefined()
+      expect(validation.statistics.hasPath).toBe(true)
+      expect(validation.statistics.pathPointCount).toBe(2)
+    })
+
+    it('should detect invalid path point coordinates', async () => {
+      // 创建包含无效路径点的画布
+      const invalidCanvas = document.createElement('div')
+      invalidCanvas.setAttribute('data-course-design', JSON.stringify({
+        id: 'test-course-2',
+        name: '无效路径测试',
+        obstacles: [],
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+        fieldWidth: 60,
+        fieldHeight: 40,
+        path: {
+          visible: true,
+          points: [
+            { x: NaN, y: 50 }, // 无效的x坐标
+            { x: 150, y: 'invalid' } // 无效的y坐标
+          ],
+          startPoint: { x: 50, y: 50, rotation: 0 },
+          endPoint: { x: 150, y: 150, rotation: 0 }
+        }
+      }))
+      document.body.appendChild(invalidCanvas)
+
+      const result = await jsonEngine.exportToJSON(invalidCanvas)
+
+      expect(result.success).toBe(true) // 导出仍然成功，但有警告
+
+      const parsedData = JSON.parse(result.data as string)
+      const validation = parsedData.metadata?.validationResults
+
+      expect(validation.issues.length).toBeGreaterThan(0)
+      expect(validation.isValid).toBe(false)
+    })
+
+    it('should detect missing start point', async () => {
+      const noStartPointCanvas = document.createElement('div')
+      noStartPointCanvas.setAttribute('data-course-design', JSON.stringify({
+        id: 'test-course-3',
+        name: '缺少起点测试',
+        obstacles: [],
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+        fieldWidth: 60,
+        fieldHeight: 40,
+        path: {
+          visible: true,
+          points: [
+            { x: 50, y: 50 },
+            { x: 150, y: 150 }
+          ],
+          endPoint: { x: 150, y: 150, rotation: 0 }
+        }
+      }))
+      document.body.appendChild(noStartPointCanvas)
+
+      const result = await jsonEngine.exportToJSON(noStartPointCanvas)
+
+      expect(result.success).toBe(true)
+
+      const parsedData = JSON.parse(result.data as string)
+      const validation = parsedData.metadata?.validationResults
+
+      expect(validation.warnings).toContain('路径缺少起点信息')
+      expect(validation.suggestions).toContain('添加起点以完善路径设计')
+    })
+
+    it('should detect missing end point', async () => {
+      const noEndPointCanvas = document.createElement('div')
+      noEndPointCanvas.setAttribute('data-course-design', JSON.stringify({
+        id: 'test-course-4',
+        name: '缺少终点测试',
+        obstacles: [],
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+        fieldWidth: 60,
+        fieldHeight: 40,
+        path: {
+          visible: true,
+          points: [
+            { x: 50, y: 50 },
+            { x: 150, y: 150 }
+          ],
+          startPoint: { x: 50, y: 50, rotation: 0 }
+        }
+      }))
+      document.body.appendChild(noEndPointCanvas)
+
+      const result = await jsonEngine.exportToJSON(noEndPointCanvas)
+
+      expect(result.success).toBe(true)
+
+      const parsedData = JSON.parse(result.data as string)
+      const validation = parsedData.metadata?.validationResults
+
+      expect(validation.warnings).toContain('路径缺少终点信息')
+      expect(validation.suggestions).toContain('添加终点以完善路径设计')
+    })
+
+    it('should detect insufficient path points', async () => {
+      const fewPointsCanvas = document.createElement('div')
+      fewPointsCanvas.setAttribute('data-course-design', JSON.stringify({
+        id: 'test-course-5',
+        name: '路径点不足测试',
+        obstacles: [],
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+        fieldWidth: 60,
+        fieldHeight: 40,
+        path: {
+          visible: true,
+          points: [
+            { x: 50, y: 50 }
+          ],
+          startPoint: { x: 50, y: 50, rotation: 0 },
+          endPoint: { x: 150, y: 150, rotation: 0 }
+        }
+      }))
+      document.body.appendChild(fewPointsCanvas)
+
+      const result = await jsonEngine.exportToJSON(fewPointsCanvas)
+
+      expect(result.success).toBe(true)
+
+      const parsedData = JSON.parse(result.data as string)
+      const validation = parsedData.metadata?.validationResults
+
+      expect(validation.warnings).toContain('路径至少需要2个点才能形成有效路径')
+    })
+
+    it('should validate path points within field boundaries', async () => {
+      const outOfBoundsCanvas = document.createElement('div')
+      outOfBoundsCanvas.setAttribute('data-course-design', JSON.stringify({
+        id: 'test-course-6',
+        name: '路径点超出边界测试',
+        obstacles: [],
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+        fieldWidth: 60,
+        fieldHeight: 40,
+        path: {
+          visible: true,
+          points: [
+            { x: -10, y: 50 }, // x坐标超出下界
+            { x: 70, y: 50 }   // x坐标超出上界
+          ],
+          startPoint: { x: 50, y: 50, rotation: 0 },
+          endPoint: { x: 150, y: 150, rotation: 0 }
+        }
+      }))
+      document.body.appendChild(outOfBoundsCanvas)
+
+      const result = await jsonEngine.exportToJSON(outOfBoundsCanvas)
+
+      expect(result.success).toBe(true)
+
+      const parsedData = JSON.parse(result.data as string)
+      const validation = parsedData.metadata?.validationResults
+
+      expect(validation.warnings.some((w: string) => w.includes('超出场地范围'))).toBe(true)
+    })
+
+    it('should validate control points', async () => {
+      const controlPointsCanvas = document.createElement('div')
+      controlPointsCanvas.setAttribute('data-course-design', JSON.stringify({
+        id: 'test-course-7',
+        name: '控制点测试',
+        obstacles: [],
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+        fieldWidth: 60,
+        fieldHeight: 40,
+        path: {
+          visible: true,
+          points: [
+            {
+              x: 50,
+              y: 50,
+              controlPoint1: { x: NaN, y: 60 }, // 无效的控制点
+              controlPoint2: { x: 70, y: 'invalid' } // 无效的控制点
+            },
+            { x: 150, y: 150 }
+          ],
+          startPoint: { x: 50, y: 50, rotation: 0 },
+          endPoint: { x: 150, y: 150, rotation: 0 }
+        }
+      }))
+      document.body.appendChild(controlPointsCanvas)
+
+      const result = await jsonEngine.exportToJSON(controlPointsCanvas)
+
+      expect(result.success).toBe(true)
+
+      const parsedData = JSON.parse(result.data as string)
+      const validation = parsedData.metadata?.validationResults
+
+      expect(validation.warnings.some((w: string) => w.includes('控制点'))).toBe(true)
+    })
+
+    it('should calculate path completeness with start and end points', async () => {
+      // 测试完整路径的完整性分数
+      const completePathCanvas = document.createElement('div')
+      completePathCanvas.setAttribute('data-course-design', JSON.stringify({
+        id: 'test-course-8',
+        name: '完整路径测试',
+        obstacles: [],
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+        fieldWidth: 60,
+        fieldHeight: 40,
+        path: {
+          visible: true,
+          points: [
+            { x: 10, y: 10 },
+            { x: 20, y: 20 },
+            { x: 30, y: 30 },
+            { x: 40, y: 40 },
+            { x: 50, y: 50 }
+          ],
+          startPoint: { x: 10, y: 10, rotation: 0 },
+          endPoint: { x: 50, y: 50, rotation: 90 }
+        }
+      }))
+      document.body.appendChild(completePathCanvas)
+
+      const result = await jsonEngine.exportToJSON(completePathCanvas)
+
+      expect(result.success).toBe(true)
+      expect(result.qualityReport.pathCompleteness).toBeGreaterThanOrEqual(80)
+    })
+
+    it('should handle path without start and end points', async () => {
+      const incompletePathCanvas = document.createElement('div')
+      incompletePathCanvas.setAttribute('data-course-design', JSON.stringify({
+        id: 'test-course-9',
+        name: '不完整路径测试',
+        obstacles: [],
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+        fieldWidth: 60,
+        fieldHeight: 40,
+        path: {
+          visible: true,
+          points: [
+            { x: 10, y: 10 },
+            { x: 20, y: 20 },
+            { x: 30, y: 30 }
+          ]
+        }
+      }))
+      document.body.appendChild(incompletePathCanvas)
+
+      const result = await jsonEngine.exportToJSON(incompletePathCanvas)
+
+      expect(result.success).toBe(true)
+      expect(result.qualityReport.pathCompleteness).toBeLessThan(90)
+
+      const parsedData = JSON.parse(result.data as string)
+      const validation = parsedData.metadata?.validationResults
+
+      expect(validation.warnings).toContain('路径缺少起点信息')
+      expect(validation.warnings).toContain('路径缺少终点信息')
+    })
+  })
 })

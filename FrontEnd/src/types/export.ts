@@ -85,7 +85,7 @@ export interface ExportMetadata {
   fileSize: number
   dimensions: { width: number; height: number }
   exportTime: number
-  renderingMethod: 'html2canvas' | 'backup' | 'svg-native'
+  renderingMethod: 'html2canvas' | 'backup' | 'svg-native' | 'json-serialization'
   qualityScore: number
   timestamp: string
   format: ExportFormat

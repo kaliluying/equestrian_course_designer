@@ -2613,6 +2613,11 @@ const handleGlobalMouseUp = (event: MouseEvent) => {
 
 // 组件挂载时添加事件监听
 onMounted(() => {
+  // 将 course store 暴露到全局，供导出功能使用
+  if (typeof window !== 'undefined') {
+    (window as unknown).__COURSE_STORE__ = courseStore
+  }
+
   // 只在非编辑模式下（即没有 design_id_to_update）才清除
   const fromMyDesigns = localStorage.getItem('from_my_designs')
 

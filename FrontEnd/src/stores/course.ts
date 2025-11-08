@@ -1240,8 +1240,39 @@ export const useCourseStore = defineStore('course', () => {
   }
 
   /**
+   * 获取包含完整路径信息的课程设计
+   * @description 整合coursePath、startPoint和endPoint到CourseDesign对象的path字段
+   * @returns {CourseDesign} 包含路径数据的完整课程设计
+   */
+  function getCompleteDesign(): CourseDesign {
+    const design = { ...currentCourse.value }
+
+    // 如果路径可见且有路径点，整合路径数据
+    if (coursePath.value.visible && coursePath.value.points.length > 0) {
+      design.path = {
+        visible: coursePath.value.visible,
+        points: coursePath.value.points,
+        startPoint: {
+          x: startPoint.value.x,
+          y: startPoint.value.y,
+          rotation: startPoint.value.rotation
+        },
+        endPoint: {
+          x: endPoint.value.x,
+          y: endPoint.value.y,
+          rotation: endPoint.value.rotation
+        }
+      }
+    } else {
+      design.path = undefined
+    }
+
+    return design
+  }
+
+  /**
    * 更新课程信息
-   * @description 更新最后修改时间并触发自动保存
+   * @description 更新最后修改时间并触发自动保存，同时同步路径数据到currentCourse
    */
   function updateCourse() {
     // 获取当前画布元素和视口信息
@@ -1261,9 +1292,30 @@ export const useCourseStore = defineStore('course', () => {
 
     // 更新课程状态中的视口信息
     currentCourse.value.viewportInfo = viewportInfo
+
+    // 同步路径数据到currentCourse.path
+    if (coursePath.value.visible && coursePath.value.points.length > 0) {
+      currentCourse.value.path = {
+        visible: coursePath.value.visible,
+        points: coursePath.value.points,
+        startPoint: {
+          x: startPoint.value.x,
+          y: startPoint.value.y,
+          rotation: startPoint.value.rotation
+        },
+        endPoint: {
+          x: endPoint.value.x,
+          y: endPoint.value.y,
+          rotation: endPoint.value.rotation
+        }
+      }
+    } else {
+      currentCourse.value.path = undefined
+    }
+
     // 更新最后修改时间
     currentCourse.value.updatedAt = new Date().toISOString()
-    // 调用自动保存，现在会包含最新的视口信息
+    // 调用自动保存，现在会包含最新的视口信息和路径数据
     saveToLocalStorage()
   }
 
@@ -1595,15 +1647,42 @@ export const useCourseStore = defineStore('course', () => {
   async function loadCourse(file: File) {
     try {
       const text = await file.text()
-      const courseData = JSON.parse(text)
+      let parsedData = JSON.parse(text)
 
-      // 处理视口信息
-      const originalViewport = courseData.viewportInfo || {
-        width: window.innerWidth,
-        height: window.innerHeight,
-        canvasWidth: 800,
-        canvasHeight: 600,
-        aspectRatio: (courseData.fieldWidth || 80) / (courseData.fieldHeight || 60),
+      // 检测JSON格式：新格式（包含courseDesign字段）或旧格式（直接是CourseDesign对象）
+      let courseData: CourseDesign
+      let originalViewport: any
+
+      if (parsedData.courseDesign) {
+        // 新格式：从导出引擎生成的JSON
+        console.log('检测到新格式JSON（包含courseDesign字段）')
+        courseData = parsedData.courseDesign
+        originalViewport = parsedData.viewportInfo || {
+          width: window.innerWidth,
+          height: window.innerHeight,
+          canvasWidth: 800,
+          canvasHeight: 600,
+          aspectRatio: (courseData.fieldWidth || 80) / (courseData.fieldHeight || 60),
+        }
+      } else if (parsedData.id && parsedData.obstacles) {
+        // 旧格式：直接是CourseDesign对象
+        console.log('检测到旧格式JSON（直接CourseDesign对象）')
+        courseData = parsedData
+        originalViewport = courseData.viewportInfo || {
+          width: window.innerWidth,
+          height: window.innerHeight,
+          canvasWidth: 800,
+          canvasHeight: 600,
+          aspectRatio: (courseData.fieldWidth || 80) / (courseData.fieldHeight || 60),
+        }
+      } else {
+        // 无法识别的格式
+        throw new Error('无法识别的JSON文件格式。请确保文件是有效的课程设计文件。')
+      }
+
+      // 验证必需字段
+      if (!courseData.id || !Array.isArray(courseData.obstacles)) {
+        throw new Error('文件格式错误：缺少必需的字段（id或obstacles）')
       }
 
       // 确保canvas已经渲染，才能获取准确的尺寸
@@ -2270,6 +2349,7 @@ export const useCourseStore = defineStore('course', () => {
     addObstacleWithId,
     updateObstacle,
     removeObstacle,
+    getCompleteDesign,
     updateCourse,
     saveToLocalStorage,
     restoreFromLocalStorage,
