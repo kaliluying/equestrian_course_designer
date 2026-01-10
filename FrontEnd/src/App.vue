@@ -36,14 +36,6 @@
           反馈
         </router-link>
 
-        <!-- 比赛信息按钮 -->
-        <div v-if="$route.path === '/'" class="competition-toggle" @click="showCompetitionDrawer = true">
-          <el-icon>
-            <InfoFilled />
-          </el-icon>
-          <span>比赛信息</span>
-        </div>
-
         <div class="user-info">
           <template v-if="userStore.currentUser">
             <div class="user-profile">
@@ -54,7 +46,7 @@
                 {{ userStore.currentUser.username }}
               </span>
             </div>
-            <el-button type="primary" size="small" :disabled="!userStore.currentUser" @click="toggleCollaboration"
+            <el-button type="primary" size="small" :disabled="!userStore.currentUser" @click="toggleCollaboration(false)"
               class="collab-button" :class="{ 'is-active': isCollaborating }">
               <el-icon>
                 <Connection />
@@ -123,6 +115,14 @@
           <Check />
         </el-icon>
         <span>已自动保存</span>
+      </div>
+
+      <!-- 比赛信息浮动按钮 - 只在首页显示 -->
+      <div v-if="$route.path === '/'" class="competition-fab" @click="showCompetitionDrawer = true">
+        <el-icon :size="20">
+          <InfoFilled />
+        </el-icon>
+        <span>比赛信息</span>
       </div>
 
       <!-- 登录对话框 -->
@@ -924,13 +924,27 @@ const toggleCollaboration = async (viaLink = false) => {
   isTogglingCollaboration = true
 
   try {
-    // 检查用户是否为会员，但如果是通过链接加入则跳过检查
-    if (!userStore.currentUser?.is_premium_active && !isCollaborating.value && !viaLink) {
-      // 先尝试更新用户资料，确保会员状态是最新的
-      await userStore.updateUserProfile()
+    // 如果已经在协作中，停止协作（无需检查会员）
+    if (isCollaborating.value) {
+      if (canvasRef.value) {
+        await canvasRef.value.stopCollaboration()
+      }
+      isCollaborating.value = false
+      console.log('已停止协作')
+      isTogglingCollaboration = false
+      return
+    }
 
-      // 再次检查会员状态
-      if (!userStore.currentUser?.is_premium_active) {
+    // 开始协作前检查会员状态（通过链接加入除外）
+    if (!viaLink) {
+      console.log('检查会员状态，viaLink:', viaLink)
+      // 调用后端 API 检查会员状态
+      const { checkPremiumStatus } = await import('@/api/user')
+      const premiumCheck = await checkPremiumStatus()
+      console.log('会员状态检查结果:', premiumCheck)
+
+      if (!premiumCheck.is_premium_active) {
+        console.log('用户不是会员，显示升级对话框')
         ElMessageBox.confirm(
           '协作功能是会员专属功能，请升级到会员以使用此功能。',
           '会员专属功能',
@@ -940,7 +954,6 @@ const toggleCollaboration = async (viaLink = false) => {
             type: 'warning'
           }
         ).then(() => {
-          // 跳转到用户资料页面
           router.push('/profile')
         }).catch(() => {
           // 用户取消操作
@@ -948,28 +961,20 @@ const toggleCollaboration = async (viaLink = false) => {
         isTogglingCollaboration = false
         return
       }
+      console.log('用户是会员，继续建立连接')
+    } else {
+      console.log('通过链接加入，跳过会员检查')
     }
 
-    // 如果已经在协作中，停止协作
-    if (isCollaborating.value) {
-      // 停止协作
-      if (canvasRef.value) {
-        await canvasRef.value.stopCollaboration()
-      }
-      isCollaborating.value = false
-      console.log('已停止协作')
-    } else {
-      // 开始协作
-      if (canvasRef.value) {
-        // 传递通过链接加入的标志
-        await canvasRef.value.startCollaboration(viaLink)
-      }
-      isCollaborating.value = true
-      console.log('已开始协作')
+    // 开始协作
+    if (canvasRef.value) {
+      await canvasRef.value.startCollaboration(viaLink)
     }
+    isCollaborating.value = true
+    console.log('已开始协作')
   } catch (error) {
     console.error('切换协作状态时出错:', error)
-    console.error('操作失败，请稍后重试')
+    ElMessage.error('操作失败，请稍后重试')
   } finally {
     isTogglingCollaboration = false
   }
@@ -1109,14 +1114,6 @@ const showOnboarding = ref(false)
 const handleDrawerClose = (done: () => void) => {
   done()
 }
-
-// 监听右侧面板宽度变化，更新比赛信息按钮位置
-watch(rightPanelWidth, (newWidth) => {
-  const toggle = document.querySelector('.competition-toggle') as HTMLElement
-  if (toggle) {
-    toggle.style.right = `${newWidth + 10}px`
-  }
-})
 
 // 检查是否需要显示首次访问引导
 const checkOnboarding = () => {
@@ -1700,30 +1697,47 @@ body,
   }
 }
 
-.competition-toggle {
+.competition-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  color: rgba(255, 255, 255, 0.85);
-  padding: 6px 12px;
-  border-radius: 6px;
+  gap: 8px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+  color: white;
+  border-radius: 50px;
   cursor: pointer;
-  transition: var(--transition);
-  background-color: rgba(255, 255, 255, 0.1);
-  margin-right: 12px;
+  box-shadow: 0 4px 12px rgba(58, 106, 248, 0.4);
+  transition: all 0.3s ease;
+  z-index: 1000;
+  font-weight: 500;
+  user-select: none;
 
   &:hover {
-    color: white;
-    background-color: rgba(255, 255, 255, 0.15);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(58, 106, 248, 0.5);
+  }
+
+  &:active {
+    transform: translateY(0);
   }
 
   .el-icon {
-    font-size: 16px;
+    flex-shrink: 0;
   }
 
   span {
     font-size: 14px;
     white-space: nowrap;
+  }
+
+  @media (max-width: 768px) {
+    bottom: 16px;
+    right: 16px;
+    padding: 10px 16px;
+    font-size: 13px;
   }
 }
 

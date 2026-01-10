@@ -74,7 +74,20 @@ export class JSONExportEngine {
       includePath: true,
       includeTimestamps: true,
       includeIds: true,
-      obstacleFields: ['id', 'type', 'position', 'rotation', 'poles', 'number'],
+      obstacleFields: [
+        'id',
+        'type',
+        'position',
+        'rotation',
+        'poles',
+        'number',
+        'numberPosition',
+        'customId',
+        'decorationProperties',
+        'wallProperties',
+        'liverpoolProperties',
+        'waterProperties'
+      ],
       pathFields: ['points', 'visible', 'startPoint', 'endPoint'],
       customFields: {}
     },
@@ -704,7 +717,20 @@ export class JSONExportEngine {
           includeViewportInfo: options.includeViewportInfo ?? true,
           includeTimestamps: options.selectiveInclude.includeTimestamps ?? true,
           includeIds: options.selectiveInclude.includeIds ?? true,
-          obstacleFields: options.selectiveInclude.obstacleFields ?? ['id', 'type', 'position', 'rotation', 'poles', 'number'],
+          obstacleFields: options.selectiveInclude.obstacleFields ?? [
+            'id',
+            'type',
+            'position',
+            'rotation',
+            'poles',
+            'number',
+            'numberPosition',
+            'customId',
+            'decorationProperties',
+            'wallProperties',
+            'liverpoolProperties',
+            'waterProperties'
+          ],
           pathFields: options.selectiveInclude.pathFields ?? ['points', 'visible', 'startPoint', 'endPoint'],
           customFields: options.selectiveInclude.customFields ?? {}
         }
@@ -1042,7 +1068,7 @@ export class JSONExportEngine {
    * 创建导出错误
    */
   private createExportError(
-    error: any,
+    error: unknown,
     stage: ExportStage,
     canvas: HTMLElement,
     options: Required<JSONExportOptions>

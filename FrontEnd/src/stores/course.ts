@@ -1319,40 +1319,39 @@ export const useCourseStore = defineStore('course', () => {
     saveToLocalStorage()
   }
 
-  /**
-   * 自动保存到localStorage
-   * @description 保存当前课程设计的完整状态，包括路径信息和视口信息
-   */
+  let autosaveTimeout: ReturnType<typeof setTimeout> | null = null
+  const AUTOSAVE_DELAY = 1000
+
   function saveToLocalStorage() {
-    try {
-      // 检查是否有实际内容需要保存（避免保存空设计）
-      if (
-        currentCourse.value.obstacles.length === 0 &&
-        (!coursePath.value.visible || coursePath.value.points.length === 0)
-      ) {
-        // 可以选择在此处清除自动保存或直接返回
-        // localStorage.removeItem('autosaved_course');
-        // localStorage.removeItem('autosaved_timestamp');
-        return // 如果没有内容，不保存
-      }
-
-      // 创建包含路线和视口信息的完整数据对象
-      const courseDataToSave = {
-        ...currentCourse.value, // 包含更新后的 viewportInfo
-        path: {
-          visible: coursePath.value.visible,
-          points: coursePath.value.points,
-          startPoint: startPoint.value,
-          endPoint: endPoint.value,
-        },
-      }
-
-      // 保存数据到localStorage
-      localStorage.setItem('autosaved_course', JSON.stringify(courseDataToSave))
-      localStorage.setItem('autosaved_timestamp', new Date().toISOString())
-    } catch (error) {
-      console.error('自动保存到localStorage失败:', error)
+    if (autosaveTimeout) {
+      clearTimeout(autosaveTimeout)
     }
+
+    autosaveTimeout = setTimeout(() => {
+      try {
+        if (
+          currentCourse.value.obstacles.length === 0 &&
+          (!coursePath.value.visible || coursePath.value.points.length === 0)
+        ) {
+          return
+        }
+
+        const courseDataToSave = {
+          ...currentCourse.value,
+          path: {
+            visible: coursePath.value.visible,
+            points: coursePath.value.points,
+            startPoint: startPoint.value,
+            endPoint: endPoint.value,
+          },
+        }
+
+        localStorage.setItem('autosaved_course', JSON.stringify(courseDataToSave))
+        localStorage.setItem('autosaved_timestamp', new Date().toISOString())
+      } catch (error) {
+        console.error('自动保存到localStorage失败:', error)
+      }
+    }, AUTOSAVE_DELAY)
   }
 
   /**

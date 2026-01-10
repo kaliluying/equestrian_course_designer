@@ -2,39 +2,61 @@ import { fileURLToPath, URL } from 'node:url'
 
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import Icons from 'unplugin-icons/vite'
+import Components from 'unplugin-vue-components/vite'
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
+import { visualizer } from 'rollup-plugin-visualizer'
+import viteCompression from 'vite-plugin-compression'
 
 // https://vite.dev/config/
 export default defineConfig({
   base: '/',
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    Components({
+      resolvers: [
+        ElementPlusResolver(),
+      ],
+    }),
+    Icons({
+      compiler: 'vue3',
+      autoInstall: true,
+    }),
+    viteCompression({
+      algorithm: 'gzip',
+      ext: '.gz',
+      threshold: 10240,
+    }),
+    viteCompression({
+      algorithm: 'brotliCompress',
+      ext: '.br',
+      threshold: 10240,
+    }),
+    visualizer({
+      filename: 'dist/stats.html',
+      open: false,
+      gzipSize: true,
+      brotliSize: true,
+    }),
+  ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
   build: {
-    target: 'es2015',
-    minify: 'terser',
+    target: 'es2020',
+    minify: 'esbuild',
     cssMinify: true,
     cssCodeSplit: true,
     sourcemap: false,
     assetsInlineLimit: 4096,
     outDir: 'dist',
     emptyOutDir: true,
-    terserOptions: {
-      compress: {
-        drop_console: false,
-        drop_debugger: true,
-        pure_funcs: [],
-        passes: 2,
-      },
-      format: {
-        comments: false,
-      },
-    },
     rollupOptions: {
       output: {
-        entryFileNames: 'js/[name].js',
+        entryFileNames: 'js/[name]-[hash].js',
+        chunkFileNames: 'js/[name]-[hash].js',
         assetFileNames: (assetInfo) => {
           const info = assetInfo.name?.split('.') || []
           const ext = info[info.length - 1] || 'js'
@@ -50,12 +72,17 @@ export default defineConfig({
           }
           return `${ext}/[name].[ext]`
         },
-        chunkFileNames: 'js/[name].js',
         manualChunks: {
-          vendor: ['vue', 'pinia'],
-          'element-plus': ['element-plus'],
+          'vue-core': ['vue', 'pinia', 'vue-router'],
+          'element-ui': ['element-plus'],
+          'export-engine': ['html2canvas', 'jspdf'],
+          'utils': ['axios', 'uuid'],
         },
       },
     },
+  },
+  optimizeDeps: {
+    include: ['vue', 'vue-router', 'pinia', 'element-plus'],
+    exclude: ['html2canvas', 'jspdf'],
   },
 })

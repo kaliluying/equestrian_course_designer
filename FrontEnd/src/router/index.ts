@@ -1,12 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useCourseStore } from '@/stores/course'
-import ResetPassword from '../views/ResetPassword.vue'
-import SharedDesigns from '../views/SharedDesigns.vue'
-import MyDesigns from '../views/MyDesigns.vue'
-import UserProfile from '../views/UserProfile.vue'
-import Feedback from '../views/Feedback.vue'
-import Home from '../views/Home.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -14,35 +8,35 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
-      component: Home,
+      component: () => import('../views/Home.vue'),
     },
     {
       path: '/my-designs',
       name: 'my-designs',
-      component: MyDesigns,
+      component: () => import('../views/MyDesigns.vue'),
       meta: { requiresAuth: true },
     },
     {
       path: '/shared-designs',
       name: 'shared-designs',
-      component: SharedDesigns,
+      component: () => import('../views/SharedDesigns.vue'),
       meta: { requiresAuth: true },
     },
     {
       path: '/profile',
       name: 'profile',
-      component: UserProfile,
+      component: () => import('../views/UserProfile.vue'),
       meta: { requiresAuth: true },
     },
     {
       path: '/feedback',
       name: 'feedback',
-      component: Feedback,
+      component: () => import('../views/Feedback.vue'),
     },
     {
       path: '/reset-password',
       name: 'reset-password',
-      component: ResetPassword,
+      component: () => import('../views/ResetPassword.vue'),
     },
   ],
 })
@@ -53,20 +47,16 @@ router.beforeEach(async (to, from, next) => {
   const courseStore = useCourseStore()
 
   // 检查是否需要认证
-  if (to.meta.requiresAuth && !userStore.isAuthenticated) {
-    next('/')
-    return
-  }
-
-  // 如果用户已登录，尝试恢复用户会话
-  if (userStore.isAuthenticated) {
-    try {
-      await userStore.updateUserProfile()
-    } catch (error) {
-      console.error('更新用户资料失败:', error)
-      userStore.logout()
+  if (to.meta.requiresAuth) {
+    // 双重检查：既检查 store 状态，也检查 localStorage
+    const hasToken = !!localStorage.getItem('access_token')
+    if (!userStore.isAuthenticated && !hasToken) {
       next('/')
       return
+    }
+    // 如果 localStorage 有 token 但 store 未初始化，重新初始化
+    if (!userStore.isAuthenticated && hasToken) {
+      userStore.initializeAuth()
     }
   }
 

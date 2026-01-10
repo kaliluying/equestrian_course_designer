@@ -65,6 +65,11 @@ export interface JSONStatistics {
   pathPointCount: number
   fieldCount: number
   nestingDepth: number
+  customObstacleCount: number
+  decorationCount: number
+  decorationByCategory: Record<string, number>
+  specialObstacleCount: { wall: number; liverpool: number; water: number }
+  obstaclesWithCustomId: number
 }
 
 /**
@@ -597,6 +602,24 @@ export class JSONExportFormatter {
           suggestion: '确保杆子数据格式正确'
         })
       }
+
+      // 针对CUSTOM类型障碍物的特殊验证
+      if (obstacle.type === 'CUSTOM') {
+        this.validateCustomObstacle(obstacle, index, errors, warnings)
+      }
+
+      // 针对DECORATION类型障碍物的装饰物属性验证
+      if (obstacle.type === 'DECORATION' && obstacle.decorationProperties) {
+        this.validateDecorationProperties(obstacle.decorationProperties, index, errors, warnings)
+      }
+
+      // 验证特殊障碍物属性（砖墙、利物浦、水障）
+      this.validateSpecialObstacleProperties(obstacle, index, errors, warnings)
+
+      // 验证杆件配置
+      if (obstacle.poles && Array.isArray(obstacle.poles)) {
+        this.validatePoles(obstacle.poles, index, errors, warnings)
+      }
     })
 
     // 检查重复ID
@@ -776,6 +799,301 @@ export class JSONExportFormatter {
   }
 
   /**
+   * 验证自定义障碍物
+   * 针对CUSTOM类型障碍物进行特殊验证
+   */
+  private validateCustomObstacle(
+    obstacle: any,
+    index: number,
+    errors: JSONValidationError[],
+    warnings: JSONValidationWarning[]
+  ): void {
+    const fieldPrefix = `courseDesign.obstacles[${index}]`
+
+    // 验证customId
+    if (!obstacle.customId) {
+      warnings.push({
+        field: `${fieldPrefix}.customId`,
+        message: `自定义障碍物 ${index + 1} 缺少customId字段`,
+        suggestion: '添加customId以关联障碍物模板'
+      })
+    } else if (typeof obstacle.customId !== 'string') {
+      errors.push({
+        field: `${fieldPrefix}.customId`,
+        message: `自定义障碍物 ${index + 1} 的customId必须是字符串`,
+        severity: 'medium',
+        code: 'INVALID_CUSTOM_ID_TYPE'
+      })
+    }
+  }
+
+  /**
+   * 验证装饰物属性
+   * 验证DECORATION类型障碍物的decorationProperties
+   */
+  private validateDecorationProperties(
+    properties: any,
+    obstacleIndex: number,
+    errors: JSONValidationError[],
+    warnings: JSONValidationWarning[]
+  ): void {
+    const fieldPrefix = `courseDesign.obstacles[${obstacleIndex}].decorationProperties`
+
+    // 验证必需字段
+    const requiredFields = ['category', 'width', 'height', 'color']
+    requiredFields.forEach(field => {
+      if (!(field in properties)) {
+        errors.push({
+          field: `${fieldPrefix}.${field}`,
+          message: `装饰物缺少必需字段: ${field}`,
+          severity: 'high',
+          code: 'MISSING_DECORATION_FIELD'
+        })
+      }
+    })
+
+    // 验证category
+    const validCategories = ['TABLE', 'TREE', 'ENTRANCE', 'EXIT', 'FLOWER', 'FENCE', 'CUSTOM']
+    if (properties.category && !validCategories.includes(properties.category)) {
+      errors.push({
+        field: `${fieldPrefix}.category`,
+        message: `装饰物类别无效: ${properties.category}`,
+        severity: 'high',
+        code: 'INVALID_DECORATION_CATEGORY'
+      })
+    }
+
+    // 验证尺寸
+    if (typeof properties.width !== 'number' || properties.width <= 0) {
+      errors.push({
+        field: `${fieldPrefix}.width`,
+        message: '装饰物宽度必须是正数',
+        severity: 'medium',
+        code: 'INVALID_DECORATION_WIDTH'
+      })
+    }
+
+    if (typeof properties.height !== 'number' || properties.height <= 0) {
+      errors.push({
+        field: `${fieldPrefix}.height`,
+        message: '装饰物高度必须是正数',
+        severity: 'medium',
+        code: 'INVALID_DECORATION_HEIGHT'
+      })
+    }
+
+    // 验证树特定属性
+    if (properties.category === 'TREE') {
+      if (properties.trunkHeight !== undefined && (typeof properties.trunkHeight !== 'number' || properties.trunkHeight <= 0)) {
+        warnings.push({
+          field: `${fieldPrefix}.trunkHeight`,
+          message: '树干高度应该是正数',
+          suggestion: '确保树干高度是有效的正数值'
+        })
+      }
+      if (properties.trunkWidth !== undefined && (typeof properties.trunkWidth !== 'number' || properties.trunkWidth <= 0)) {
+        warnings.push({
+          field: `${fieldPrefix}.trunkWidth`,
+          message: '树干宽度应该是正数',
+          suggestion: '确保树干宽度是有效的正数值'
+        })
+      }
+      if (properties.foliageRadius !== undefined && (typeof properties.foliageRadius !== 'number' || properties.foliageRadius <= 0)) {
+        warnings.push({
+          field: `${fieldPrefix}.foliageRadius`,
+          message: '树冠半径应该是正数',
+          suggestion: '确保树冠半径是有效的正数值'
+        })
+      }
+    }
+  }
+
+  /**
+   * 验证特殊障碍物属性
+   * 验证砖墙、利物浦、水障类型障碍物的特殊属性
+   */
+  private validateSpecialObstacleProperties(
+    obstacle: any,
+    index: number,
+    errors: JSONValidationError[],
+    warnings: JSONValidationWarning[]
+  ): void {
+    const fieldPrefix = `courseDesign.obstacles[${index}]`
+
+    // 验证砖墙属性
+    if (obstacle.type === 'WALL' && obstacle.wallProperties) {
+      const props = obstacle.wallProperties
+      const propPrefix = `${fieldPrefix}.wallProperties`
+
+      if (typeof props.height !== 'number' || props.height <= 0) {
+        errors.push({
+          field: `${propPrefix}.height`,
+          message: '砖墙高度必须是正数',
+          severity: 'medium',
+          code: 'INVALID_WALL_HEIGHT'
+        })
+      }
+
+      if (typeof props.width !== 'number' || props.width <= 0) {
+        errors.push({
+          field: `${propPrefix}.width`,
+          message: '砖墙宽度必须是正数',
+          severity: 'medium',
+          code: 'INVALID_WALL_WIDTH'
+        })
+      }
+    }
+
+    // 验证利物浦属性
+    if (obstacle.type === 'LIVERPOOL' && obstacle.liverpoolProperties) {
+      const props = obstacle.liverpoolProperties
+      const propPrefix = `${fieldPrefix}.liverpoolProperties`
+
+      if (typeof props.waterDepth !== 'number' || props.waterDepth <= 0) {
+        errors.push({
+          field: `${propPrefix}.waterDepth`,
+          message: '利物浦水深必须是正数',
+          severity: 'medium',
+          code: 'INVALID_LIVERPOOL_DEPTH'
+        })
+      }
+
+      if (props.hasRail && typeof props.railHeight !== 'number') {
+        warnings.push({
+          field: `${propPrefix}.railHeight`,
+          message: '利物浦横杆高度应该是数字',
+          suggestion: '当hasRail为true时，应提供有效的railHeight'
+        })
+      }
+    }
+
+    // 验证水障属性
+    if (obstacle.type === 'WATER' && obstacle.waterProperties) {
+      const props = obstacle.waterProperties
+      const propPrefix = `${fieldPrefix}.waterProperties`
+
+      if (typeof props.depth !== 'number' || props.depth <= 0) {
+        errors.push({
+          field: `${propPrefix}.depth`,
+          message: '水障深度必须是正数',
+          severity: 'medium',
+          code: 'INVALID_WATER_DEPTH'
+        })
+      }
+    }
+  }
+
+  /**
+   * 验证杆件配置
+   * 验证障碍物的杆件数组中每个杆件的必需字段和有效性
+   */
+  private validatePoles(
+    poles: any[],
+    obstacleIndex: number,
+    errors: JSONValidationError[],
+    warnings: JSONValidationWarning[]
+  ): void {
+    const fieldPrefix = `courseDesign.obstacles[${obstacleIndex}].poles`
+
+    poles.forEach((pole, poleIndex) => {
+      const polePrefix = `${fieldPrefix}[${poleIndex}]`
+
+      // 验证必需字段
+      const requiredFields = ['height', 'width', 'color']
+      requiredFields.forEach(field => {
+        if (!(field in pole)) {
+          warnings.push({
+            field: `${polePrefix}.${field}`,
+            message: `杆件 ${poleIndex + 1} 缺少${field}字段`,
+            suggestion: `添加${field}以完善杆件配置`
+          })
+        }
+      })
+
+      // 验证尺寸
+      if (typeof pole.height !== 'number' || pole.height <= 0) {
+        warnings.push({
+          field: `${polePrefix}.height`,
+          message: `杆件 ${poleIndex + 1} 的高度应该是正数`,
+          suggestion: '确保杆件高度是有效的正数值'
+        })
+      }
+
+      if (typeof pole.width !== 'number' || pole.width <= 0) {
+        warnings.push({
+          field: `${polePrefix}.width`,
+          message: `杆件 ${poleIndex + 1} 的宽度应该是正数`,
+          suggestion: '确保杆件宽度是有效的正数值'
+        })
+      }
+
+      // 验证编号位置
+      if (pole.numberPosition) {
+        if (typeof pole.numberPosition.x !== 'number' || typeof pole.numberPosition.y !== 'number') {
+          warnings.push({
+            field: `${polePrefix}.numberPosition`,
+            message: `杆件 ${poleIndex + 1} 的编号位置坐标无效`,
+            suggestion: '确保numberPosition包含有效的x和y坐标'
+          })
+        }
+      }
+    })
+  }
+
+  /**
+   * 生成自定义障碍物统计信息
+   */
+  private generateCustomObstacleStatistics(courseDesign: any): {
+    customCount: number
+    decorationCount: number
+    decorationByCategory: Record<string, number>
+    specialObstacleCount: { wall: number; liverpool: number; water: number }
+    obstaclesWithCustomId: number
+  } {
+    const obstacles = courseDesign?.obstacles || []
+
+    let customCount = 0
+    let decorationCount = 0
+    const decorationByCategory: Record<string, number> = {}
+    const specialObstacleCount = { wall: 0, liverpool: 0, water: 0 }
+    let obstaclesWithCustomId = 0
+
+    obstacles.forEach((obstacle: any) => {
+      // 统计CUSTOM类型
+      if (obstacle.type === 'CUSTOM') {
+        customCount++
+      }
+
+      // 统计装饰物
+      if (obstacle.type === 'DECORATION') {
+        decorationCount++
+        if (obstacle.decorationProperties?.category) {
+          const category = obstacle.decorationProperties.category
+          decorationByCategory[category] = (decorationByCategory[category] || 0) + 1
+        }
+      }
+
+      // 统计特殊障碍物
+      if (obstacle.type === 'WALL') specialObstacleCount.wall++
+      if (obstacle.type === 'LIVERPOOL') specialObstacleCount.liverpool++
+      if (obstacle.type === 'WATER') specialObstacleCount.water++
+
+      // 统计包含customId的障碍物
+      if (obstacle.customId) {
+        obstaclesWithCustomId++
+      }
+    })
+
+    return {
+      customCount,
+      decorationCount,
+      decorationByCategory,
+      specialObstacleCount,
+      obstaclesWithCustomId
+    }
+  }
+
+  /**
    * 生成统计信息
    */
   private generateStatistics(data: any): JSONStatistics {
@@ -792,6 +1110,9 @@ export class JSONExportFormatter {
       const fieldCount = this.countFields(data)
       const nestingDepth = this.calculateNestingDepth(data)
 
+      // 获取自定义障碍物统计信息
+      const customObstacleStats = this.generateCustomObstacleStatistics(data.courseDesign)
+
       return {
         totalSize: originalSize,
         compressedSize,
@@ -799,7 +1120,12 @@ export class JSONExportFormatter {
         obstacleCount,
         pathPointCount,
         fieldCount,
-        nestingDepth
+        nestingDepth,
+        customObstacleCount: customObstacleStats.customCount,
+        decorationCount: customObstacleStats.decorationCount,
+        decorationByCategory: customObstacleStats.decorationByCategory,
+        specialObstacleCount: customObstacleStats.specialObstacleCount,
+        obstaclesWithCustomId: customObstacleStats.obstaclesWithCustomId
       }
     } catch (error) {
       return this.createEmptyStatistics()
@@ -880,7 +1206,12 @@ export class JSONExportFormatter {
       obstacleCount: 0,
       pathPointCount: 0,
       fieldCount: 0,
-      nestingDepth: 0
+      nestingDepth: 0,
+      customObstacleCount: 0,
+      decorationCount: 0,
+      decorationByCategory: {},
+      specialObstacleCount: { wall: 0, liverpool: 0, water: 0 },
+      obstaclesWithCustomId: 0
     }
   }
 

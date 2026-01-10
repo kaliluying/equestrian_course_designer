@@ -67,7 +67,7 @@ export const login = async (data: { username: string; password: string }) => {
       },
     })
 
-    
+
     return response.data
   } catch (error) {
     console.error('登录请求失败:', error)
@@ -103,6 +103,17 @@ export const getUserProfile = async () => {
     return response
   } catch (error) {
     console.error('获取用户资料失败:', error)
+    throw error
+  }
+}
+
+// 检查用户会员状态（轻量级接口）
+export const checkPremiumStatus = async () => {
+  try {
+    const response = await request.get(`${apiConfig.apiBaseUrl}/user/users/check_premium/`)
+    return response
+  } catch (error) {
+    console.error('检查会员状态失败:', error)
     throw error
   }
 }

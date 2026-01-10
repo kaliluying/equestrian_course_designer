@@ -554,12 +554,16 @@ const fetchUserProfile = async () => {
     if (response && response.success) {
       userProfile.value = response as unknown as UserProfile
       if (response.available_plans && Array.isArray(response.available_plans)) {
-        availablePlans.value = response.available_plans.filter((plan: MembershipPlan) => plan.code !== 'free')
+        // 保留所有计划（包括 free），UI 上已硬编码免费用户卡片
+        availablePlans.value = response.available_plans
 
-        // 如果没有获取到计划数据，显示提示
-        if (availablePlans.value.length === 0) {
+        // 只有完全没有返回计划数据时才显示警告
+        if (response.available_plans.length === 0) {
           ElMessage.warning('未能获取会员计划信息，请刷新页面重试')
         }
+      } else {
+        // 后端没有返回 available_plans 字段
+        ElMessage.warning('未能获取会员计划信息，请刷新页面重试')
       }
 
       // 更新用户存储中的会员状态

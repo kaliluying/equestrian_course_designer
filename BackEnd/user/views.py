@@ -599,6 +599,17 @@ class UserViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=['get'])
+    def check_premium(self, request):
+        """检查用户会员状态（轻量级接口）"""
+        user = request.user
+        profile, created = UserProfile.objects.get_or_create(user=user)
+        
+        return Response({
+            'success': True,
+            'is_premium_active': profile.is_premium_active()
+        })
+
+    @action(detail=False, methods=['get'])
     def my_profile(self, request):
         """获取当前用户资料"""
         user = request.user

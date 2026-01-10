@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch} from 'vue'
 import { ObstacleType, DecorationCategory } from '@/types/obstacle'
 import type {
   CustomObstacleTemplate,
@@ -608,25 +608,27 @@ export const useObstacleStore = defineStore('obstacle', () => {
     }
   }
 
-  // 按创建时间排序的共享障碍物（最新的在前面）
-  const sortedSharedObstacles = computed(() => {
-    return [...sharedObstacles.value].sort((a, b) => {
-      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    })
-  })
+  const _sortedSharedObstacles = ref<CustomObstacleTemplate[]>([])
+  const _sortedObstacles = ref<CustomObstacleTemplate[]>([])
 
-  // 共享障碍物加载状态
   const isLoadingShared = computed(() => loadingShared.value)
-
-  // 共享障碍物是否有错误
   const hasSharedError = computed(() => sharedError.value !== null)
 
-  // 按创建时间排序的障碍物（最新的在前面）
-  const sortedObstacles = computed(() => {
-    return [...customObstacles.value].sort((a, b) => {
+  function refreshSortedLists() {
+    _sortedSharedObstacles.value = [...sharedObstacles.value].sort((a, b) => {
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     })
-  })
+    _sortedObstacles.value = [...customObstacles.value].sort((a, b) => {
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    })
+  }
+
+  watch([customObstacles, sharedObstacles], () => {
+    refreshSortedLists()
+  }, { deep: true })
+
+  const sortedSharedObstacles = computed(() => _sortedSharedObstacles.value)
+  const sortedObstacles = computed(() => _sortedObstacles.value)
 
   // 监听用户登录状态变化
   if (import.meta.env.SSR === false) {

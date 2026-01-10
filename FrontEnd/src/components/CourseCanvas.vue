@@ -1568,10 +1568,21 @@ const handleDrop = (event: DragEvent) => {
               isCollaborating.value = true
               localStorage.setItem('isCollaborating', 'true')
 
+              // 检查是否有权限重连（会员或通过链接加入）
+              const viaLinkValue = webSocketStore.viaLink || localStorage.getItem('via_link') === 'true'
+              const userStore = useUserStore()
+              const canReconnect = viaLinkValue || userStore.currentUser?.is_premium_active
+
+              if (!canReconnect) {
+                console.log('用户无权限重连，退出协作模式')
+                isCollaborating.value = false
+                return
+              }
+
               if (typeof connect === 'function') {
                 // 使用静默模式连接，避免触发协作停止事件
                 try {
-                  connect(courseStore.currentCourse.id, webSocketStore.viaLink, true) // 使用webSocketStore中保存的viaLink值，第三个参数为true表示静默模式
+                  connect(courseStore.currentCourse.id, viaLinkValue, true) // 使用保存的viaLink值，第三个参数为true表示静默模式
                   // 延迟后再次尝试发送
                   setTimeout(() => {
                     // 再次确保协作状态为true
@@ -1854,8 +1865,20 @@ const handleDrop = (event: DragEvent) => {
     if (!result) {
       // 如果发送失败，尝试重新连接WebSocket
       console.log('发送失败，尝试重新连接WebSocket')
+
+      // 检查是否有权限重连（会员或通过链接加入）
+      const viaLinkValue = webSocketStore.viaLink || localStorage.getItem('via_link') === 'true'
+      const userStore = useUserStore()
+      const canReconnect = viaLinkValue || userStore.currentUser?.is_premium_active
+
+      if (!canReconnect) {
+        console.log('用户无权限重连，退出协作模式')
+        isCollaborating.value = false
+        return
+      }
+
       if (typeof connect === 'function') {
-        connect(courseStore.currentCourse.id, webSocketStore.viaLink, true) // 使用webSocketStore中保存的viaLink值，静默模式重连
+        connect(courseStore.currentCourse.id, viaLinkValue, true) // 使用保存的viaLink值，静默模式重连
         // 延迟后再次尝试发送
         setTimeout(() => {
           if (connectionStatus === ConnectionStatus.CONNECTED) {

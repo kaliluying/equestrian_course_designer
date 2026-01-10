@@ -490,12 +490,18 @@ onMounted(() => {
     })
   }
 
-  // 自动连接WebSocket
-  // 检查URL中是否有collaboration参数，如果有则表示是通过链接加入
-  const urlParams = new URLSearchParams(window.location.search)
-  const isViaLink = urlParams.has('collaboration') && urlParams.has('designId')
-  console.log('自动连接WebSocket，是否通过链接加入:', isViaLink)
-  connect(props.designId, isViaLink) // 连接到指定设计ID，并传递是否通过链接加入
+  // 检查是否已经有连接（由CourseCanvas发起）
+  // 如果已经连接，则不再重复连接
+  if (connectionStatus.value === ConnectionStatus.CONNECTED || connectionStatus.value === ConnectionStatus.CONNECTING) {
+    console.log('已有连接或正在连接中，跳过自动连接')
+  } else {
+    // 自动连接WebSocket
+    // 检查URL中是否有collaboration参数，如果有则表示是通过链接加入
+    const urlParams = new URLSearchParams(window.location.search)
+    const isViaLink = urlParams.has('collaboration') && urlParams.has('designId')
+    console.log('自动连接WebSocket，是否通过链接加入:', isViaLink)
+    connect(props.designId, isViaLink) // 连接到指定设计ID，并传递是否通过链接加入
+  }
   console.log('当前连接状态:', connectionStatus.value)
 
   // 使用nextTick确保DOM已完全渲染后再获取元素尺寸

@@ -66,6 +66,128 @@ describe('JSONExportEngine', () => {
     expect(parsedData.courseDesign.obstacles).toHaveLength(1)
   })
 
+  it('should include custom obstacle fields in default export', async () => {
+    // 创建包含自定义障碍物字段的测试数据
+    const customObstacleCanvas = document.createElement('div')
+    customObstacleCanvas.setAttribute('data-course-design', JSON.stringify({
+      id: 'test-course-custom',
+      name: '自定义障碍物测试',
+      obstacles: [
+        {
+          id: 'obstacle-custom-1',
+          type: 'CUSTOM',
+          position: { x: 100, y: 200 },
+          rotation: 45,
+          number: 1,
+          numberPosition: { x: 105, y: 205 },
+          customId: 'custom-template-123',
+          poles: [{ height: 1.2, width: 0.1, color: '#ffffff' }]
+        },
+        {
+          id: 'obstacle-decoration-1',
+          type: 'DECORATION',
+          position: { x: 150, y: 250 },
+          rotation: 0,
+          decorationProperties: {
+            category: 'TREE',
+            width: 2,
+            height: 3,
+            color: '#00ff00',
+            trunkHeight: 1,
+            trunkWidth: 0.5,
+            foliageRadius: 1.5
+          }
+        },
+        {
+          id: 'obstacle-wall-1',
+          type: 'WALL',
+          position: { x: 200, y: 300 },
+          rotation: 0,
+          wallProperties: {
+            height: 1.5,
+            width: 3,
+            color: '#8b4513',
+            texture: 'brick'
+          }
+        },
+        {
+          id: 'obstacle-liverpool-1',
+          type: 'LIVERPOOL',
+          position: { x: 250, y: 350 },
+          rotation: 0,
+          liverpoolProperties: {
+            height: 1.2,
+            width: 4,
+            waterDepth: 0.3,
+            waterColor: '#0066cc',
+            hasRail: true,
+            railHeight: 1.2
+          }
+        },
+        {
+          id: 'obstacle-water-1',
+          type: 'WATER',
+          position: { x: 300, y: 400 },
+          rotation: 0,
+          waterProperties: {
+            width: 5,
+            depth: 0.5,
+            color: '#0099ff',
+            borderColor: '#003366',
+            borderWidth: 0.1
+          }
+        }
+      ],
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+      fieldWidth: 60,
+      fieldHeight: 40
+    }))
+    document.body.appendChild(customObstacleCanvas)
+
+    const result = await jsonEngine.exportToJSON(customObstacleCanvas)
+
+    expect(result.success).toBe(true)
+
+    const parsedData = JSON.parse(result.data as string)
+    const obstacles = parsedData.courseDesign.obstacles
+
+    // 验证CUSTOM类型障碍物包含所有自定义字段
+    const customObstacle = obstacles.find((o: any) => o.type === 'CUSTOM')
+    expect(customObstacle).toBeDefined()
+    expect(customObstacle.customId).toBe('custom-template-123')
+    expect(customObstacle.numberPosition).toEqual({ x: 105, y: 205 })
+
+    // 验证DECORATION类型障碍物包含decorationProperties
+    const decorationObstacle = obstacles.find((o: any) => o.type === 'DECORATION')
+    expect(decorationObstacle).toBeDefined()
+    expect(decorationObstacle.decorationProperties).toBeDefined()
+    expect(decorationObstacle.decorationProperties.category).toBe('TREE')
+    expect(decorationObstacle.decorationProperties.trunkHeight).toBe(1)
+    expect(decorationObstacle.decorationProperties.foliageRadius).toBe(1.5)
+
+    // 验证WALL类型障碍物包含wallProperties
+    const wallObstacle = obstacles.find((o: any) => o.type === 'WALL')
+    expect(wallObstacle).toBeDefined()
+    expect(wallObstacle.wallProperties).toBeDefined()
+    expect(wallObstacle.wallProperties.height).toBe(1.5)
+    expect(wallObstacle.wallProperties.texture).toBe('brick')
+
+    // 验证LIVERPOOL类型障碍物包含liverpoolProperties
+    const liverpoolObstacle = obstacles.find((o: any) => o.type === 'LIVERPOOL')
+    expect(liverpoolObstacle).toBeDefined()
+    expect(liverpoolObstacle.liverpoolProperties).toBeDefined()
+    expect(liverpoolObstacle.liverpoolProperties.waterDepth).toBe(0.3)
+    expect(liverpoolObstacle.liverpoolProperties.hasRail).toBe(true)
+
+    // 验证WATER类型障碍物包含waterProperties
+    const waterObstacle = obstacles.find((o: any) => o.type === 'WATER')
+    expect(waterObstacle).toBeDefined()
+    expect(waterObstacle.waterProperties).toBeDefined()
+    expect(waterObstacle.waterProperties.depth).toBe(0.5)
+    expect(waterObstacle.waterProperties.borderColor).toBe('#003366')
+  })
+
   it('should handle custom export options', async () => {
     const customOptions = {
       minify: true,

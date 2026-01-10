@@ -1,4 +1,5 @@
 import { request } from '@/utils/request'
+import { cachedRequest, invalidateCache } from '@/utils/apiCache'
 import { CUSTOM_OBSTACLE_API } from '@/config/api'
 
 // 障碍物杆子数据接口定义
@@ -104,13 +105,15 @@ export interface ObstacleCountInfo {
 
 /**
  * 获取用户的自定义障碍物
- * @returns Promise<ObstacleData[]> 用户的自定义障碍物列表
+ * @returns Promise<{ results: ObstacleData[] } | ObstacleData[]> 用户的自定义障碍物列表
  */
 export const fetchUserObstacles = async (): Promise<
   { results: ObstacleData[] } | ObstacleData[]
 > => {
-  return request.get<{ results: ObstacleData[] } | ObstacleData[]>(
+  return cachedRequest<{ results: ObstacleData[] } | ObstacleData[]>(
     CUSTOM_OBSTACLE_API.FETCH_USER_OBSTACLES,
+    undefined,
+    300000
   )
 }
 
@@ -120,7 +123,9 @@ export const fetchUserObstacles = async (): Promise<
  * @returns Promise<ObstacleData> 创建的障碍物数据
  */
 export const createObstacle = async (data: ObstacleData): Promise<ObstacleData> => {
-  return request.post<ObstacleData>(CUSTOM_OBSTACLE_API.CREATE_OBSTACLE, data)
+  const result = await request.post<ObstacleData>(CUSTOM_OBSTACLE_API.CREATE_OBSTACLE, data)
+  invalidateCache()
+  return result
 }
 
 /**
@@ -163,14 +168,11 @@ export const updateObstacle = async (
  * @returns Promise<void>
  */
 export const deleteObstacle = async (id: number | string): Promise<void> => {
-  // 确保ID是有效的数字
   let numericId: number
   if (typeof id === 'string') {
-    // 如果是纯数字字符串，直接转换
     if (/^\d+$/.test(id)) {
       numericId = parseInt(id)
     } else {
-      // 尝试从字符串中提取数字部分
       const match = id.match(/\d+/)
       numericId = match ? parseInt(match[0]) : 0
     }
@@ -178,7 +180,9 @@ export const deleteObstacle = async (id: number | string): Promise<void> => {
     numericId = id
   }
 
-  await request.delete<void>(CUSTOM_OBSTACLE_API.DELETE_OBSTACLE(numericId))
+  const result = await request.delete<void>(CUSTOM_OBSTACLE_API.DELETE_OBSTACLE(numericId))
+  invalidateCache()
+  return result
 }
 
 /**
@@ -186,18 +190,24 @@ export const deleteObstacle = async (id: number | string): Promise<void> => {
  * @returns Promise<ObstacleCountInfo> 数量和限制信息
  */
 export const getObstacleCountInfo = async (): Promise<ObstacleCountInfo> => {
-  return request.get<ObstacleCountInfo>(CUSTOM_OBSTACLE_API.GET_OBSTACLE_COUNT)
+  return cachedRequest<ObstacleCountInfo>(
+    CUSTOM_OBSTACLE_API.GET_OBSTACLE_COUNT,
+    undefined,
+    300000
+  )
 }
 
 /**
  * 获取共享的障碍物
- * @returns Promise<ObstacleData[]> 共享的障碍物列表
+ * @returns Promise<{ results: ObstacleData[] } | ObstacleData[]> 共享的障碍物列表
  */
 export const getSharedObstacles = async (): Promise<
   { results: ObstacleData[] } | ObstacleData[]
 > => {
-  return request.get<{ results: ObstacleData[] } | ObstacleData[]>(
+  return cachedRequest<{ results: ObstacleData[] } | ObstacleData[]>(
     CUSTOM_OBSTACLE_API.GET_SHARED_OBSTACLES,
+    undefined,
+    300000
   )
 }
 

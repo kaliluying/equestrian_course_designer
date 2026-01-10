@@ -1,5 +1,6 @@
 import type { DesignResponse, SaveDesignRequest } from '@/types/design'
 import { request } from '@/utils/request'
+import { cachedRequest, invalidateCache } from '@/utils/apiCache'
 
 // 保存设计
 export const saveDesign = async (data: SaveDesignRequest): Promise<DesignResponse> => {
@@ -20,8 +21,8 @@ export const saveDesign = async (data: SaveDesignRequest): Promise<DesignRespons
   }
 
   try {
-    // 如果有ID，则是更新操作
     if (data.id) {
+      invalidateCache()
       const response = await request.put<DesignResponse>(`/user/designs/${data.id}/`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -31,8 +32,7 @@ export const saveDesign = async (data: SaveDesignRequest): Promise<DesignRespons
       return response
     }
 
-    // 否则是创建操作
-
+    invalidateCache()
     const response = await request.post<DesignResponse>('/user/designs/', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
@@ -63,19 +63,27 @@ export interface PaginatedResponse<T> {
 export const getUserDesigns = async (
   page: number = 1,
 ): Promise<PaginatedResponse<DesignResponse>> => {
-  return request.get<PaginatedResponse<DesignResponse>>(`/user/designs/my/?page=${page}`)
+  return cachedRequest<PaginatedResponse<DesignResponse>>(
+    `/user/designs/my/?page=${page}`,
+    undefined,
+    300000
+  )
 }
 
 // 获取公开分享的设计列表
 export const getSharedDesigns = async (
   page: number = 1,
 ): Promise<PaginatedResponse<DesignResponse>> => {
-  return request.get<PaginatedResponse<DesignResponse>>(`/user/designs/shared/?page=${page}`)
+  return cachedRequest<PaginatedResponse<DesignResponse>>(
+    `/user/designs/shared/?page=${page}`,
+    undefined,
+    300000
+  )
 }
 
 // 获取设计详情
 export const getDesign = async (id: number): Promise<DesignResponse> => {
-  return request.get<DesignResponse>(`/user/designs/${id}/`)
+  return cachedRequest<DesignResponse>(`/user/designs/${id}/`, undefined, 300000)
 }
 
 // 点赞/取消点赞设计
