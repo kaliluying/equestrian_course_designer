@@ -583,10 +583,10 @@ export const useWebSocketStore = defineStore('websocket', () => {
   const handleLeaveMessage = (message: WebSocketMessage) => {
     console.log('处理离开消息:', message)
 
-    const { id } = message.payload as { id: string }
+    const userId = message.senderId
 
     // 从协作者列表中移除
-    const index = collaborators.value.findIndex((c) => c.id === id)
+    const index = collaborators.value.findIndex((c) => c.id === userId)
     if (index >= 0) {
       collaborators.value.splice(index, 1)
     }

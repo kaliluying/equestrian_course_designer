@@ -39,12 +39,31 @@ def get_user_profile_info(user):
         return False
     try:
         profile = user.profile
-        if profile.membership_plan.name == '高级会员':
-            return True
-        return False
+        return profile.membership_plan is not None and profile.membership_plan.name == '高级会员'
     except Exception as e:
         logger.error(f"获取用户资料失败: {str(e)}")
         return False
+
+
+@database_sync_to_async
+def check_design_access(user, design_id):
+    """
+    检查用户是否有权访问该设计
+    返回: (has_access, is_owner)
+    """
+    from .models import Design
+    if not user or not user.is_authenticated:
+        return False, False
+    try:
+        design = Design.objects.get(id=design_id)
+        is_owner = design.author_id == user.id
+        has_access = is_owner or design.is_shared
+        return has_access, is_owner
+    except Design.DoesNotExist:
+        return False, False
+    except Exception as e:
+        logger.error(f"检查设计访问权限失败: {str(e)}")
+        return False, False
 
 
 class CollaborationConsumer(AsyncWebsocketConsumer):
@@ -99,7 +118,32 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                         'message': '只有高级会员才能创建协作会话',
                         'timestamp': datetime.now().isoformat()
                     }))
-                    await self.close(code=4003)  # 自定义关闭代码
+                    await self.close(code=4003)
+                    return
+
+                # 检查设计访问权限
+                has_access, is_owner = await check_design_access(self.user, self.design_id)
+                if not has_access:
+                    logger.warning(f"用户 {self.user.username} 没有权限访问设计 {self.design_id}")
+                    await self.accept()
+                    await self.send(text_data=json.dumps({
+                        'type': 'error',
+                        'message': '您没有权限访问此设计',
+                        'timestamp': datetime.now().isoformat()
+                    }))
+                    await self.close(code=4004)
+                    return
+
+                # 只有设计作者才能创建新的协作会话
+                if self.design_id not in active_sessions and not is_owner:
+                    logger.warning(f"用户 {self.user.username} 尝试为非自己的设计创建协作会话")
+                    await self.accept()
+                    await self.send(text_data=json.dumps({
+                        'type': 'error',
+                        'message': '只有设计作者才能发起协作',
+                        'timestamp': datetime.now().isoformat()
+                    }))
+                    await self.close(code=4005)
                     return
 
             # 5. 加入房间组
