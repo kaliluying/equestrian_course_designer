@@ -77,13 +77,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'equestrian.wsgi.application'
 
-# Channels配置
 ASGI_APPLICATION = 'equestrian.asgi.application'
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels.layers.InMemoryChannelLayer',
-    },
-}
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
@@ -142,7 +136,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
 
 # 站点域名配置，用于媒体文件URL生成
-SITE_DOMAIN = os.environ.get('SITE_DOMAIN', '192.168.1.14:8000')
+SITE_DOMAIN = os.environ.get('SITE_DOMAIN', '192.168.1.3:8000')
 USE_HTTPS = os.environ.get('USE_HTTPS', 'False').lower() == 'true'
 
 # Default primary key field type
@@ -253,8 +247,6 @@ EMAIL_USE_TLS = True                     # 启用TLS加密
 EMAIL_HOST_USER = 'kaliluying@gmail.com'       # 你的Gmail邮箱地址
 EMAIL_HOST_PASSWORD = 'wzeh vduq wxma zrap'  # 应用专用密码（非邮箱登录密码）
 
-# WebSocket配置
-ALLOWED_HOSTS = ['*']  # 允许所有主机访问，生产环境应该限制
 
 # settings.py
 CHANNEL_LAYERS = {
@@ -266,9 +258,6 @@ CHANNEL_LAYERS = {
     },
 }
 
-
-# 获取项目根目录
-BASE_DIR = Path(__file__).resolve().parent.parent
 
 # 创建日志目录
 LOGS_DIR = os.path.join(BASE_DIR, 'logs')

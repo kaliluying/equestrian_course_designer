@@ -25,10 +25,7 @@ from user.views import ForgotPasswordView, ResetPasswordView
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('user/', include('user.urls')),  # 用户相关的API端点
-    path('api/user/', include('user.urls')),
     path('api/feedback/', include('feedback.urls')),  # 新增反馈URL
-    path('forgot-password/', ForgotPasswordView.as_view(), name='forgot_password'),
-    path('reset-password/', ResetPasswordView.as_view(), name='reset_password'),
 
     # 前端入口页面
     path('', TemplateView.as_view(template_name='index.html')),

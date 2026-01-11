@@ -103,15 +103,45 @@ export interface ObstacleCountInfo {
   is_premium: boolean
 }
 
+// 分页响应接口
+export interface PaginatedResponse<T> {
+  count: number
+  next: string | null
+  previous: string | null
+  results: T[]
+}
+
 /**
  * 获取用户的自定义障碍物
- * @returns Promise<{ results: ObstacleData[] } | ObstacleData[]> 用户的自定义障碍物列表
+ * @param params 查询参数，支持 search（搜索）、page（页码）、page_size（每页数量）、ordering（排序）
+ * @returns Promise<PaginatedResponse<ObstacleData> | ObstacleData[]> 用户的自定义障碍物列表
  */
-export const fetchUserObstacles = async (): Promise<
-  { results: ObstacleData[] } | ObstacleData[]
-> => {
-  return cachedRequest<{ results: ObstacleData[] } | ObstacleData[]>(
-    CUSTOM_OBSTACLE_API.FETCH_USER_OBSTACLES,
+export const fetchUserObstacles = async (params?: {
+  search?: string
+  page?: number
+  page_size?: number
+  ordering?: string
+}): Promise<PaginatedResponse<ObstacleData> | ObstacleData[]> => {
+  const queryParams = new URLSearchParams()
+  if (params?.search) {
+    queryParams.append('search', params.search)
+  }
+  if (params?.page) {
+    queryParams.append('page', params.page.toString())
+  }
+  if (params?.page_size) {
+    queryParams.append('page_size', params.page_size.toString())
+  }
+  if (params?.ordering) {
+    queryParams.append('ordering', params.ordering)
+  }
+  
+  const url = queryParams.toString()
+    ? `${CUSTOM_OBSTACLE_API.FETCH_USER_OBSTACLES}?${queryParams.toString()}`
+    : CUSTOM_OBSTACLE_API.FETCH_USER_OBSTACLES
+    
+  return cachedRequest<PaginatedResponse<ObstacleData> | ObstacleData[]>(
+    url,
     undefined,
     300000
   )
@@ -199,13 +229,35 @@ export const getObstacleCountInfo = async (): Promise<ObstacleCountInfo> => {
 
 /**
  * 获取共享的障碍物
- * @returns Promise<{ results: ObstacleData[] } | ObstacleData[]> 共享的障碍物列表
+ * @param params 查询参数，支持 search（搜索）、page（页码）、page_size（每页数量）、ordering（排序）
+ * @returns Promise<PaginatedResponse<ObstacleData> | ObstacleData[]> 共享的障碍物列表
  */
-export const getSharedObstacles = async (): Promise<
-  { results: ObstacleData[] } | ObstacleData[]
-> => {
-  return cachedRequest<{ results: ObstacleData[] } | ObstacleData[]>(
-    CUSTOM_OBSTACLE_API.GET_SHARED_OBSTACLES,
+export const getSharedObstacles = async (params?: {
+  search?: string
+  page?: number
+  page_size?: number
+  ordering?: string
+}): Promise<PaginatedResponse<ObstacleData> | ObstacleData[]> => {
+  const queryParams = new URLSearchParams()
+  if (params?.search) {
+    queryParams.append('search', params.search)
+  }
+  if (params?.page) {
+    queryParams.append('page', params.page.toString())
+  }
+  if (params?.page_size) {
+    queryParams.append('page_size', params.page_size.toString())
+  }
+  if (params?.ordering) {
+    queryParams.append('ordering', params.ordering)
+  }
+  
+  const url = queryParams.toString()
+    ? `${CUSTOM_OBSTACLE_API.GET_SHARED_OBSTACLES}?${queryParams.toString()}`
+    : CUSTOM_OBSTACLE_API.GET_SHARED_OBSTACLES
+    
+  return cachedRequest<PaginatedResponse<ObstacleData> | ObstacleData[]>(
+    url,
     undefined,
     300000
   )

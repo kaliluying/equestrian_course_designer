@@ -212,7 +212,7 @@
         @mousedown.stop="startDraggingPoleNumber($event, obstacle, obstacle.poles.findIndex(p => p === pole))" :style="{
           position: 'absolute',
           left: `${scalePoint({ x: obstacle.position.x + (pole.numberPosition?.x ?? 0), y: 0 }).x}px`,
-          top: `${scalePoint({ x: 0, y: obstacle.position.y + (pole.numberPosition?.y ?? 50) }).y}px`,
+          top: `${scalePoint({ x: 0, y: obstacle.position.y + (pole.numberPosition?.y ?? -3) }).y}px`,
           transform: 'translate(-50%, -50%)',
           transition: isDragging && selectedObstacles.some(obs => obs.id === obstacle.id) ? 'none' : 'all 0.1s ease',
         }">
@@ -1099,7 +1099,7 @@ const startDraggingPoleNumber = (event: MouseEvent, obstacle: Obstacle, poleInde
   startPos.value = {
     [obstacle.id]: {
       x: pole.numberPosition?.x ?? 0,
-      y: pole.numberPosition?.y ?? 50,
+      y: pole.numberPosition?.y ?? -3,
     },
   }
 
@@ -1148,7 +1148,7 @@ const handleMouseMove = (event: MouseEvent) => {
       if (pole) {
         // 直接修改pole对象的numberPosition属性，确保响应式更新
         if (!pole.numberPosition) {
-          pole.numberPosition = { x: 0, y: 50 }
+          pole.numberPosition = { x: 0, y: -3 }
         }
         // 直接赋值，避免Object.assign的开销
         pole.numberPosition.x = boundedPosition.x
@@ -1460,10 +1460,16 @@ const handleMouseMove = (event: MouseEvent) => {
 
 // 处理拖放新障碍物
 const handleDrop = (event: DragEvent) => {
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/80a2706c-c882-4226-99f6-7bd8a98ea3f6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CourseCanvas.vue:handleDrop',message:'drop-event-start',data:{hasDataTransfer:!!event.dataTransfer,clientX:event.clientX,clientY:event.clientY},hypothesisId:'DROP',timestamp:Date.now(),sessionId:'debug-session'})}).catch(()=>{});
+  // #endregion
   event.preventDefault()
 
   // 获取拖放的数据
   const obstacleData = event.dataTransfer?.getData('text/plain')
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/80a2706c-c882-4226-99f6-7bd8a98ea3f6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CourseCanvas.vue:handleDrop',message:'obstacle-data',data:{obstacleData},hypothesisId:'DROP',timestamp:Date.now(),sessionId:'debug-session'})}).catch(()=>{});
+  // #endregion
   console.log('拖放事件，障碍物数据:', obstacleData)
 
   if (!obstacleData) {

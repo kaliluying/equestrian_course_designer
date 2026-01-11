@@ -126,7 +126,7 @@ class LoginView(APIView):
             user = serializer.validated_data['user']
 
             # 添加会员状态检查
-            self.check_and_update_membership(user)
+            check_and_update_membership(user)
 
             refresh = RefreshToken.for_user(user)
             return success_response('登录成功', {
@@ -137,47 +137,6 @@ class LoginView(APIView):
             })
         return error_response(serializer.errors, status.HTTP_400_BAD_REQUEST)
 
-    def check_and_update_membership(self, user):
-        """检查并更新用户的会员状态"""
-        try:
-            profile = user.profile
-            now = timezone.now()
-
-            # 检查会员是否已过期
-            if profile.is_premium and profile.premium_expire_date and profile.premium_expire_date <= now:
-                logger.info(f"用户 {user.username} 的会员已过期，检查是否有待生效的会员计划")
-
-                # 检查是否有待生效的会员计划
-                if profile.pending_membership_plan:
-                    logger.info(f"用户 {user.username} 有待生效的会员计划，将其激活")
-
-                    # 激活待生效的会员计划
-                    profile.membership_plan = profile.pending_membership_plan
-                    profile.premium_expire_date = profile.pending_membership_expire_date
-
-                    # 更新存储限制
-                    if profile.membership_plan and profile.membership_plan.storage_limit:
-                        profile.storage_limit = profile.membership_plan.storage_limit
-
-                    # 清除待生效的会员计划信息
-                    profile.pending_membership_plan = None
-                    profile.pending_membership_start_date = None
-                    profile.pending_membership_expire_date = None
-
-                    profile.save()
-                    logger.info(
-                        f"用户 {user.username} 的待生效会员计划已激活，新会员类型：{profile.membership_plan.name}")
-
-                elif not profile.is_premium_active():  # 调用方法而不是访问属性
-                    # 会员已过期且没有待生效的计划，重置会员状态
-                    logger.info(
-                        f"用户 {user.username} 的会员已过期，没有待生效的会员计划，重置为非会员状态")
-                    # 不重置会员计划，保留历史信息，只通过is_premium_active判断会员状态
-
-            return True
-        except Exception as e:
-            logger.error(f"检查用户会员状态时出错: {str(e)}")
-            return False
 
 
 class ForgotPasswordView(APIView):
@@ -461,12 +420,13 @@ class DesignViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         """创建设计前检查存储限制"""
-        # 获取用户当前的设计数量
         user = request.user
+        
+        check_and_update_membership(user)
+        
         try:
             profile = user.profile
         except UserProfile.DoesNotExist:
-            # 如果用户资料不存在，创建一个
             profile = UserProfile.objects.create(user=user)
 
         # 获取用户的设计数量
@@ -562,6 +522,9 @@ class UserViewSet(viewsets.ModelViewSet):
     def check_premium(self, request):
         """检查用户会员状态（轻量级接口）"""
         user = request.user
+        
+        check_and_update_membership(user)
+        
         profile, created = UserProfile.objects.get_or_create(user=user)
         
         return success_response('查询成功', {
@@ -572,6 +535,9 @@ class UserViewSet(viewsets.ModelViewSet):
     def my_profile(self, request):
         """获取当前用户资料"""
         user = request.user
+        
+        check_and_update_membership(user)
+        
         # 获取或创建用户资料
         profile, created = UserProfile.objects.get_or_create(user=user)
 
@@ -697,20 +663,46 @@ class UserViewSet(viewsets.ModelViewSet):
         })
 
 
+class StandardResultsSetPagination(PageNumberPagination):
+    """标准分页器"""
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
 class CustomObstacleViewSet(viewsets.ModelViewSet):
     """
     自定义障碍物视图集
     提供自定义障碍物的CRUD操作
+    支持分页、搜索和排序
     """
     serializer_class = CustomObstacleSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         """
         获取当前用户的自定义障碍物
+        支持搜索和排序
         """
         user = self.request.user
-        return CustomObstacle.objects.filter(user=user)
+        queryset = CustomObstacle.objects.filter(user=user)
+
+        # 支持搜索（按名称）
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(name__icontains=search)
+
+        # 支持排序
+        ordering = self.request.query_params.get('ordering', '-created_at')
+        # 验证排序字段，防止SQL注入
+        valid_ordering_fields = ['created_at', '-created_at', 'updated_at', '-updated_at', 'name', '-name']
+        if ordering in valid_ordering_fields:
+            queryset = queryset.order_by(ordering)
+        else:
+            queryset = queryset.order_by('-created_at')
+
+        return queryset
 
     def perform_create(self, serializer):
         """
@@ -745,14 +737,21 @@ class CustomObstacleViewSet(viewsets.ModelViewSet):
         user = request.user
         count = CustomObstacle.objects.filter(user=user).count()
 
-        # 获取用户限制
-        max_count = 20  # 默认限制
-        if hasattr(user, 'profile') and user.profile.is_premium_active():
-            max_count = 100  # 会员用户限制
+        # 从会员计划中获取自定义障碍物数量限制
+        max_count = 10  # 默认限制（免费用户）
+        is_unlimited = False
+        if hasattr(user, 'profile') and user.profile.membership_plan:
+            plan_limit = user.profile.membership_plan.custom_obstacle_limit
+            if plan_limit is not None:
+                max_count = plan_limit
+            else:
+                # null 表示无限制
+                is_unlimited = True
 
         return Response({
             'count': count,
-            'max_count': max_count,
+            'max_count': max_count if not is_unlimited else None,
+            'is_unlimited': is_unlimited,
             'is_premium': hasattr(user, 'profile') and user.profile.is_premium_active()
         })
 
@@ -760,12 +759,35 @@ class CustomObstacleViewSet(viewsets.ModelViewSet):
     def get_shared_obstacles(self, request):
         """
         获取其他用户共享的障碍物
+        支持分页、搜索和排序
         """
-        # 获取所有标记为共享的障碍物，但排除当前用户的
+        # 获取所有标记为共享的障碍物，排除当前用户的
         shared_obstacles = CustomObstacle.objects.filter(
             is_shared=True
-        )
+        ).exclude(user=request.user)
 
+        # 支持搜索（按名称）
+        search = request.query_params.get('search')
+        if search:
+            shared_obstacles = shared_obstacles.filter(name__icontains=search)
+
+        # 支持排序
+        ordering = request.query_params.get('ordering', '-created_at')
+        # 验证排序字段，防止SQL注入
+        valid_ordering_fields = ['created_at', '-created_at', 'updated_at', '-updated_at', 'name', '-name']
+        if ordering in valid_ordering_fields:
+            shared_obstacles = shared_obstacles.order_by(ordering)
+        else:
+            shared_obstacles = shared_obstacles.order_by('-created_at')
+
+        # 分页
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(shared_obstacles, request)
+        
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+        
         serializer = self.get_serializer(shared_obstacles, many=True)
         return Response(serializer.data)
 
@@ -793,6 +815,63 @@ class CustomObstacleViewSet(viewsets.ModelViewSet):
 
 # 支付相关视图
 logger = logging.getLogger(__name__)
+
+
+def check_and_update_membership(user):
+    """检查并更新用户的会员状态"""
+    try:
+        profile = user.profile
+        now = timezone.now()
+
+        if profile.is_premium and profile.premium_expire_date and profile.premium_expire_date <= now:
+            logger.info(f"用户 {user.username} 的会员已过期，检查是否有待生效的会员计划")
+
+            if profile.pending_membership_plan:
+                logger.info(f"用户 {user.username} 有待生效的会员计划，将其激活")
+
+                profile.membership_plan = profile.pending_membership_plan
+                profile.premium_expire_date = profile.pending_membership_expire_date
+                profile.is_premium = True
+
+                if profile.membership_plan and profile.membership_plan.storage_limit:
+                    profile.storage_limit = profile.membership_plan.storage_limit
+
+                profile.pending_membership_plan = None
+                profile.pending_membership_start_date = None
+                profile.pending_membership_expire_date = None
+
+                profile.save()
+                logger.info(
+                    f"用户 {user.username} 的待生效会员计划已激活，新会员类型：{profile.membership_plan.name}")
+
+            elif not profile.is_premium_active():
+                logger.info(
+                    f"用户 {user.username} 的会员已过期，没有待生效的会员计划，重置为非会员状态")
+                
+                try:
+                    free_plan = MembershipPlan.objects.get(code='free')
+                except MembershipPlan.DoesNotExist:
+                    free_plan = MembershipPlan.objects.create(
+                        name='免费用户',
+                        code='free',
+                        monthly_price=0,
+                        yearly_price=0,
+                        storage_limit=5,
+                        custom_obstacle_limit=10,
+                        description='免费用户计划，限制存储5个设计'
+                    )
+                
+                profile.is_premium = False
+                profile.membership_plan = free_plan
+                profile.storage_limit = 5
+                profile.save()
+                
+                logger.info(f"用户 {user.username} 的会员状态已重置为免费用户")
+
+        return True
+    except Exception as e:
+        logger.error(f"检查用户会员状态时出错: {str(e)}")
+        return False
 
 
 @api_view(['POST'])
@@ -844,13 +923,6 @@ def create_membership_order(request):
             return error_response(f'创建支付订单失败: {str(e)}', status.HTTP_500_INTERNAL_SERVER_ERROR)
     else:
         return error_response(serializer.errors, status.HTTP_400_BAD_REQUEST)
-
-
-class StandardResultsSetPagination(PageNumberPagination):
-    """标准分页器"""
-    page_size = 10
-    page_size_query_param = 'page_size'
-    max_page_size = 100
 
 
 @api_view(['GET'])

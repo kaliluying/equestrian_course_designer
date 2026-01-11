@@ -35,11 +35,19 @@
 
     <div v-else class="obstacle-grid">
       <!-- 显示数量限制信息 -->
-      <div v-if="!userStore.currentUser?.is_premium_active" class="limit-info">
-        已创建 {{ obstacleStore.customObstacles.length }}/10 个自定义障碍物
-      </div>
-      <div v-else class="limit-info premium">
-        高级会员：无限制自定义障碍
+      <div v-if="obstacleStore.obstacleCountInfo" class="limit-info" :class="{ premium: obstacleStore.obstacleCountInfo.is_premium, exceeded: !obstacleStore.obstacleCountInfo.is_premium && obstacleStore.customObstacles.length > obstacleStore.obstacleCountInfo.max_count }">
+        <template v-if="obstacleStore.obstacleCountInfo.is_premium">
+          高级会员：无限制自定义障碍
+        </template>
+        <template v-else>
+          <span>已创建 {{ obstacleStore.paginationInfo?.totalCount || obstacleStore.customObstacles.length }} 个自定义障碍物</span>
+          <span v-if="(obstacleStore.paginationInfo?.totalCount || obstacleStore.customObstacles.length) > obstacleStore.obstacleCountInfo.max_count" class="exceeded-warning">
+            （超过限制 {{ obstacleStore.obstacleCountInfo.max_count }} 个，仍可查看所有障碍物）
+          </span>
+          <span v-else>
+            （限制：{{ obstacleStore.obstacleCountInfo.max_count }} 个）
+          </span>
+        </template>
       </div>
 
       <!-- 加载中遮罩 -->
@@ -296,6 +304,18 @@
           </el-button-group>
         </div>
       </div>
+
+      <!-- 分页控件 -->
+      <div v-if="obstacleStore.paginationInfo && obstacleStore.paginationInfo.totalCount > obstacleStore.paginationInfo.pageSize" class="pagination-container">
+        <el-pagination
+          v-model:current-page="currentPage"
+          :page-size="obstacleStore.paginationInfo.pageSize"
+          :total="obstacleStore.paginationInfo.totalCount"
+          layout="prev, pager, next, jumper, total"
+          @current-change="handlePageChange"
+          small
+        />
+      </div>
     </div>
 
     <!-- 编辑器对话框 -->
@@ -335,7 +355,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { Plus, Edit, Delete, Loading, Share } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useObstacleStore } from '@/stores/obstacle'
@@ -350,6 +370,7 @@ const editorVisible = ref(false)
 const currentObstacle = ref<CustomObstacleTemplate | null>(null)
 const deleteDialogVisible = ref(false)
 const obstacleToDelete = ref<CustomObstacleTemplate | null>(null)
+const currentPage = ref(1)
 
 // 预览缩放比例
 const previewScale = 0.4
@@ -368,11 +389,25 @@ const typeNames = {
 
 // 重新加载数据
 const retryLoad = () => {
+  currentPage.value = 1
   obstacleStore.initObstacles()
 }
 
+// 处理分页变化
+const handlePageChange = (page: number) => {
+  currentPage.value = page
+  obstacleStore.changePage(page)
+}
+
+// 同步分页信息
+watch(() => obstacleStore.paginationInfo, (newInfo) => {
+  if (newInfo) {
+    currentPage.value = newInfo.currentPage
+  }
+}, { immediate: true })
+
 // 显示编辑器
-const showEditor = (obstacle: CustomObstacleTemplate | null) => {
+const showEditor = async (obstacle: CustomObstacleTemplate | null) => {
   // 检查用户是否登录
   if (!userStore.isAuthenticated) {
     ElMessage.warning('请先登录后再使用自定义障碍功能')
@@ -381,9 +416,13 @@ const showEditor = (obstacle: CustomObstacleTemplate | null) => {
 
   // 如果是创建新障碍物（而非编辑现有障碍物）
   if (!obstacle) {
-    // 检查非会员用户数量限制
-    if (!userStore.currentUser?.is_premium_active && obstacleStore.customObstacles.length >= 10) {
-      ElMessage.warning('普通用户最多创建10个自定义障碍，请升级会员享受无限创建特权')
+    // 检查用户数量限制（使用后端返回的实际限制值）
+    // 注意：每次都重新获取最新的计数信息，避免缓存问题
+    // 注意：只限制创建新障碍物，不限制查看和编辑已有障碍物
+    const latestCountInfo = await obstacleStore.fetchCountInfo()
+    const totalCount = obstacleStore.paginationInfo?.totalCount ?? obstacleStore.customObstacles.length
+    if (latestCountInfo && !latestCountInfo.is_premium && totalCount >= latestCountInfo.max_count) {
+      ElMessage.warning(`普通用户最多创建${latestCountInfo.max_count}个自定义障碍，请升级会员享受无限创建特权`)
       return
     }
   }
@@ -806,6 +845,24 @@ const toggleShare = async (obstacle: CustomObstacleTemplate) => {
     border-left-color: var(--el-color-success);
     color: var(--el-color-success);
   }
+
+  &.exceeded {
+    background-color: var(--el-color-warning-light-9);
+    border-left-color: var(--el-color-warning);
+    color: var(--el-color-warning-dark-2);
+  }
+
+  .exceeded-warning {
+    color: var(--el-color-warning);
+    font-weight: 500;
+  }
+}
+
+.pagination-container {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+  padding: 12px 0;
 }
 
 /* 响应式调整 */

@@ -36,7 +36,6 @@
               <span class="label">会员状态：</span>
               <span class="value">
                 <el-tag v-if="userProfile.is_premium_active" type="success">有效</el-tag>
-                <el-tag v-else-if="userProfile.is_premium && !userProfile.is_premium_active" type="warning">已过期</el-tag>
                 <el-tag v-else type="info">未开通</el-tag>
               </span>
             </div>
@@ -199,7 +198,7 @@
                 <el-icon>
                   <Close />
                 </el-icon>
-                <span>10个自定义障碍</span>
+                <span>20个自定义障碍</span>
               </div>
             </div>
             <div class="pricing-cta">

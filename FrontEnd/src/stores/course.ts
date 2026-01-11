@@ -702,7 +702,16 @@ export const useCourseStore = defineStore('course', () => {
 
       // 新编号为当前最大编号+1
       newObstacle.number = String(maxNumber + 1)
+      // #region agent log - 同步障碍物编号到第一个杆件
+      if (newObstacle.poles && newObstacle.poles.length > 0) {
+        newObstacle.poles[0].number = newObstacle.number
+        newObstacle.poles[0].numberPosition = { x: 0, y: -3 }
+      }
+      // #endregion
     }
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/80a2706c-c882-4226-99f6-7bd8a98ea3f6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'course.ts:707',message:'addObstacle-before-push',data:{obstacleNumber:newObstacle.number,polesCount:newObstacle.poles?.length,polesData:newObstacle.poles?.map((p,i)=>({idx:i,num:p.number,numPos:p.numberPosition}))},hypothesisId:'A',timestamp:Date.now(),sessionId:'debug-session'})}).catch(()=>{});
+    // #endregion
 
     currentCourse.value.obstacles.push(newObstacle)
 
@@ -751,6 +760,12 @@ export const useCourseStore = defineStore('course', () => {
 
       // 新编号为当前最大编号+1
       newObstacle.number = String(maxNumber + 1)
+      // #region agent log - 同步障碍物编号到第一个杆件
+      if (newObstacle.poles && newObstacle.poles.length > 0) {
+        newObstacle.poles[0].number = newObstacle.number
+        newObstacle.poles[0].numberPosition = { x: 0, y: -3 }
+      }
+      // #endregion
     }
 
     // 添加到障碍物列表

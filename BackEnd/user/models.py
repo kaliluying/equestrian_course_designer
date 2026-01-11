@@ -218,6 +218,12 @@ class MembershipPlan(models.Model):
         default=100,
         verbose_name='存储限制(设计数量)'
     )
+    custom_obstacle_limit = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name='自定义障碍物限制(个)',
+        help_text='null表示无限制'
+    )
     description = models.TextField(
         blank=True,
         null=True,

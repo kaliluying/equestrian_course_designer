@@ -25,6 +25,7 @@ import type {
   ApiLiverpoolProperties,
   ApiWaterProperties,
   ApiDecorationProperties,
+  PaginatedResponse,
 } from '@/api/obstacle'
 import { ElMessage } from 'element-plus'
 import {
@@ -192,6 +193,14 @@ export const useObstacleStore = defineStore('obstacle', () => {
   const sharedError = ref<ErrorResponse | null>(null)
   // 障碍物数量限制信息
   const obstacleCountInfo = ref<ObstacleCountInfo | null>(null)
+  // 分页信息
+  const paginationInfo = ref<{
+    currentPage: number
+    totalCount: number
+    pageSize: number
+    hasNext: boolean
+    hasPrevious: boolean
+  } | null>(null)
 
   // 获取用户存储
   const userStore = useUserStore()
@@ -202,11 +211,42 @@ export const useObstacleStore = defineStore('obstacle', () => {
     return userId ? `customObstacles_${userId}` : null
   }
 
-  // 初始化加载自定义障碍物
+  // 加载指定页的障碍物
+  const loadObstaclesPage = async (page: number = 1, pageSize: number = 10): Promise<void> => {
+    const response = await fetchUserObstacles({ page, page_size: pageSize })
+    const paginatedResponse = response as PaginatedResponse<ObstacleData>
+    
+    if (paginatedResponse.results) {
+      // 只显示当前页的数据
+      customObstacles.value = paginatedResponse.results.map(convertApiObstacleToTemplate)
+      
+      // 更新分页信息
+      paginationInfo.value = {
+        currentPage: page,
+        totalCount: paginatedResponse.count,
+        pageSize: pageSize,
+        hasNext: paginatedResponse.next !== null,
+        hasPrevious: paginatedResponse.previous !== null,
+      }
+    } else if (Array.isArray(response)) {
+      // 非分页响应
+      customObstacles.value = (response as ObstacleData[]).map(convertApiObstacleToTemplate)
+      paginationInfo.value = {
+        currentPage: 1,
+        totalCount: customObstacles.value.length,
+        pageSize: pageSize,
+        hasNext: false,
+        hasPrevious: false,
+      }
+    }
+  }
+
+  // 初始化加载自定义障碍物（加载第一页）
   const initObstacles = async () => {
     // 清空当前障碍物，以防切换用户时显示了其他用户的障碍物
     customObstacles.value = []
     error.value = null
+    paginationInfo.value = null
 
     // 如果用户未登录，则不加载任何障碍物
     if (!userStore.isAuthenticated) {
@@ -216,26 +256,8 @@ export const useObstacleStore = defineStore('obstacle', () => {
     loading.value = true
 
     try {
-      // 从服务器加载障碍物
-      const response = await fetchUserObstacles()
-
-      // 检查响应格式，处理分页数据
-      // 使用类型断言处理可能的分页响应
-      const paginatedResponse = response as unknown as { results?: ObstacleData[] }
-      const obstacles = paginatedResponse.results || (response as ObstacleData[])
-
-      if (Array.isArray(obstacles)) {
-        customObstacles.value = obstacles.map(convertApiObstacleToTemplate)
-
-        // 同时保存一份到本地存储（作为备份）
-        const storageKey = getStorageKey()
-        if (storageKey) {
-          localStorage.setItem(storageKey, JSON.stringify(customObstacles.value))
-        }
-      } else {
-        console.error('服务器返回的障碍物数据格式不正确:', obstacles)
-        throw new Error('障碍物数据格式不正确')
-      }
+      // 加载第一页
+      await loadObstaclesPage(1, 10)
 
       // 获取障碍物数量限制信息
       try {
@@ -265,6 +287,33 @@ export const useObstacleStore = defineStore('obstacle', () => {
     }
   }
 
+  // 切换到指定页
+  const changePage = async (page: number) => {
+    if (!paginationInfo.value) return
+    
+    loading.value = true
+    try {
+      await loadObstaclesPage(page, paginationInfo.value.pageSize)
+    } catch (e) {
+      console.error('切换页面失败:', e)
+      error.value = createErrorResponse(ErrorCode.LOAD_OBSTACLE_FAILED, '加载页面失败，请重试')
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 单独获取障碍物数量限制信息（不使用缓存，确保获取最新数据）
+  const fetchCountInfo = async (): Promise<ObstacleCountInfo | null> => {
+    try {
+      const countInfo = await getObstacleCountInfo()
+      obstacleCountInfo.value = countInfo
+      return countInfo
+    } catch (countError) {
+      console.error('获取障碍物数量限制信息失败:', countError)
+      return obstacleCountInfo.value
+    }
+  }
+
   // 保存自定义障碍物
   const saveCustomObstacle = async (obstacle: CustomObstacleTemplate, showMessage = true) => {
     // 如果用户未登录，则不保存
@@ -281,15 +330,19 @@ export const useObstacleStore = defineStore('obstacle', () => {
       return obstacle
     }
 
-    // 检查非会员用户数量限制
+    // 检查用户数量限制（使用后端返回的实际限制值）
+    // 注意：只限制创建新障碍物，不限制查看和编辑已有障碍物
+    const countInfo = obstacleCountInfo.value
+    const totalCount = paginationInfo.value?.totalCount ?? customObstacles.value.length
     if (
-      !userStore.currentUser?.is_premium_active &&
+      countInfo &&
+      !countInfo.is_premium &&
       !obstacle.id &&
-      customObstacles.value.length >= 10
+      totalCount >= countInfo.max_count
     ) {
       error.value = createErrorResponse(
         ErrorCode.USER_LIMIT_EXCEEDED,
-        '普通用户最多创建10个自定义障碍，请升级会员享受无限创建特权',
+        `普通用户最多创建${countInfo.max_count}个自定义障碍，请升级会员享受无限创建特权`,
         ErrorSeverity.WARNING,
         {
           solutions: ['删除一些不需要的障碍物以释放空间', '升级为会员，享受无限创建特权'],
@@ -330,14 +383,17 @@ export const useObstacleStore = defineStore('obstacle', () => {
       // 转换回模板格式
       const savedTemplate = convertApiObstacleToTemplate(savedObstacle)
 
-      // 更新本地障碍物列表
-      const index = customObstacles.value.findIndex((o) => o.id === savedTemplate.id)
-      if (index >= 0) {
-        // 更新现有障碍物
-        customObstacles.value[index] = savedTemplate
+      // 重新加载当前页以获取最新数据
+      if (paginationInfo.value) {
+        await loadObstaclesPage(paginationInfo.value.currentPage, paginationInfo.value.pageSize)
       } else {
-        // 添加新障碍物
-        customObstacles.value.push(savedTemplate)
+        // 如果没有分页信息，更新本地列表
+        const index = customObstacles.value.findIndex((o) => o.id === savedTemplate.id)
+        if (index >= 0) {
+          customObstacles.value[index] = savedTemplate
+        } else {
+          customObstacles.value.push(savedTemplate)
+        }
       }
 
       // 同时更新本地存储备份
@@ -448,28 +504,32 @@ export const useObstacleStore = defineStore('obstacle', () => {
       // 通过API从服务器删除 - 直接传递ID，让API处理ID转换
       await deleteObstacle(id)
 
-      // 从本地障碍物列表中移除
-      const index = customObstacles.value.findIndex((o) => o.id === id)
-      if (index >= 0) {
-        customObstacles.value.splice(index, 1)
-
-        // 同时更新本地存储备份
-        const storageKey = getStorageKey()
-        if (storageKey) {
-          localStorage.setItem(storageKey, JSON.stringify(customObstacles.value))
+      // 重新加载当前页以获取最新数据
+      if (paginationInfo.value) {
+        await loadObstaclesPage(paginationInfo.value.currentPage, paginationInfo.value.pageSize)
+      } else {
+        // 如果没有分页信息，从本地列表移除
+        const index = customObstacles.value.findIndex((o) => o.id === id)
+        if (index >= 0) {
+          customObstacles.value.splice(index, 1)
         }
-
-        // 更新障碍物数量信息
-        try {
-          obstacleCountInfo.value = await getObstacleCountInfo()
-        } catch (countError) {
-          console.error('获取障碍物数量限制信息失败:', countError)
-        }
-
-        ElMessage.success('障碍物已删除')
-        return true
       }
-      return false
+
+      // 同时更新本地存储备份
+      const storageKey = getStorageKey()
+      if (storageKey) {
+        localStorage.setItem(storageKey, JSON.stringify(customObstacles.value))
+      }
+
+      // 更新障碍物数量信息
+      try {
+        obstacleCountInfo.value = await getObstacleCountInfo()
+      } catch (countError) {
+        console.error('获取障碍物数量限制信息失败:', countError)
+      }
+
+      ElMessage.success('障碍物已删除')
+      return true
     } catch (e) {
       console.error('从服务器删除自定义障碍物失败:', e)
       error.value = createErrorResponse(ErrorCode.DELETE_OBSTACLE_FAILED, '删除障碍物失败，请重试')
@@ -538,14 +598,13 @@ export const useObstacleStore = defineStore('obstacle', () => {
       const response = await getSharedObstacles()
 
       // 检查响应格式，处理分页数据
-      // 使用类型断言处理可能的分页响应
       if (!response) {
-        // 处理空响应情况
         sharedObstacles.value = []
         return
       }
 
-      const paginatedResponse = response as unknown as { results?: ObstacleData[] }
+      // 处理分页响应或普通数组响应
+      const paginatedResponse = response as PaginatedResponse<ObstacleData>
       const obstacles = paginatedResponse.results || (response as ObstacleData[])
 
       if (Array.isArray(obstacles)) {
@@ -644,12 +703,15 @@ export const useObstacleStore = defineStore('obstacle', () => {
     error,
     sharedError,
     obstacleCountInfo,
+    paginationInfo,
     initObstacles,
     initSharedObstacles,
+    fetchCountInfo,
     saveCustomObstacle,
     removeCustomObstacle,
     getObstacleById,
     toggleSharing,
+    changePage,
     clearError: () => {
       error.value = null
     },

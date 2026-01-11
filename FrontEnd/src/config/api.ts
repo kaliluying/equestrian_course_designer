@@ -41,7 +41,7 @@ interface EnvConfig {
   wsBaseUrl: string
   appBaseUrl: string
 }
-const apiHost = '192.168.1.14'
+const apiHost = '192.168.1.3'
 // 基础配置
 const BASE_CONFIG: Record<EnvType, EnvConfig> = {
   // 开发环境配置
