@@ -12,14 +12,29 @@ def get_file_path(instance, filename, base_path):
     """
     # 获取文件扩展名
     ext = filename.split('.')[-1]
+    
+    # 提取原始文件名（去掉扩展名）
+    base_name = '.'.join(filename.split('.')[:-1]) if '.' in filename else filename
+    
+    # 如果文件名不是默认的 'design'，使用原始文件名（路线名称）
+    if base_name and base_name != 'design':
+        route_name = base_name
+    else:
+        route_name = None
 
     # 生成新的文件名
     if hasattr(instance, 'id') and instance.id:
         # 如果实例已有ID（更新），使用ID作为文件名的一部分
-        new_filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{instance.id}.{ext}"
+        if route_name:
+            new_filename = f"{route_name}_{instance.id}.{ext}"
+        else:
+            new_filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{instance.id}.{ext}"
     else:
         # 如果是新创建的实例，使用UUID
-        new_filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}.{ext}"
+        if route_name:
+            new_filename = f"{route_name}_{uuid.uuid4().hex[:8]}.{ext}"
+        else:
+            new_filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}.{ext}"
 
     # 返回完整路径
     return os.path.join(base_path, new_filename)

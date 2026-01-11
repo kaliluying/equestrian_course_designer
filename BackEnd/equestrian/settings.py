@@ -142,7 +142,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
 
 # 站点域名配置，用于媒体文件URL生成
-SITE_DOMAIN = os.environ.get('SITE_DOMAIN', '192.168.1.2:8000')
+SITE_DOMAIN = os.environ.get('SITE_DOMAIN', '192.168.1.14:8000')
 USE_HTTPS = os.environ.get('USE_HTTPS', 'False').lower() == 'true'
 
 # Default primary key field type

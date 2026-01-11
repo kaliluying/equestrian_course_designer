@@ -410,26 +410,24 @@ const handleSaveDesign = async () => {
     const originalWidth = originalRect.width
     const originalHeight = originalRect.height
 
-
-
     try {
       // 4. 使用html2canvas进行渲染
-      const imageCanvas = await html2canvas(canvas, {
+      const html2canvasOptions = {
         backgroundColor: '#ffffff',
         scale: 3,
-        width: originalWidth,
-        height: originalHeight,
         useCORS: true,
         allowTaint: false,
-        foreignObjectRendering: true,
-        logging: false
-      })
+        foreignObjectRendering: false,
+        logging: false,
+        scrollX: -window.scrollX,
+        scrollY: -window.scrollY
+      }
 
-
+      const imageCanvas = await html2canvas(canvas, html2canvasOptions)
 
       // 5. 处理生成的图像，确保合适的尺寸
-      const finalWidth = Math.max(800, imageCanvas.width)
-      const finalHeight = Math.max(600, imageCanvas.height)
+      const finalWidth = imageCanvas.width
+      const finalHeight = imageCanvas.height
 
       // 创建最终输出画布
       const outputCanvas = document.createElement('canvas')
@@ -445,11 +443,8 @@ const handleSaveDesign = async () => {
       ctx.fillStyle = '#ffffff'
       ctx.fillRect(0, 0, finalWidth, finalHeight)
 
-      // 居中绘制图像
-      const x = (finalWidth - imageCanvas.width) / 2
-      const y = (finalHeight - imageCanvas.height) / 2
-      ctx.drawImage(imageCanvas, 0, 0, imageCanvas.width, imageCanvas.height,
-        x, y, imageCanvas.width, imageCanvas.height)
+      // 直接绘制图像
+      ctx.drawImage(imageCanvas, 0, 0)
 
       // 6. 转换为高质量Blob
       const imageBlob = await new Promise<Blob>((resolve, reject) => {
@@ -462,8 +457,6 @@ const handleSaveDesign = async () => {
         }, 'image/png', 1.0)  // 使用最高质量
       })
 
-
-
       // 7. 导出设计数据
       const designData = courseStore.exportCourse()
       const designBlob = new Blob([JSON.stringify(designData, null, 2)], { type: 'application/json' })
@@ -471,11 +464,16 @@ const handleSaveDesign = async () => {
       // 8. 检查是否是更新现有设计
       const designIdToUpdate = localStorage.getItem('design_id_to_update')
 
+      // 生成基于路线名称的图片文件名
+      const sanitizeFileName = (name: string): string => {
+        return name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '').trim() || '未命名设计'
+      }
+      const imageFileName = `${sanitizeFileName(courseName.value || '未命名设计')}.png`
 
       // 构建保存请求数据
       const saveData: SaveDesignRequest = {
         title: courseName.value || '未命名设计',
-        image: new File([imageBlob], 'design.png', { type: 'image/png' }),
+        image: new File([imageBlob], imageFileName, { type: 'image/png' }),
         download: new File([designBlob], 'design.json', { type: 'application/json' })
       }
 

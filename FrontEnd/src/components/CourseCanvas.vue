@@ -1132,7 +1132,7 @@ const handleMouseMove = (event: MouseEvent) => {
       if (!initialPosition) return
 
       // 缓存缩放因子，避免重复计算
-      const scaleFactor = pathScaleFactor.value
+      const scaleFactor = meterScale.value
 
       // 计算新的相对位置（考虑缩放因子）
       const newRelativePosition = {
@@ -1188,8 +1188,8 @@ const handleMouseMove = (event: MouseEvent) => {
   // 处理障碍物拖拽
   if (isDragging.value) {
     // 计算鼠标移动距离（需要考虑缩放）
-    const deltaX = (event.clientX - startMousePos.value.x) / pathScaleFactor.value
-    const deltaY = (event.clientY - startMousePos.value.y) / pathScaleFactor.value
+    const deltaX = (event.clientX - startMousePos.value.x) / meterScale.value
+    const deltaY = (event.clientY - startMousePos.value.y) / meterScale.value
 
     // 更新所有选中障碍物的位置
     selectedObstacles.value.forEach((obstacle) => {
@@ -1715,8 +1715,8 @@ const handleDrop = (event: DragEvent) => {
     case ObstacleType.SINGLE:
     case 'SINGLE':
       newObstacle.poles = [{
-        height: 0.5 * meterScale.value, // 修改为0.5米
-        width: 3.5 * meterScale.value,  // 3.5米宽
+        height: 0.5,
+        width: 3.5,
         color: '#8B4513'
       }]
       break
@@ -1724,14 +1724,14 @@ const handleDrop = (event: DragEvent) => {
     case 'DOUBLE':
       newObstacle.poles = [
         {
-          height: 0.5 * meterScale.value, // 修改为0.5米
-          width: 3.5 * meterScale.value,  // 3.5米宽
+          height: 0.5,
+          width: 3.5,
           color: '#8B4513',
-          spacing: 0.5 * meterScale.value, // 间距0.5米
+          spacing: 0.5,
         },
         {
-          height: 0.5 * meterScale.value, // 修改为0.5米
-          width: 3.5 * meterScale.value,  // 3.5米宽
+          height: 0.5,
+          width: 3.5,
           color: '#8B4513',
           spacing: 0
         }
@@ -1741,20 +1741,20 @@ const handleDrop = (event: DragEvent) => {
     case 'COMBINATION':
       newObstacle.poles = [
         {
-          height: 0.5 * meterScale.value, // 修改为0.5米
-          width: 3.5 * meterScale.value,  // 3.5米宽
+          height: 0.5,
+          width: 3.5,
           color: '#8B4513',
-          spacing: 0.5 * meterScale.value, // 间距0.5米
+          spacing: 0.5,
         },
         {
-          height: 0.5 * meterScale.value, // 修改为0.5米
-          width: 3.5 * meterScale.value,  // 3.5米宽
+          height: 0.5,
+          width: 3.5,
           color: '#8B4513',
-          spacing: 0.5 * meterScale.value, // 间距0.5米
+          spacing: 0.5,
         },
         {
-          height: 0.5 * meterScale.value, // 修改为0.5米
-          width: 3.5 * meterScale.value,  // 3.5米宽
+          height: 0.5,
+          width: 3.5,
           color: '#8B4513',
           spacing: 0
         }
@@ -1763,67 +1763,60 @@ const handleDrop = (event: DragEvent) => {
     case ObstacleType.WALL:
     case 'WALL':
       newObstacle.wallProperties = {
-        height: 1.5 * meterScale.value, // 修改为1.5米高
-        width: 3.5 * meterScale.value,  // 3.5米宽
+        height: 1.5,
+        width: 3.5,
         color: '#8B4513'
       }
       break
     case ObstacleType.LIVERPOOL:
     case 'LIVERPOOL':
       newObstacle.liverpoolProperties = {
-        height: 0.5 * meterScale.value,  // 修改为0.5米高
-        width: 3.5 * meterScale.value,   // 3.5米宽
-        waterDepth: 0.3 * meterScale.value, // 水深0.3米
+        height: 0.5,
+        width: 3.5,
+        waterDepth: 0.3,
         waterColor: 'rgba(0, 100, 255, 0.3)',
         hasRail: true,
-        railHeight: 0.2 * meterScale.value  // 栏杆高度0.2米
+        railHeight: 0.2
       }
-      // 为利物浦类型添加横杆
       newObstacle.poles = [{
-        height: 0.5 * meterScale.value,  // 修改为0.5米
-        width: 3.5 * meterScale.value,   // 3.5米宽
+        height: 0.5,
+        width: 3.5,
         color: '#8B4513'
       }]
       break
     case ObstacleType.WATER:
     case 'WATER':
       newObstacle.waterProperties = {
-        width: 3.5 * meterScale.value,   // 3.5米宽
-        depth: 2.0 * meterScale.value,   // 修改为2.0米深
+        width: 3.5,
+        depth: 2.0,
         color: 'rgba(0, 100, 255, 0.4)',
         borderColor: 'rgba(0, 50, 150, 0.5)',
-        borderWidth: 0.1 * meterScale.value // 边框宽度0.1米
+        borderWidth: 0.1
       }
-      // 水障不需要横杆
       newObstacle.poles = []
       break
     case ObstacleType.DECORATION:
     case 'DECORATION':
       console.log('处理装饰物类型:', obstacleData)
-      // 默认使用裁判桌作为装饰物
       newObstacle.decorationProperties = {
         category: DecorationCategory.TABLE,
-        width: 4 * meterScale.value,
-        height: 3 * meterScale.value,
+        width: 4,
+        height: 3,
         color: '#8B4513',
         borderColor: '#593b22',
         borderWidth: 2,
         text: '裁判桌',
         textColor: '#ffffff'
       }
-      // 装饰物不需要横杆
       newObstacle.poles = []
-
-      // 确保类型正确设置为DECORATION
       newObstacle.type = ObstacleType.DECORATION
       console.log('创建装饰物完成，类型:', newObstacle.type, '属性:', newObstacle.decorationProperties)
       break
     default:
       console.warn('未知的障碍物类型:', obstacleData)
-      // 默认使用单横木
       newObstacle.poles = [{
-        height: (50 * meterScale.value) / 100,
-        width: 3.5 * meterScale.value,
+        height: 0.5,
+        width: 3.5,
         color: '#8B4513'
       }]
       break
@@ -1935,14 +1928,14 @@ const pathScaleFactor = computed(() => {
   if (!originalViewportInfo || !originalViewportInfo.canvasWidth || !originalViewportInfo.canvasHeight || originalViewportInfo.canvasWidth <= 0 || originalViewportInfo.canvasHeight <= 0) {
     console.warn("原始视口信息缺失或无效，使用基于场地尺寸的缩放因子。");
     // 使用基于场地尺寸的缩放因子作为备选方案
-    return meterScale.value / 20; // 假设默认每米20像素
+    return meterScale.value;
   }
 
   // 获取当前画布元素
   const currentCanvas = canvasContainerRef.value;
   if (!currentCanvas) {
     console.warn("当前画布引用不可用，使用基于场地尺寸的缩放因子。");
-    return meterScale.value / 20; // 假设默认每米20像素
+    return meterScale.value;
   }
 
   // 获取当前画布的尺寸
@@ -1953,7 +1946,7 @@ const pathScaleFactor = computed(() => {
   // 防止除以零或无效尺寸
   if (currentWidth <= 0 || currentHeight <= 0) {
     console.warn("当前画布尺寸无效，使用基于场地尺寸的缩放因子。");
-    return meterScale.value / 20; // 假设默认每米20像素
+    return meterScale.value;
   }
 
   // 计算宽度和高度的缩放比例
@@ -1977,7 +1970,7 @@ const pathScaleFactor = computed(() => {
       W: ${currentWidth}/${originalViewportInfo.canvasWidth},
       H: ${currentHeight}/${originalViewportInfo.canvasHeight},
       DPR: ${devicePixelRatio}/${originalDevicePixelRatio}`);
-    return meterScale.value / 20; // 假设默认每米20像素
+    return meterScale.value;
   }
 
   // 添加详细的调试日志
@@ -1996,7 +1989,7 @@ const scalePoint = (point: { x: number; y: number }) => {
     return { x: 0, y: 0 }
   }
 
-  const scale = pathScaleFactor.value
+  const scale = meterScale.value
 
   // 检查坐标是否有效
   if (typeof point.x !== 'number' || typeof point.y !== 'number' ||
@@ -2029,7 +2022,7 @@ const unscalePoint = (point: { x: number; y: number }) => {
     return { x: 0, y: 0 }
   }
 
-  const scale = pathScaleFactor.value
+  const scale = meterScale.value
 
   // 防止除以零
   if (scale === 0) {

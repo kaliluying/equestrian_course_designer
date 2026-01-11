@@ -24,7 +24,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
 from django.utils.decorators import method_decorator
 from rest_framework.decorators import action, api_view, permission_classes
 from django.db.models import F
-from .utils import get_absolute_media_url, create_alipay_order, verify_alipay_callback, query_alipay_order
+from .utils import get_absolute_media_url, create_alipay_order, verify_alipay_callback, query_alipay_order, success_response, error_response
 from rest_framework.exceptions import PermissionDenied
 from django.views.generic import TemplateView
 import logging
@@ -82,13 +82,12 @@ class RegisterView(APIView):
                 user.save()
 
                 refresh = RefreshToken.for_user(user)
-                return Response({
-                    'message': '注册成功',
+                return success_response('注册成功', {
                     'user_id': user.id,
                     'username': user.username,
                     'access_token': str(refresh.access_token),
                     'refresh_token': str(refresh)
-                }, status=status.HTTP_201_CREATED)
+                }, status.HTTP_201_CREATED)
         except serializers.ValidationError as e:
             # 处理验证错误
             error_messages = {}
@@ -101,16 +100,10 @@ class RegisterView(APIView):
             else:  # 处理非字典类型的错误
                 error_messages['non_field_errors'] = [str(e.detail)]
 
-            return Response({
-                'code': status.HTTP_400_BAD_REQUEST,
-                'message': error_messages
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(error_messages, status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             # 处理其他异常
-            return Response({
-                'code': status.HTTP_500_INTERNAL_SERVER_ERROR,
-                'message': {'non_field_errors': ['服务器内部错误，请稍后重试'], 'error': str(e)}
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return error_response({'non_field_errors': ['服务器内部错误，请稍后重试'], 'error': str(e)}, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -136,14 +129,13 @@ class LoginView(APIView):
             self.check_and_update_membership(user)
 
             refresh = RefreshToken.for_user(user)
-            return Response({
-                'message': '登录成功',
+            return success_response('登录成功', {
                 'user_id': user.id,
                 'username': user.username,
                 'access_token': str(refresh.access_token),
                 'refresh_token': str(refresh)
             })
-        return Response({'code': 400, 'message': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return error_response(serializer.errors, status.HTTP_400_BAD_REQUEST)
 
     def check_and_update_membership(self, user):
         """检查并更新用户的会员状态"""
@@ -239,13 +231,13 @@ class ForgotPasswordView(APIView):
                     fail_silently=False,
                 )
 
-                return Response({'message': '密码重置邮件已发送，请检查您的邮箱'}, status=status.HTTP_200_OK)
+                return success_response('密码重置邮件已发送，请检查您的邮箱')
             except User.DoesNotExist:
                 # 这种情况不应该发生，因为序列化器已经验证了用户存在
                 # 但为了安全起见，仍然返回成功消息
-                return Response({'message': '如果该用户名和邮箱匹配，我们将发送密码重置邮件'}, status=status.HTTP_200_OK)
+                return success_response('如果该用户名和邮箱匹配，我们将发送密码重置邮件')
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return error_response(serializer.errors, status.HTTP_400_BAD_REQUEST)
 
 
 class ResetPasswordView(APIView):
@@ -280,11 +272,11 @@ class ResetPasswordView(APIView):
                 token.is_used = True
                 token.save()
 
-                return Response({'message': '密码已成功重置'}, status=status.HTTP_200_OK)
+                return success_response('密码已成功重置')
             except PasswordResetToken.DoesNotExist:
-                return Response({'message': '无效或已过期的重置令牌'}, status=status.HTTP_400_BAD_REQUEST)
+                return error_response('无效或已过期的重置令牌', status.HTTP_400_BAD_REQUEST)
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return error_response(serializer.errors, status.HTTP_400_BAD_REQUEST)
 
 
 class DesignViewSet(viewsets.ModelViewSet):
@@ -360,9 +352,7 @@ class DesignViewSet(viewsets.ModelViewSet):
 
             # 如果不是自己的设计，检查是否已共享
             if design.author != request.user and not design.is_shared:
-                return Response({
-                    'message': '您无权点赞未共享的设计'
-                }, status=status.HTTP_403_FORBIDDEN)
+                return error_response('您无权点赞未共享的设计', status.HTTP_403_FORBIDDEN)
 
             user = request.user
 
@@ -374,11 +364,9 @@ class DesignViewSet(viewsets.ModelViewSet):
                 # 如果已点赞，则取消点赞
                 DesignLike.objects.filter(design=design, user=user).delete()
                 # 减少点赞数
-                design.likes_count = F('likes_count') - 1
-                design.save()
-                design.refresh_from_db()  # 刷新以获取最新的点赞数
-                return Response({
-                    'message': '取消点赞成功',
+                Design.objects.filter(pk=pk).update(likes_count=F('likes_count') - 1)
+                design.refresh_from_db()
+                return success_response('取消点赞成功', {
                     'likes_count': design.likes_count,
                     'is_liked': False
                 })
@@ -386,18 +374,14 @@ class DesignViewSet(viewsets.ModelViewSet):
                 # 如果未点赞，则添加点赞
                 DesignLike.objects.create(design=design, user=user)
                 # 增加点赞数
-                design.likes_count = F('likes_count') + 1
-                design.save()
-                design.refresh_from_db()  # 刷新以获取最新的点赞数
-                return Response({
-                    'message': '点赞成功',
+                Design.objects.filter(pk=pk).update(likes_count=F('likes_count') + 1)
+                design.refresh_from_db()
+                return success_response('点赞成功', {
                     'likes_count': design.likes_count,
                     'is_liked': True
                 })
         except Design.DoesNotExist:
-            return Response({
-                'message': '设计不存在'
-            }, status=status.HTTP_404_NOT_FOUND)
+            return error_response('设计不存在', status.HTTP_404_NOT_FOUND)
 
     @action(detail=True, methods=['post'], url_path='share')
     def share_design(self, request, pk=None):
@@ -408,8 +392,7 @@ class DesignViewSet(viewsets.ModelViewSet):
         design.is_shared = not design.is_shared
         design.save()
 
-        return Response({
-            'message': '分享状态已更新',
+        return success_response('分享状态已更新', {
             'is_shared': design.is_shared
         })
 
@@ -422,8 +405,7 @@ class DesignViewSet(viewsets.ModelViewSet):
         design.is_shared = not design.is_shared
         design.save()
 
-        return Response({
-            'message': '设计已分享' if design.is_shared else '设计已取消分享',
+        return success_response('设计已分享' if design.is_shared else '设计已取消分享', {
             'is_shared': design.is_shared
         })
 
@@ -434,34 +416,25 @@ class DesignViewSet(viewsets.ModelViewSet):
             # 获取下载类型参数，默认为json
             file_type = request.query_params.get('type', 'json').lower()
             if file_type not in ['json', 'png', 'pdf']:
-                return Response({
-                    'message': '不支持的文件类型，支持的类型有：json, png, pdf'
-                }, status=status.HTTP_400_BAD_REQUEST)
+                return error_response('不支持的文件类型，支持的类型有：json, png, pdf', status.HTTP_400_BAD_REQUEST)
 
             # 直接获取设计，不使用self.get_object()，允许下载任何共享的设计
             design = Design.objects.get(pk=pk)
 
             # 如果不是自己的设计，检查是否已共享
             if design.author != request.user and not design.is_shared:
-                return Response({
-                    'message': '您无权下载未共享的设计'
-                }, status=status.HTTP_403_FORBIDDEN)
+                return error_response('您无权下载未共享的设计', status.HTTP_403_FORBIDDEN)
 
             # 检查是否有下载文件
             if not design.download and file_type == 'json':
-                return Response({
-                    'message': '该设计没有可下载的JSON文件'
-                }, status=status.HTTP_404_NOT_FOUND)
+                return error_response('该设计没有可下载的JSON文件', status.HTTP_404_NOT_FOUND)
 
             # 检查是否有图片文件
             if not design.image and file_type == 'png':
-                return Response({
-                    'message': '该设计没有可下载的PNG图片'
-                }, status=status.HTTP_404_NOT_FOUND)
+                return error_response('该设计没有可下载的PNG图片', status.HTTP_404_NOT_FOUND)
 
             # 增加下载计数
-            design.downloads_count = F('downloads_count') + 1
-            design.save()
+            Design.objects.filter(pk=pk).update(downloads_count=F('downloads_count') + 1)
             design.refresh_from_db()
 
             # 根据文件类型返回不同的下载URL
@@ -473,13 +446,10 @@ class DesignViewSet(viewsets.ModelViewSet):
                 filename = f"{design.title}.png"
             elif file_type == 'pdf':
                 # 这里需要实现PDF生成逻辑，暂时返回错误
-                return Response({
-                    'message': 'PDF下载功能正在开发中，敬请期待'
-                }, status=status.HTTP_501_NOT_IMPLEMENTED)
+                return error_response('PDF下载功能正在开发中，敬请期待', status.HTTP_501_NOT_IMPLEMENTED)
 
             # 返回下载URL和文件名
-            return Response({
-                'message': '下载成功',
+            return success_response('下载成功', {
                 'download_url': download_url,
                 'filename': filename,
                 'file_type': file_type,
@@ -487,9 +457,7 @@ class DesignViewSet(viewsets.ModelViewSet):
             })
 
         except Design.DoesNotExist:
-            return Response({
-                'message': '设计不存在'
-            }, status=status.HTTP_404_NOT_FOUND)
+            return error_response('设计不存在', status.HTTP_404_NOT_FOUND)
 
     def create(self, request, *args, **kwargs):
         """创建设计前检查存储限制"""
@@ -507,14 +475,17 @@ class DesignViewSet(viewsets.ModelViewSet):
         # 检查是否超出存储限制
         storage_limit = profile.get_storage_limit()
         if user_designs_count >= storage_limit:
-            return Response({
-                'message': f'您已达到存储限制（{storage_limit}个设计）。升级为会员可获得更多存储空间！',
-                'is_limit_reached': True,
-                'current_count': user_designs_count,
-                'limit': storage_limit,
-                'is_premium': profile.is_premium,
-                'is_premium_active': profile.is_premium_active()
-            }, status=status.HTTP_403_FORBIDDEN)
+            return error_response(
+                f'您已达到存储限制（{storage_limit}个设计）。升级为会员可获得更多存储空间！',
+                status.HTTP_403_FORBIDDEN,
+                {
+                    'is_limit_reached': True,
+                    'current_count': user_designs_count,
+                    'limit': storage_limit,
+                    'is_premium': profile.is_premium,
+                    'is_premium_active': profile.is_premium_active()
+                }
+            )
 
         # 继续正常的创建流程
         return super().create(request, *args, **kwargs)
@@ -558,10 +529,7 @@ class UserViewSet(viewsets.ModelViewSet):
                     membership_plan = MembershipPlan.objects.get(
                         id=membership_plan_id, is_active=True)
                 except MembershipPlan.DoesNotExist:
-                    return Response({
-                        'success': False,
-                        'message': "指定的会员计划不存在或未激活"
-                    }, status=status.HTTP_400_BAD_REQUEST)
+                    return error_response("指定的会员计划不存在或未激活", status.HTTP_400_BAD_REQUEST)
 
             # 设置会员状态
             profile.is_premium = is_premium
@@ -579,24 +547,16 @@ class UserViewSet(viewsets.ModelViewSet):
 
             profile.save()
 
-            return Response({
-                'success': True,
-                'message': f"用户 {user.username} 的会员状态已更新",
+            return success_response(f"用户 {user.username} 的会员状态已更新", {
                 'is_premium': profile.is_premium,
                 'premium_expiry': profile.premium_expiry,
                 'membership_plan': membership_plan.name if membership_plan else None,
                 'design_storage_limit': profile.get_storage_limit()
             })
         except User.DoesNotExist:
-            return Response({
-                'success': False,
-                'message': "用户不存在"
-            }, status=status.HTTP_404_NOT_FOUND)
+            return error_response("用户不存在", status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response({
-                'success': False,
-                'message': f"设置会员状态失败: {str(e)}"
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(f"设置会员状态失败: {str(e)}", status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=['get'])
     def check_premium(self, request):
@@ -604,8 +564,7 @@ class UserViewSet(viewsets.ModelViewSet):
         user = request.user
         profile, created = UserProfile.objects.get_or_create(user=user)
         
-        return Response({
-            'success': True,
+        return success_response('查询成功', {
             'is_premium_active': profile.is_premium_active()
         })
 
@@ -678,10 +637,7 @@ class UserViewSet(viewsets.ModelViewSet):
         """修改用户密码"""
         user = request.user
         if not user.is_authenticated:
-            return Response({
-                'success': False,
-                'message': "用户未登录"
-            }, status=status.HTTP_401_UNAUTHORIZED)
+            return error_response("用户未登录", status.HTTP_401_UNAUTHORIZED)
 
         old_password = request.data.get('old_password')
         new_password = request.data.get('new_password')
@@ -689,23 +645,14 @@ class UserViewSet(viewsets.ModelViewSet):
 
         # 验证数据
         if not old_password or not new_password or not confirm_password:
-            return Response({
-                'success': False,
-                'message': "所有字段都是必填的"
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return error_response("所有字段都是必填的", status.HTTP_400_BAD_REQUEST)
 
         if new_password != confirm_password:
-            return Response({
-                'success': False,
-                'message': "两次输入的新密码不一致"
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return error_response("两次输入的新密码不一致", status.HTTP_400_BAD_REQUEST)
 
         # 验证旧密码
         if not user.check_password(old_password):
-            return Response({
-                'success': False,
-                'message': "旧密码不正确"
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return error_response("旧密码不正确", status.HTTP_400_BAD_REQUEST)
 
         # 设置新密码
         user.set_password(new_password)
@@ -714,9 +661,7 @@ class UserViewSet(viewsets.ModelViewSet):
         # 更新令牌
         refresh = RefreshToken.for_user(user)
 
-        return Response({
-            'success': True,
-            'message': "密码修改成功",
+        return success_response("密码修改成功", {
             'refresh': str(refresh),
             'access': str(refresh.access_token)
         })
@@ -726,42 +671,28 @@ class UserViewSet(viewsets.ModelViewSet):
         """修改用户邮箱"""
         user = request.user
         if not user.is_authenticated:
-            return Response({
-                'success': False,
-                'message': "用户未登录"
-            }, status=status.HTTP_401_UNAUTHORIZED)
+            return error_response("用户未登录", status.HTTP_401_UNAUTHORIZED)
 
         password = request.data.get('password')
         new_email = request.data.get('new_email')
 
         # 验证数据
         if not password or not new_email:
-            return Response({
-                'success': False,
-                'message': "所有字段都是必填的"
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return error_response("所有字段都是必填的", status.HTTP_400_BAD_REQUEST)
 
         # 验证密码
         if not user.check_password(password):
-            return Response({
-                'success': False,
-                'message': "密码不正确"
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return error_response("密码不正确", status.HTTP_400_BAD_REQUEST)
 
         # 检查邮箱是否已被使用
         if User.objects.filter(email=new_email).exclude(id=user.id).exists():
-            return Response({
-                'success': False,
-                'message': "该邮箱已被其他用户使用"
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return error_response("该邮箱已被其他用户使用", status.HTTP_400_BAD_REQUEST)
 
         # 更新邮箱
         user.email = new_email
         user.save()
 
-        return Response({
-            'success': True,
-            'message': "邮箱修改成功",
+        return success_response("邮箱修改成功", {
             'email': new_email
         })
 
@@ -901,9 +832,7 @@ def create_membership_order(request):
             order.save()
 
             # 返回订单信息和支付链接
-            return Response({
-                'success': True,
-                'message': '订单创建成功',
+            return success_response('订单创建成功', {
                 'order': MembershipOrderSerializer(order).data,
                 'payment_url': pay_url
             })
@@ -912,16 +841,9 @@ def create_membership_order(request):
             logger.error(f"创建支付宝订单失败: {str(e)}")
             order.status = 'failed'
             order.save()
-            return Response({
-                'success': False,
-                'message': f'创建支付订单失败: {str(e)}',
-            }, status=500)
+            return error_response(f'创建支付订单失败: {str(e)}', status.HTTP_500_INTERNAL_SERVER_ERROR)
     else:
-        return Response({
-            'success': False,
-            'message': '参数错误',
-            'errors': serializer.errors
-        }, status=400)
+        return error_response(serializer.errors, status.HTTP_400_BAD_REQUEST)
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -973,15 +895,11 @@ def get_order_status(request, order_id):
         order = MembershipOrder.objects.get(
             order_id=order_id, user=request.user)
     except MembershipOrder.DoesNotExist:
-        return Response({
-            'success': False,
-            'message': '订单不存在'
-        }, status=404)
+        return error_response('订单不存在', status.HTTP_404_NOT_FOUND)
 
     # 如果订单已经支付完成，直接返回状态
     if order.status == 'paid':
-        return Response({
-            'success': True,
+        return success_response('查询成功', {
             'order': MembershipOrderSerializer(order).data
         })
 
@@ -1001,25 +919,19 @@ def get_order_status(request, order_id):
             # 更新用户会员状态
             update_user_membership(request.user, order)
 
-            return Response({
-                'success': True,
-                'message': '支付成功',
+            return success_response('支付成功', {
                 'order': MembershipOrderSerializer(order).data
             })
         else:
-            return Response({
-                'success': True,
-                'message': '订单未支付或支付处理中',
+            return success_response('订单未支付或支付处理中', {
                 'order': MembershipOrderSerializer(order).data,
                 'alipay_status': query_result.get('trade_status')
             })
     except Exception as e:
         logger.error(f"查询支付宝订单状态失败: {str(e)}")
-        return Response({
-            'success': False,
-            'message': f'查询订单状态失败: {str(e)}',
+        return error_response(f'查询订单状态失败: {str(e)}', status.HTTP_500_INTERNAL_SERVER_ERROR, {
             'order': MembershipOrderSerializer(order).data
-        }, status=500)
+        })
 
 
 @api_view(['POST'])

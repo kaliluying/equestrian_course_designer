@@ -7,6 +7,7 @@ from .models import Feedback
 from .serializers import FeedbackSerializer
 from django.contrib.auth.models import User
 from user.models import MembershipOrder, UserProfile, MembershipPlan
+from user.utils import success_response
 from django.db.models import Sum, Count
 from datetime import timedelta, date
 from django.contrib.auth.decorators import login_required
@@ -39,10 +40,10 @@ class FeedbackViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         headers = self.get_success_headers(serializer.data)
-        return Response(
-            {"message": "反馈提交成功，感谢您的反馈！", "data": serializer.data},
-            status=status.HTTP_201_CREATED,
-            headers=headers
+        return success_response(
+            "反馈提交成功，感谢您的反馈！",
+            {"data": serializer.data},
+            status.HTTP_201_CREATED
         )
 
 

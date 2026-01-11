@@ -79,16 +79,16 @@
           </div>
 
           <div class="action-buttons">
-            <el-button type="primary" @click="openDesign(design)">
+            <el-button type="primary" @click="openDesign(design)" class="action-btn">
               编辑
             </el-button>
-            <el-button :type="design.is_shared ? 'success' : 'info'" @click="toggleShare(design)">
+            <el-button :type="design.is_shared ? 'success' : 'info'" @click="toggleShare(design)" class="action-btn share-btn">
               {{ design.is_shared ? '取消分享' : '分享' }}
             </el-button>
-            <el-button type="danger" @click="confirmDelete(design)">
+            <el-button type="danger" @click="confirmDelete(design)" class="action-btn">
               删除
             </el-button>
-            <el-button type="info" @click="handleDownload(design)">
+            <el-button type="info" @click="handleDownload(design)" class="action-btn">
               下载
             </el-button>
           </div>
@@ -671,6 +671,26 @@ onMounted(() => {
 .design-date {
   font-size: 12px;
   color: var(--text-light);
+}
+
+.action-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 16px;
+
+  :deep(.el-button) {
+    margin: 0;
+  }
+
+  .action-btn {
+    width: 100%;
+    padding: 8px 12px;
+  }
+
+  @media (max-width: 480px) {
+    gap: 6px;
+  }
 }
 
 .card-actions {

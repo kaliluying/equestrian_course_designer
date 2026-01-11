@@ -156,15 +156,6 @@ export default {
       status: (designId: string) => `${config.apiBaseUrl}/collaboration/${designId}/status/`,
       history: (designId: string) => `${config.apiBaseUrl}/collaboration/${designId}/history/`,
     },
-
-    // 自定义障碍物相关
-    obstacles: {
-      list: getApiUrl('/api/obstacles/custom/'),
-      detail: (id: string) => getApiUrl(`/api/obstacles/custom/${id}/`),
-      create: getApiUrl('/api/obstacles/custom/'),
-      update: (id: string) => getApiUrl(`/api/obstacles/custom/${id}/`),
-      delete: (id: string) => getApiUrl(`/api/obstacles/custom/${id}/`),
-    },
   },
 
   // 帮助和文档链接

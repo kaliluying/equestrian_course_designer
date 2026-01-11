@@ -9,6 +9,8 @@ from hashlib import sha1
 import time
 import os
 import uuid
+from rest_framework.response import Response
+from rest_framework import status
 
 
 def get_absolute_media_url(path):
@@ -140,3 +142,45 @@ def query_alipay_order(order_id):
     """
     alipay = get_alipay_client()
     return alipay.api_alipay_trade_query(out_trade_no=order_id)
+
+
+def success_response(message='操作成功', data=None, status_code=status.HTTP_200_OK):
+    """
+    创建统一的成功响应
+
+    参数:
+    - message: 成功消息
+    - data: 额外的响应数据（字典）
+    - status_code: HTTP状态码
+
+    返回:
+    - DRF Response对象
+    """
+    response_data = {
+        'success': True,
+        'message': message
+    }
+    if data:
+        response_data.update(data)
+    return Response(response_data, status=status_code)
+
+
+def error_response(message, status_code=status.HTTP_400_BAD_REQUEST, errors=None):
+    """
+    创建统一的错误响应
+
+    参数:
+    - message: 错误消息（字符串或字典，字典用于字段验证错误）
+    - status_code: HTTP状态码
+    - errors: 额外的错误信息
+
+    返回:
+    - DRF Response对象
+    """
+    response_data = {
+        'success': False,
+        'message': message
+    }
+    if errors:
+        response_data['errors'] = errors
+    return Response(response_data, status=status_code)
