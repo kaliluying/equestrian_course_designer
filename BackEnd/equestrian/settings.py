@@ -13,83 +13,112 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 from datetime import timedelta
 from pathlib import Path
 import os
+from dotenv import load_dotenv
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# 加载 .env 文件
+load_dotenv(BASE_DIR / ".env")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-p_%_x$&etn*k5*mikk9o=^shm3@0w+l+8kccf3hpe-gr8kjw-$'
-
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Security fix: DEBUG must be False in production
+DEBUG = os.environ.get("DJANGO_DEBUG", "True").lower() == "true"
 
-ALLOWED_HOSTS = ['*']
+# SECURITY WARNING: keep the secret key used in production secret!
+# Security fix: SECRET_KEY must be non-empty in production
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
+if not SECRET_KEY and not DEBUG:
+    raise ValueError("SECRET_KEY must be set in production (DJANGO_SECRET_KEY env var)")
+
+# Security fix: ALLOWED_HOSTS must not be wildcard in production
+allowed_hosts_env = os.environ.get("DJANGO_ALLOWED_HOSTS", "")
+ALLOWED_HOSTS = allowed_hosts_env.split(",") if allowed_hosts_env else []
+if not ALLOWED_HOSTS or (len(ALLOWED_HOSTS) == 1 and ALLOWED_HOSTS[0] == ""):
+    if DEBUG:
+        # Development: allow localhost and common local networks
+        ALLOWED_HOSTS = ["localhost", "127.0.0.1", "0.0.0.0"]
+    else:
+        # Production: require explicit ALLOWED_HOSTS
+        raise ValueError(
+            "ALLOWED_HOSTS must be set in production (DJANGO_ALLOWED_HOSTS env var)"
+        )
+if not ALLOWED_HOSTS or (len(ALLOWED_HOSTS) == 1 and ALLOWED_HOSTS[0] == ""):
+    if DEBUG:
+        # Development: allow localhost and common local networks
+        ALLOWED_HOSTS = ["localhost", "127.0.0.1", "0.0.0.0"]
+    else:
+        # Production: require explicit ALLOWED_HOSTS
+        raise ValueError(
+            "ALLOWED_HOSTS must be set in production (DJANGO_ALLOWED_HOSTS env var)"
+        )
 
 # Application definition
 
 INSTALLED_APPS = [
-    'simpleui',
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'rest_framework',
-    'corsheaders',
-    'channels',
+    "simpleui",
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "rest_framework",
+    "corsheaders",
+    "channels",
     "user.apps.UserConfig",
-    'feedback',  # 新增反馈应用
+    "feedback",  # 新增反馈应用
 ]
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',  # 紧接 SecurityMiddleware
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'user.middleware.TokenAuthenticationMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # 紧接 SecurityMiddleware
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "user.middleware.TokenAuthenticationMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
 ]
 
-ROOT_URLCONF = 'equestrian.urls'
+ROOT_URLCONF = "equestrian.urls"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'templates')],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [os.path.join(BASE_DIR, "templates")],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'equestrian.wsgi.application'
+WSGI_APPLICATION = "equestrian.wsgi.application"
 
-ASGI_APPLICATION = 'equestrian.asgi.application'
+ASGI_APPLICATION = "equestrian.asgi.application"
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'equestrian',
-        'USER': 'root',
-        'PASSWORD': '176294955',
-        'HOST': '127.0.0.1',
-        'PORT': '3306',
+    "default": {
+        "ENGINE": "django.db.backends.mysql",
+        "NAME": os.environ.get("DB_NAME", "equestrian"),
+        "USER": os.environ.get("DB_USER", "root"),
+        "PASSWORD": os.environ.get("DB_PASSWORD", ""),
+        "HOST": os.environ.get("DB_HOST", "127.0.0.1"),
+        "PORT": os.environ.get("DB_PORT", "3306"),
     }
 }
 
@@ -98,25 +127,25 @@ DATABASES = {
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
 
-LANGUAGE_CODE = 'zh-hans'
+LANGUAGE_CODE = "zh-hans"
 
-TIME_ZONE = 'Asia/Shanghai'
+TIME_ZONE = "Asia/Shanghai"
 
 USE_I18N = True
 
@@ -125,24 +154,24 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-STATIC_URL = '/static/'
+STATIC_URL = "/static/"
 # STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
+    os.path.join(BASE_DIR, "static"),
 ]
 
 # Media files
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+MEDIA_URL = "/media/"
 
 # 站点域名配置，用于媒体文件URL生成
-SITE_DOMAIN = os.environ.get('SITE_DOMAIN', '192.168.1.3:8000')
-USE_HTTPS = os.environ.get('USE_HTTPS', 'False').lower() == 'true'
+SITE_DOMAIN = os.environ.get("SITE_DOMAIN", "192.168.1.3:8000")
+USE_HTTPS = os.environ.get("USE_HTTPS", "False").lower() == "true"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # 隐藏右侧SimpleUI广告链接和使用分析
 SIMPLEUI_HOME_INFO = False
@@ -151,161 +180,201 @@ SIMPLEUI_ANALYSIS = False
 # SIMPLEUI_HOME_QUICK = False
 SIMPLEUI_HOME_ACTION = False
 
-SIMPLEUI_INDEX = 'https://kaliluying.github.io/'
+SIMPLEUI_INDEX = "https://kaliluying.github.io/"
 
-SIMPLEUI_HOME_PAGE = '/api/feedback/dashboard'
+SIMPLEUI_HOME_PAGE = "/api/feedback/dashboard"
 
 # DRF配置
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "user.authentication.CookieJWTAuthentication",
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
-    'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticated',
-    ),
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 9,  # 每页显示9条记录
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 9,  # 每页显示9条记录
 }
+
+# Custom authentication backends for cookie-based JWT auth
+AUTHENTICATION_BACKENDS = [
+    "user.backends.CookieAuthBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
 
 # JWT配置
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=7),  # 访问令牌过期时间改为7天
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),  # 刷新令牌过期时间改为30天
-    'ROTATE_REFRESH_TOKENS': True,  # 开启刷新令牌自动更新
-    'BLACKLIST_AFTER_ROTATION': True,
-    'UPDATE_LAST_LOGIN': True,
-
-    'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
-    'VERIFYING_KEY': None,
-    'AUDIENCE': None,
-    'ISSUER': None,
-
-    'AUTH_HEADER_TYPES': ('Bearer',),
-    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
-    'USER_ID_FIELD': 'id',
-    'USER_ID_CLAIM': 'user_id',
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=7),  # 访问令牌过期时间改为7天
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),  # 刷新令牌过期时间改为30天
+    "ROTATE_REFRESH_TOKENS": True,  # 开启刷新令牌自动更新
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "VERIFYING_KEY": None,
+    "AUDIENCE": None,
+    "ISSUER": None,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
 }
 
-# CSRF配置
-CSRF_COOKIE_SECURE = False  # 开发环境设为False，生产环境设为True
-CSRF_COOKIE_HTTPONLY = False  # 允许JavaScript访问CSRF cookie
-CSRF_COOKIE_SAMESITE = 'Lax'  # 允许跨站请求携带cookie
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:8080",
-    "http://127.0.0.1:8080",
-    "http://192.168.1.6:5173",
-    "http://192.168.1.6:8080",
-    "https://equestrian.top",
-    "http://192.168.1.7:5173",
-    "http://192.168.1.7:8080",
-    "http://192.168.1.2:5173",
-]
+# CSRF配置 - Security fix: enforce secure settings in production
+CSRF_COOKIE_SECURE = False if DEBUG else True  # 生产环境必须为True
+CSRF_COOKIE_HTTPONLY = True  # 防止JavaScript访问CSRF cookie
+CSRF_COOKIE_SAMESITE = "Lax"  # 允许跨站请求携带cookie
+CSRF_TRUSTED_ORIGINS = (
+    os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
+    if not DEBUG
+    else [
+        # Development trusted origins
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        "http://192.168.1.6:5173",
+        "http://192.168.1.6:8080",
+        "https://equestrian.top",
+        "http://192.168.1.7:5173",
+        "http://192.168.1.7:8080",
+        "http://192.168.1.2:5173",
+    ]
+)
+if not CSRF_TRUSTED_ORIGINS or (
+    len(CSRF_TRUSTED_ORIGINS) == 1 and CSRF_TRUSTED_ORIGINS[0] == ""
+):
+    if not DEBUG:
+        raise ValueError("CSRF_TRUSTED_ORIGINS must be set in production")
 
-# CORS配置
-CORS_ORIGIN_ALLOW_ALL = True
-
+# CORS配置 - Security fix: use allowlist instead of allow-all
+CORS_ORIGIN_ALLOW_ALL = False  # 禁止所有来源，改用白名单
+CORS_ALLOWED_ORIGINS = (
+    os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
+    if not DEBUG
+    else [
+        # Development CORS origins (localhost + local network)
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        "http://192.168.1.6:5173",
+        "http://192.168.1.6:8080",
+        "https://equestrian.top",
+        "http://192.168.1.7:5173",
+        "http://192.168.1.7:8080",
+        "http://192.168.1.2:5173",
+    ]
+)
+if not CORS_ALLOWED_ORIGINS or (
+    len(CORS_ALLOWED_ORIGINS) == 1 and CORS_ALLOWED_ORIGINS[0] == ""
+):
+    if not DEBUG:
+        raise ValueError("CORS_ALLOWED_ORIGINS must be set in production")
 
 # 允许跨域请求携带cookie
 CORS_ALLOW_CREDENTIALS = True
 
 # 允许的HTTP方法
 CORS_ALLOW_METHODS = [
-    'DELETE',
-    'GET',
-    'OPTIONS',
-    'PATCH',
-    'POST',
-    'PUT',
+    "DELETE",
+    "GET",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
 ]
 
 # 允许的HTTP头
 CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
 ]
 
 # 前端URL配置
-FRONTEND_URL = 'http://192.168.1.2:5173'  # 开发环境
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://192.168.1.2:5173")  # 开发环境
 # FRONTEND_URL = 'https://equestrian.top'  # 生产环境
 
 
 # 邮件配置
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'  # 默认的SMTP后端
-EMAIL_HOST = 'smtp.gmail.com'            # Gmail SMTP服务器地址
-EMAIL_PORT = 587                         # TLS加密端口
-EMAIL_USE_TLS = True                     # 启用TLS加密
-EMAIL_HOST_USER = 'kaliluying@gmail.com'       # 你的Gmail邮箱地址
-EMAIL_HOST_PASSWORD = 'wzeh vduq wxma zrap'  # 应用专用密码（非邮箱登录密码）
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"  # 默认的SMTP后端
+EMAIL_HOST = "smtp.gmail.com"  # Gmail SMTP服务器地址
+EMAIL_PORT = 587  # TLS加密端口
+EMAIL_USE_TLS = True  # 启用TLS加密
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")  # 你的Gmail邮箱地址
+EMAIL_HOST_PASSWORD = os.environ.get(
+    "EMAIL_HOST_PASSWORD", ""
+)  # 应用专用密码（非邮箱登录密码）
 
 
 # settings.py
 CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            "hosts": [('127.0.0.1', 6379)],
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
         },
     },
 }
 
 
 # 创建日志目录
-LOGS_DIR = os.path.join(BASE_DIR, 'logs')
+LOGS_DIR = os.path.join(BASE_DIR, "logs")
 os.makedirs(LOGS_DIR, exist_ok=True)
 
 # 日志配置
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'verbose': {
-            'format': '{levelname} {asctime} {module} {message}',
-            'style': '{',
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} {module} {message}",
+            "style": "{",
         },
     },
-    'handlers': {
-        'console': {
-            'level': 'DEBUG',
-            'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
+    "handlers": {
+        "console": {
+            "level": "DEBUG",
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
         },
-        'file': {
-            'level': 'DEBUG',
-            'class': 'logging.FileHandler',
-            'filename': os.path.join(LOGS_DIR, 'django-channels.log'),
-            'formatter': 'verbose',
+        "file": {
+            "level": "DEBUG",
+            "class": "logging.FileHandler",
+            "filename": os.path.join(LOGS_DIR, "django-channels.log"),
+            "formatter": "verbose",
         },
     },
-    'loggers': {
-        'django': {
-            'handlers': ['console', 'file'],  # 同时输出到控制台和文件
-            'level': 'INFO',
-            'propagate': True,
+    "loggers": {
+        "django": {
+            "handlers": ["console", "file"],  # 同时输出到控制台和文件
+            "level": "INFO",
+            "propagate": True,
         },
-        'django.channels': {
-            'handlers': ['console', 'file'],  # 同时输出到控制台和文件
-            'level': 'DEBUG',
-            'propagate': False,
+        "django.channels": {
+            "handlers": ["console", "file"],  # 同时输出到控制台和文件
+            "level": "DEBUG",
+            "propagate": False,
         },
     },
 }
 
 # 支付宝配置
-ALIPAY_APPID = '9021000144617885'  # 替换为实际的支付宝应用ID
+ALIPAY_APPID = os.environ.get("ALIPAY_APPID", "")  # 替换为实际的支付宝应用ID
 ALIPAY_APP_PRIVATE_KEY_PATH = os.path.join(
-    BASE_DIR, 'equestrian/keys/app_private_key.pem')
+    BASE_DIR, "equestrian/keys/app_private_key.pem"
+)
 ALIPAY_ALIPAY_PUBLIC_KEY_PATH = os.path.join(
-    BASE_DIR, 'equestrian/keys/alipay_public_key.pem')
+    BASE_DIR, "equestrian/keys/alipay_public_key.pem"
+)
 ALIPAY_NOTIFY_URL = f"{SITE_DOMAIN}/api/payment/alipay/notify/"
 ALIPAY_RETURN_URL = f"{SITE_DOMAIN}/payment/success/"
-ALIPAY_DEBUG = True  # 开发环境使用沙箱模式
+ALIPAY_DEBUG = (
+    os.environ.get("ALIPAY_DEBUG", "True").lower() == "true"
+)  # 开发环境使用沙箱模式

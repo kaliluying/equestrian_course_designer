@@ -75,3 +75,5 @@ front.bat
 .trae/
 
 AGENTS.md
+.env
+.sisyphus/

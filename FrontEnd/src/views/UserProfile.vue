@@ -548,7 +548,6 @@ const fetchUserProfile = async () => {
   loading.value = true
   try {
     const response = await getUserProfile() as ApiResponse
-    console.log('获取用户资料响应:', response)
     // 由于axios拦截器已经处理了响应，所以response就是响应数据
     if (response && response.success) {
       userProfile.value = response as unknown as UserProfile
@@ -570,7 +569,6 @@ const fetchUserProfile = async () => {
         userStore.currentUser.is_premium_active = response.is_premium_active
         // 更新本地存储
         localStorage.setItem('user', JSON.stringify(userStore.currentUser))
-        console.log('已更新用户存储中的会员状态:', response.is_premium_active)
       }
     } else {
       ElMessage.error(response?.message || '获取用户资料失败')

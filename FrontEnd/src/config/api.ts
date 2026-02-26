@@ -7,7 +7,6 @@
 type EnvType = 'development' | 'production' | 'test' | 'staging'
 
 // 环境变量，可以根据实际部署环境修改
-console.log(import.meta.env.MODE)
 const ENV = {
   // 当前环境：development, production, test, staging
   NODE_ENV: (import.meta.env.MODE || 'development') as EnvType,
@@ -41,7 +40,7 @@ interface EnvConfig {
   wsBaseUrl: string
   appBaseUrl: string
 }
-const apiHost = '192.168.1.3'
+const apiHost = getEnvValue('API_HOST', '192.168.1.7')
 // 基础配置
 const BASE_CONFIG: Record<EnvType, EnvConfig> = {
   // 开发环境配置

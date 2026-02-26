@@ -383,9 +383,6 @@ export const useCourseStore = defineStore('course', () => {
     // 如果没有非装饰物类型的障碍物，则不生成路径
     if (nonDecorationObstacles.length === 0) return
 
-    // 获取当前的米到像素的比例
-    const scale = meterScale.value
-
     // 只在第一次生成路径时设置起终点位置
     if (!coursePath.value.points.length) {
       // 获取第一个和最后一个非装饰物障碍物
@@ -400,19 +397,19 @@ export const useCourseStore = defineStore('course', () => {
 
       // 根据第一个障碍物设置起点，确保起点标记中心线与路径对齐
       const startAngle = (firstObstacle.rotation - 270) * (Math.PI / 180)
-      const startDistance = 100 // 起点距离第一个障碍物的距离（像素）
+      const startDistanceMeters = 1
       startPoint.value = {
-        x: firstCenter.x - Math.cos(startAngle) * startDistance,
-        y: firstCenter.y - Math.sin(startAngle) * startDistance,
+        x: firstCenter.x - Math.cos(startAngle) * startDistanceMeters,
+        y: firstCenter.y - Math.sin(startAngle) * startDistanceMeters,
         rotation: firstObstacle.rotation,
       }
 
       // 根据最后一个障碍物设置终点，确保终点标记中心线与路径对齐
       const endAngle = (lastObstacle.rotation - 270) * (Math.PI / 180)
-      const endDistance = 100 // 终点距离最后一个障碍物的距离（像素）
+      const endDistanceMeters = 1
       endPoint.value = {
-        x: lastCenter.x + Math.cos(endAngle) * endDistance,
-        y: lastCenter.y + Math.sin(endAngle) * endDistance,
+        x: lastCenter.x + Math.cos(endAngle) * endDistanceMeters,
+        y: lastCenter.y + Math.sin(endAngle) * endDistanceMeters,
         rotation: lastObstacle.rotation,
       }
     }
@@ -430,45 +427,36 @@ export const useCourseStore = defineStore('course', () => {
     nonDecorationObstacles.forEach((obstacle) => {
       const center = getObstacleCenter(obstacle)
       // 计算障碍物的角度（弧度），减去270度是为了调整角度方向
-      // 马术比赛中，障碍物的方向通常是垂直于障碍物的方向
       const angle = (obstacle.rotation - 270) * (Math.PI / 180)
-      // 定义障碍物前方的直线距离为3米，并转换为像素单位
-      // 这个距离用于确保马匹有足够的空间接近障碍物
-      const approachDistance = 3 * scale // 3米的接近距离
-      // 定义障碍物后方的直线距离为3米，并转换为像素单位
-      // 这个距离用于确保马匹有足够的空间离开障碍物
-      const departDistance = 3 * scale // 3米的离开距离
+      // 距离使用米为单位
+      const approachDistance = 1
+      const departDistance = 1
       // 计算障碍物的总长度（包括横杆间距）
       let totalLength = 0
       if (obstacle.type === ObstacleType.DOUBLE && obstacle.poles.length > 1) {
-        // 双横杆障碍物：计算横杆长度加上间距
         totalLength =
           obstacle.poles[0].height + (obstacle.poles[0].spacing || 0) + obstacle.poles[1].height
       } else if (obstacle.type === ObstacleType.LIVERPOOL && obstacle.liverpoolProperties) {
-        // 利物浦障碍物：使用水障宽度
         totalLength = obstacle.liverpoolProperties.height
       } else if (obstacle.type === ObstacleType.WALL && obstacle.wallProperties) {
-        // 砖墙障碍物：使用墙的宽度
         totalLength = obstacle.wallProperties.height
       } else if (obstacle.type === ObstacleType.COMBINATION) {
-        // 组合障碍物：使用组合障碍物的宽度
         for (const pole of obstacle.poles) {
           totalLength += pole.height + (pole.spacing || 0)
         }
       } else {
-        // 单横杆障碍物：使用横杆宽度
         totalLength = obstacle.poles[0]?.height || 0
       }
-      // 添加障碍物前的连接点（可调节点）
+      // 添加障碍物前的连接点
       points.push({
         x: center.x - Math.cos(angle) * (approachDistance + totalLength / 2),
         y: center.y - Math.sin(angle) * (approachDistance + totalLength / 2),
       })
 
-      // 添加接近直线的起点（3米直线的起点）
+      // 添加接近直线的起点
       points.push({
-        x: center.x - Math.cos(angle) * (approachDistance + totalLength / 2),
-        y: center.y - Math.sin(angle) * (approachDistance + totalLength / 2),
+        x: center.x - Math.cos(angle) * (approachDistance - 0.5 + totalLength / 2),
+        y: center.y - Math.sin(angle) * (approachDistance - 0.5 + totalLength / 2),
       })
 
       // 添加障碍物中心点
@@ -477,13 +465,13 @@ export const useCourseStore = defineStore('course', () => {
         y: center.y,
       })
 
-      // 添加离开直线的终点（3米直线的终点）
+      // 添加离开直线的终点
       points.push({
-        x: center.x + Math.cos(angle) * (departDistance + totalLength / 2),
-        y: center.y + Math.sin(angle) * (departDistance + totalLength / 2),
+        x: center.x + Math.cos(angle) * (departDistance - 0.5 + totalLength / 2),
+        y: center.y + Math.sin(angle) * (departDistance - 0.5 + totalLength / 2),
       })
 
-      // 添加障碍物后的连接点（可调节点）
+      // 添加障碍物后的连接点
       points.push({
         x: center.x + Math.cos(angle) * (departDistance + totalLength / 2),
         y: center.y + Math.sin(angle) * (departDistance + totalLength / 2),
@@ -497,6 +485,7 @@ export const useCourseStore = defineStore('course', () => {
     })
 
     // 为每个点生成控制点
+    // 核心原则：障碍物内部是直线，障碍物之间（连接点到连接点）才需要贝塞尔曲线
     for (let i = 0; i < points.length; i++) {
       const current = points[i]
       const prev = points[i - 1]
@@ -506,44 +495,31 @@ export const useCourseStore = defineStore('course', () => {
       const isStartPoint = i === 0
       const isEndPoint = i === points.length - 1
 
-      // 如果是起点或终点，生成相应的控制点
-      if (isStartPoint || isEndPoint) {
-        if (prev && !isStartPoint) {
-          // 生成前控制点
-          const angle = Math.atan2(prev.y - current.y, prev.x - current.x)
-          const distance =
-            Math.sqrt(Math.pow(prev.x - current.x, 2) + Math.pow(prev.y - current.y, 2)) / 3
-          current.controlPoint1 = {
-            x: current.x + Math.cos(angle) * distance,
-            y: current.y + Math.sin(angle) * distance,
-          }
-        }
+      // 计算当前点属于哪个障碍物（如果有）
+      // 每个障碍物有5个点：0=连接点前, 1=直线起点, 2=中心点, 3=直线终点, 4=连接点后
+      const pointIndexInObstacle = (i - 1) % 5
 
-        if (next && !isEndPoint) {
-          // 生成后控制点
-          const angle = Math.atan2(next.y - current.y, next.x - current.x)
-          const distance =
-            Math.sqrt(Math.pow(next.x - current.x, 2) + Math.pow(next.y - current.y, 2)) / 3
-          current.controlPoint2 = {
-            x: current.x + Math.cos(angle) * distance,
-            y: current.y + Math.sin(angle) * distance,
-          }
-        }
-        continue
-      }
+      // 判断是否是障碍物内部的直线段点（点1、2、3）
+      const isObstacleInternalPoint = pointIndexInObstacle >= 1 && pointIndexInObstacle <= 3
 
-      // 对于障碍物部分的点，检查是否是直线部分
-      const pointInObstacle = (i - 1) % 5
+      // 判断是否是连接点（障碍物前后的连接点，点0和点4）
+      const isConnectionPoint = pointIndexInObstacle === 0 || pointIndexInObstacle === 4
 
-      // 如果是直线部分的点，跳过控制点生成
-      if (pointInObstacle === 1 || pointInObstacle === 2 || pointInObstacle === 3) {
+      // 如果是起点，生成后控制点
+      if (isStartPoint && next) {
+        const angle = Math.atan2(next.y - current.y, next.x - current.x)
+        const distance =
+          Math.sqrt(Math.pow(next.x - current.x, 2) + Math.pow(next.y - current.y, 2)) / 3
         current.controlPoint1 = undefined
-        current.controlPoint2 = undefined
+        current.controlPoint2 = {
+          x: current.x + Math.cos(angle) * distance,
+          y: current.y + Math.sin(angle) * distance,
+        }
         continue
       }
-      // 只为连接点生成控制点
-      if (prev && pointInObstacle != 4) {
-        // 生成前控制点
+
+      // 如果是终点，生成前控制点
+      if (isEndPoint && prev) {
         const angle = Math.atan2(prev.y - current.y, prev.x - current.x)
         const distance =
           Math.sqrt(Math.pow(prev.x - current.x, 2) + Math.pow(prev.y - current.y, 2)) / 3
@@ -551,18 +527,69 @@ export const useCourseStore = defineStore('course', () => {
           x: current.x + Math.cos(angle) * distance,
           y: current.y + Math.sin(angle) * distance,
         }
+        current.controlPoint2 = undefined
         continue
       }
 
-      if (next) {
-        // 生成后控制点
-        const angle = Math.atan2(next.y - current.y, next.x - current.x)
-        const distance =
-          Math.sqrt(Math.pow(next.x - current.x, 2) + Math.pow(next.y - current.y, 2)) / 3
-        current.controlPoint2 = {
-          x: current.x + Math.cos(angle) * distance,
-          y: current.y + Math.sin(angle) * distance,
+      // 障碍物内部的直线段点：不设置任何控制点，使用直线连接
+      if (isObstacleInternalPoint) {
+        current.controlPoint1 = undefined
+        current.controlPoint2 = undefined
+        continue
+      }
+
+      // 连接点（障碍物前后）的处理
+      if (isConnectionPoint) {
+        if (pointIndexInObstacle === 0) {
+          // 障碍物前的连接点
+          // controlPoint1: 从前一个点过来的控制点
+          if (prev) {
+            const angleToPrev = Math.atan2(prev.y - current.y, prev.x - current.x)
+            const distToPrev = Math.sqrt(
+              Math.pow(prev.x - current.x, 2) + Math.pow(prev.y - current.y, 2)
+            )
+            current.controlPoint1 = {
+              x: current.x + Math.cos(angleToPrev) * (distToPrev / 3),
+              y: current.y + Math.sin(angleToPrev) * (distToPrev / 3),
+            }
+          }
+          // controlPoint2: 指向直线起点，用很小距离确保直线过渡
+          if (next) {
+            const angleToNext = Math.atan2(next.y - current.y, next.x - current.x)
+            const segmentLength = Math.sqrt(
+              Math.pow(next.x - current.x, 2) + Math.pow(next.y - current.y, 2)
+            )
+            current.controlPoint2 = {
+              x: current.x + Math.cos(angleToNext) * Math.min(segmentLength * 0.05, 1),
+              y: current.y + Math.sin(angleToNext) * Math.min(segmentLength * 0.05, 1),
+            }
+          }
+        } else {
+          // pointIndexInObstacle === 4，障碍物后的连接点
+          // controlPoint1: 指向直线终点，用很小距离确保直线过渡
+          if (prev) {
+            const angleToPrev = Math.atan2(prev.y - current.y, prev.x - current.x)
+            const segmentLength = Math.sqrt(
+              Math.pow(prev.x - current.x, 2) + Math.pow(prev.y - current.y, 2)
+            )
+            current.controlPoint1 = {
+              x: current.x + Math.cos(angleToPrev) * Math.min(segmentLength * 0.05, 1),
+              y: current.y + Math.sin(angleToPrev) * Math.min(segmentLength * 0.05, 1),
+            }
+          }
+          // controlPoint2: 去往下一个点的控制点
+          if (next) {
+            const angleToNext = Math.atan2(next.y - current.y, next.x - current.x)
+            const distToNext = Math.sqrt(
+              Math.pow(next.x - current.x, 2) + Math.pow(next.y - current.y, 2)
+            )
+            current.controlPoint2 = {
+              x: current.x + Math.cos(angleToNext) * (distToNext / 3),
+              y: current.y + Math.sin(angleToNext) * (distToNext / 3),
+            }
+          }
         }
+        continue
       }
     }
     // 更新课程路径的点数组
@@ -572,14 +599,16 @@ export const useCourseStore = defineStore('course', () => {
 
   /**
    * 计算每米对应的像素数
-   * @description 根据当前画布尺寸计算比例
+   * @description 根据当前画布尺寸计算比例，使用宽高中较小的比例保持宽高比
    * @returns {number} 每米对应的像素数
    */
   const meterScale = computed(() => {
     const canvas = document.querySelector('.course-canvas')
-    if (!canvas) return 20 // 默认值
+    if (!canvas) return 20
     const rect = (canvas as HTMLElement).getBoundingClientRect()
-    return rect.width / currentCourse.value.fieldWidth
+    const scaleByWidth = rect.width / currentCourse.value.fieldWidth
+    const scaleByHeight = rect.height / currentCourse.value.fieldHeight
+    return Math.min(scaleByWidth, scaleByHeight)
   })
 
   /**
@@ -616,12 +645,14 @@ export const useCourseStore = defineStore('course', () => {
       )
     }
 
-    // 考虑到padding: 20px的影响
-    const padding = 20
+    // CSS中障碍物有padding: 20px，需要将像素偏移转换为米
+    const paddingPixels = 20
+    const scale = meterScale.value
+    const paddingMeters = paddingPixels / scale
 
-    // 计算障碍物的中心点（相对于障碍物position，未旋转前）
-    const centerX = width / 2 + padding
-    const centerY = height / 2 + padding
+    // 计算障碍物中心：宽高的一半 + padding偏移（米）
+    const centerX = width / 2 + paddingMeters
+    const centerY = height / 2 + paddingMeters
 
     return {
       x: obstacle.position.x + centerX,
@@ -702,16 +733,11 @@ export const useCourseStore = defineStore('course', () => {
 
       // 新编号为当前最大编号+1
       newObstacle.number = String(maxNumber + 1)
-      // #region agent log - 同步障碍物编号到第一个杆件
       if (newObstacle.poles && newObstacle.poles.length > 0) {
         newObstacle.poles[0].number = newObstacle.number
         newObstacle.poles[0].numberPosition = { x: 0, y: -3 }
       }
-      // #endregion
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/80a2706c-c882-4226-99f6-7bd8a98ea3f6',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'course.ts:707',message:'addObstacle-before-push',data:{obstacleNumber:newObstacle.number,polesCount:newObstacle.poles?.length,polesData:newObstacle.poles?.map((p,i)=>({idx:i,num:p.number,numPos:p.numberPosition}))},hypothesisId:'A',timestamp:Date.now(),sessionId:'debug-session'})}).catch(()=>{});
-    // #endregion
 
     currentCourse.value.obstacles.push(newObstacle)
 
@@ -760,12 +786,10 @@ export const useCourseStore = defineStore('course', () => {
 
       // 新编号为当前最大编号+1
       newObstacle.number = String(maxNumber + 1)
-      // #region agent log - 同步障碍物编号到第一个杆件
       if (newObstacle.poles && newObstacle.poles.length > 0) {
         newObstacle.poles[0].number = newObstacle.number
         newObstacle.poles[0].numberPosition = { x: 0, y: -3 }
       }
-      // #endregion
     }
 
     // 添加到障碍物列表
@@ -815,14 +839,9 @@ export const useCourseStore = defineStore('course', () => {
     const center = getObstacleCenter(obstacle)
     const angle = (obstacle.rotation - 270) * (Math.PI / 180)
 
-    // 计算米到像素的比例
-    const scale = meterScale.value
-    // 定义障碍物前方的直线距离为3米，并转换为像素单位
-    // 这个距离用于确保马匹有足够的空间接近障碍物
-    const approachDistance = 3 * scale // 3米的接近距离
-    // 定义障碍物后方的直线距离为3米，并转换为像素单位
-    // 这个距离用于确保马匹有足够的空间离开障碍物
-    const departDistance = 3 * scale // 3米的离开距离
+    // 距离使用米为单位
+    const approachDistance = 1
+    const departDistance = 1
 
     // 计算障碍物的总长度（包括横杆间距）
     let totalLength = 0
@@ -847,7 +866,7 @@ export const useCourseStore = defineStore('course', () => {
     }
 
     // 创建障碍物的5个点
-    // 第1个点：障碍物前的连接点，位于障碍物前方3米
+    // 第1个点：障碍物前的连接点
     // 这个点用于连接前一个障碍物，可以通过控制点调整曲线形状
     const point1: PathPoint = {
       x: center.x - Math.cos(angle) * (approachDistance + totalLength / 2),
@@ -899,7 +918,7 @@ export const useCourseStore = defineStore('course', () => {
         }
       }
 
-      // 为新障碍物的第一个连接点添加前控制点
+      // 为新障碍物的第一个连接点添加控制点
       const angleToPrev = Math.atan2(prevPoint.y - point1.y, prevPoint.x - point1.x)
       const distanceToPrev =
         Math.sqrt(Math.pow(prevPoint.x - point1.x, 2) + Math.pow(prevPoint.y - point1.y, 2)) / 3
@@ -908,9 +927,24 @@ export const useCourseStore = defineStore('course', () => {
         y: point1.y + Math.sin(angleToPrev) * distanceToPrev,
       }
     }
+    // point1 的 controlPoint2 指向直线起点
+    const angleToPoint2 = Math.atan2(point2.y - point1.y, point2.x - point1.x)
+    const segLen1 = Math.sqrt(Math.pow(point2.x - point1.x, 2) + Math.pow(point2.y - point1.y, 2))
+    point1.controlPoint2 = {
+      x: point1.x + Math.cos(angleToPoint2) * Math.min(segLen1 * 0.05, 1),
+      y: point1.y + Math.sin(angleToPoint2) * Math.min(segLen1 * 0.05, 1),
+    }
+
+    // point5 的 controlPoint1 指向直线终点
+    const angleFromPoint4 = Math.atan2(point4.y - point5.y, point4.x - point5.x)
+    const segLen5 = Math.sqrt(Math.pow(point4.x - point5.x, 2) + Math.pow(point4.y - point5.y, 2))
+    point5.controlPoint1 = {
+      x: point5.x + Math.cos(angleFromPoint4) * Math.min(segLen5 * 0.05, 1),
+      y: point5.y + Math.sin(angleFromPoint4) * Math.min(segLen5 * 0.05, 1),
+    }
 
     // 为新障碍物的最后一个连接点添加后控制点
-    const angleToEnd = Math.atan2(point5.y - endPoint.y, point5.x - endPoint.x)
+    const angleToEnd = Math.atan2(endPoint.y - point5.y, endPoint.x - point5.x)
     const distanceToEnd =
       Math.sqrt(Math.pow(endPoint.x - point5.x, 2) + Math.pow(endPoint.y - point5.y, 2)) / 3
     point5.controlPoint2 = {
@@ -1045,14 +1079,9 @@ export const useCourseStore = defineStore('course', () => {
     const center = getObstacleCenter(obstacle)
     const angle = (obstacle.rotation - 270) * (Math.PI / 180)
 
-    // 计算米到像素的比例
-    const scale = meterScale.value
-    // 定义障碍物前方的直线距离为3米，并转换为像素单位
-    // 这个距离用于确保马匹有足够的空间接近障碍物
-    const approachDistance = 3 * scale // 3米的接近距离
-    // 定义障碍物后方的直线距离为3米，并转换为像素单位
-    // 这个距离用于确保马匹有足够的空间离开障碍物
-    const departDistance = 3 * scale // 3米的离开距离
+    // 距离使用米为单位
+    const approachDistance = 1
+    const departDistance = 1
 
     // 计算障碍物的总长度（包括横杆间距）
     let totalLength = 0

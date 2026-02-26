@@ -200,22 +200,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, computed, reactive, watch } from 'vue'
-import { useUserStore } from '@/stores/user'
-import ToolBar from '@/components/ToolBar.vue'
-import CourseCanvas from '@/components/CourseCanvas.vue'
-import PropertiesPanel from '@/components/PropertiesPanel.vue'
-import LoginForm from '@/components/LoginForm.vue'
-import RegisterForm from '@/components/RegisterForm.vue'
-import CollaborationPanel from '@/components/CollaborationPanel.vue'
-import OnboardingTour from '@/components/OnboardingTour.vue'
-import { Position, User, ChatDotRound, SwitchButton, Connection, Key, UserFilled, Check, InfoFilled } from '@element-plus/icons-vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ChatDotRound, Check, Connection, InfoFilled, Key, Position, SwitchButton, User, UserFilled } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCourseStore } from '@/stores/course'
+import { useUserStore } from '@/stores/user'
 import { useWebSocketStore } from '@/stores/websocket'
 import type { CollaborationSession } from '@/stores/websocket'
+import CollaborationPanel from '@/components/CollaborationPanel.vue'
+import CourseCanvas from '@/components/CourseCanvas.vue'
+import LoginForm from '@/components/LoginForm.vue'
+import OnboardingTour from '@/components/OnboardingTour.vue'
+import PropertiesPanel from '@/components/PropertiesPanel.vue'
+import RegisterForm from '@/components/RegisterForm.vue'
 import ResizableDivider from '@/components/ResizableDivider.vue'
+import ToolBar from '@/components/ToolBar.vue'
 
 const userStore = useUserStore()
 const courseStore = useCourseStore()
@@ -355,41 +355,33 @@ const handleTokenExpired = () => {
 
 // 监听协作连接成功事件
 const handleCollaborationConnected = (event: CustomEvent) => {
-  console.log('收到协作连接成功事件:', event.detail)
 
   // 检查是否是延迟事件，如果是普通事件已经处理过，则不重复处理
   if (event.detail.delayed && isCollaborating.value) {
-    console.log('跳过延迟事件处理')
     return
   }
 
   // 如果已经在协作状态，不重复设置
   if (isCollaborating.value) {
-    console.log('已经在协作状态，跳过处理')
     return
   }
 
   isCollaborating.value = true
-  console.log('设置协作状态为 true')
 
   // 更新会话信息
   if (event.detail.session) {
     collaborationSession.value = event.detail.session
-    console.log('更新会话信息:', event.detail.session)
   }
 
   // 不显示成功消息
-  console.log('已成功连接到协作会话')
 
   // 同步当前画布状态
   nextTick(() => {
     if (canvasRef.value) {
-      console.log('准备同步画布状态')
 
       // 如果是通过链接加入（协作者），发送同步请求获取完整画布状态
       const viaLink = localStorage.getItem('via_link') === 'true'
       if (viaLink) {
-        console.log('通过链接加入，发送同步请求获取完整画布状态')
 
         // 检查是否已经发送过同步请求
         const syncRequested = localStorage.getItem('sync_requested') === 'true'
@@ -399,7 +391,6 @@ const handleCollaborationConnected = (event: CustomEvent) => {
 
           // 延迟1秒后发送同步请求，确保WebSocket连接已完全建立
           setTimeout(() => {
-            console.log('延迟1秒后发送同步请求')
             localStorage.setItem('sync_requested', 'true')
             // 使用类型断言访问sendSyncRequest方法
             if (typeof (webSocketStore as any).sendSyncRequest === 'function') {
@@ -409,11 +400,9 @@ const handleCollaborationConnected = (event: CustomEvent) => {
             }
           }, 1000)
         } else {
-          console.log('已经发送过同步请求，不再重复发送')
         }
       } else {
         // 如果是创建者，触发画布状态同步
-        console.log('作为创建者，触发画布状态同步')
         const event = new CustomEvent('sync-canvas-state', {
           detail: {
             course: courseStore.currentCourse,
@@ -422,7 +411,6 @@ const handleCollaborationConnected = (event: CustomEvent) => {
           }
         })
         document.dispatchEvent(event)
-        console.log('已触发画布状态同步事件')
       }
     } else {
       console.warn('canvasRef 不存在，无法同步画布状态')
@@ -434,19 +422,15 @@ const handleCollaborationConnected = (event: CustomEvent) => {
 const handleCollaborationFailed = (event: CustomEvent) => {
   console.error('协作连接失败:', event.detail)
   isCollaborating.value = false
-  console.log('协作连接失败，请重试')
 }
 
 // 监听协作断开连接事件
 const handleCollaborationDisconnected = (event: CustomEvent) => {
-  console.log('协作断开连接:', event.detail)
   isCollaborating.value = false
-  console.log('协作已断开连接')
 }
 
 // 监听协作状态同步事件
 const handleCollaborationSync = (event: CustomEvent) => {
-  console.log('收到协作状态同步:', event.detail)
   if (event.detail.course) {
     // 确保路径数据存在
     const courseData = {
@@ -458,18 +442,14 @@ const handleCollaborationSync = (event: CustomEvent) => {
         endPoint: { x: 0, y: 0, rotation: 270 }
       }
     }
-    console.log('准备导入的课程数据:', courseData)
     courseStore.importCourse(courseData)
   }
 }
 
 // 监听路线生成事件
 const handleRouteGenerated = () => {
-  console.log('收到路线生成事件')
   if (isCollaborating.value) {
-    console.log('当前处于协作状态，准备同步')
     if (canvasRef.value) {
-      console.log('canvasRef 存在，准备触发状态同步')
       // 确保 courseStore.currentCourse 存在
       if (!courseStore.currentCourse) {
         console.error('courseStore.currentCourse 不存在，无法同步状态')
@@ -484,7 +464,6 @@ const handleRouteGenerated = () => {
         endPoint: courseStore.endPoint
       }
 
-      console.log('准备同步的路径数据:', pathData)
 
       // 触发画布状态同步
       const event = new CustomEvent('sync-canvas-state', {
@@ -498,18 +477,15 @@ const handleRouteGenerated = () => {
         }
       })
       document.dispatchEvent(event)
-      console.log('已触发路线生成后的状态同步')
     } else {
       console.warn('canvasRef 不存在，无法同步状态')
     }
   } else {
-    console.log('当前不在协作状态，跳过同步')
   }
 }
 
 // 监听新协作者加入事件
 const handleCollaboratorJoined = (event: CustomEvent) => {
-  console.log('收到新协作者加入事件:', event.detail)
 
   // 防抖处理：检查是否在短时间内已经处理过该协作者的加入事件
   const collaborator = event.detail.collaborator
@@ -524,7 +500,6 @@ const handleCollaboratorJoined = (event: CustomEvent) => {
   const debounceTime = 10000 // 10秒内不重复发送
 
   if (now - lastResponseTime < debounceTime) {
-    console.log(`已在${debounceTime / 1000}秒内响应过该协作者，跳过:`, collaborator.username)
     return
   }
 
@@ -541,52 +516,39 @@ const handleCollaboratorJoined = (event: CustomEvent) => {
   const eventIsOwner = event.detail.isOwner
   const eventCurrentUserId = event.detail.currentUserId
 
-  console.log('事件中的会话信息:', eventSession)
-  console.log('事件中的isOwner值:', eventIsOwner)
-  console.log('事件中的当前用户ID:', eventCurrentUserId)
 
   // 获取会话信息，包括所有者ID
   const session = (webSocketStore as any).session || eventSession
   const sessionOwnerId = session?.owner
 
-  console.log('当前用户ID:', currentUserId)
-  console.log('会话所有者ID:', sessionOwnerId)
 
   // 判断当前用户是否为所有者
   const isOwner = (currentUserId && sessionOwnerId && String(currentUserId) === String(sessionOwnerId)) || eventIsOwner === true
-  console.log('当前用户是否为所有者:', isOwner)
 
   // 检查是否通过链接加入
   const viaLink = localStorage.getItem('via_link') === 'true'
-  console.log('是否通过链接加入:', viaLink)
 
   // 如果当前用户是所有者（或创建者）且在协作状态，则发送完整画布状态
   if (isCollaborating.value) {
     // 使用Canvas组件的isCreator方法判断当前用户是否为创建者
     if (canvasRef.value && typeof canvasRef.value.isCreator === 'function') {
       const isCreator = canvasRef.value.isCreator()
-      console.log('Canvas组件判断当前用户是否为创建者:', isCreator)
 
       if (isCreator) {
-        console.log('当前用户是创建者，准备发送完整画布状态给新加入的协作者')
 
         // 使用Canvas组件的sendFullCanvasState方法发送完整画布状态
         if (typeof canvasRef.value.sendFullCanvasState === 'function') {
           // 发送给特定用户
           canvasRef.value.sendFullCanvasState(event.detail.collaborator.id)
-          console.log('已使用Canvas组件方法发送完整画布状态给:', event.detail.collaborator.username)
         } else {
           console.warn('Canvas组件没有sendFullCanvasState方法')
         }
       } else {
-        console.log('当前用户不是创建者，跳过发送完整画布状态')
       }
     } else if (isOwner || !viaLink) {
       // 回退到原来的判断逻辑
-      console.log('使用回退逻辑判断当前用户是所有者或创建者，准备发送完整画布状态')
 
       if (canvasRef.value) {
-        console.log('canvasRef 存在，准备发送完整画布状态')
 
         // 确保 courseStore.currentCourse 存在
         if (!courseStore.currentCourse) {
@@ -608,7 +570,6 @@ const handleCollaboratorJoined = (event: CustomEvent) => {
         }
 
         // 发送同步响应
-        console.log('发送同步响应给新加入的协作者:', event.detail.collaborator.username)
 
         // 为确保消息能够正确发送，尝试直接发送
         try {
@@ -629,7 +590,6 @@ const handleCollaboratorJoined = (event: CustomEvent) => {
             }
 
             socket.send(JSON.stringify(directMessage))
-            console.log('同步响应消息直接发送成功')
           }
         } catch (error) {
           console.error('直接发送同步响应失败:', error)
@@ -638,10 +598,8 @@ const handleCollaboratorJoined = (event: CustomEvent) => {
         console.warn('canvasRef 不存在，无法发送完整画布状态')
       }
     } else {
-      console.log('当前用户不是所有者或创建者，跳过发送完整画布状态')
     }
   } else {
-    console.log('当前不在协作状态，跳过发送完整画布状态')
   }
 }
 
@@ -651,18 +609,15 @@ let premiumPromptShowing = false;
 
 // 监听会员检查事件
 const handleCollaborationPremiumRequired = (event: CustomEvent) => {
-  console.log('收到会员检查事件:', event.detail)
   isCollaborating.value = false
 
   // 如果已经在显示弹窗，不再重复显示
   if (premiumPromptShowing) {
-    console.log('已经在显示会员提示弹窗，跳过')
     return
   }
 
   // 如果在短时间内已经触发过，不再重复显示
   if (premiumPromptDebounceTimer !== null) {
-    console.log('短时间内已经触发过会员提示，跳过')
     return
   }
 
@@ -779,8 +734,10 @@ onUnmounted(() => {
   document.removeEventListener('collaboration-failed', handleCollaborationFailed as EventListener)
   document.removeEventListener('collaboration-disconnected', handleCollaborationDisconnected as EventListener)
   document.removeEventListener('collaboration-premium-required', handleCollaborationPremiumRequired as EventListener)
+  document.removeEventListener('sync-canvas-state', handleCollaborationSync as EventListener)
   document.removeEventListener('course-autosaved', showAutosaveNotificationHandler as EventListener)
   document.removeEventListener('route-generated', handleRouteGenerated as EventListener)
+  document.removeEventListener('collaborator-joined', handleCollaboratorJoined as EventListener)
 })
 
 const showRegisterDialog = () => {
@@ -811,7 +768,6 @@ const handleAuthSuccess = async () => {
 
       // 检查邀请是否在有效期内（30分钟）
       if (now.getTime() - inviteTime.getTime() < 30 * 60 * 1000) {
-        console.log('检测到待处理的协作邀请，正在处理:', designId)
 
         // 显示确认对话框
         try {
@@ -827,19 +783,16 @@ const handleAuthSuccess = async () => {
           )
 
           // 如果用户点击确认按钮，代码会继续执行到这里
-          console.log('用户点击加入按钮，开始处理协作邀请')
           // 处理协作邀请
           await processCollaborationInvite(designId)
         } catch (error) {
           // 如果用户点击取消按钮或关闭对话框，会抛出异常并进入这里
           if (error === 'cancel') {
-            console.log('用户选择忽略协作邀请')
           } else {
             console.error('处理协作邀请确认对话框时出错:', error)
           }
         }
       } else {
-        console.log('协作邀请已过期，忽略处理')
       }
     } catch (error) {
       console.error('处理登录后的协作邀请时出错:', error)
@@ -864,7 +817,6 @@ const handleRegisterSuccess = async () => {
 
       // 检查邀请是否在有效期内（30分钟）
       if (now.getTime() - inviteTime.getTime() < 30 * 60 * 1000) {
-        console.log('检测到待处理的协作邀请，正在处理:', designId)
 
         // 显示确认对话框
         try {
@@ -880,19 +832,16 @@ const handleRegisterSuccess = async () => {
           )
 
           // 如果用户点击确认按钮，代码会继续执行到这里
-          console.log('用户点击加入按钮，开始处理协作邀请')
           // 处理协作邀请
           await processCollaborationInvite(designId)
         } catch (error) {
           // 如果用户点击取消按钮或关闭对话框，会抛出异常并进入这里
           if (error === 'cancel') {
-            console.log('用户选择忽略协作邀请')
           } else {
             console.error('处理协作邀请确认对话框时出错:', error)
           }
         }
       } else {
-        console.log('协作邀请已过期，忽略处理')
       }
     } catch (error) {
       console.error('处理注册后的协作邀请时出错:', error)
@@ -930,21 +879,17 @@ const toggleCollaboration = async (viaLink = false) => {
         await canvasRef.value.stopCollaboration()
       }
       isCollaborating.value = false
-      console.log('已停止协作')
       isTogglingCollaboration = false
       return
     }
 
     // 开始协作前检查会员状态（通过链接加入除外）
     if (!viaLink) {
-      console.log('检查会员状态，viaLink:', viaLink)
       // 调用后端 API 检查会员状态
       const { checkPremiumStatus } = await import('@/api/user')
       const premiumCheck = await checkPremiumStatus()
-      console.log('会员状态检查结果:', premiumCheck)
 
       if (!premiumCheck.is_premium_active) {
-        console.log('用户不是会员，显示升级对话框')
         ElMessageBox.confirm(
           '协作功能是会员专属功能，请升级到会员以使用此功能。',
           '会员专属功能',
@@ -961,9 +906,7 @@ const toggleCollaboration = async (viaLink = false) => {
         isTogglingCollaboration = false
         return
       }
-      console.log('用户是会员，继续建立连接')
     } else {
-      console.log('通过链接加入，跳过会员检查')
     }
 
     // 开始协作
@@ -971,7 +914,6 @@ const toggleCollaboration = async (viaLink = false) => {
       await canvasRef.value.startCollaboration(viaLink)
     }
     isCollaborating.value = true
-    console.log('已开始协作')
   } catch (error) {
     console.error('切换协作状态时出错:', error)
     ElMessage.error('操作失败，请稍后重试')
@@ -1007,20 +949,16 @@ const checkCollaborationInvite = async () => {
             designId,
             timestamp: new Date().toISOString()
           }))
-          console.log('已保存协作邀请信息到本地存储:', designId)
 
-          console.log('请先登录后再加入协作会话')
           loginDialogVisible.value = true
           return
         }
 
         // 如果已登录，直接处理协作邀请
-        console.log('用户已登录，直接处理协作邀请')
         await processCollaborationInvite(designId)
       } catch (confirmError) {
         // 如果用户点击取消按钮或关闭对话框
         if (confirmError === 'cancel') {
-          console.log('用户取消加入协作')
           ElMessage.info('已取消加入协作')
           return
         } else {
@@ -1055,7 +993,6 @@ const processCollaborationInvite = async (designId: string) => {
     // 启动协作模式
     if (canvasRef.value) {
       await canvasRef.value.startCollaboration(true)
-      console.log('已加入协作会话')
     } else {
       throw new Error('Canvas组件未加载')
     }

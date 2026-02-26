@@ -3,30 +3,31 @@ import type { AxiosRequestConfig, AxiosError } from 'axios'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import apiConfig from '@/config/api'
-import router from '@/router' // 导入router实例
+import router from '@/router'
+
+// Security fix: Use httpOnly cookies for JWT tokens instead of localStorage
+// CSRF token stored in memory (not cookie) since cookie is httpOnly
+let csrfTokenInMemory: string | null = null
 
 // 创建 axios 实例
 const axiosInstance = axios.create({
   baseURL: apiConfig.apiBaseUrl,
   timeout: 5000,
-  // 添加withCredentials以支持跨域请求时携带cookie
+  // Security fix: withCredentials is required for cookies to be sent
   withCredentials: true,
 })
 
-// 获取CSRF令牌的函数
-const getCsrfToken = async () => {
+// 获取CSRF令牌的函数 - now stores in memory
+const getCsrfToken = async (): Promise<string | null> => {
   try {
-    // 从Django获取CSRF令牌
     const response = await axios.get(apiConfig.endpoints.user.csrf, {
       withCredentials: true,
-      // 添加时间戳防止缓存
       params: { _t: new Date().getTime() },
     })
 
-    // 如果响应中包含csrfToken，则手动设置cookie
     if (response.data && response.data.csrfToken) {
-      document.cookie = `csrftoken=${response.data.csrfToken}; path=/; SameSite=Lax`
-
+      // Security fix: store in memory, not document.cookie (cookie is httpOnly)
+      csrfTokenInMemory = response.data.csrfToken
       return response.data.csrfToken
     }
     return null
@@ -39,25 +40,16 @@ const getCsrfToken = async () => {
 // 请求拦截器
 axiosInstance.interceptors.request.use(
   async (config) => {
-    // 获取JWT令牌
-    const token = localStorage.getItem('access_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
+    // Security fix: JWT tokens now come from httpOnly cookies, not Authorization header
+    // Remove the old Authorization header since we're using cookies
+    delete config.headers.Authorization
 
-    // 对于非GET请求，添加CSRF令牌
+    // 对于非GET请求，添加CSRF令牌 (from memory)
     if (config.method !== 'get') {
-      // 从cookie中获取CSRF令牌
-      const csrfToken = document.cookie
-        .split('; ')
-        .find((row) => row.startsWith('csrftoken='))
-        ?.split('=')[1]
-
-      if (csrfToken) {
-        config.headers['X-CSRFToken'] = csrfToken
+      if (csrfTokenInMemory) {
+        config.headers['X-CSRFToken'] = csrfTokenInMemory
       } else {
-        // 如果cookie中没有，尝试从服务器获取
-
+        // If no token in memory, fetch from server
         const newCsrfToken = await getCsrfToken()
         if (newCsrfToken) {
           config.headers['X-CSRFToken'] = newCsrfToken
@@ -91,30 +83,29 @@ axiosInstance.interceptors.response.use(
     )
 
     if (error.response?.status === 401) {
-      // Token 过期，尝试使用 refresh token 获取新的 access token
-      const refreshToken = localStorage.getItem('refresh_token')
-      if (refreshToken) {
-        try {
-          const response = await axios.post(apiConfig.endpoints.user.refreshToken, {
-            refresh: refreshToken,
-          })
-          const { access } = response.data
-          localStorage.setItem('access_token', access)
+      // Security fix: JWT tokens are now in httpOnly cookies
+      // Debug: log cookie info
+      console.log('[request.ts] 401 错误，检测 cookie 状态')
+      console.log('[request.ts] document.cookie:', document.cookie)
 
-          // 重试原始请求
-          if (error.config) {
-            error.config.headers = error.config.headers || {}
-            error.config.headers.Authorization = `Bearer ${access}`
-            return axiosInstance(error.config)
-          }
-        } catch (refreshError) {
-          console.error('request.ts: 刷新token失败:', refreshError)
-          // Refresh token 也过期了，需要重新登录
-          const userStore = useUserStore()
-          userStore.logout(router)
+      // Refresh uses cookie automatically (withCredentials: true)
+      try {
+        console.log('[request.ts] 尝试刷新 token...')
+        // 使用 axiosInstance 而不是 axios，确保配置一致
+        await axiosInstance.post(
+          apiConfig.endpoints.user.refreshToken,
+          {},
+          { withCredentials: true },
+        )
+        console.log('[request.ts] Token 刷新成功')
+
+        // 重试原始请求
+        if (error.config) {
+          return axiosInstance(error.config)
         }
-      } else {
-        // 没有refresh token，直接登出
+      } catch (refreshError) {
+        console.error('request.ts: 刷新token失败:', refreshError)
+        // Refresh token 也过期了，需要重新登录
         const userStore = useUserStore()
         userStore.logout(router)
       }

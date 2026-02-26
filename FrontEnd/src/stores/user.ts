@@ -16,9 +16,10 @@ export const useUserStore = defineStore('user', () => {
   const isAuthenticated = ref(false)
 
   const initializeAuth = () => {
-    const token = localStorage.getItem('access_token')
+    // Tokens are now stored in httpOnly cookies by the backend
+    // We only check localStorage for user data
     const userData = localStorage.getItem('user')
-    if (token && userData) {
+    if (userData) {
       currentUser.value = JSON.parse(userData)
       isAuthenticated.value = true
 
@@ -32,11 +33,10 @@ export const useUserStore = defineStore('user', () => {
     try {
       const response = await login(form)
 
-      // 保存令牌到localStorage
-      localStorage.setItem('access_token', response.access_token)
-      localStorage.setItem('refresh_token', response.refresh_token)
+      // Tokens are now set as httpOnly cookies by the backend
+      // No need to store them in localStorage
 
-      // 保存用户信息到localStorage
+      // Save user info to localStorage (for UI display purposes only)
       const userData = {
         id: response.user_id,
         username: response.username,
@@ -47,14 +47,9 @@ export const useUserStore = defineStore('user', () => {
       currentUser.value = userData
       isAuthenticated.value = true
 
-      // 获取最新的用户资料，包括会员状态
-      updateUserProfile()
-
-      // 在用户登录成功后初始化障碍物存储
-      // 动态导入避免循环依赖
-      const { useObstacleStore } = await import('@/stores/obstacle')
-      const obstacleStore = useObstacleStore()
-      obstacleStore.initObstacles()
+      // 注意：不在这里立即调用 updateUserProfile() 和 initObstacles()
+      // 避免并发请求导致的 cookie 问题
+      // 这些方法会在需要时由各组件自行调用，或通过路由守卫触发
 
       return currentUser.value
     } catch (error) {
@@ -68,11 +63,12 @@ export const useUserStore = defineStore('user', () => {
       // 使用api中的register方法，它已经处理了CSRF令牌
       const response = await register(form)
 
-      const { access_token, refresh_token, user_id, username } = response
+      const { user_id, username } = response
 
-      // 保存 token 和用户信息
-      localStorage.setItem('access_token', access_token)
-      localStorage.setItem('refresh_token', refresh_token)
+      // Tokens are set as httpOnly cookies by the backend
+      // No need to store them in localStorage
+
+      // Save user info to localStorage (for UI display purposes only)
       localStorage.setItem(
         'user',
         JSON.stringify({
@@ -81,9 +77,6 @@ export const useUserStore = defineStore('user', () => {
         }),
       )
 
-      // 设置 refresh token 到 cookie
-      document.cookie = `refresh_token=${refresh_token}; path=/; secure; samesite=strict`
-
       currentUser.value = {
         id: user_id,
         username: username,
@@ -91,11 +84,9 @@ export const useUserStore = defineStore('user', () => {
 
       isAuthenticated.value = true
 
-      // 在用户注册成功后初始化障碍物存储
-      // 动态导入避免循环依赖
-      const { useObstacleStore } = await import('@/stores/obstacle')
-      const obstacleStore = useObstacleStore()
-      obstacleStore.initObstacles()
+      // 注意：不在这里立即调用 initObstacles()
+      // 避免并发请求导致的 cookie 问题
+      // 这些方法会在需要时由各组件自行调用
 
       return currentUser.value
     } catch (error) {
@@ -105,11 +96,10 @@ export const useUserStore = defineStore('user', () => {
   }
 
   const logout = (router?: Router) => {
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
+    // Tokens are in httpOnly cookies, so we just clear user data from localStorage
     localStorage.removeItem('user')
 
-    // 清除 cookie 中的 refresh token
+    // Clear the refresh token cookie (access_token cookie will expire naturally)
     document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;'
 
     currentUser.value = null

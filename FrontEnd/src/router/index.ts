@@ -48,15 +48,16 @@ router.beforeEach(async (to, from, next) => {
 
   // 检查是否需要认证
   if (to.meta.requiresAuth) {
-    // 双重检查：既检查 store 状态，也检查 localStorage
-    const hasToken = !!localStorage.getItem('access_token')
-    if (!userStore.isAuthenticated && !hasToken) {
+    // 检查用户是否已认证（基于 store 状态和 localStorage 中的用户数据）
+    // Tokens are now in httpOnly cookies, so we check user data in localStorage
+    const hasUserData = !!localStorage.getItem('user')
+    if (!userStore.isAuthenticated && !hasUserData) {
       next('/')
       return
     }
-    // 如果 localStorage 有 token 但 store 未初始化，重新初始化
-    if (!userStore.isAuthenticated && hasToken) {
-      userStore.initializeAuth()
+    // 如果 localStorage 有用户数据但 store 未初始化，重新初始化
+    if (!userStore.isAuthenticated && hasUserData) {
+      await userStore.initializeAuth()
     }
   }
 

@@ -447,7 +447,6 @@ const handleSave = async (obstacle: CustomObstacleTemplate) => {
     // 检查是否存在错误
     if (obstacleStore.hasError) {
       // 保存失败，保持编辑器打开状态
-      console.log('保存失败，错误信息:', obstacleStore.error)
       // 不关闭编辑器，允许用户修改后重试
       return
     }
