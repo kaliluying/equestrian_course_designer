@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, cast
 import os
 import logging
 import time
@@ -38,6 +38,16 @@ def retry_on_error(max_retries=3, delay=1):
     return decorator
 
 
+def require_config(config: Optional[str], env_var: str, example: str = None) -> str:
+    """检查配置是否存在，不存在则抛出错误"""
+    if not config:
+        msg = f"请设置 {env_var} 环境变量"
+        if example:
+            msg += f" (如: {example})"
+        raise ValueError(msg)
+    return config
+
+
 class BaseLLMProvider(ABC):
     """LLM 提供商基类"""
 
@@ -50,15 +60,32 @@ class BaseLLMProvider(ABC):
         pass
 
 
-class OpenAIProvider(BaseLLMProvider):
-    """OpenAI 提供商"""
+class OpenAICompatibleProvider(BaseLLMProvider):
+    """OpenAI 兼容 API 提供商 (支持 OpenAI、MiniMax、Ollama 等)"""
 
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        base_url: Optional[str] = None
+    ):
+        # 从环境变量读取
+        env_prefix = os.getenv("AI_PROVIDER_CONFIG", "OPENAI").upper()
+        raw_api_key = api_key or os.getenv(f"{env_prefix}_API_KEY")
+        raw_model = model or os.getenv(f"{env_prefix}_MODEL")
+        raw_base_url = base_url or os.getenv(f"{env_prefix}_BASE_URL")
+
+        # 验证必填配置
+        self.api_key = cast(str, require_config(raw_api_key, f"{env_prefix}_API_KEY"))
+        self.model = cast(str, require_config(raw_model, f"{env_prefix}_MODEL", "gpt-4o"))
+        self.base_url = cast(str, require_config(raw_base_url, f"{env_prefix}_BASE_URL", "https://api.openai.com/v1"))
+
         try:
             from openai import OpenAI
-            self.client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
-            # 支持从环境变量读取模型配置
-            self.model = model or os.getenv("OPENAI_MODEL", "gpt-4o")
+            self.client = OpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url
+            )
         except ImportError:
             raise ImportError("请安装 openai: uv add openai")
 
@@ -77,7 +104,6 @@ class OpenAIProvider(BaseLLMProvider):
             timeout=kwargs.get("timeout", 60)
         )
 
-        # 验证响应内容
         if not response.choices:
             raise ValueError("LLM 返回空响应")
         content = response.choices[0].message.content
@@ -94,15 +120,32 @@ class OpenAIProvider(BaseLLMProvider):
         return self.model
 
 
-class AnthropicProvider(BaseLLMProvider):
-    """Anthropic 提供商"""
+class AnthropicCompatibleProvider(BaseLLMProvider):
+    """Anthropic 兼容 API 提供商"""
 
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        base_url: Optional[str] = None
+    ):
+        # 从环境变量读取
+        env_prefix = os.getenv("AI_PROVIDER_CONFIG", "ANTHROPIC").upper()
+        raw_api_key = api_key or os.getenv(f"{env_prefix}_API_KEY")
+        raw_model = model or os.getenv(f"{env_prefix}_MODEL")
+        raw_base_url = base_url or os.getenv(f"{env_prefix}_BASE_URL")
+
+        # 验证必填配置
+        self.api_key = cast(str, require_config(raw_api_key, f"{env_prefix}_API_KEY"))
+        self.model = cast(str, require_config(raw_model, f"{env_prefix}_MODEL", "claude-3-5-sonnet-20241022"))
+        self.base_url = cast(str, require_config(raw_base_url, f"{env_prefix}_BASE_URL", "https://api.anthropic.com"))
+
         try:
             import anthropic
-            self.client = anthropic.Anthropic(api_key=api_key or os.getenv("ANTHROPIC_API_KEY"))
-            # 支持从环境变量读取模型配置
-            self.model = model or os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
+            self.client = anthropic.Anthropic(
+                api_key=self.api_key,
+                base_url=self.base_url
+            )
         except ImportError:
             raise ImportError("请安装 anthropic: uv add anthropic")
 
@@ -127,85 +170,46 @@ class AnthropicProvider(BaseLLMProvider):
         return self.model
 
 
-class MiniMaxProvider(BaseLLMProvider):
-    """MiniMax 提供商"""
-
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None, base_url: Optional[str] = None):
-        self.api_key = api_key or os.getenv("MINIMAX_API_KEY")
-        if not self.api_key:
-            raise ValueError("请设置 MINIMAX_API_KEY 环境变量")
-
-        # 用户必须自行配置模型和地址
-        self.model = model or os.getenv("MINIMAX_MODEL")
-        if not self.model:
-            raise ValueError("请设置 MINIMAX_MODEL 环境变量 (如: MiniMax-M2.5, abab5.5-chat)")
-
-        self.base_url = base_url or os.getenv("MINIMAX_BASE_URL")
-        if not self.base_url:
-            raise ValueError("请设置 MINIMAX_BASE_URL 环境变量 (如: https://api.minimax.chat)")
-
-    @retry_on_error(max_retries=3)
-    def generate(self, prompt: str, system_prompt: Optional[str] = None, **kwargs) -> LLMResponse:
-        url = f"{self.base_url}/v1/text/chatcompletion_v2"
-
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
-
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": kwargs.get("temperature", 0.3),
-            "max_tokens": kwargs.get("max_tokens", 2000),
-        }
-
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-
-        response = requests.post(
-            url,
-            headers=headers,
-            data=json.dumps(payload),
-            timeout=kwargs.get("timeout", 60)
-        )
-
-        if response.status_code != 200:
-            raise ValueError(f"MiniMax API 错误: {response.status_code} - {response.text}")
-
-        data = response.json()
-
-        if "choices" not in data or not data["choices"]:
-            raise ValueError("LLM 返回空响应")
-
-        content = data["choices"][0]["message"]["content"]
-        if not content:
-            raise ValueError("LLM 返回空内容")
-
-        # MiniMax 返回 usage 格式: {prompt_tokens, completion_tokens, total_tokens}
-        usage = data.get("usage", {})
-        token_used = usage.get("total_tokens", 0)
-
-        return LLMResponse(
-            content=content,
-            token_used=token_used,
-            model=self.model
-        )
-
-    def get_model_name(self) -> str:
-        return self.model
+# 兼容旧版命名
+OpenAIProvider = OpenAICompatibleProvider
+AnthropicProvider = AnthropicCompatibleProvider
 
 
 def get_llm_provider(provider: Optional[str] = None) -> BaseLLMProvider:
-    """获取 LLM 提供商实例"""
+    """获取 LLM 提供商实例
+
+    使用 AI_PROVIDER 环境变量选择厂商:
+    - openai: OpenAI 兼容 API
+    - anthropic: Anthropic 兼容 API
+
+    配合 AI_PROVIDER_CONFIG 环境变量指定配置前缀:
+    - AI_PROVIDER=openai
+    - OPENAI_API_KEY=xxx
+    - OPENAI_MODEL=xxx
+    - OPENAI_BASE_URL=xxx
+
+    MiniMax 示例:
+    - AI_PROVIDER=openai
+    - AI_PROVIDER_CONFIG=MINIMAX
+    - MINIMAX_API_KEY=xxx
+    - MINIMAX_MODEL=MiniMax-M2.5
+    - MINIMAX_BASE_URL=https://api.minimax.chat
+    """
     provider = provider or os.getenv("AI_PROVIDER", "openai").lower()
 
+    # 根据厂商设置默认的配置前缀
+    provider_config_map = {
+        "openai": "OPENAI",
+        "anthropic": "ANTHROPIC",
+    }
+
+    # 设置配置前缀
+    config_prefix = os.getenv("AI_PROVIDER_CONFIG", provider_config_map.get(provider, "OPENAI"))
+    os.environ["AI_PROVIDER_CONFIG"] = config_prefix
+
     providers = {
-        "openai": OpenAIProvider,
-        "anthropic": AnthropicProvider,
-        "minimax": MiniMaxProvider,
+        "openai": OpenAICompatibleProvider,
+        "anthropic": AnthropicCompatibleProvider,
     }
 
     if provider not in providers:
