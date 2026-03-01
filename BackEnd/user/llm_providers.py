@@ -130,15 +130,19 @@ class AnthropicProvider(BaseLLMProvider):
 class MiniMaxProvider(BaseLLMProvider):
     """MiniMax 提供商"""
 
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None, base_url: Optional[str] = None):
         self.api_key = api_key or os.getenv("MINIMAX_API_KEY")
         if not self.api_key:
             raise ValueError("请设置 MINIMAX_API_KEY 环境变量")
-        # 支持从环境变量读取模型配置
-        # Coding Plan: MiniMax-M2.5, abab6.5s-chat
-        # 按量付费: abab5.5-chat, abab6.5g, abab6.5s 等
-        self.model = model or os.getenv("MINIMAX_MODEL", "MiniMax-M2.5")
-        self.base_url = os.getenv("MINIMAX_BASE_URL", "https://api.minimax.chat")
+
+        # 用户必须自行配置模型和地址
+        self.model = model or os.getenv("MINIMAX_MODEL")
+        if not self.model:
+            raise ValueError("请设置 MINIMAX_MODEL 环境变量 (如: MiniMax-M2.5, abab5.5-chat)")
+
+        self.base_url = base_url or os.getenv("MINIMAX_BASE_URL")
+        if not self.base_url:
+            raise ValueError("请设置 MINIMAX_BASE_URL 环境变量 (如: https://api.minimax.chat)")
 
     @retry_on_error(max_retries=3)
     def generate(self, prompt: str, system_prompt: Optional[str] = None, **kwargs) -> LLMResponse:
