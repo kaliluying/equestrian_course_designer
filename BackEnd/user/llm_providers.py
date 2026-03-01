@@ -1,11 +1,9 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, cast
+from typing import Optional, cast
 import os
 import logging
 import time
-import json
-import requests
 from functools import wraps
 
 logger = logging.getLogger(__name__)
@@ -61,7 +59,7 @@ class BaseLLMProvider(ABC):
 
 
 class OpenAICompatibleProvider(BaseLLMProvider):
-    """OpenAI 兼容 API 提供商 (支持 OpenAI、MiniMax、Ollama 等)"""
+    """OpenAI 兼容 API 提供商"""
 
     def __init__(
         self,
@@ -69,16 +67,19 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         model: Optional[str] = None,
         base_url: Optional[str] = None
     ):
-        # 从环境变量读取
-        env_prefix = os.getenv("AI_PROVIDER_CONFIG", "OPENAI").upper()
-        raw_api_key = api_key or os.getenv(f"{env_prefix}_API_KEY")
-        raw_model = model or os.getenv(f"{env_prefix}_MODEL")
-        raw_base_url = base_url or os.getenv(f"{env_prefix}_BASE_URL")
-
-        # 验证必填配置
-        self.api_key = cast(str, require_config(raw_api_key, f"{env_prefix}_API_KEY"))
-        self.model = cast(str, require_config(raw_model, f"{env_prefix}_MODEL", "gpt-4o"))
-        self.base_url = cast(str, require_config(raw_base_url, f"{env_prefix}_BASE_URL", "https://api.openai.com/v1"))
+        # 读取统一配置
+        self.api_key = cast(str, require_config(
+            api_key or os.getenv("API_KEY"),
+            "API_KEY"
+        ))
+        self.model = cast(str, require_config(
+            model or os.getenv("MODEL"),
+            "MODEL", "gpt-4o, MiniMax-M2.5"
+        ))
+        self.base_url = cast(str, require_config(
+            base_url or os.getenv("BASE_URL"),
+            "BASE_URL", "https://api.openai.com/v1"
+        ))
 
         try:
             from openai import OpenAI
@@ -129,16 +130,19 @@ class AnthropicCompatibleProvider(BaseLLMProvider):
         model: Optional[str] = None,
         base_url: Optional[str] = None
     ):
-        # 从环境变量读取
-        env_prefix = os.getenv("AI_PROVIDER_CONFIG", "ANTHROPIC").upper()
-        raw_api_key = api_key or os.getenv(f"{env_prefix}_API_KEY")
-        raw_model = model or os.getenv(f"{env_prefix}_MODEL")
-        raw_base_url = base_url or os.getenv(f"{env_prefix}_BASE_URL")
-
-        # 验证必填配置
-        self.api_key = cast(str, require_config(raw_api_key, f"{env_prefix}_API_KEY"))
-        self.model = cast(str, require_config(raw_model, f"{env_prefix}_MODEL", "claude-3-5-sonnet-20241022"))
-        self.base_url = cast(str, require_config(raw_base_url, f"{env_prefix}_BASE_URL", "https://api.anthropic.com"))
+        # 读取统一配置
+        self.api_key = cast(str, require_config(
+            api_key or os.getenv("API_KEY"),
+            "API_KEY"
+        ))
+        self.model = cast(str, require_config(
+            model or os.getenv("MODEL"),
+            "MODEL", "claude-3-5-sonnet-20241022"
+        ))
+        self.base_url = cast(str, require_config(
+            base_url or os.getenv("BASE_URL"),
+            "BASE_URL", "https://api.anthropic.com"
+        ))
 
         try:
             import anthropic
@@ -178,34 +182,19 @@ AnthropicProvider = AnthropicCompatibleProvider
 def get_llm_provider(provider: Optional[str] = None) -> BaseLLMProvider:
     """获取 LLM 提供商实例
 
-    使用 AI_PROVIDER 环境变量选择厂商:
-    - openai: OpenAI 兼容 API
-    - anthropic: Anthropic 兼容 API
+    环境变量配置:
+    - AI_PROVIDER: openai 或 anthropic (默认: openai)
+    - API_KEY: API 密钥
+    - MODEL: 模型名称
+    - BASE_URL: API 地址
 
-    配合 AI_PROVIDER_CONFIG 环境变量指定配置前缀:
-    - AI_PROVIDER=openai
-    - OPENAI_API_KEY=xxx
-    - OPENAI_MODEL=xxx
-    - OPENAI_BASE_URL=xxx
-
-    MiniMax 示例:
-    - AI_PROVIDER=openai
-    - AI_PROVIDER_CONFIG=MINIMAX
-    - MINIMAX_API_KEY=xxx
-    - MINIMAX_MODEL=MiniMax-M2.5
-    - MINIMAX_BASE_URL=https://api.minimaxi.com/v1
+    示例 (MiniMax):
+    AI_PROVIDER=openai
+    API_KEY=your-key
+    MODEL=MiniMax-M2.5
+    BASE_URL=https://api.minimaxi.com/v1
     """
     provider = provider or os.getenv("AI_PROVIDER", "openai").lower()
-
-    # 根据厂商设置默认的配置前缀
-    provider_config_map = {
-        "openai": "OPENAI",
-        "anthropic": "ANTHROPIC",
-    }
-
-    # 设置配置前缀
-    config_prefix = os.getenv("AI_PROVIDER_CONFIG", provider_config_map.get(provider, "OPENAI"))
-    os.environ["AI_PROVIDER_CONFIG"] = config_prefix
 
     providers = {
         "openai": OpenAICompatibleProvider,
