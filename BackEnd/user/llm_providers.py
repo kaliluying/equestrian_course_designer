@@ -4,6 +4,8 @@ from typing import Optional, Dict, Any
 import os
 import logging
 import time
+import json
+import requests
 from functools import wraps
 
 logger = logging.getLogger(__name__)
@@ -125,6 +127,73 @@ class AnthropicProvider(BaseLLMProvider):
         return self.model
 
 
+class MiniMaxProvider(BaseLLMProvider):
+    """MiniMax 提供商"""
+
+    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+        self.api_key = api_key or os.getenv("MINIMAX_API_KEY")
+        if not self.api_key:
+            raise ValueError("请设置 MINIMAX_API_KEY 环境变量")
+        # 支持从环境变量读取模型配置
+        # Coding Plan: MiniMax-M2.5, abab6.5s-chat
+        # 按量付费: abab5.5-chat, abab6.5g, abab6.5s 等
+        self.model = model or os.getenv("MINIMAX_MODEL", "MiniMax-M2.5")
+        self.base_url = os.getenv("MINIMAX_BASE_URL", "https://api.minimax.chat")
+
+    @retry_on_error(max_retries=3)
+    def generate(self, prompt: str, system_prompt: Optional[str] = None, **kwargs) -> LLMResponse:
+        url = f"{self.base_url}/v1/text/chatcompletion_v2"
+
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": kwargs.get("temperature", 0.3),
+            "max_tokens": kwargs.get("max_tokens", 2000),
+        }
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        response = requests.post(
+            url,
+            headers=headers,
+            data=json.dumps(payload),
+            timeout=kwargs.get("timeout", 60)
+        )
+
+        if response.status_code != 200:
+            raise ValueError(f"MiniMax API 错误: {response.status_code} - {response.text}")
+
+        data = response.json()
+
+        if "choices" not in data or not data["choices"]:
+            raise ValueError("LLM 返回空响应")
+
+        content = data["choices"][0]["message"]["content"]
+        if not content:
+            raise ValueError("LLM 返回空内容")
+
+        # MiniMax 返回 usage 格式: {prompt_tokens, completion_tokens, total_tokens}
+        usage = data.get("usage", {})
+        token_used = usage.get("total_tokens", 0)
+
+        return LLMResponse(
+            content=content,
+            token_used=token_used,
+            model=self.model
+        )
+
+    def get_model_name(self) -> str:
+        return self.model
+
+
 def get_llm_provider(provider: Optional[str] = None) -> BaseLLMProvider:
     """获取 LLM 提供商实例"""
     provider = provider or os.getenv("AI_PROVIDER", "openai").lower()
@@ -132,6 +201,7 @@ def get_llm_provider(provider: Optional[str] = None) -> BaseLLMProvider:
     providers = {
         "openai": OpenAIProvider,
         "anthropic": AnthropicProvider,
+        "minimax": MiniMaxProvider,
     }
 
     if provider not in providers:
