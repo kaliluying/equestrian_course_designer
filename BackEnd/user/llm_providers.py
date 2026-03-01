@@ -163,7 +163,19 @@ class AnthropicCompatibleProvider(BaseLLMProvider):
             system=system_prompt,
             messages=messages
         )
-        content = message.content[0].text
+
+        # 处理不同类型的响应内容 (TextBlock, ThinkingBlock 等)
+        content_parts = []
+        for block in message.content:
+            # 检查是否有 text 属性 (TextBlock)
+            if hasattr(block, 'text'):
+                content_parts.append(block.text)
+            # 如果是 ThinkingBlock，跳过思考过程
+
+        content = ''.join(content_parts)
+        if not content:
+            raise ValueError("LLM 返回空内容")
+
         return LLMResponse(
             content=content,
             token_used=message.usage.input_tokens + message.usage.output_tokens,
