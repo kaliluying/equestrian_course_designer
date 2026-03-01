@@ -35,7 +35,7 @@ VALID_DIFFICULTIES = {'easy', 'medium', 'hard'}
 def generate_route(request):
     """AI 生成路线"""
     # 1. 获取用户资料和配额（使用 select_for_update 锁定行）
-    profile = request.user.userprofile
+    profile = request.user.profile
 
     try:
         quota = AIGenerationQuota.objects.select_for_update().get(user_profile=profile)
@@ -151,7 +151,7 @@ def generate_route(request):
 @permission_classes([IsAuthenticated])
 def get_ai_quota(request):
     """获取 AI 配额信息"""
-    profile = request.user.userprofile
+    profile = request.user.profile
     quota, _ = AIGenerationQuota.objects.get_or_create(user_profile=profile)
 
     return Response({
@@ -211,7 +211,7 @@ def purchase_ai_quota(request):
 @permission_classes([IsAuthenticated])
 def get_ai_history(request):
     """获取 AI 生成历史"""
-    profile = request.user.userprofile
+    profile = request.user.profile
     limit = request.query_params.get('limit', 20)
 
     try:
