@@ -225,6 +225,8 @@
       </template>
     </el-dialog>
 
+    <!-- AI 生成对话框 -->
+    <AIGenerateDialog ref="aiDialogRef" />
 
   </div>
 </template>
