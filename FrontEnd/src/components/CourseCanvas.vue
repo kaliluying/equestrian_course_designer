@@ -253,18 +253,6 @@
 
       <!-- 添加 SVG 路径渲染 -->
       <svg class="course-path-svg">
-        <!-- 先渲染控制线 -->
-        <template v-for="(point, pointIndex) in courseStore.coursePath.points" :key="`lines-${pointIndex}`">
-          <line v-if="point.controlPoint1 && showDistanceLabels" 
-            :x1="scalePoint(point).x" :y1="scalePoint(point).y" 
-            :x2="scalePoint(point.controlPoint1).x" :y2="scalePoint(point.controlPoint1).y" 
-            class="control-line" />
-          <line v-if="point.controlPoint2 && showDistanceLabels" 
-            :x1="scalePoint(point).x" :y1="scalePoint(point).y" 
-            :x2="scalePoint(point.controlPoint2).x" :y2="scalePoint(point.controlPoint2).y" 
-            class="control-line" />
-        </template>
-
         <!-- 渲染路径 -->
         <path v-for="(segment, index) in pathSegments" :key="`path-${index}`" :d="segment" class="course-path-line"
           fill="none" stroke="var(--primary-color)" stroke-width="2" stroke-dasharray="5,5" />
@@ -3092,25 +3080,17 @@ const obstacleDistances = computed(() => {
     return [] // 如果不可见或点不足，返回空数组
   }
 
-  const distances = [] // 初始化距离数组
-  const points = courseStore.coursePath.points // 获取路径点
-  const scale = meterScale.value // 获取米到像素的比例
-  const obstacles = courseStore.currentCourse.obstacles // 获取障碍物列表
+  const distances = []
+  const points = courseStore.coursePath.points
+  const obstacles = courseStore.currentCourse.obstacles
 
-  // 首先清空之前的距离数据，因为我们会重新计算并按顺序添加
-  // （或者直接在最后返回新计算的 distances 数组）
-
-  // 计算起点到第一个障碍物的距离
-  // 检查是否有足够的点来计算起点到第一个障碍物的距离 (至少 Start, Obs1_Entry, Obs1_Center)
   if (points.length >= 3) {
-    const startPoint = points[0] // 获取起点
-    const firstObstacleEntry = points[1] // 获取第一个障碍物的入口连接点
+    const startPoint = points[0]
+    const firstObstacleEntry = points[1]
 
     if (startPoint && firstObstacleEntry) {
-      // 计算起点到第一个障碍物入口连接点的路径长度（像素）
-      const distanceInPixels = calculatePathSegmentLength(startPoint, firstObstacleEntry)
-      // 将像素距离转换为米
-      const distanceInMeters = (distanceInPixels / scale).toFixed(1)
+      const segmentLength = calculatePathSegmentLength(startPoint, firstObstacleEntry)
+      const distanceInMeters = Number(segmentLength).toFixed(1)
 
       // 如果距离有效，则添加标签信息
       if (parseFloat(distanceInMeters) > 0) {
@@ -3144,10 +3124,8 @@ const obstacleDistances = computed(() => {
       const nextEntryPoint = points[nextEntryPointIndex]; // 获取下一个障碍物的入口连接点
 
       if (exitPoint && nextEntryPoint) {
-        // 计算这两个连接点之间的路径段长度（像素）
-        const distanceInPixels = calculatePathSegmentLength(exitPoint, nextEntryPoint)
-        // 将像素距离转换为米，并保留一位小数
-        const distanceInMeters = (distanceInPixels / scale).toFixed(1)
+        const segmentLength = calculatePathSegmentLength(exitPoint, nextEntryPoint)
+        const distanceInMeters = Number(segmentLength).toFixed(1)
 
         // 仅当距离大于0时才添加标签
         if (parseFloat(distanceInMeters) > 0) {
@@ -3187,10 +3165,8 @@ const obstacleDistances = computed(() => {
     const endPoint = points[points.length - 1] // 获取终点
 
     if (lastObstacleExit && endPoint) {
-      // 计算最后一个障碍物出口到终点的路径长度
-      const distanceInPixels = calculatePathSegmentLength(lastObstacleExit, endPoint)
-      // 转换为米
-      const distanceInMeters = (distanceInPixels / scale).toFixed(1)
+      const segmentLength = calculatePathSegmentLength(lastObstacleExit, endPoint)
+      const distanceInMeters = Number(segmentLength).toFixed(1)
 
       // 如果距离有效，则添加标签信息
       if (parseFloat(distanceInMeters) > 0) {

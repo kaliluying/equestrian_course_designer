@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run:*)",
+      "Bash(uv add:*)",
+      "Bash(python:*)",
+      "Bash(npm run:*)",
+      "mcp__MiniMax__web_search",
+      "WebFetch(domain:platform.minimaxi.com)"
+    ]
+  }
+}

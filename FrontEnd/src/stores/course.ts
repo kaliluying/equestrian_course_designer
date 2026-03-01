@@ -1070,8 +1070,11 @@ export const useCourseStore = defineStore('course', () => {
     // 起点(1) + 非装饰物障碍物数量 * 每个障碍物的点数(5)
     const startIndex = 1 + nonDecorationObstaclesBefore * 5
 
-    // 确保索引有效
-    if (startIndex >= points.length - 1) {
+    // 确保索引有效（需要 startIndex 到 startIndex+4 共5个点）
+    if (startIndex + 4 >= points.length) {
+      console.warn(
+        `路径点数组长度(${points.length})不足，无法为障碍物${obstacleIndex}更新路径点（需要索引${startIndex}到${startIndex + 4}）`
+      )
       return
     }
 
@@ -2421,7 +2424,30 @@ export const useCourseStore = defineStore('course', () => {
     // 应用路径
     if (aiResult.path && aiResult.path.visible) {
       coursePath.value.visible = true
-      coursePath.value.points = aiResult.path.points || []
+
+      // 检查路径点数量是否足够
+      const nonDecorationCount = aiResult.obstacles.filter(
+        (o) => o.type !== 'decoration' && o.type !== 'DECORATION'
+      ).length
+      const requiredPoints = 1 + nonDecorationCount * 5
+
+      if (aiResult.path.points && aiResult.path.points.length >= requiredPoints) {
+        // 路径点足够，使用 AI 返回的路径点，并确保有完整属性
+        coursePath.value.points = aiResult.path.points.map((point) => ({
+          x: point.x,
+          y: point.y,
+          controlPoint1: point.controlPoint1 || { x: point.x, y: point.y },
+          controlPoint2: point.controlPoint2 || { x: point.x, y: point.y },
+          isControlPoint1Moved: point.isControlPoint1Moved || false,
+          isControlPoint2Moved: point.isControlPoint2Moved || false,
+        }))
+      } else {
+        // 路径点不足，重新生成
+        console.warn(
+          `AI返回的路径点数量(${aiResult.path.points?.length || 0})不足，需要${requiredPoints}个，将重新生成`
+        )
+        generatePath()
+      }
 
       if (aiResult.path.startPoint) {
         startPoint.value = {
