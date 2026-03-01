@@ -2373,6 +2373,81 @@ export const useCourseStore = defineStore('course', () => {
     resetStartEndPoints()
   }
 
+  /**
+   * 导入AI生成的路线设计
+   * @param aiResult AI生成的设计结果
+   */
+  function importAIResult(aiResult: {
+    obstacles: Array<{
+      id: string
+      type: string
+      position: { x: number; y: number }
+      rotation: number
+      number: string
+      poles: Array<{ height: number; width: number; color: string }>
+      wallProperties?: Record<string, unknown>
+      liverpoolProperties?: Record<string, unknown>
+      waterProperties?: Record<string, unknown>
+    }>
+    path: {
+      visible: boolean
+      points: Array<{ x: number; y: number }>
+      startPoint?: { x: number; y: number; rotation: number }
+      endPoint?: { x: number; y: number; rotation: number }
+    }
+  }) {
+    if (!aiResult.obstacles || aiResult.obstacles.length === 0) {
+      console.error('AI生成结果无效：没有障碍物数据')
+      return false
+    }
+
+    // 默认障碍物属性
+    const defaultPole = { height: 1.4, width: 3.5, color: '#8B4513' }
+    const defaultPosition = { x: 10, y: 10 }
+
+    // 应用障碍物 - 重新生成ID避免冲突
+    currentCourse.value.obstacles = aiResult.obstacles.map((obs) => ({
+      id: uuidv4(),
+      type: obs.type || ObstacleType.SINGLE,
+      position: obs.position || defaultPosition,
+      rotation: obs.rotation || 0,
+      number: obs.number || '1',
+      poles: obs.poles || [defaultPole],
+      wallProperties: obs.wallProperties,
+      liverpoolProperties: obs.liverpoolProperties,
+      waterProperties: obs.waterProperties
+    }))
+
+    // 应用路径
+    if (aiResult.path && aiResult.path.visible) {
+      coursePath.value.visible = true
+      coursePath.value.points = aiResult.path.points || []
+
+      if (aiResult.path.startPoint) {
+        startPoint.value = {
+          x: aiResult.path.startPoint.x,
+          y: aiResult.path.startPoint.y,
+          rotation: aiResult.path.startPoint.rotation || 0
+        }
+      }
+
+      if (aiResult.path.endPoint) {
+        endPoint.value = {
+          x: aiResult.path.endPoint.x,
+          y: aiResult.path.endPoint.y,
+          rotation: aiResult.path.endPoint.rotation || 0
+        }
+      }
+    } else if (currentCourse.value.obstacles.length > 0) {
+      generatePath()
+    }
+
+    currentCourse.value.updatedAt = new Date().toISOString()
+    updateCourse()
+
+    return true
+  }
+
   return {
     currentCourse,
     selectedObstacle,
@@ -2407,5 +2482,6 @@ export const useCourseStore = defineStore('course', () => {
     importCourse,
     setCurrentCourseId,
     resetCourse,
+    importAIResult,
   }
 })

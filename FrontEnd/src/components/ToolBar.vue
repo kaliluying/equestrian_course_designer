@@ -140,9 +140,17 @@
             </el-icon>
             清空画布
           </el-button>
+
+          <el-button @click="showAIGenerate" type="primary" class="action-button">
+            <el-icon>
+              <Edit />
+            </el-icon>
+            AI生成
+          </el-button>
         </div>
       </div>
     </div>
+
 
 
 
@@ -233,6 +241,7 @@ import { saveDesign } from '@/api/design'
 import type { SaveDesignRequest } from '@/types/design'
 
 import CustomObstacleManager from '@/components/CustomObstacleManager.vue'
+import AIGenerateDialog from '@/components/AIGenerateDialog.vue'
 
 
 
@@ -1014,6 +1023,18 @@ const downloadBlob = (blob: Blob, filename: string) => {
 
 // 修改 emit 定义，添加 show-login 事件
 const emit = defineEmits(['show-login'])
+
+// AI 生成对话框
+const aiDialogRef = ref<InstanceType<typeof AIGenerateDialog> | null>(null)
+
+const showAIGenerate = () => {
+  if (!userStore.isAuthenticated) {
+    ElMessage.warning('请先登录后再使用AI生成功能')
+    emit('show-login')
+    return
+  }
+  aiDialogRef.value?.open()
+}
 
 // 添加获取类型名称的函数，以确保类型安全
 const getTypeName = (type: string) => {

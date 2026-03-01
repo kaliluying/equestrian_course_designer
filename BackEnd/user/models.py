@@ -456,7 +456,6 @@ class MembershipOrder(models.Model):
         return f"{self.order_id} - {self.user.username} - {self.amount}元"
 
     def save(self, *args, **kwargs):
-        # 如果没有订单号，则生成一个
         if not self.order_id:
             import datetime
             import random
@@ -464,3 +463,117 @@ class MembershipOrder(models.Model):
             order_id = f"ECD{now.strftime('%Y%m%d%H%M%S')}{random.randint(1000, 9999)}"
             self.order_id = order_id
         super().save(*args, **kwargs)
+
+
+class AIGenerationQuota(models.Model):
+    """AI生成配额"""
+    user_profile = models.OneToOneField(
+        UserProfile,
+        on_delete=models.CASCADE,
+        related_name='ai_quota',
+        verbose_name='用户资料'
+    )
+    free_quota = models.PositiveIntegerField(
+        default=3,
+        verbose_name='免费配额'
+    )
+    purchased_quota = models.PositiveIntegerField(
+        default=0,
+        verbose_name='购买配额'
+    )
+    used_quota = models.PositiveIntegerField(
+        default=0,
+        verbose_name='已使用'
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='创建时间'
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name='更新时间'
+    )
+
+    @property
+    def remaining_quota(self):
+        return self.free_quota + self.purchased_quota - self.used_quota
+
+    def __str__(self):
+        return f"{self.user_profile.user.username} - 剩余{self.remaining_quota}次"
+
+    class Meta:
+        verbose_name = 'AI生成配额'
+        verbose_name_plural = 'AI生成配额'
+
+
+class AIGenerationHistory(models.Model):
+    """AI生成历史记录"""
+    STATUS_CHOICES = [
+        ('pending', '处理中'),
+        ('success', '成功'),
+        ('failed', '失败'),
+    ]
+
+    user_profile = models.ForeignKey(
+        UserProfile,
+        on_delete=models.CASCADE,
+        related_name='ai_histories',
+        verbose_name='用户资料'
+    )
+    prompt = models.TextField(verbose_name='用户输入')
+    result = models.JSONField(
+        null=True,
+        blank=True,
+        verbose_name='生成结果'
+    )
+    token_used = models.PositiveIntegerField(
+        default=0,
+        verbose_name='消耗token数'
+    )
+    cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name='成本'
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        verbose_name='状态'
+    )
+    error_message = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name='错误信息'
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='创建时间'
+    )
+
+    def __str__(self):
+        return f"{self.user_profile.user.username} - {self.created_at}"
+
+    class Meta:
+        verbose_name = 'AI生成历史'
+        verbose_name_plural = 'AI生成历史'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['-created_at']),
+        ]
+
+
+# 自动创建 AI 配额信号
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+
+@receiver(post_save, sender=UserProfile)
+def create_ai_quota(sender, instance, created, **kwargs):
+    """在创建 UserProfile 时自动创建 AI 配额"""
+    if created:
+        AIGenerationQuota.objects.get_or_create(
+            user_profile=instance,
+            defaults={'free_quota': 3}  # 新用户免费3次
+        )

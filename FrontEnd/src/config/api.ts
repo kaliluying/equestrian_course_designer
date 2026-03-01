@@ -40,7 +40,7 @@ interface EnvConfig {
   wsBaseUrl: string
   appBaseUrl: string
 }
-const apiHost = getEnvValue('API_HOST', '192.168.1.7')
+const apiHost = getEnvValue('API_HOST', '192.168.1.6')
 // 基础配置
 const BASE_CONFIG: Record<EnvType, EnvConfig> = {
   // 开发环境配置
@@ -181,4 +181,12 @@ export const CUSTOM_OBSTACLE_API = {
   GET_SHARED_OBSTACLES: '/user/obstacles/shared/',
   // 切换障碍物共享状态
   TOGGLE_SHARE: (id: number | string) => `/user/obstacles/${id}/toggle-share/`,
+}
+
+// AI 生成相关
+export const AI_API = {
+  generate: '/user/ai/generate/',
+  quota: '/user/ai/quota/',
+  purchase: '/user/ai/purchase/',
+  history: '/user/ai/history/',
 }

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Design, DesignLike, MembershipOrder, PasswordResetToken, UserProfile, MembershipPlan, CustomObstacle
+from .models import Design, DesignLike, MembershipOrder, PasswordResetToken, UserProfile, MembershipPlan, CustomObstacle, AIGenerationQuota, AIGenerationHistory
 from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin, GroupAdmin
 from django.contrib.auth.models import Group
@@ -509,3 +509,20 @@ class MembershipOrderAdmin(admin.ModelAdmin):
     list_filter = ('status', 'user')
     search_fields = ('user__username', 'order_id', 'membership_plan__name')
     ordering = ('-payment_time',)
+
+
+@admin.register(AIGenerationQuota)
+class AIGenerationQuotaAdmin(admin.ModelAdmin):
+    list_display = ('user_profile', 'free_quota', 'purchased_quota', 'used_quota', 'remaining_quota', 'updated_at')
+    list_filter = ('updated_at',)
+    search_fields = ('user_profile__user__username',)
+    readonly_fields = ('remaining_quota', 'created_at', 'updated_at')
+
+
+@admin.register(AIGenerationHistory)
+class AIGenerationHistoryAdmin(admin.ModelAdmin):
+    list_display = ('user_profile', 'prompt', 'status', 'token_used', 'created_at')
+    list_filter = ('status', 'created_at')
+    search_fields = ('user_profile__user__username', 'prompt')
+    readonly_fields = ('created_at',)
+    ordering = ('-created_at',)

@@ -18,6 +18,7 @@ from .views import (
 )
 from .share_link_view import ShareLinkView
 from .views import CookieTokenRefreshView
+from . import ai_views
 
 # 创建路由器并注册视图集
 router = DefaultRouter()
@@ -57,4 +58,9 @@ urlpatterns = [
     ),
     path("api/payment/alipay/notify/", alipay_notify, name="alipay_notify"),
     path("payment/success/", PaymentSuccessView.as_view(), name="payment_success"),
+    # AI 生成相关
+    path("ai/generate/", ai_views.generate_route, name="ai_generate"),
+    path("ai/quota/", ai_views.get_ai_quota, name="ai_quota"),
+    path("ai/purchase/", ai_views.purchase_ai_quota, name="ai_purchase"),
+    path("ai/history/", ai_views.get_ai_history, name="ai_history"),
 ]
