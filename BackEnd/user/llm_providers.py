@@ -174,11 +174,6 @@ class AnthropicCompatibleProvider(BaseLLMProvider):
         return self.model
 
 
-# 兼容旧版命名
-OpenAIProvider = OpenAICompatibleProvider
-AnthropicProvider = AnthropicCompatibleProvider
-
-
 def get_llm_provider(provider: Optional[str] = None) -> BaseLLMProvider:
     """获取 LLM 提供商实例
 
