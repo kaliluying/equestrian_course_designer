@@ -193,7 +193,7 @@ def get_llm_provider(provider: Optional[str] = None) -> BaseLLMProvider:
     - AI_PROVIDER_CONFIG=MINIMAX
     - MINIMAX_API_KEY=xxx
     - MINIMAX_MODEL=MiniMax-M2.5
-    - MINIMAX_BASE_URL=https://api.minimax.chat
+    - MINIMAX_BASE_URL=https://api.minimaxi.com/v1
     """
     provider = provider or os.getenv("AI_PROVIDER", "openai").lower()
 
