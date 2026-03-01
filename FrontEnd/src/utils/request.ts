@@ -12,7 +12,7 @@ let csrfTokenInMemory: string | null = null
 // 创建 axios 实例
 const axiosInstance = axios.create({
   baseURL: apiConfig.apiBaseUrl,
-  timeout: 5000,
+  timeout: 120000,  // 2 minutes for AI generation
   // Security fix: withCredentials is required for cookies to be sent
   withCredentials: true,
 })
