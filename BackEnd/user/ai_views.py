@@ -9,6 +9,8 @@ import json
 import re
 import random
 import time
+import os
+from decimal import Decimal, ROUND_HALF_UP
 
 from .models import AIGenerationQuota, AIGenerationHistory, MembershipOrder
 from .llm_providers import get_llm_provider
@@ -430,11 +432,27 @@ def generate_route(request):
                 include_combinations=True,
             )
             generator = RouteGenerator()
-            result = generator.generate(route_config)
+            fallback_result = generator.generate(route_config)
+            ai_like_result = {
+                "obstacles": fallback_result.get("obstacles", []),
+                "field_width": field_width,
+                "field_height": field_height,
+                "difficulty": difficulty,
+                "design_notes": fallback_result.get("explanation"),
+            }
+            result = _normalize_ai_result(ai_like_result)
 
         # 8. 更新历史记录
         history.result = result
         history.token_used = llm_response.token_used
+        token_price_per_1k = os.getenv("AI_TOKEN_PRICE_PER_1K", "0")
+        try:
+            price = Decimal(token_price_per_1k)
+            history.cost = (price * Decimal(history.token_used) / Decimal(1000)).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+        except Exception:
+            history.cost = Decimal("0.00")
         history.status = "success"
         history.save()
 
