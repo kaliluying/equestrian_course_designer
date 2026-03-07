@@ -73,6 +73,36 @@ AI_QUOTA_AMOUNT_MAP = {
 }
 
 
+def _set_auth_cookies(response, access_token, refresh_token):
+    """
+    为认证响应写入 JWT cookies。
+    注册与登录共用同一套 cookie 策略，避免前后端鉴权状态不一致。
+    """
+    is_production = not settings.DEBUG
+
+    response.set_cookie(
+        "access_token",
+        access_token,
+        max_age=7 * 24 * 60 * 60,
+        httponly=True,
+        secure=is_production,
+        samesite="None" if is_production else "Lax",
+        path="/",
+    )
+
+    response.set_cookie(
+        "refresh_token",
+        refresh_token,
+        max_age=30 * 24 * 60 * 60,
+        httponly=True,
+        secure=is_production,
+        samesite="None" if is_production else "Lax",
+        path="/",
+    )
+
+    return response
+
+
 def _resolve_ai_quota_amount(order_amount):
     """
     根据订单金额推断 AI 配额数量。
@@ -160,7 +190,7 @@ class RegisterView(APIView):
                 user.save()
 
                 refresh = RefreshToken.for_user(user)
-                return success_response(
+                response = success_response(
                     "注册成功",
                     {
                         "user_id": user.id,
@@ -170,6 +200,13 @@ class RegisterView(APIView):
                     },
                     status.HTTP_201_CREATED,
                 )
+                response = _set_auth_cookies(
+                    response,
+                    str(refresh.access_token),
+                    str(refresh),
+                )
+                logger.info(f"用户 {user.username} 注册成功，已设置 httpOnly cookies")
+                return response
         except serializers.ValidationError as e:
             # 处理验证错误
             error_messages = {}
@@ -226,31 +263,7 @@ class LoginView(APIView):
                     "username": user.username,
                 },
             )
-
-            # Security fix: Set JWT tokens as httpOnly cookies
-            # For development (DEBUG=True): use Lax for better browser compatibility
-            # For production: use SameSite=None with Secure for cross-site requests
-            is_production = not settings.DEBUG
-            response.set_cookie(
-                "access_token",
-                access_token,
-                max_age=7 * 24 * 60 * 60,  # 7 days in seconds
-                httponly=True,
-                secure=is_production,
-                samesite="None" if is_production else "Lax",
-                path="/",
-            )
-
-            # Refresh token cookie (longer-lived, 30 days)
-            response.set_cookie(
-                "refresh_token",
-                refresh_token,
-                max_age=30 * 24 * 60 * 60,  # 30 days in seconds
-                httponly=True,
-                secure=is_production,
-                samesite="None" if is_production else "Lax",
-                path="/",
-            )
+            response = _set_auth_cookies(response, access_token, refresh_token)
 
             logger.info(f"用户 {user.username} 登录成功，已设置 httpOnly cookies")
 
