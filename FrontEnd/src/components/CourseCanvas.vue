@@ -1,6 +1,6 @@
 <template>
   <div :class="['course-canvas', $attrs.class]" :style="canvasStyle" @drop="handleDrop" @dragover.prevent
-    @mousedown.self="startSelection" ref="canvasContainerRef">
+    @pointerdown.self="startSelection" ref="canvasContainerRef">
 
     <div class="canvas-grid"></div>
     <div class="dimension-labels">
@@ -26,7 +26,7 @@
         top: `${scalePoint(obstacle.position).y}px`,
         transform: `rotate(${obstacle.rotation}deg)`,
       }" @click="handleObstacleClick($event, obstacle)"
-      @mousedown="startDragging($event, obstacle)">
+      @pointerdown="startDragging($event, obstacle)">
       <div class="obstacle-content">
         <!-- 仅对非装饰物类型显示方向箭头，或装饰物但设置了showDirectionArrow属性 -->
         <div v-if="obstacle.type !== ObstacleType.DECORATION ||
@@ -198,7 +198,7 @@
         </template>
       </div>
       <div class="obstacle-controls" v-if="isSelected(obstacle)">
-        <div class="rotation-handle" @mousedown.stop="startRotating($event, obstacle)"></div>
+        <div class="rotation-handle" @pointerdown.stop="startRotating($event, obstacle)"></div>
       </div>
     </div>
 
@@ -209,7 +209,7 @@
           'dragging': isDraggingNumber && draggingNumberObstacle?.id === obstacle.id && draggingPoleIndex === obstacle.poles.findIndex(p => p === pole),
           'obstacle-dragging': isDragging && selectedObstacles.some(obs => obs.id === obstacle.id)
         }"
-        @mousedown.stop="startDraggingPoleNumber($event, obstacle, obstacle.poles.findIndex(p => p === pole))" :style="{
+        @pointerdown.stop="startDraggingPoleNumber($event, obstacle, obstacle.poles.findIndex(p => p === pole))" :style="{
           position: 'absolute',
           left: `${scalePoint({ x: obstacle.position.x + (pole.numberPosition?.x ?? 0), y: 0 }).x}px`,
           top: `${scalePoint({ x: 0, y: obstacle.position.y + (pole.numberPosition?.y ?? -3) }).y}px`,
@@ -231,24 +231,24 @@
     <div v-if="courseStore.coursePath.visible" class="course-path">
       <div class="path-indicator start-indicator"
         :class="{ 'selected': draggingPoint === 'start' || draggingPoint === 'start-rotate' }" :style="startStyle"
-        @mousedown.stop="startDraggingPoint('start', $event)">
+        @pointerdown.stop="startDraggingPoint('start', $event)">
         <div class="direction-arrow">
           <div class="arrow-line"></div>
           <div class="arrow-head"></div>
         </div>
         <div class="path-line"></div>
-        <div class="rotation-handle" @mousedown.stop="startRotatingPoint('start', $event)"></div>
+        <div class="rotation-handle" @pointerdown.stop="startRotatingPoint('start', $event)"></div>
       </div>
 
       <div class="path-indicator end-indicator"
         :class="{ 'selected': draggingPoint === 'end' || draggingPoint === 'end-rotate' }" :style="endStyle"
-        @mousedown.stop="startDraggingPoint('end', $event)">
+        @pointerdown.stop="startDraggingPoint('end', $event)">
         <div class="direction-arrow">
           <div class="arrow-line"></div>
           <div class="arrow-head"></div>
         </div>
         <div class="path-line"></div>
-        <div class="rotation-handle" @mousedown.stop="startRotatingPoint('end', $event)"></div>
+        <div class="rotation-handle" @pointerdown.stop="startRotatingPoint('end', $event)"></div>
       </div>
 
       <!-- 添加 SVG 路径渲染 -->
@@ -280,12 +280,12 @@
             :cx="scalePoint(point.controlPoint1).x"
             :cy="scalePoint(point.controlPoint1).y"
             :r="draggingControlPoint?.pointIndex === pointIndex && draggingControlPoint?.controlPointNumber === 1 ? 8 : 6"
-            class="control-point" @mousedown.stop="startDraggingControlPoint(pointIndex, 1, $event)" />
+            class="control-point" @pointerdown.stop="startDraggingControlPoint(pointIndex, 1, $event)" />
           <circle v-if="point.controlPoint2 && showDistanceLabels" 
             :cx="scalePoint(point.controlPoint2).x"
             :cy="scalePoint(point.controlPoint2).y"
             :r="draggingControlPoint?.pointIndex === pointIndex && draggingControlPoint?.controlPointNumber === 2 ? 8 : 6"
-            class="control-point" @mousedown.stop="startDraggingControlPoint(pointIndex, 2, $event)" />
+            class="control-point" @pointerdown.stop="startDraggingControlPoint(pointIndex, 2, $event)" />
         </template>
       </svg>
 
@@ -349,6 +349,8 @@ import { ObstacleType, DecorationCategory } from '@/types/obstacle'
 import type { Obstacle, PathPoint, CustomObstacleTemplate } from '@/types/obstacle'
 import { ConnectionStatus, useWebSocketStore } from '@/stores/websocket'
 
+type CanvasInteractionEvent = MouseEvent | PointerEvent
+
 // 组件状态管理
 const courseStore = useCourseStore()
 // const obstacleStore = useObstacleStore()
@@ -360,6 +362,7 @@ const isRotating = ref(false) // 是否正在旋转
 const isDraggingNumber = ref(false)
 const draggingNumberObstacle = ref<Obstacle | null>(null)
 const draggingPoleIndex = ref<number | null>(null)
+const activePointerId = ref<number | null>(null)
 const startPos = ref<Record<string, { x: number; y: number }>>({})
 const startMousePos = ref({ x: 0, y: 0 }) // 开始位置
 const startPointPos = ref<{ x: number; y: number } | null>(null) // 起终点拖拽时的初始位置
@@ -970,8 +973,29 @@ const adjustColor = (color: string, amount: number) => {
   return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`
 }
 
+const beginPointerInteraction = (event: CanvasInteractionEvent) => {
+  if (!('pointerId' in event)) {
+    return true
+  }
+
+  if (event.isPrimary === false) {
+    return false
+  }
+
+  if (activePointerId.value !== null && activePointerId.value !== event.pointerId) {
+    return false
+  }
+
+  activePointerId.value = event.pointerId
+  return true
+}
+
+const matchesActivePointer = (event: PointerEvent) => {
+  return activePointerId.value === null || activePointerId.value === event.pointerId
+}
+
 // 开始拖动障碍物
-const startDragging = (event: MouseEvent, obstacle: Obstacle) => {
+const startDragging = (event: CanvasInteractionEvent, obstacle: Obstacle) => {
   // 如果正在拖拽编号，阻止障碍物拖拽
   if (isDraggingNumber.value) {
     event.preventDefault()
@@ -981,6 +1005,8 @@ const startDragging = (event: MouseEvent, obstacle: Obstacle) => {
   }
 
   if (isRotating.value) return
+
+  if (!beginPointerInteraction(event)) return
 
   isDragging.value = true
   draggingObstacle.value = obstacle
@@ -1002,7 +1028,7 @@ const startDragging = (event: MouseEvent, obstacle: Obstacle) => {
 }
 
 // 开始旋转障碍物
-const startRotating = (event: MouseEvent, obstacle: Obstacle) => {
+const startRotating = (event: CanvasInteractionEvent, obstacle: Obstacle) => {
   // 如果正在拖拽编号，阻止障碍物旋转
   if (isDraggingNumber.value) {
     event.preventDefault()
@@ -1010,6 +1036,8 @@ const startRotating = (event: MouseEvent, obstacle: Obstacle) => {
     event.stopImmediatePropagation()
     return
   }
+
+  if (!beginPointerInteraction(event)) return
 
   isRotating.value = true
   draggingObstacle.value = obstacle
@@ -1048,7 +1076,13 @@ const applyNumberPositionBounds = (position: { x: number; y: number }) => {
 }
 
 // 开始拖动编号
-const startDraggingPoleNumber = (event: MouseEvent, obstacle: Obstacle, poleIndex: number) => {
+const startDraggingPoleNumber = (
+  event: CanvasInteractionEvent,
+  obstacle: Obstacle,
+  poleIndex: number,
+) => {
+  if (!beginPointerInteraction(event)) return
+
   // 阻止事件冒泡和默认行为，确保不会触发其他交互
   event.preventDefault()
   event.stopPropagation()
@@ -1077,7 +1111,7 @@ const startDraggingPoleNumber = (event: MouseEvent, obstacle: Obstacle, poleInde
 }
 
 // 处理鼠标移动
-const handleMouseMove = (event: MouseEvent) => {
+const handleMouseMove = (event: CanvasInteractionEvent) => {
   // 如果正在拖拽编号，阻止其他交互操作
   if (isDraggingNumber.value) {
     event.preventDefault()
@@ -2163,13 +2197,17 @@ const selectionStyle = computed(() => {
 })
 
 // 开始框选
-const startSelection = (event: MouseEvent) => {
+const startSelection = (event: CanvasInteractionEvent) => {
   // 如果正在拖拽编号，阻止框选操作
   if (isDraggingNumber.value) {
     event.preventDefault()
     event.stopPropagation()
     return
   }
+
+  if (!beginPointerInteraction(event)) return
+
+  event.preventDefault()
 
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   const x = event.clientX - rect.left
@@ -2189,7 +2227,7 @@ const startSelection = (event: MouseEvent) => {
 }
 
 // 更新框选区域
-const updateSelection = (event: MouseEvent) => {
+const updateSelection = (event: CanvasInteractionEvent) => {
   if (!isSelecting.value) return
 
   const canvas = document.querySelector('.course-canvas')
@@ -2306,7 +2344,11 @@ const endSelection = () => {
 }
 
 // 修改事件监听
-const handleGlobalMouseMove = (event: MouseEvent) => {
+const handleGlobalMouseMove = (event: PointerEvent) => {
+  if (!matchesActivePointer(event)) {
+    return
+  }
+
   // 如果正在拖拽编号，优先处理编号拖拽，阻止其他所有交互
   if (isDraggingNumber.value) {
     event.preventDefault()
@@ -2399,7 +2441,11 @@ const handleGlobalMouseMove = (event: MouseEvent) => {
 }
 
 // 修改全局鼠标抬起事件处理
-const handleGlobalMouseUp = (event: MouseEvent) => {
+const handleGlobalMouseUp = (event: PointerEvent) => {
+  if (!matchesActivePointer(event)) {
+    return
+  }
+
   // 结束框选
   if (isSelecting.value) {
     endSelection()
@@ -2519,6 +2565,7 @@ const handleGlobalMouseUp = (event: MouseEvent) => {
   // 重置鼠标位置和点位置
   startMousePos.value = { x: 0, y: 0 }
   startPointPos.value = null
+  activePointerId.value = null
 }
 
 // 组件挂载时添加事件监听
@@ -2539,8 +2586,9 @@ onMounted(() => {
   }
 
   // 添加事件监听器
-  window.addEventListener('mousemove', handleGlobalMouseMove)
-  window.addEventListener('mouseup', handleGlobalMouseUp)
+  window.addEventListener('pointermove', handleGlobalMouseMove, { passive: false })
+  window.addEventListener('pointerup', handleGlobalMouseUp, { passive: false })
+  window.addEventListener('pointercancel', handleGlobalMouseUp, { passive: false })
   window.addEventListener('keydown', handleKeyDown)
 
   // 添加生成路线事件监听
@@ -2566,8 +2614,9 @@ onMounted(() => {
 
   // 在组件卸载时移除事件监听
   onUnmounted(() => {
-    window.removeEventListener('mousemove', handleGlobalMouseMove)
-    window.removeEventListener('mouseup', handleGlobalMouseUp)
+    window.removeEventListener('pointermove', handleGlobalMouseMove)
+    window.removeEventListener('pointerup', handleGlobalMouseUp)
+    window.removeEventListener('pointercancel', handleGlobalMouseUp)
     window.removeEventListener('keydown', handleKeyDown)
 
     // 移除障碍物更新事件监听
@@ -2585,8 +2634,9 @@ onMounted(() => {
 
 // 组件卸载时移除事件监听
 onUnmounted(() => {
-  window.removeEventListener('mousemove', handleGlobalMouseMove)
-  window.removeEventListener('mouseup', handleGlobalMouseUp)
+  window.removeEventListener('pointermove', handleGlobalMouseMove)
+  window.removeEventListener('pointerup', handleGlobalMouseUp)
+  window.removeEventListener('pointercancel', handleGlobalMouseUp)
   window.removeEventListener('keydown', handleKeyDown)
   // 移除生成路线事件监听
   const canvas = document.querySelector('.course-canvas')
@@ -2648,7 +2698,7 @@ const pasteObstacle = () => {
 }
 
 // 开始拖拽起点或终点
-const startDraggingPoint = (point: 'start' | 'end', event: MouseEvent) => {
+const startDraggingPoint = (point: 'start' | 'end', event: CanvasInteractionEvent) => {
   // 如果正在拖拽编号，阻止起终点拖拽
   if (isDraggingNumber.value) {
     event.preventDefault()
@@ -2657,6 +2707,8 @@ const startDraggingPoint = (point: 'start' | 'end', event: MouseEvent) => {
     return
   }
 
+  if (!beginPointerInteraction(event)) return
+
   draggingPoint.value = point
 
   // 记录初始鼠标位置和点位置
@@ -2664,11 +2716,12 @@ const startDraggingPoint = (point: 'start' | 'end', event: MouseEvent) => {
   startMousePos.value = { x: event.clientX, y: event.clientY }
   startPointPos.value = { x: pointPos.x, y: pointPos.y }
 
+  event.preventDefault()
   event.stopPropagation()
 }
 
 // 开始旋转起点或终点
-const startRotatingPoint = (point: 'start' | 'end', event: MouseEvent) => {
+const startRotatingPoint = (point: 'start' | 'end', event: CanvasInteractionEvent) => {
   // 如果正在拖拽编号，阻止起终点旋转
   if (isDraggingNumber.value) {
     event.preventDefault()
@@ -2676,6 +2729,8 @@ const startRotatingPoint = (point: 'start' | 'end', event: MouseEvent) => {
     event.stopImmediatePropagation()
     return
   }
+
+  if (!beginPointerInteraction(event)) return
 
   draggingPoint.value = point === 'start' ? 'start-rotate' : 'end-rotate'
 
@@ -2696,6 +2751,7 @@ const startRotatingPoint = (point: 'start' | 'end', event: MouseEvent) => {
     y: point === 'start' ? courseStore.startPoint.rotation : courseStore.endPoint.rotation
   }
 
+  event.preventDefault()
   event.stopPropagation()
 }
 
@@ -2703,7 +2759,7 @@ const startRotatingPoint = (point: 'start' | 'end', event: MouseEvent) => {
 const startDraggingControlPoint = (
   pointIndex: number,
   controlPointNumber: 1 | 2,
-  event: MouseEvent,
+  event: CanvasInteractionEvent,
 ) => {
   // 如果正在拖拽编号，阻止控制点拖拽
   if (isDraggingNumber.value) {
@@ -2712,6 +2768,8 @@ const startDraggingControlPoint = (
     event.stopImmediatePropagation()
     return
   }
+
+  if (!beginPointerInteraction(event)) return
 
   draggingControlPoint.value = { pointIndex, controlPointNumber }
   const canvas = document.querySelector('.course-canvas')
@@ -2728,6 +2786,7 @@ const startDraggingControlPoint = (
     }
   }
 
+  event.preventDefault()
   event.stopPropagation()
 }
 
@@ -3312,6 +3371,7 @@ const handleDeletePath = () => {
   margin: 0 auto;
   user-select: none;
   -webkit-user-select: none;
+  touch-action: none;
 }
 
 .canvas-grid {
@@ -3345,6 +3405,7 @@ const handleDeletePath = () => {
   transition: transform 0.3s ease;
   user-select: none;
   --obstacle-rotation: 0deg;
+  touch-action: none;
 
   &.selected {
     z-index: 4;
@@ -3424,6 +3485,7 @@ const handleDeletePath = () => {
   pointer-events: auto;
   transition: all 0.2s ease;
   user-select: none;
+  touch-action: none;
 
   /* 确保在不同背景下的可见性 */
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
@@ -3497,6 +3559,7 @@ const handleDeletePath = () => {
     cursor: pointer;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     pointer-events: auto;
+    touch-action: none;
 
     &:hover {
       transform: scale(1.2);
@@ -3804,6 +3867,7 @@ const handleDeletePath = () => {
   pointer-events: auto;
   user-select: none;
   -webkit-user-select: none;
+  touch-action: none;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 
   .rotation-handle {
@@ -3820,6 +3884,7 @@ const handleDeletePath = () => {
     z-index: 2;
     user-select: none;
     -webkit-user-select: none;
+    touch-action: none;
 
     &:hover {
       transform: scale(1.2);
@@ -3953,6 +4018,7 @@ const handleDeletePath = () => {
   stroke-width: 2;
   cursor: move;
   pointer-events: all;
+  touch-action: none;
 
   &:hover {
     fill: var(--primary-color-light);

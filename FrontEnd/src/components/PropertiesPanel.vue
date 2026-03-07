@@ -219,6 +219,7 @@ import { useCourseStore } from '@/stores/course'
 import type { Pole, Obstacle } from '@/types/obstacle'
 import { ObstacleType } from '@/types/obstacle'
 import { useWebSocketStore } from '@/stores/websocket'
+import { getCourseCanvasMeterScale } from '@/utils/course-canvas-scale'
 
 // 添加障碍物编号错误提示
 const numberError = ref('')
@@ -349,9 +350,11 @@ const canRemovePole = computed(() => {
  * 根据画布宽度和场地实际宽度计算
  */
 const meterScale = computed(() => {
-  const canvas = document.querySelector('.course-canvas')
-  if (!canvas) return 1
-  return canvas.clientWidth / courseStore.currentCourse.fieldWidth
+  return getCourseCanvasMeterScale(
+    courseStore.currentCourse.fieldWidth,
+    courseStore.currentCourse.fieldHeight,
+    1,
+  )
 })
 
 /**
@@ -890,3 +893,4 @@ const updateShowDirectionArrow = (show: boolean): void => {
   margin-right: 10px;
 }
 </style>
+

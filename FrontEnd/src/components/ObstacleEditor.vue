@@ -480,6 +480,7 @@ import { useObstacleStore } from '@/stores/obstacle'
 import { useCourseStore } from '@/stores/course'
 import { ElMessage } from 'element-plus'
 import { cloneDeep } from 'lodash'
+import { getCourseCanvasMeterScale } from '@/utils/course-canvas-scale'
 
 const props = defineProps<{
   template?: CustomObstacleTemplate
@@ -496,9 +497,11 @@ const isEditing = computed(() => !!props.template)
  * 根据画布宽度和场地实际宽度计算
  */
 const meterScale = computed(() => {
-  const canvas = document.querySelector('.course-canvas')
-  if (!canvas) return 100 // 默认值
-  return canvas.clientWidth / courseStore.currentCourse.fieldWidth
+  return getCourseCanvasMeterScale(
+    courseStore.currentCourse.fieldWidth,
+    courseStore.currentCourse.fieldHeight,
+    100,
+  )
 })
 
 // 装饰物宽度(米)计算属性
@@ -1265,3 +1268,4 @@ watch(() => props.template, () => {
   margin-bottom: 20px;
 }
 </style>
+

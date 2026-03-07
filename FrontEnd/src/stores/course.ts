@@ -1427,7 +1427,6 @@ export const useCourseStore = defineStore('course', () => {
         }
       }
 
-      // 先检查自动保存的数据
       const savedCourse = localStorage.getItem('autosaved_course')
       const savedTimestamp = localStorage.getItem('autosaved_timestamp')
 
@@ -1436,178 +1435,71 @@ export const useCourseStore = defineStore('course', () => {
       }
 
       try {
-        // 解析保存的数据
         const parsedData = JSON.parse(savedCourse)
 
-        // 验证数据完整性
         if (!parsedData || !parsedData.id || !Array.isArray(parsedData.obstacles)) {
           console.error('自动保存的数据格式无效')
           return false
         }
 
-        // 获取当前画布尺寸
         const canvas = document.querySelector('.course-canvas')
-        const currentCanvasWidth = canvas ? canvas.clientWidth : 800
-        const currentCanvasHeight = canvas ? canvas.clientHeight : 600
-
-        // 获取当前视口信息
+        const canvasElement = canvas instanceof HTMLElement ? canvas : null
         const currentViewport = {
           width: window.innerWidth,
           height: window.innerHeight,
-          canvasWidth: currentCanvasWidth,
-          canvasHeight: currentCanvasHeight,
+          canvasWidth: canvasElement ? canvasElement.clientWidth : 800,
+          canvasHeight: canvasElement ? canvasElement.clientHeight : 600,
           aspectRatio: (parsedData.fieldWidth || 80) / (parsedData.fieldHeight || 60),
+          devicePixelRatio: window.devicePixelRatio || 1,
         }
 
-        // 计算缩放系数
-        let scaleFactor = 1
-        if (parsedData.viewportInfo) {
-          const originalViewport = parsedData.viewportInfo
-          const scaleFactorWidth =
-            currentViewport.canvasWidth / (originalViewport.canvasWidth || 800)
-          const scaleFactorHeight =
-            currentViewport.canvasHeight / (originalViewport.canvasHeight || 600)
-          scaleFactor = Math.min(scaleFactorWidth, scaleFactorHeight)
-        }
+        const restoredObstacles = JSON.parse(JSON.stringify(parsedData.obstacles)) as Obstacle[]
+        const restoredPath = parsedData.path
+          ? JSON.parse(JSON.stringify(parsedData.path))
+          : null
 
-        // 缩放障碍物位置和尺寸
-        const scaledObstacles = parsedData.obstacles.map((obstacle: Obstacle) => {
-          const scaledObstacle = { ...obstacle }
-
-          // 缩放位置
-          if (scaledObstacle.position) {
-            scaledObstacle.position = {
-              x: scaledObstacle.position.x * scaleFactor,
-              y: scaledObstacle.position.y * scaleFactor,
-            }
-          }
-
-          // 缩放编号位置
-          if (scaledObstacle.numberPosition) {
-            scaledObstacle.numberPosition = {
-              x: scaledObstacle.numberPosition.x * scaleFactor,
-              y: scaledObstacle.numberPosition.y * scaleFactor,
-            }
-          }
-
-          // 缩放障碍物属性
-          if (scaledObstacle.poles) {
-            scaledObstacle.poles = scaledObstacle.poles.map((pole) => ({
-              ...pole,
-              width: pole.width * scaleFactor,
-              height: pole.height * scaleFactor,
-              spacing: pole.spacing ? pole.spacing * scaleFactor : undefined,
-            }))
-          }
-
-          // 缩放特定类型的属性
-          if (scaledObstacle.wallProperties) {
-            scaledObstacle.wallProperties = {
-              ...scaledObstacle.wallProperties,
-              width: scaledObstacle.wallProperties.width * scaleFactor,
-              height: scaledObstacle.wallProperties.height * scaleFactor,
-            }
-          }
-
-          if (scaledObstacle.liverpoolProperties) {
-            scaledObstacle.liverpoolProperties = {
-              ...scaledObstacle.liverpoolProperties,
-              width: scaledObstacle.liverpoolProperties.width * scaleFactor,
-              height: scaledObstacle.liverpoolProperties.height * scaleFactor,
-              waterDepth: scaledObstacle.liverpoolProperties.waterDepth * scaleFactor,
-            }
-          }
-
-          if (scaledObstacle.waterProperties) {
-            scaledObstacle.waterProperties = {
-              ...scaledObstacle.waterProperties,
-              width: scaledObstacle.waterProperties.width * scaleFactor,
-              depth: scaledObstacle.waterProperties.depth * scaleFactor,
-              borderWidth: scaledObstacle.waterProperties.borderWidth
-                ? scaledObstacle.waterProperties.borderWidth * scaleFactor
-                : undefined,
-            }
-          }
-
-          if (scaledObstacle.decorationProperties) {
-            scaledObstacle.decorationProperties = {
-              ...scaledObstacle.decorationProperties,
-              width: scaledObstacle.decorationProperties.width * scaleFactor,
-              height: scaledObstacle.decorationProperties.height * scaleFactor,
-              borderWidth: scaledObstacle.decorationProperties.borderWidth
-                ? scaledObstacle.decorationProperties.borderWidth * scaleFactor
-                : undefined,
-            }
-          }
-
-          return scaledObstacle
-        })
-
-        // 缩放路径数据
-        let scaledPath = null
-        if (parsedData.path) {
-          scaledPath = {
-            visible: parsedData.path.visible,
-            points: parsedData.path.points.map((point: PathPoint) => {
-              const scaledPoint = {
-                ...point,
-                x: point.x * scaleFactor,
-                y: point.y * scaleFactor,
-              }
-
-              if (point.controlPoint1) {
-                scaledPoint.controlPoint1 = {
-                  x: point.controlPoint1.x * scaleFactor,
-                  y: point.controlPoint1.y * scaleFactor,
-                }
-              }
-
-              if (point.controlPoint2) {
-                scaledPoint.controlPoint2 = {
-                  x: point.controlPoint2.x * scaleFactor,
-                  y: point.controlPoint2.y * scaleFactor,
-                }
-              }
-
-              return scaledPoint
-            }),
-          }
-        }
-
-        // 更新当前课程数据
         currentCourse.value = {
           ...parsedData,
-          obstacles: scaledObstacles,
+          obstacles: restoredObstacles,
           viewportInfo: currentViewport,
           updatedAt: new Date().toISOString(),
         }
 
-        // 更新路径数据
-        if (scaledPath) {
-          coursePath.value = scaledPath
+        selectedObstacle.value = null
 
-          // 更新起点和终点
-          if (parsedData.path.startPoint) {
-            startPoint.value = {
-              x: parsedData.path.startPoint.x * scaleFactor,
-              y: parsedData.path.startPoint.y * scaleFactor,
-              rotation: parsedData.path.startPoint.rotation,
-            }
+        if (restoredPath) {
+          coursePath.value = {
+            visible: restoredPath.visible ?? false,
+            points: restoredPath.points ?? [],
           }
 
-          if (parsedData.path.endPoint) {
-            endPoint.value = {
-              x: parsedData.path.endPoint.x * scaleFactor,
-              y: parsedData.path.endPoint.y * scaleFactor,
-              rotation: parsedData.path.endPoint.rotation,
-            }
+          startPoint.value = restoredPath.startPoint
+            ? {
+                x: restoredPath.startPoint.x,
+                y: restoredPath.startPoint.y,
+                rotation: restoredPath.startPoint.rotation,
+              }
+            : { x: 0, y: 0, rotation: 270 }
+
+          endPoint.value = restoredPath.endPoint
+            ? {
+                x: restoredPath.endPoint.x,
+                y: restoredPath.endPoint.y,
+                rotation: restoredPath.endPoint.rotation,
+              }
+            : { x: 0, y: 0, rotation: 270 }
+        } else {
+          coursePath.value = {
+            visible: false,
+            points: [],
           }
+          startPoint.value = { x: 0, y: 0, rotation: 270 }
+          endPoint.value = { x: 0, y: 0, rotation: 270 }
         }
 
         return true
       } catch (error) {
         console.error('解析本地存储的JSON数据失败:', error)
-        // 清除无效的自动保存数据
         localStorage.removeItem('autosaved_course')
         localStorage.removeItem('autosaved_timestamp')
         return false
@@ -1693,274 +1585,86 @@ export const useCourseStore = defineStore('course', () => {
   async function loadCourse(file: File) {
     try {
       const text = await file.text()
-      let parsedData = JSON.parse(text)
+      const parsedData = JSON.parse(text)
 
-      // 检测JSON格式：新格式（包含courseDesign字段）或旧格式（直接是CourseDesign对象）
       let courseData: CourseDesign
-      let originalViewport: any
 
       if (parsedData.courseDesign) {
-        // 新格式：从导出引擎生成的JSON
         console.log('检测到新格式JSON（包含courseDesign字段）')
         courseData = parsedData.courseDesign
-        originalViewport = parsedData.viewportInfo || {
-          width: window.innerWidth,
-          height: window.innerHeight,
-          canvasWidth: 800,
-          canvasHeight: 600,
-          aspectRatio: (courseData.fieldWidth || 80) / (courseData.fieldHeight || 60),
-        }
       } else if (parsedData.id && parsedData.obstacles) {
-        // 旧格式：直接是CourseDesign对象
         console.log('检测到旧格式JSON（直接CourseDesign对象）')
         courseData = parsedData
-        originalViewport = courseData.viewportInfo || {
-          width: window.innerWidth,
-          height: window.innerHeight,
-          canvasWidth: 800,
-          canvasHeight: 600,
-          aspectRatio: (courseData.fieldWidth || 80) / (courseData.fieldHeight || 60),
-        }
       } else {
-        // 无法识别的格式
         throw new Error('无法识别的JSON文件格式。请确保文件是有效的课程设计文件。')
       }
 
-      // 验证必需字段
       if (!courseData.id || !Array.isArray(courseData.obstacles)) {
         throw new Error('文件格式错误：缺少必需的字段（id或obstacles）')
       }
 
-      // 确保canvas已经渲染，才能获取准确的尺寸
-      // 需要等待一会，确保DOM已经更新
-      await new Promise((resolve) => setTimeout(resolve, 100))
-
-      // 获取当前画布元素
       const canvasElement = document.querySelector('.course-canvas')
-      let currentCanvasWidth = 800
-      let currentCanvasHeight = 600
+      const canvasRect = canvasElement instanceof HTMLElement
+        ? canvasElement.getBoundingClientRect()
+        : null
 
-      if (canvasElement) {
-        const rect = canvasElement.getBoundingClientRect()
-        currentCanvasWidth = rect.width
-        currentCanvasHeight = rect.height
-      } else {
-        console.warn('未找到画布元素，使用默认尺寸')
-      }
-
-      // 当前设备的视口信息
       const currentViewport = {
         width: window.innerWidth,
         height: window.innerHeight,
-        canvasWidth: currentCanvasWidth,
-        canvasHeight: currentCanvasHeight,
+        canvasWidth: canvasRect ? canvasRect.width : 800,
+        canvasHeight: canvasRect ? canvasRect.height : 600,
         aspectRatio: (courseData.fieldWidth || 80) / (courseData.fieldHeight || 60),
+        devicePixelRatio: window.devicePixelRatio || 1,
       }
 
-      // 计算缩放系数 - 使用画布大小比例
-      const scaleFactorWidth = currentViewport.canvasWidth / (originalViewport.canvasWidth || 800)
-      const scaleFactorHeight =
-        currentViewport.canvasHeight / (originalViewport.canvasHeight || 600)
+      const restoredObstacles = JSON.parse(JSON.stringify(courseData.obstacles)) as Obstacle[]
+      const restoredPath = courseData.path
+        ? JSON.parse(JSON.stringify(courseData.path))
+        : null
 
-      // 考虑设备像素比的影响
-      const currentDevicePixelRatio = window.devicePixelRatio || 1
-      const originalDevicePixelRatio = originalViewport.devicePixelRatio || 1
-      const pixelRatioAdjustment = currentDevicePixelRatio / originalDevicePixelRatio
-
-      // 使用一个统一的缩放因子，防止宽高比例不同导致的变形
-      // 并应用设备像素比调整
-      const scaleFactor = Math.min(scaleFactorWidth, scaleFactorHeight) * pixelRatioAdjustment
-
-      console.log('加载路线图时的缩放计算:', {
-        scaleFactorWidth,
-        scaleFactorHeight,
-        currentDevicePixelRatio,
-        originalDevicePixelRatio,
-        pixelRatioAdjustment,
-        finalScaleFactor: scaleFactor,
-      })
-
-      // 检查是否需要进行缩放调整
-      const needsScaling = Math.abs(scaleFactor - 1) > 0.1
-
-      // 调整障碍物位置和尺寸来适应当前屏幕
-      const scaledObstacles = courseData.obstacles.map((obstacle: Obstacle, index: number) => {
-        const scaledObstacle = JSON.parse(JSON.stringify(obstacle)) // 深拷贝确保所有嵌套属性都能被修改
-
-        // 确保对象有position属性
-        if (!scaledObstacle.position) {
-          console.warn(`障碍物 #${index} 缺少position属性，设置默认值`, obstacle)
-          scaledObstacle.position = { x: 10, y: 10 }
-        }
-
-        if (needsScaling) {
-          // 记录原始位置用于调试
-          // const originalPosition = { ...scaledObstacle.position }
-
-          // 缩放位置 - 使用统一的缩放因子确保等比例缩放
-          scaledObstacle.position = {
-            x: scaledObstacle.position.x * scaleFactor,
-            y: scaledObstacle.position.y * scaleFactor,
-          }
-
-          // 如果有编号位置，也要缩放
-          if (scaledObstacle.numberPosition) {
-            scaledObstacle.numberPosition = {
-              x: scaledObstacle.numberPosition.x * scaleFactor,
-              y: scaledObstacle.numberPosition.y * scaleFactor,
-            }
-          }
-
-          // 缩放障碍物的大小 - 根据障碍物类型处理不同属性
-          // 1. 缩放横杆（poles）
-          if (scaledObstacle.poles && Array.isArray(scaledObstacle.poles)) {
-            scaledObstacle.poles = scaledObstacle.poles.map((pole: Pole) => ({
-              ...pole,
-              width: pole.width * scaleFactor,
-              height: pole.height * scaleFactor,
-              spacing: pole.spacing ? pole.spacing * scaleFactor : undefined,
-            }))
-          }
-
-          // 2. 缩放墙属性
-          if (scaledObstacle.wallProperties) {
-            scaledObstacle.wallProperties = {
-              ...scaledObstacle.wallProperties,
-              width: scaledObstacle.wallProperties.width * scaleFactor,
-              height: scaledObstacle.wallProperties.height * scaleFactor,
-            }
-          }
-
-          // 3. 缩放利物浦属性
-          if (scaledObstacle.liverpoolProperties) {
-            scaledObstacle.liverpoolProperties = {
-              ...scaledObstacle.liverpoolProperties,
-              width: scaledObstacle.liverpoolProperties.width * scaleFactor,
-              height: scaledObstacle.liverpoolProperties.height * scaleFactor,
-              railHeight: scaledObstacle.liverpoolProperties.railHeight
-                ? scaledObstacle.liverpoolProperties.railHeight * scaleFactor
-                : undefined,
-            }
-          }
-
-          // 4. 缩放水障属性
-          if (scaledObstacle.waterProperties) {
-            scaledObstacle.waterProperties = {
-              ...scaledObstacle.waterProperties,
-              width: scaledObstacle.waterProperties.width * scaleFactor,
-              depth: scaledObstacle.waterProperties.depth * scaleFactor,
-              borderWidth: scaledObstacle.waterProperties.borderWidth
-                ? scaledObstacle.waterProperties.borderWidth * scaleFactor
-                : undefined,
-            }
-          }
-
-          // 5. 缩放装饰物属性
-          if (scaledObstacle.decorationProperties) {
-            scaledObstacle.decorationProperties = {
-              ...scaledObstacle.decorationProperties,
-              width: scaledObstacle.decorationProperties.width * scaleFactor,
-              height: scaledObstacle.decorationProperties.height * scaleFactor,
-              trunkHeight: scaledObstacle.decorationProperties.trunkHeight
-                ? scaledObstacle.decorationProperties.trunkHeight * scaleFactor
-                : undefined,
-              trunkWidth: scaledObstacle.decorationProperties.trunkWidth
-                ? scaledObstacle.decorationProperties.trunkWidth * scaleFactor
-                : undefined,
-              foliageRadius: scaledObstacle.decorationProperties.foliageRadius
-                ? scaledObstacle.decorationProperties.foliageRadius * scaleFactor
-                : undefined,
-              borderWidth: scaledObstacle.decorationProperties.borderWidth
-                ? scaledObstacle.decorationProperties.borderWidth * scaleFactor
-                : undefined,
-              scale: scaledObstacle.decorationProperties.scale
-                ? scaledObstacle.decorationProperties.scale * scaleFactor
-                : undefined,
-            }
-          }
-
-          // 确保障碍物在场地范围内
-          const fieldWidth = courseData.fieldWidth || 80
-          const fieldHeight = courseData.fieldHeight || 60
-
-          // 设置边界限制
-          const minX = 0
-          const maxX = fieldWidth
-          const minY = 0
-          const maxY = fieldHeight
-
-          if (scaledObstacle.position.x < minX) scaledObstacle.position.x = minX
-          if (scaledObstacle.position.x > maxX) scaledObstacle.position.x = maxX
-          if (scaledObstacle.position.y < minY) scaledObstacle.position.y = minY
-          if (scaledObstacle.position.y > maxY) scaledObstacle.position.y = maxY
-        }
-
-        return scaledObstacle
-      })
-
-      // 同样以等比例缩放调整路径点
-      let scaledPath = null
-      if (courseData.path) {
-        scaledPath = { ...courseData.path }
-
-        if (needsScaling && courseData.path.points) {
-          // 缩放路径点 - 使用统一缩放因子
-          scaledPath.points = courseData.path.points.map((point: PathPoint) => {
-            const scaledPoint = {
-              ...point,
-              x: point.x * scaleFactor,
-              y: point.y * scaleFactor,
-            }
-
-            // 处理控制点
-            if (point.controlPoint1) {
-              scaledPoint.controlPoint1 = {
-                x: point.controlPoint1.x * scaleFactor,
-                y: point.controlPoint1.y * scaleFactor,
-              }
-            }
-
-            if (point.controlPoint2) {
-              scaledPoint.controlPoint2 = {
-                x: point.controlPoint2.x * scaleFactor,
-                y: point.controlPoint2.y * scaleFactor,
-              }
-            }
-
-            return scaledPoint
-          })
-        }
-      }
-
-      // 加载基本课程数据
       currentCourse.value = {
         id: courseData.id,
         name: courseData.name,
-        obstacles: scaledObstacles || courseData.obstacles,
+        obstacles: restoredObstacles,
         createdAt: courseData.createdAt,
         updatedAt: courseData.updatedAt,
         fieldWidth: courseData.fieldWidth,
         fieldHeight: courseData.fieldHeight,
-        viewportInfo: currentViewport, // 更新为当前设备的视口信息
+        viewportInfo: currentViewport,
       }
 
-      // 如果存在路线数据，则加载路线
-      if (scaledPath) {
+      selectedObstacle.value = null
+
+      if (restoredPath) {
         coursePath.value = {
-          visible: scaledPath.visible,
-          points: scaledPath.points,
+          visible: restoredPath.visible ?? false,
+          points: restoredPath.points ?? [],
         }
 
-        if (scaledPath.startPoint) {
-          startPoint.value = scaledPath.startPoint
-        }
+        startPoint.value = restoredPath.startPoint
+          ? {
+              x: restoredPath.startPoint.x,
+              y: restoredPath.startPoint.y,
+              rotation: restoredPath.startPoint.rotation,
+            }
+          : { x: 0, y: 0, rotation: 270 }
 
-        if (scaledPath.endPoint) {
-          endPoint.value = scaledPath.endPoint
+        endPoint.value = restoredPath.endPoint
+          ? {
+              x: restoredPath.endPoint.x,
+              y: restoredPath.endPoint.y,
+              rotation: restoredPath.endPoint.rotation,
+            }
+          : { x: 0, y: 0, rotation: 270 }
+      } else {
+        coursePath.value = {
+          visible: false,
+          points: [],
         }
+        startPoint.value = { x: 0, y: 0, rotation: 270 }
+        endPoint.value = { x: 0, y: 0, rotation: 270 }
       }
 
-      // 更新课程
       updateCourse()
       return true
     } catch (error) {
@@ -2074,250 +1778,56 @@ export const useCourseStore = defineStore('course', () => {
    */
   function importCourse(course: CourseDesign) {
     console.log('开始导入课程数据:', course)
-    // 保留当前的ID，避免覆盖本地ID
     const currentId = currentCourse.value.id
 
-    // 记录导入前的视口信息
-    const viewportInfo = course.viewportInfo || {
-      width: window.innerWidth,
-      height: window.innerHeight,
-      canvasWidth: 800,
-      canvasHeight: 600,
-      aspectRatio: course.fieldWidth / course.fieldHeight,
-      devicePixelRatio: window.devicePixelRatio || 1, // 添加设备像素比信息
-    }
+    const canvasElement = document.querySelector('.course-canvas')
+    const canvasRect = canvasElement instanceof HTMLElement
+      ? canvasElement.getBoundingClientRect()
+      : null
 
-    // 记录当前设备的视口信息
     const currentViewportInfo = {
       width: window.innerWidth,
       height: window.innerHeight,
-      canvasWidth: 800,
-      canvasHeight: 600,
+      canvasWidth: canvasRect ? canvasRect.width : 800,
+      canvasHeight: canvasRect ? canvasRect.height : 600,
       aspectRatio: course.fieldWidth / course.fieldHeight,
       devicePixelRatio: window.devicePixelRatio || 1,
     }
 
-    // 获取当前画布元素
-    const canvasElement = document.querySelector('.course-canvas')
-    if (canvasElement) {
-      const rect = canvasElement.getBoundingClientRect()
-      currentViewportInfo.canvasWidth = rect.width
-      currentViewportInfo.canvasHeight = rect.height
-    }
-
-    console.log('导入课程时的视口信息:', {
-      original: viewportInfo,
-      current: currentViewportInfo,
-    })
-
-    // 计算缩放因子
-    const scaleFactorWidth = currentViewportInfo.canvasWidth / (viewportInfo.canvasWidth || 800)
-    const scaleFactorHeight = currentViewportInfo.canvasHeight / (viewportInfo.canvasHeight || 600)
-
-    // 考虑设备像素比的影响
-    const currentDevicePixelRatio = currentViewportInfo.devicePixelRatio || 1
-    const originalDevicePixelRatio = viewportInfo.devicePixelRatio || 1
-    const pixelRatioAdjustment = currentDevicePixelRatio / originalDevicePixelRatio
-
-    // 使用一个统一的缩放因子，防止宽高比例不同导致的变形
-    const scaleFactor = Math.min(scaleFactorWidth, scaleFactorHeight) * pixelRatioAdjustment
-
-    console.log('导入课程时的缩放计算:', {
-      scaleFactorWidth,
-      scaleFactorHeight,
-      currentDevicePixelRatio,
-      originalDevicePixelRatio,
-      pixelRatioAdjustment,
-      finalScaleFactor: scaleFactor,
-    })
-
-    // 检查是否需要进行缩放调整
-    const needsScaling = Math.abs(scaleFactor - 1) > 0.1
-
-    // 缩放障碍物
-    let scaledObstacles = course.obstacles
-    if (needsScaling) {
-      scaledObstacles = course.obstacles.map((obstacle: Obstacle) => {
-        const scaledObstacle = JSON.parse(JSON.stringify(obstacle)) // 深拷贝确保所有嵌套属性都能被修改
-
-        // 确保对象有position属性
-        if (!scaledObstacle.position) {
-          console.warn(`障碍物 ${obstacle.id} 缺少position属性，设置默认值`)
-          scaledObstacle.position = { x: 10, y: 10 }
-        }
-
-        // 缩放位置
-        scaledObstacle.position = {
-          x: scaledObstacle.position.x * scaleFactor,
-          y: scaledObstacle.position.y * scaleFactor,
-        }
-
-        // 如果有编号位置，也要缩放
-        if (scaledObstacle.numberPosition) {
-          scaledObstacle.numberPosition = {
-            x: scaledObstacle.numberPosition.x * scaleFactor,
-            y: scaledObstacle.numberPosition.y * scaleFactor,
-          }
-        }
-
-        // 缩放障碍物的大小 - 根据障碍物类型处理不同属性
-        // 1. 缩放横杆（poles）
-        if (scaledObstacle.poles && Array.isArray(scaledObstacle.poles)) {
-          scaledObstacle.poles = scaledObstacle.poles.map((pole: Pole) => ({
-            ...pole,
-            width: pole.width * scaleFactor,
-            height: pole.height * scaleFactor,
-            spacing: pole.spacing ? pole.spacing * scaleFactor : undefined,
-          }))
-        }
-
-        // 2. 缩放墙属性
-        if (scaledObstacle.wallProperties) {
-          scaledObstacle.wallProperties = {
-            ...scaledObstacle.wallProperties,
-            width: scaledObstacle.wallProperties.width * scaleFactor,
-            height: scaledObstacle.wallProperties.height * scaleFactor,
-          }
-        }
-
-        // 3. 缩放利物浦属性
-        if (scaledObstacle.liverpoolProperties) {
-          scaledObstacle.liverpoolProperties = {
-            ...scaledObstacle.liverpoolProperties,
-            width: scaledObstacle.liverpoolProperties.width * scaleFactor,
-            height: scaledObstacle.liverpoolProperties.height * scaleFactor,
-            railHeight: scaledObstacle.liverpoolProperties.railHeight
-              ? scaledObstacle.liverpoolProperties.railHeight * scaleFactor
-              : undefined,
-          }
-        }
-
-        // 4. 缩放水障属性
-        if (scaledObstacle.waterProperties) {
-          scaledObstacle.waterProperties = {
-            ...scaledObstacle.waterProperties,
-            width: scaledObstacle.waterProperties.width * scaleFactor,
-            depth: scaledObstacle.waterProperties.depth * scaleFactor,
-            borderWidth: scaledObstacle.waterProperties.borderWidth
-              ? scaledObstacle.waterProperties.borderWidth * scaleFactor
-              : undefined,
-          }
-        }
-
-        // 5. 缩放装饰物属性
-        if (scaledObstacle.decorationProperties) {
-          scaledObstacle.decorationProperties = {
-            ...scaledObstacle.decorationProperties,
-            width: scaledObstacle.decorationProperties.width * scaleFactor,
-            height: scaledObstacle.decorationProperties.height * scaleFactor,
-            trunkHeight: scaledObstacle.decorationProperties.trunkHeight
-              ? scaledObstacle.decorationProperties.trunkHeight * scaleFactor
-              : undefined,
-            trunkWidth: scaledObstacle.decorationProperties.trunkWidth
-              ? scaledObstacle.decorationProperties.trunkWidth * scaleFactor
-              : undefined,
-            foliageRadius: scaledObstacle.decorationProperties.foliageRadius
-              ? scaledObstacle.decorationProperties.foliageRadius * scaleFactor
-              : undefined,
-            borderWidth: scaledObstacle.decorationProperties.borderWidth
-              ? scaledObstacle.decorationProperties.borderWidth * scaleFactor
-              : undefined,
-            scale: scaledObstacle.decorationProperties.scale
-              ? scaledObstacle.decorationProperties.scale * scaleFactor
-              : undefined,
-          }
-        }
-
-        return scaledObstacle
-      })
-    }
-
-    // 更新课程数据
     currentCourse.value = {
       ...course,
-      obstacles: scaledObstacles,
+      obstacles: JSON.parse(JSON.stringify(course.obstacles)) as Obstacle[],
       id: currentId,
       updatedAt: new Date().toISOString(),
-      // 保留原始设计的视口信息，但更新当前设备的视口信息
       viewportInfo: currentViewportInfo,
     }
 
-    // 清除选中的障碍物
     selectedObstacle.value = null
 
-    // 更新路径
     if (course.path) {
       console.log('导入路径数据:', course.path)
+      const restoredPath = JSON.parse(JSON.stringify(course.path))
 
-      // 缩放路径点
-      let scaledPoints = []
-      if (course.path.points && needsScaling) {
-        scaledPoints = course.path.points.map((point: PathPoint) => {
-          const scaledPoint = {
-            ...point,
-            x: point.x * scaleFactor,
-            y: point.y * scaleFactor,
-          }
-
-          // 处理控制点
-          if (point.controlPoint1) {
-            scaledPoint.controlPoint1 = {
-              x: point.controlPoint1.x * scaleFactor,
-              y: point.controlPoint1.y * scaleFactor,
-            }
-          }
-
-          if (point.controlPoint2) {
-            scaledPoint.controlPoint2 = {
-              x: point.controlPoint2.x * scaleFactor,
-              y: point.controlPoint2.y * scaleFactor,
-            }
-          }
-
-          return scaledPoint
-        })
-      } else {
-        scaledPoints = course.path.points ? [...course.path.points] : []
-      }
-
-      // 更新路径数据
       coursePath.value = {
-        visible: course.path.visible ?? false,
-        points: scaledPoints,
+        visible: restoredPath.visible ?? false,
+        points: restoredPath.points ?? [],
       }
 
-      // 更新起点和终点
-      if (course.path.startPoint) {
-        if (needsScaling) {
-          startPoint.value = {
-            x: course.path.startPoint.x * scaleFactor,
-            y: course.path.startPoint.y * scaleFactor,
-            rotation: course.path.startPoint.rotation || 270,
+      startPoint.value = restoredPath.startPoint
+        ? {
+            x: restoredPath.startPoint.x,
+            y: restoredPath.startPoint.y,
+            rotation: restoredPath.startPoint.rotation || 270,
           }
-        } else {
-          startPoint.value = {
-            x: course.path.startPoint.x,
-            y: course.path.startPoint.y,
-            rotation: course.path.startPoint.rotation || 270,
-          }
-        }
-      }
+        : { x: 0, y: 0, rotation: 270 }
 
-      if (course.path.endPoint) {
-        if (needsScaling) {
-          endPoint.value = {
-            x: course.path.endPoint.x * scaleFactor,
-            y: course.path.endPoint.y * scaleFactor,
-            rotation: course.path.endPoint.rotation || 270,
+      endPoint.value = restoredPath.endPoint
+        ? {
+            x: restoredPath.endPoint.x,
+            y: restoredPath.endPoint.y,
+            rotation: restoredPath.endPoint.rotation || 270,
           }
-        } else {
-          endPoint.value = {
-            x: course.path.endPoint.x,
-            y: course.path.endPoint.y,
-            rotation: course.path.endPoint.rotation || 270,
-          }
-        }
-      }
+        : { x: 0, y: 0, rotation: 270 }
 
       console.log('路径数据导入完成:', {
         coursePath: coursePath.value,
@@ -2326,7 +1836,6 @@ export const useCourseStore = defineStore('course', () => {
       })
     } else {
       console.log('没有路径数据需要导入')
-      // 如果没有路径数据，重置路径状态
       coursePath.value = {
         visible: false,
         points: [],
@@ -2334,6 +1843,8 @@ export const useCourseStore = defineStore('course', () => {
       startPoint.value = { x: 0, y: 0, rotation: 270 }
       endPoint.value = { x: 0, y: 0, rotation: 270 }
     }
+
+    updateCourse()
   }
 
   /**
@@ -2511,3 +2022,4 @@ export const useCourseStore = defineStore('course', () => {
     importAIResult,
   }
 })
+
