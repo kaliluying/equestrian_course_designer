@@ -351,7 +351,7 @@ export const useCourseStore = defineStore('course', () => {
    * @description 根据当前场地中的障碍物自动生成一条合理的路线
    * 包括设置起点、终点位置和生成贝塞尔曲线控制点
    */
-  const generatePath = () => {
+  const generatePath = (resetStartEndPoints = false) => {
     // 获取当前课程中的障碍物列表
     const obstacles = currentCourse.value.obstacles
     // 如果没有障碍物，则不生成路径
@@ -383,30 +383,32 @@ export const useCourseStore = defineStore('course', () => {
     // 如果没有非装饰物类型的障碍物，则不生成路径
     if (nonDecorationObstacles.length === 0) return
 
-    // 只在第一次生成路径时设置起终点位置
-    if (!coursePath.value.points.length) {
+    // 仅在首次生成或显式要求重算时重置起终点
+    if (resetStartEndPoints || !coursePath.value.points.length) {
       // 获取第一个和最后一个非装饰物障碍物
       const firstObstacle = nonDecorationObstacles[0]
       const lastObstacle = nonDecorationObstacles[nonDecorationObstacles.length - 1]
 
       // 计算第一个障碍物的中心点
       const firstCenter = getObstacleCenter(firstObstacle)
+      const firstObstacleLength = getObstaclePathLength(firstObstacle)
 
       // 计算最后一个障碍物的中心点
       const lastCenter = getObstacleCenter(lastObstacle)
+      const lastObstacleLength = getObstaclePathLength(lastObstacle)
 
-      // 根据第一个障碍物设置起点，确保起点标记中心线与路径对齐
+      // 起点位于第一个障碍物进障侧 6 米
       const startAngle = (firstObstacle.rotation - 270) * (Math.PI / 180)
-      const startDistanceMeters = 1
+      const startDistanceMeters = firstObstacleLength / 2 + 6
       startPoint.value = {
         x: firstCenter.x - Math.cos(startAngle) * startDistanceMeters,
         y: firstCenter.y - Math.sin(startAngle) * startDistanceMeters,
         rotation: firstObstacle.rotation,
       }
 
-      // 根据最后一个障碍物设置终点，确保终点标记中心线与路径对齐
+      // 终点位于最后一个障碍物出障侧 6 米
       const endAngle = (lastObstacle.rotation - 270) * (Math.PI / 180)
-      const endDistanceMeters = 1
+      const endDistanceMeters = lastObstacleLength / 2 + 6
       endPoint.value = {
         x: lastCenter.x + Math.cos(endAngle) * endDistanceMeters,
         y: lastCenter.y + Math.sin(endAngle) * endDistanceMeters,
@@ -432,21 +434,7 @@ export const useCourseStore = defineStore('course', () => {
       const approachDistance = 1
       const departDistance = 1
       // 计算障碍物的总长度（包括横杆间距）
-      let totalLength = 0
-      if (obstacle.type === ObstacleType.DOUBLE && obstacle.poles.length > 1) {
-        totalLength =
-          obstacle.poles[0].height + (obstacle.poles[0].spacing || 0) + obstacle.poles[1].height
-      } else if (obstacle.type === ObstacleType.LIVERPOOL && obstacle.liverpoolProperties) {
-        totalLength = obstacle.liverpoolProperties.height
-      } else if (obstacle.type === ObstacleType.WALL && obstacle.wallProperties) {
-        totalLength = obstacle.wallProperties.height
-      } else if (obstacle.type === ObstacleType.COMBINATION) {
-        for (const pole of obstacle.poles) {
-          totalLength += pole.height + (pole.spacing || 0)
-        }
-      } else {
-        totalLength = obstacle.poles[0]?.height || 0
-      }
+      const totalLength = getObstaclePathLength(obstacle)
       // 添加障碍物前的连接点
       points.push({
         x: center.x - Math.cos(angle) * (approachDistance + totalLength / 2),
@@ -553,30 +541,10 @@ export const useCourseStore = defineStore('course', () => {
               y: current.y + Math.sin(angleToPrev) * (distToPrev / 3),
             }
           }
-          // controlPoint2: 指向直线起点，用很小距离确保直线过渡
-          if (next) {
-            const angleToNext = Math.atan2(next.y - current.y, next.x - current.x)
-            const segmentLength = Math.sqrt(
-              Math.pow(next.x - current.x, 2) + Math.pow(next.y - current.y, 2)
-            )
-            current.controlPoint2 = {
-              x: current.x + Math.cos(angleToNext) * Math.min(segmentLength * 0.05, 1),
-              y: current.y + Math.sin(angleToNext) * Math.min(segmentLength * 0.05, 1),
-            }
-          }
+          current.controlPoint2 = undefined
         } else {
           // pointIndexInObstacle === 4，障碍物后的连接点
-          // controlPoint1: 指向直线终点，用很小距离确保直线过渡
-          if (prev) {
-            const angleToPrev = Math.atan2(prev.y - current.y, prev.x - current.x)
-            const segmentLength = Math.sqrt(
-              Math.pow(prev.x - current.x, 2) + Math.pow(prev.y - current.y, 2)
-            )
-            current.controlPoint1 = {
-              x: current.x + Math.cos(angleToPrev) * Math.min(segmentLength * 0.05, 1),
-              y: current.y + Math.sin(angleToPrev) * Math.min(segmentLength * 0.05, 1),
-            }
-          }
+          current.controlPoint1 = undefined
           // controlPoint2: 去往下一个点的控制点
           if (next) {
             const angleToNext = Math.atan2(next.y - current.y, next.x - current.x)
@@ -1847,6 +1815,26 @@ export const useCourseStore = defineStore('course', () => {
     updateCourse()
   }
 
+  const getObstaclePathLength = (obstacle: Obstacle) => {
+    if (obstacle.type === ObstacleType.DOUBLE && obstacle.poles.length > 1) {
+      return obstacle.poles[0].height + (obstacle.poles[0].spacing || 0) + obstacle.poles[1].height
+    }
+
+    if (obstacle.type === ObstacleType.LIVERPOOL && obstacle.liverpoolProperties) {
+      return obstacle.liverpoolProperties.height
+    }
+
+    if (obstacle.type === ObstacleType.WALL && obstacle.wallProperties) {
+      return obstacle.wallProperties.height
+    }
+
+    if (obstacle.type === ObstacleType.COMBINATION) {
+      return obstacle.poles.reduce((sum, pole) => sum + pole.height + (pole.spacing || 0), 0)
+    }
+
+    return obstacle.poles[0]?.height || 0
+  }
+
   /**
    * 设置当前课程ID
    * @description 更新当前课程的唯一标识符
@@ -1905,7 +1893,14 @@ export const useCourseStore = defineStore('course', () => {
     }>
     path: {
       visible: boolean
-      points: Array<{ x: number; y: number }>
+      points: Array<{
+        x: number
+        y: number
+        controlPoint1?: { x: number; y: number }
+        controlPoint2?: { x: number; y: number }
+        isControlPoint1Moved?: boolean
+        isControlPoint2Moved?: boolean
+      }>
       startPoint?: { x: number; y: number; rotation: number }
       endPoint?: { x: number; y: number; rotation: number }
     }
@@ -1943,14 +1938,14 @@ export const useCourseStore = defineStore('course', () => {
       const requiredPoints = 1 + nonDecorationCount * 5
 
       if (aiResult.path.points && aiResult.path.points.length >= requiredPoints) {
-        // 路径点足够，使用 AI 返回的路径点，并确保有完整属性
+        // 仅保留 AI 实际返回的控制点，避免为直线路径凭空创建可拖拽手柄
         coursePath.value.points = aiResult.path.points.map((point) => ({
           x: point.x,
           y: point.y,
-          controlPoint1: point.controlPoint1 || { x: point.x, y: point.y },
-          controlPoint2: point.controlPoint2 || { x: point.x, y: point.y },
-          isControlPoint1Moved: point.isControlPoint1Moved || false,
-          isControlPoint2Moved: point.isControlPoint2Moved || false,
+          controlPoint1: point.controlPoint1,
+          controlPoint2: point.controlPoint2,
+          isControlPoint1Moved: point.isControlPoint1Moved ?? false,
+          isControlPoint2Moved: point.isControlPoint2Moved ?? false,
         }))
       } else {
         // 路径点不足，重新生成

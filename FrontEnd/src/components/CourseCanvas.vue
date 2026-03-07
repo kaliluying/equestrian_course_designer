@@ -276,12 +276,12 @@
         <!-- 渲染控制点 -->
         <template v-for="(point, pointIndex) in courseStore.coursePath.points" :key="`points-${pointIndex}`">
           <!-- 只在非直线部分显示控制点 -->
-          <circle v-if="point.controlPoint1 && showDistanceLabels" 
+          <circle v-if="showDistanceLabels && shouldRenderControlPoint(pointIndex, 1)"
             :cx="scalePoint(point.controlPoint1).x"
             :cy="scalePoint(point.controlPoint1).y"
             :r="draggingControlPoint?.pointIndex === pointIndex && draggingControlPoint?.controlPointNumber === 1 ? 8 : 6"
             class="control-point" @pointerdown.stop="startDraggingControlPoint(pointIndex, 1, $event)" />
-          <circle v-if="point.controlPoint2 && showDistanceLabels" 
+          <circle v-if="showDistanceLabels && shouldRenderControlPoint(pointIndex, 2)"
             :cx="scalePoint(point.controlPoint2).x"
             :cy="scalePoint(point.controlPoint2).y"
             :r="draggingControlPoint?.pointIndex === pointIndex && draggingControlPoint?.controlPointNumber === 2 ? 8 : 6"
@@ -2910,6 +2910,29 @@ const endStyle = computed(() => {
   }
 })
 
+const shouldRenderControlPoint = (pointIndex: number, controlPointNumber: 1 | 2) => {
+  const points = courseStore.coursePath.points
+  const currentPoint = points[pointIndex]
+
+  if (!currentPoint) {
+    return false
+  }
+
+  if (controlPointNumber === 1) {
+    const previousPoint = points[pointIndex - 1]
+    return Boolean(currentPoint.controlPoint1 && previousPoint?.controlPoint2)
+  }
+
+  const nextPoint = points[pointIndex + 1]
+  return Boolean(currentPoint.controlPoint2 && nextPoint?.controlPoint1)
+}
+
+const PATH_CONNECTION_BUFFER_METERS = 1
+
+const formatDisplayedDistance = (segmentLength: number, extraMeters = 0) => {
+  return (segmentLength + extraMeters).toFixed(1)
+}
+
 // 修改生成路线的方法
 const handleGenerateCoursePath = () => {
   if (courseStore.currentCourse.obstacles.length === 0) {
@@ -2943,7 +2966,7 @@ const handleGenerateCoursePath = () => {
   // 先清除现有路径
   courseStore.clearPath()
   // 生成新路径
-  courseStore.generatePath()
+  courseStore.generatePath(true)
   // 显示路径
   courseStore.togglePathVisibility(true)
 
@@ -3141,7 +3164,10 @@ const obstacleDistances = computed(() => {
 
     if (startPoint && firstObstacleEntry) {
       const segmentLength = calculatePathSegmentLength(startPoint, firstObstacleEntry)
-      const distanceInMeters = Number(segmentLength).toFixed(1)
+      const distanceInMeters = formatDisplayedDistance(
+        segmentLength,
+        PATH_CONNECTION_BUFFER_METERS,
+      )
 
       // 如果距离有效，则添加标签信息
       if (parseFloat(distanceInMeters) > 0) {
@@ -3176,7 +3202,10 @@ const obstacleDistances = computed(() => {
 
       if (exitPoint && nextEntryPoint) {
         const segmentLength = calculatePathSegmentLength(exitPoint, nextEntryPoint)
-        const distanceInMeters = Number(segmentLength).toFixed(1)
+        const distanceInMeters = formatDisplayedDistance(
+          segmentLength,
+          PATH_CONNECTION_BUFFER_METERS * 2,
+        )
 
         // 仅当距离大于0时才添加标签
         if (parseFloat(distanceInMeters) > 0) {
@@ -3217,7 +3246,10 @@ const obstacleDistances = computed(() => {
 
     if (lastObstacleExit && endPoint) {
       const segmentLength = calculatePathSegmentLength(lastObstacleExit, endPoint)
-      const distanceInMeters = Number(segmentLength).toFixed(1)
+      const distanceInMeters = formatDisplayedDistance(
+        segmentLength,
+        PATH_CONNECTION_BUFFER_METERS,
+      )
 
       // 如果距离有效，则添加标签信息
       if (parseFloat(distanceInMeters) > 0) {
