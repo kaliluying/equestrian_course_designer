@@ -10,6 +10,7 @@ declare module 'vue' {
     AIGenerateDialog: typeof import('./src/components/AIGenerateDialog.vue')['default']
     CollaborationPanel: typeof import('./src/components/CollaborationPanel.vue')['default']
     CourseCanvas: typeof import('./src/components/CourseCanvas.vue')['default']
+    CourseCanvasV2: typeof import('./src/components/CourseCanvasV2.vue')['default']
     CustomObstacleManager: typeof import('./src/components/CustomObstacleManager.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElAvatar: typeof import('element-plus/es')['ElAvatar']

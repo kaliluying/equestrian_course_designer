@@ -258,13 +258,16 @@ export class ExportManager {
     }
   ): Promise<ExportResult> {
     const exportId = this.generateExportId()
+    const sourceVersion =
+      (canvas.getAttribute('data-render-version') as 'v1' | 'v2' | null) || 'v1'
 
     // 使用预定义的默认PNG设置
     const defaultPNGOptions: PNGExportOptions = {
       scale: 2,
       backgroundColor: 'white',
       quality: 0.9,
-      includeWatermark: false
+      includeWatermark: false,
+      sourceVersion
     }
 
     const context: ExportContext = {
@@ -366,6 +369,14 @@ export class ExportManager {
     context: ExportContext,
     callbacks?: { onProgress?: ProgressCallback }
   ): Promise<ExportResult> {
+    const sourceVersion = this.getSourceVersion(context)
+    if (sourceVersion === 'v2') {
+      const svgElement = this.getV2SVGElement(context.canvas)
+      if (svgElement) {
+        return await this.exportV2SVGToPNG(svgElement, context.options as PNGExportOptions, context.startTime)
+      }
+    }
+
     const { pngExportEngine } = await import('./pngExportEngine')
 
     return await pngExportEngine.exportToPNG(
@@ -382,6 +393,14 @@ export class ExportManager {
     context: ExportContext,
     callbacks?: { onProgress?: ProgressCallback }
   ): Promise<ExportResult> {
+    const sourceVersion = this.getSourceVersion(context)
+    if (sourceVersion === 'v2') {
+      const svgElement = this.getV2SVGElement(context.canvas)
+      if (svgElement) {
+        return await this.exportV2SVGToPDF(svgElement, context.options as PDFExportOptions, context.startTime)
+      }
+    }
+
     const { pdfExportEngine } = await import('./pdfExportEngine')
 
     return await pdfExportEngine.exportToPDF(
@@ -413,6 +432,192 @@ export class ExportManager {
   private mergeWithDefaults(format: ExportFormat, options?: Partial<ExportOptions>): ExportOptions {
     const defaults = this.getDefaultOptions(format)
     return { ...defaults, ...options } as ExportOptions
+  }
+
+  private getSourceVersion(context: ExportContext): 'v1' | 'v2' {
+    const sourceVersion = (context.options as { sourceVersion?: 'v1' | 'v2' }).sourceVersion
+    return sourceVersion ?? 'v1'
+  }
+
+  private getV2SVGElement(canvas: HTMLElement): SVGSVGElement | null {
+    return canvas.querySelector('.canvas-svg') as SVGSVGElement | null
+  }
+
+  private serializeSVG(svgElement: SVGSVGElement): string {
+    const serializer = new XMLSerializer()
+    const content = serializer.serializeToString(svgElement)
+    if (content.includes('xmlns=')) {
+      return content
+    }
+    return content.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"')
+  }
+
+  private async svgToPNGBlob(
+    svgElement: SVGSVGElement,
+    scale: number,
+    backgroundColor: string,
+    quality: number
+  ): Promise<{ blob: Blob; width: number; height: number }> {
+    const svgText = this.serializeSVG(svgElement)
+    const svgBlob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' })
+    const svgUrl = URL.createObjectURL(svgBlob)
+
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image()
+        img.onload = () => resolve(img)
+        img.onerror = () => reject(new Error('SVG图像加载失败'))
+        img.src = svgUrl
+      })
+
+      const viewBox = svgElement.viewBox?.baseVal
+      const baseWidth = viewBox?.width || svgElement.clientWidth || 800
+      const baseHeight = viewBox?.height || svgElement.clientHeight || 600
+      const width = Math.max(1, Math.round(baseWidth * scale))
+      const height = Math.max(1, Math.round(baseHeight * scale))
+
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        throw new Error('无法创建离屏画布上下文')
+      }
+
+      if (backgroundColor !== 'transparent') {
+        ctx.fillStyle = backgroundColor
+        ctx.fillRect(0, 0, width, height)
+      }
+
+      ctx.drawImage(image, 0, 0, width, height)
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((result) => {
+          if (!result) {
+            reject(new Error('PNG编码失败'))
+            return
+          }
+          resolve(result)
+        }, 'image/png', quality)
+      })
+
+      return { blob, width, height }
+    } finally {
+      URL.revokeObjectURL(svgUrl)
+    }
+  }
+
+  private async exportV2SVGToPNG(
+    svgElement: SVGSVGElement,
+    options: PNGExportOptions,
+    startTime: number
+  ): Promise<ExportResult> {
+    const scale = options.scale || 2
+    const backgroundColor = options.backgroundColor || 'white'
+    const quality = options.quality ?? 0.92
+    const { blob, width, height } = await this.svgToPNGBlob(svgElement, scale, backgroundColor, quality)
+
+    return this.createV2ExportResult(
+      ExportFormat.PNG,
+      blob,
+      width,
+      height,
+      startTime,
+      'svg-native'
+    )
+  }
+
+  private async exportV2SVGToPDF(
+    svgElement: SVGSVGElement,
+    options: PDFExportOptions,
+    startTime: number
+  ): Promise<ExportResult> {
+    const { jsPDF } = await import('jspdf')
+    const scale = 2
+    const { blob: pngBlob, width, height } = await this.svgToPNGBlob(
+      svgElement,
+      scale,
+      'white',
+      options.quality ?? 0.95
+    )
+
+    const imageDataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = () => reject(new Error('读取PNG数据失败'))
+      reader.readAsDataURL(pngBlob)
+    })
+
+    const orientation = options.orientation === 'portrait' ? 'p' : 'l'
+    const pdf = new jsPDF({
+      orientation,
+      unit: 'pt',
+      format: options.paperSize || 'a4'
+    })
+
+    const pageWidth = pdf.internal.pageSize.getWidth()
+    const pageHeight = pdf.internal.pageSize.getHeight()
+    const margins = options.margins || { top: 20, right: 20, bottom: 20, left: 20 }
+    const maxWidth = pageWidth - margins.left - margins.right
+    const maxHeight = pageHeight - margins.top - margins.bottom
+    const fitScale = Math.min(maxWidth / width, maxHeight / height)
+    const drawWidth = width * fitScale
+    const drawHeight = height * fitScale
+    const drawX = (pageWidth - drawWidth) / 2
+    const drawY = (pageHeight - drawHeight) / 2
+
+    pdf.addImage(imageDataUrl, 'PNG', drawX, drawY, drawWidth, drawHeight, undefined, 'FAST')
+    const pdfBlob = pdf.output('blob')
+
+    return this.createV2ExportResult(
+      ExportFormat.PDF,
+      pdfBlob,
+      width,
+      height,
+      startTime,
+      'svg-native'
+    )
+  }
+
+  private createV2ExportResult(
+    format: ExportFormat,
+    data: Blob,
+    width: number,
+    height: number,
+    startTime: number,
+    renderingMethod: 'svg-native'
+  ): ExportResult {
+    return {
+      success: true,
+      format,
+      data,
+      metadata: {
+        fileName: '',
+        fileSize: data.size,
+        dimensions: { width, height },
+        exportTime: Date.now() - startTime,
+        renderingMethod,
+        qualityScore: 1,
+        timestamp: new Date().toISOString(),
+        format
+      },
+      qualityReport: {
+        overallScore: 1,
+        pathCompleteness: 1,
+        renderingAccuracy: 1,
+        performanceMetrics: {
+          renderingTime: Date.now() - startTime,
+          memoryUsage: 0,
+          canvasSize: { width, height },
+          elementCount: 0,
+          svgElementCount: 1
+        },
+        recommendations: [],
+        detailedIssues: []
+      },
+      warnings: [],
+      errors: []
+    }
   }
 
   /**

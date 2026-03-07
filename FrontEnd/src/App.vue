@@ -86,7 +86,7 @@
       <template v-if="$route.path === '/'">
         <ToolBar class="toolbar" :style="{ width: `${leftPanelWidth}px` }" @show-login="showLoginDialog" />
         <ResizableDivider direction="vertical" @resize="handleLeftPanelResize" />
-        <CourseCanvas class="canvas" ref="canvasRef" />
+        <component :is="activeCanvasComponent" class="canvas" ref="canvasRef" />
         <ResizableDivider direction="vertical" @resize="handleRightPanelResize" />
         <PropertiesPanel class="properties-panel" :style="{ width: `${rightPanelWidth}px` }" />
       </template>
@@ -210,6 +210,7 @@ import { useWebSocketStore } from '@/stores/websocket'
 import type { CollaborationSession } from '@/stores/websocket'
 import CollaborationPanel from '@/components/CollaborationPanel.vue'
 import CourseCanvas from '@/components/CourseCanvas.vue'
+import CourseCanvasV2 from '@/components/CourseCanvasV2.vue'
 import LoginForm from '@/components/LoginForm.vue'
 import OnboardingTour from '@/components/OnboardingTour.vue'
 import PropertiesPanel from '@/components/PropertiesPanel.vue'
@@ -227,7 +228,16 @@ const registerDialogVisible = ref(false)
 // 协作状态
 const isCollaborating = ref(false)
 const collaborationSession = ref<CollaborationSession | null>(null)
-const canvasRef = ref<InstanceType<typeof CourseCanvas> | null>(null)
+interface CanvasComponentExposed {
+  startCollaboration: (viaLink?: boolean) => Promise<boolean> | boolean
+  stopCollaboration: () => Promise<boolean> | boolean
+  isCreator?: () => boolean
+  sendFullCanvasState?: (targetUserId?: string) => void
+}
+const canvasRef = ref<CanvasComponentExposed | null>(null)
+const activeCanvasComponent = computed(() =>
+  courseStore.currentCourse.renderVersion === 'v2' ? CourseCanvasV2 : CourseCanvas
+)
 let isTogglingCollaboration = false
 
 // 自动保存相关变量

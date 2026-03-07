@@ -38,6 +38,7 @@ export interface BaseExportOptions {
   includeBackground?: boolean
   quality?: number // 0.1-1.0
   timeout?: number // milliseconds
+  sourceVersion?: 'v1' | 'v2'
 }
 
 // Format-Specific Export Options

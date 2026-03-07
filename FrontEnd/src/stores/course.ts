@@ -22,11 +22,16 @@ export const useCourseStore = defineStore('course', () => {
   const currentCourse = ref<CourseDesign>({
     id: uuidv4(), // 生成唯一ID
     name: '马术路线设计', // 默认课程名称
+    renderVersion: 'v2', // 新建设计默认使用SVG V2渲染
     obstacles: [], // 障碍物列表
     createdAt: new Date().toISOString(), // 创建时间
     updatedAt: new Date().toISOString(), // 更新时间
     fieldWidth: 90, // 场地宽度（米）
     fieldHeight: 60, // 场地高度（米）
+    field: {
+      widthMeters: 90,
+      heightMeters: 60
+    }
   })
 
   /**
@@ -50,6 +55,9 @@ export const useCourseStore = defineStore('course', () => {
    */
   const startPoint = ref({ x: 0, y: 0, rotation: 270 }) // 起点状态
   const endPoint = ref({ x: 0, y: 0, rotation: 270 }) // 终点状态
+
+  // 只读渲染版本标记：v2 使用 SVG 世界坐标渲染
+  const isV2Design = computed(() => currentCourse.value.renderVersion === 'v2')
 
   /**
    * 初始化存储
@@ -578,6 +586,37 @@ export const useCourseStore = defineStore('course', () => {
     const scaleByHeight = rect.height / currentCourse.value.fieldHeight
     return Math.min(scaleByWidth, scaleByHeight)
   })
+
+  /**
+   * 获取世界坐标与屏幕坐标转换信息
+   * @description 为V2渲染提供统一坐标转换能力，避免与设备视口耦合
+   */
+  const getWorldTransform = (rect?: DOMRect | null) => {
+    const fieldWidth = currentCourse.value.fieldWidth
+    const fieldHeight = currentCourse.value.fieldHeight
+
+    if (!rect || rect.width <= 0 || rect.height <= 0) {
+      return {
+        scale: 1,
+        offsetX: 0,
+        offsetY: 0,
+        fieldWidth,
+        fieldHeight
+      }
+    }
+
+    const scale = Math.min(rect.width / fieldWidth, rect.height / fieldHeight)
+    const offsetX = (rect.width - fieldWidth * scale) / 2
+    const offsetY = (rect.height - fieldHeight * scale) / 2
+
+    return {
+      scale,
+      offsetX,
+      offsetY,
+      fieldWidth,
+      fieldHeight
+    }
+  }
 
   /**
    * 计算障碍物的中心点坐标
@@ -1290,6 +1329,17 @@ export const useCourseStore = defineStore('course', () => {
    * @description 更新最后修改时间并触发自动保存，同时同步路径数据到currentCourse
    */
   function updateCourse() {
+    if (!currentCourse.value.renderVersion) {
+      currentCourse.value.renderVersion = 'v1'
+    }
+
+    if (currentCourse.value.renderVersion === 'v2') {
+      currentCourse.value.field = {
+        widthMeters: currentCourse.value.fieldWidth,
+        heightMeters: currentCourse.value.fieldHeight
+      }
+    }
+
     // 获取当前画布元素和视口信息
     const canvasElement = document.querySelector('.course-canvas')
     const viewportInfo = {
@@ -1428,6 +1478,13 @@ export const useCourseStore = defineStore('course', () => {
 
         currentCourse.value = {
           ...parsedData,
+          renderVersion: parsedData.renderVersion ?? 'v1',
+          field: parsedData.renderVersion === 'v2'
+            ? {
+                widthMeters: parsedData.fieldWidth || 80,
+                heightMeters: parsedData.fieldHeight || 60
+              }
+            : undefined,
           obstacles: restoredObstacles,
           viewportInfo: currentViewport,
           updatedAt: new Date().toISOString(),
@@ -1593,11 +1650,18 @@ export const useCourseStore = defineStore('course', () => {
       currentCourse.value = {
         id: courseData.id,
         name: courseData.name,
+        renderVersion: courseData.renderVersion ?? 'v1',
         obstacles: restoredObstacles,
         createdAt: courseData.createdAt,
         updatedAt: courseData.updatedAt,
         fieldWidth: courseData.fieldWidth,
         fieldHeight: courseData.fieldHeight,
+        field: courseData.renderVersion === 'v2'
+          ? {
+              widthMeters: courseData.fieldWidth,
+              heightMeters: courseData.fieldHeight
+            }
+          : undefined,
         viewportInfo: currentViewport,
       }
 
@@ -1703,11 +1767,18 @@ export const useCourseStore = defineStore('course', () => {
     const exportData: CourseDesign = {
       id: currentCourse.value.id,
       name: currentCourse.value.name,
+      renderVersion: currentCourse.value.renderVersion ?? 'v1',
       obstacles: [...currentCourse.value.obstacles],
       createdAt: currentCourse.value.createdAt,
       updatedAt: new Date().toISOString(),
       fieldWidth: currentCourse.value.fieldWidth,
       fieldHeight: currentCourse.value.fieldHeight,
+      field: currentCourse.value.renderVersion === 'v2'
+        ? {
+            widthMeters: currentCourse.value.fieldWidth,
+            heightMeters: currentCourse.value.fieldHeight
+          }
+        : undefined,
       // 添加屏幕和画布信息用于自适应
       viewportInfo: {
         width: viewportWidth,
@@ -1764,6 +1835,13 @@ export const useCourseStore = defineStore('course', () => {
 
     currentCourse.value = {
       ...course,
+      renderVersion: course.renderVersion ?? 'v1',
+      field: course.renderVersion === 'v2'
+        ? {
+            widthMeters: course.fieldWidth,
+            heightMeters: course.fieldHeight
+          }
+        : undefined,
       obstacles: JSON.parse(JSON.stringify(course.obstacles)) as Obstacle[],
       id: currentId,
       updatedAt: new Date().toISOString(),
@@ -1855,11 +1933,16 @@ export const useCourseStore = defineStore('course', () => {
     currentCourse.value = {
       id: uuidv4(),
       name: '马术路线设计',
+      renderVersion: 'v2',
       obstacles: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       fieldWidth: 80,
       fieldHeight: 60,
+      field: {
+        widthMeters: 80,
+        heightMeters: 60
+      },
     }
 
     // 清除选中的障碍物
@@ -1982,6 +2065,7 @@ export const useCourseStore = defineStore('course', () => {
 
   return {
     currentCourse,
+    isV2Design,
     selectedObstacle,
     coursePath,
     startPoint,
@@ -1998,6 +2082,7 @@ export const useCourseStore = defineStore('course', () => {
     addObstacle,
     addObstacleWithId,
     updateObstacle,
+    getWorldTransform,
     removeObstacle,
     getCompleteDesign,
     updateCourse,

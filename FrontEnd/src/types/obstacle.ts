@@ -120,11 +120,16 @@ export interface Obstacle {
 export interface CourseDesign {
   id: string
   name: string
+  renderVersion?: 'v1' | 'v2'
   obstacles: Obstacle[]
   createdAt: string
   updatedAt: string
   fieldWidth: number // 场地宽度（米）
   fieldHeight: number // 场地高度（米）
+  field?: {
+    widthMeters: number
+    heightMeters: number
+  }
   path?: CoursePathData
   viewportInfo?: {
     width: number // 导出时的视口宽度

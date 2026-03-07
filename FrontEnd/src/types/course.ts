@@ -10,11 +10,16 @@ export interface ViewportInfo {
 export interface CourseDesign {
   id: string
   name: string
+  renderVersion?: 'v1' | 'v2'
   obstacles: Obstacle[]
   createdAt: string
   updatedAt: string
   fieldWidth: number
   fieldHeight: number
+  field?: {
+    widthMeters: number
+    heightMeters: number
+  }
   path?: {
     visible: boolean
     points: PathPoint[]

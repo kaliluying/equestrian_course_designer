@@ -740,12 +740,18 @@ const executeDirectJSONExport = async () => {
     const date = new Date()
     const formattedDateTime = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`
     const fileName = `${courseStore.currentCourse.name}-${formattedDateTime}`
+    const sourceVersion = courseStore.currentCourse.renderVersion ?? 'v1'
 
     // 执行JSON导出（使用默认配置常量）
     const result = await exportManager.exportCanvas(
       canvas,
       ExportFormat.JSON,
-      { ...DEFAULT_JSON_OPTIONS, fileName },
+      {
+        ...DEFAULT_JSON_OPTIONS,
+        fileName,
+        sourceVersion,
+        includeViewportInfo: sourceVersion === 'v1'
+      },
       {
         onProgress: (state: ProgressState) => {
           console.log('JSON导出进度:', state.message, `${state.progress}%`)
@@ -925,6 +931,7 @@ const executePDFExport = async () => {
     const exportOptionsWithFileName = {
       ...options,
       fileName,
+      sourceVersion: courseStore.currentCourse.renderVersion ?? 'v1',
       // 添加用户和协作信息到元数据
       metadata: {
         userId: userStore.currentUser?.id,

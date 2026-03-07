@@ -1677,6 +1677,13 @@ export const useWebSocketStore = defineStore('websocket', () => {
   }
 
   /**
+   * 发送同步响应
+   */
+  const sendSyncResponse = (payload: Record<string, unknown>) => {
+    return sendMessage(MessageType.SYNC_RESPONSE, payload)
+  }
+
+  /**
    * 处理同步请求消息
    * 当收到其他用户的同步请求时，发送当前画布状态
    */
@@ -1883,6 +1890,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     sendPathUpdate,
     sendChatMessage,
     sendSyncRequest,
+    sendSyncResponse,
     checkConnection,
     reconnect,
   }

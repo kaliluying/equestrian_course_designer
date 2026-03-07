@@ -263,11 +263,18 @@ const openDesign = async (design: DesignResponse) => {
       const courseData = {
         id: designData.id || design.id.toString() || uuidv4(),
         name: designData.name || design.title || '未命名设计',
+        renderVersion: designData.renderVersion || 'v1',
         obstacles: Array.isArray(designData.obstacles) ? designData.obstacles : [],
         createdAt: designData.createdAt || design.create_time || new Date().toISOString(),
         updatedAt: designData.updatedAt || design.update_time || new Date().toISOString(),
         fieldWidth: designData.fieldWidth || 80,
         fieldHeight: designData.fieldHeight || 60,
+        field: designData.renderVersion === 'v2'
+          ? {
+              widthMeters: designData.fieldWidth || 80,
+              heightMeters: designData.fieldHeight || 60
+            }
+          : undefined,
         viewportInfo // 添加视口信息用于屏幕适配
       }
 
