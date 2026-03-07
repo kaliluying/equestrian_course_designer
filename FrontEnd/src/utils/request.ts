@@ -1,6 +1,7 @@
 import axios from 'axios'
 import type { AxiosRequestConfig, AxiosError } from 'axios'
 import { ElMessage } from 'element-plus'
+import { logout as logoutApi } from '@/api/user'
 import { useUserStore } from '@/stores/user'
 import apiConfig from '@/config/api'
 import router from '@/router'
@@ -82,32 +83,34 @@ axiosInstance.interceptors.response.use(
       error.response?.data,
     )
 
-    if (error.response?.status === 401) {
-      // Security fix: JWT tokens are now in httpOnly cookies
-      // Debug: log cookie info
-      console.log('[request.ts] 401 错误，检测 cookie 状态')
-      console.log('[request.ts] document.cookie:', document.cookie)
+    const originalRequest = error.config as (AxiosRequestConfig & { _retry?: boolean }) | undefined
+    const isRefreshRequest = originalRequest?.url?.includes(apiConfig.endpoints.user.refreshToken) ?? false
 
-      // Refresh uses cookie automatically (withCredentials: true)
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry && !isRefreshRequest) {
+      originalRequest._retry = true
+
       try {
-        console.log('[request.ts] 尝试刷新 token...')
-        // 使用 axiosInstance 而不是 axios，确保配置一致
-        await axiosInstance.post(
+        await axios.post(
           apiConfig.endpoints.user.refreshToken,
           {},
-          { withCredentials: true },
+          {
+            baseURL: apiConfig.apiBaseUrl,
+            withCredentials: true,
+          },
         )
-        console.log('[request.ts] Token 刷新成功')
 
-        // 重试原始请求
-        if (error.config) {
-          return axiosInstance(error.config)
-        }
+        return axiosInstance(originalRequest)
       } catch (refreshError) {
         console.error('request.ts: 刷新token失败:', refreshError)
-        // Refresh token 也过期了，需要重新登录
         const userStore = useUserStore()
-        userStore.logout(router)
+
+        try {
+          await logoutApi()
+        } catch (logoutError) {
+          console.error('request.ts: 调用登出接口失败:', logoutError)
+        }
+
+        await userStore.logout(router, false)
       }
     }
 

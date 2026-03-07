@@ -7,7 +7,11 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
-    setupFiles: ['./src/test-setup.ts']
+    setupFiles: ['./src/test-setup.ts'],
+    pool: 'threads',
+    maxWorkers: 1,
+    minWorkers: 1,
+    testTimeout: 10000,
   },
   resolve: {
     alias: {

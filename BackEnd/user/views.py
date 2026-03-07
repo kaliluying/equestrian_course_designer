@@ -332,6 +332,22 @@ class CookieTokenRefreshView(APIView):
             )
 
 
+@method_decorator(csrf_exempt, name="dispatch")
+class LogoutView(APIView):
+    """
+    用户登出视图
+    清除服务端设置的 httpOnly token cookies。
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        response = success_response("登出成功")
+        response.delete_cookie("access_token", path="/")
+        response.delete_cookie("refresh_token", path="/")
+        return response
+
+
 class ForgotPasswordView(APIView):
     """
     忘记密码视图
@@ -723,14 +739,14 @@ class UserViewSet(viewsets.ModelViewSet):
 
             # 如果是会员，设置到期时间
             if is_premium:
-                if profile.premium_expiry and profile.premium_expiry > timezone.now():
+                if profile.premium_expire_date and profile.premium_expire_date > timezone.now():
                     # 如果当前会员未过期，则在当前到期时间基础上增加时间
-                    profile.premium_expiry = profile.premium_expiry + timedelta(
+                    profile.premium_expire_date = profile.premium_expire_date + timedelta(
                         days=duration_days
                     )
                 else:
                     # 如果当前不是会员或已过期，则从现在开始计算
-                    profile.premium_expiry = timezone.now() + timedelta(
+                    profile.premium_expire_date = timezone.now() + timedelta(
                         days=duration_days
                     )
 
@@ -740,7 +756,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 f"用户 {user.username} 的会员状态已更新",
                 {
                     "is_premium": profile.is_premium,
-                    "premium_expiry": profile.premium_expiry,
+                    "premium_expire_date": profile.premium_expire_date,
                     "membership_plan": membership_plan.name
                     if membership_plan
                     else None,

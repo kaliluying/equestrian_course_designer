@@ -10,13 +10,11 @@ import { useCourseStore } from '@/stores/course'
 import { useUserStore } from '@/stores/user'
 import { useWebSocketStore } from '@/stores/websocket'
 
-// Mock the stores
 vi.mock('@/stores/course')
 vi.mock('@/stores/user')
 vi.mock('@/stores/websocket')
 vi.mock('@/stores/obstacle')
 
-// Mock Element Plus components
 vi.mock('element-plus', () => ({
   ElIcon: { name: 'ElIcon', template: '<div><slot /></div>' },
   ElButton: { name: 'ElButton', template: '<button><slot /></button>' },
@@ -35,7 +33,6 @@ describe('CourseCanvas Export Integration', () => {
   let mockWebSocketStore: any
 
   beforeEach(() => {
-    // Setup mock stores
     mockCourseStore = {
       currentCourse: {
         id: 1,
@@ -74,7 +71,6 @@ describe('CourseCanvas Export Integration', () => {
       disconnect: vi.fn()
     }
 
-    // Mock store functions
     vi.mocked(useCourseStore).mockReturnValue(mockCourseStore)
     vi.mocked(useUserStore).mockReturnValue(mockUserStore)
     vi.mocked(useWebSocketStore).mockReturnValue(mockWebSocketStore)
@@ -122,26 +118,19 @@ describe('CourseCanvas Export Integration', () => {
     expect(typeof preparation.restore).toBe('function')
   })
 
-  it('should trigger export events', () => {
+  it('should trigger export events on mounted canvas element', () => {
     expect(typeof wrapper.vm.triggerExportEvent).toBe('function')
 
-    // Mock addEventListener
-    const mockAddEventListener = vi.fn()
-    const mockCanvas = {
-      dispatchEvent: vi.fn(),
-      addEventListener: mockAddEventListener
-    }
-
-    wrapper.vm.canvasContainerRef = mockCanvas
+    const canvasElement = wrapper.vm.getCanvasElement()
+    const dispatchEventSpy = vi.spyOn(canvasElement, 'dispatchEvent')
 
     wrapper.vm.triggerExportEvent('test-event', { test: 'data' })
-    expect(mockCanvas.dispatchEvent).toHaveBeenCalled()
+    expect(dispatchEventSpy).toHaveBeenCalled()
   })
 
   it('should maintain canvas state during export operations', () => {
     const canvasInfo = wrapper.vm.getCanvasInfo()
 
-    // Verify that canvas info includes all necessary data for export
     expect(canvasInfo.obstacles).toEqual(mockCourseStore.currentCourse.obstacles)
     expect(canvasInfo.pathData.visible).toBe(mockCourseStore.coursePath.visible)
     expect(canvasInfo.fieldDimensions.width).toBe(mockCourseStore.currentCourse.fieldWidth)
@@ -149,15 +138,7 @@ describe('CourseCanvas Export Integration', () => {
   })
 
   it('should handle collaboration events during export', () => {
-    // Test that canvas can handle collaboration-related export events
-    const mockEvent = new CustomEvent('canvas-export-started', {
-      detail: { format: 'png', userId: 1 }
-    })
-
-    // Simulate event handling
     wrapper.vm.triggerExportEvent('started', { format: 'png', userId: 1 })
-
-    // Verify the event was triggered correctly
     expect(wrapper.vm.getCanvasInfo()).toBeTruthy()
   })
 })

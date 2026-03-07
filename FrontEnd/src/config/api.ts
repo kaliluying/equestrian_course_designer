@@ -125,6 +125,7 @@ export default {
       profile: getApiUrl('/user/users/my_profile/'),
       csrf: getApiUrl('/user/csrf/'),
       refreshToken: getApiUrl('/user/token/refresh/'),
+      logout: getApiUrl('/user/logout/'),
       forgotPassword: getApiUrl('/user/forgot-password/'),
       resetPassword: getApiUrl('/user/reset-password/'),
       changePassword: getApiUrl('/user/users/change_password/'),

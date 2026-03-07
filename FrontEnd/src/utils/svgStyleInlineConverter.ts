@@ -268,9 +268,7 @@ export class SVGStyleInlineConverter {
 
     // 处理SVG内部元素
     for (const element of svgElements) {
-      if (element instanceof SVGElement) {
-        results.push(this.convertElementStyles(element))
-      }
+      results.push(this.convertElementStyles(element as SVGElement))
     }
 
     return results

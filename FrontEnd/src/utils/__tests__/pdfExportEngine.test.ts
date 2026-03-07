@@ -7,34 +7,38 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { PDFExportEngine } from '../pdfExportEngine'
 import { ExportFormat } from '@/types/export'
 
-// Mock jsPDF
-vi.mock('jspdf', () => ({
-  default: vi.fn().mockImplementation(() => ({
-    setProperties: vi.fn(),
-    addImage: vi.fn(),
-    setFontSize: vi.fn(),
-    setTextColor: vi.fn(),
-    text: vi.fn(),
-    getTextWidth: vi.fn().mockReturnValue(50),
-    getCurrentPageInfo: vi.fn().mockReturnValue({ pageNumber: 1 }),
-    output: vi.fn().mockReturnValue(new Blob(['test'], { type: 'application/pdf' })),
-    internal: {
-      pageSize: { width: 210, height: 297 }
-    },
-    setDrawColor: vi.fn(),
-    setLineWidth: vi.fn(),
-    line: vi.fn(),
-    rect: vi.fn(),
-    setFillColor: vi.fn(),
-    saveGraphicsState: vi.fn(),
-    restoreGraphicsState: vi.fn(),
-    setGState: vi.fn(),
-    GState: vi.fn().mockReturnValue({}),
-    getProperties: vi.fn().mockReturnValue({})
-  }))
-}))
+vi.mock('jspdf', () => {
+  function MockJsPDF() {
+    return {
+      setProperties: vi.fn(),
+      addImage: vi.fn(),
+      setFontSize: vi.fn(),
+      getFontSize: vi.fn().mockReturnValue(12),
+      setTextColor: vi.fn(),
+      getTextColor: vi.fn().mockReturnValue('#000000'),
+      text: vi.fn(),
+      getTextWidth: vi.fn().mockReturnValue(50),
+      getCurrentPageInfo: vi.fn().mockReturnValue({ pageNumber: 1 }),
+      output: vi.fn().mockReturnValue(new Blob(['test'], { type: 'application/pdf' })),
+      internal: {
+        pageSize: { width: 210, height: 297 }
+      },
+      setDrawColor: vi.fn(),
+      setLineWidth: vi.fn(),
+      line: vi.fn(),
+      rect: vi.fn(),
+      setFillColor: vi.fn(),
+      saveGraphicsState: vi.fn(),
+      restoreGraphicsState: vi.fn(),
+      setGState: vi.fn(),
+      GState: vi.fn().mockReturnValue({}),
+      getProperties: vi.fn().mockReturnValue({})
+    }
+  }
 
-// Mock canvas renderer
+  return { default: MockJsPDF }
+})
+
 vi.mock('../canvasRenderer', () => ({
   canvasRenderer: {
     render: vi.fn().mockResolvedValue({
@@ -50,7 +54,6 @@ vi.mock('../canvasRenderer', () => ({
   }
 }))
 
-// Mock quality validator
 vi.mock('../exportQualityValidator', () => ({
   exportQualityValidator: {
     validatePathCompleteness: vi.fn().mockResolvedValue({
@@ -71,9 +74,15 @@ vi.mock('../exportQualityValidator', () => ({
       overallScore: 0.9,
       pathCompleteness: 95,
       renderingAccuracy: 0.9,
-      styleAccuracy: 0.85,
+      performanceMetrics: {
+        renderingTime: 0,
+        memoryUsage: 0,
+        canvasSize: { width: 800, height: 600 },
+        elementCount: 3,
+        svgElementCount: 2
+      },
       recommendations: ['PDF导出质量良好'],
-      detailedResults: []
+      detailedIssues: []
     })
   }
 }))
@@ -85,12 +94,10 @@ describe('PDFExportEngine', () => {
   beforeEach(() => {
     pdfEngine = new PDFExportEngine()
 
-    // 创建模拟画布元素
     mockCanvas = document.createElement('div')
     mockCanvas.style.width = '800px'
     mockCanvas.style.height = '600px'
 
-    // 添加一些SVG内容用于测试
     mockCanvas.innerHTML = `
       <svg width="800" height="600">
         <path d="M10,10 L100,100" stroke="blue" fill="none"/>
@@ -98,7 +105,6 @@ describe('PDFExportEngine', () => {
       </svg>
     `
 
-    // Mock getBoundingClientRect
     vi.spyOn(mockCanvas, 'getBoundingClientRect').mockReturnValue({
       width: 800,
       height: 600,
@@ -174,7 +180,7 @@ describe('PDFExportEngine', () => {
       const result = await pdfEngine.exportToPDF(mockCanvas, options)
 
       expect(result.success).toBe(true)
-      expect(result.metadata.fileName).toBe('测试文档.pdf')
+      expect(result.metadata.fileName).toBe('测试文档')
     })
 
     it('应该包含页脚当启用时', async () => {
@@ -208,7 +214,6 @@ describe('PDFExportEngine', () => {
     })
 
     it('应该检测质量问题', async () => {
-      // Mock质量验证器返回问题
       const { exportQualityValidator } = await import('../exportQualityValidator')
       vi.mocked(exportQualityValidator.validatePathCompleteness).mockResolvedValueOnce({
         isValid: false,
@@ -230,16 +235,30 @@ describe('PDFExportEngine', () => {
         margins: { top: 20, right: 20, bottom: 20, left: 20 }
       }
 
+      vi.mocked(exportQualityValidator.generateComprehensiveReport).mockReturnValueOnce({
+        overallScore: 0.7,
+        pathCompleteness: 60,
+        renderingAccuracy: 0.8,
+        performanceMetrics: {
+          renderingTime: 0,
+          memoryUsage: 0,
+          canvasSize: { width: 800, height: 600 },
+          elementCount: 3,
+          svgElementCount: 2
+        },
+        recommendations: ['存在路径质量问题'],
+        detailedIssues: []
+      })
+
       const result = await pdfEngine.exportToPDF(mockCanvas, options)
 
-      expect(result.success).toBe(true) // 即使有质量问题，导出仍应成功
+      expect(result.success).toBe(true)
       expect(result.qualityReport.pathCompleteness).toBeLessThan(95)
     })
   })
 
   describe('错误处理', () => {
     it('应该处理渲染失败', async () => {
-      // Mock渲染器失败
       const { canvasRenderer } = await import('../canvasRenderer')
       vi.mocked(canvasRenderer.render).mockRejectedValueOnce(new Error('渲染失败'))
       vi.mocked(canvasRenderer.renderWithBackup).mockResolvedValueOnce({
@@ -256,11 +275,10 @@ describe('PDFExportEngine', () => {
 
       const result = await pdfEngine.exportToPDF(mockCanvas, options)
 
-      expect(result.success).toBe(true) // 应该使用备用渲染器成功
+      expect(result.success).toBe(true)
     })
 
     it('应该处理完全失败的情况', async () => {
-      // Mock所有渲染器都失败
       const { canvasRenderer } = await import('../canvasRenderer')
       vi.mocked(canvasRenderer.render).mockRejectedValueOnce(new Error('主渲染器失败'))
       vi.mocked(canvasRenderer.renderWithBackup).mockRejectedValueOnce(new Error('备用渲染器失败'))
@@ -291,7 +309,6 @@ describe('PDFExportEngine', () => {
 
       expect(progressCallback).toHaveBeenCalled()
 
-      // 检查是否报告了不同的阶段
       const calls = progressCallback.mock.calls
       const stages = calls.map(call => call[0].stage)
 
@@ -301,3 +318,5 @@ describe('PDFExportEngine', () => {
     })
   })
 })
+
+

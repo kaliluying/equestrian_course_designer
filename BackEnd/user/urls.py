@@ -15,6 +15,7 @@ from .views import (
     get_order_status,
     alipay_notify,
     PaymentSuccessView,
+    LogoutView,
 )
 from .share_link_view import ShareLinkView
 from .views import CookieTokenRefreshView
@@ -32,6 +33,7 @@ urlpatterns = [
     # 用户注册和登录
     path("register/", RegisterView.as_view(), name="register"),
     path("login/", LoginView.as_view(), name="login"),
+    path("logout/", LogoutView.as_view(), name="logout"),
     # 忘记密码和重置密码
     path("forgot-password/", ForgotPasswordView.as_view(), name="forgot_password"),
     path("reset-password/", ResetPasswordView.as_view(), name="reset_password"),

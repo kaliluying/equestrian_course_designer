@@ -76,8 +76,13 @@ export const login = async (data: { username: string; password: string }) => {
 }
 
 // 刷新token
-export const refreshToken = (data: { refresh: string }) => {
-  return request.post(apiConfig.endpoints.user.refreshToken, data)
+export const refreshToken = () => {
+  return request.post(apiConfig.endpoints.user.refreshToken, {})
+}
+
+// 用户登出
+export const logout = () => {
+  return request.post(apiConfig.endpoints.user.logout, {})
 }
 
 // 忘记密码

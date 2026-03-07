@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { LoginForm, RegisterForm } from '@/types/user'
-import { login, register } from '@/api/user'
+import { login, logout as logoutApi, register } from '@/api/user'
 import type { Router } from 'vue-router'
 
 // 定义用户类型
@@ -95,26 +95,26 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  const logout = (router?: Router) => {
-    // Tokens are in httpOnly cookies, so we just clear user data from localStorage
-    localStorage.removeItem('user')
+  const logout = async (router?: Router, callApi = true) => {
+    if (callApi) {
+      try {
+        await logoutApi()
+      } catch (error) {
+        console.error('用户状态管理: 登出接口调用失败:', error)
+      }
+    }
 
-    // Clear the refresh token cookie (access_token cookie will expire naturally)
-    document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;'
+    localStorage.removeItem('user')
 
     currentUser.value = null
     isAuthenticated.value = false
 
-    // 用户登出后清空障碍物存储
-    // 动态导入避免循环依赖
-    import('@/stores/obstacle').then(({ useObstacleStore }) => {
-      const obstacleStore = useObstacleStore()
-      obstacleStore.initObstacles() // 这将清空障碍物存储，因为用户已登出
-    })
+    const { useObstacleStore } = await import('@/stores/obstacle')
+    const obstacleStore = useObstacleStore()
+    obstacleStore.initObstacles()
 
-    // 如果提供了router实例，则重定向到首页
     if (router) {
-      router.push('/')
+      await router.push('/')
     }
   }
 

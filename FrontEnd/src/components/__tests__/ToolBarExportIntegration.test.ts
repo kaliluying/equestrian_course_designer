@@ -11,12 +11,10 @@ import { useCourseStore } from '@/stores/course'
 import { useUserStore } from '@/stores/user'
 import { ExportFormat } from '@/types/export'
 
-// Mock the stores
 vi.mock('@/stores/course')
 vi.mock('@/stores/user')
 vi.mock('@/utils/exportManager')
 
-// Mock Element Plus components
 vi.mock('element-plus', () => ({
   ElButton: { name: 'ElButton', template: '<button><slot /></button>' },
   ElDialog: { name: 'ElDialog', template: '<div><slot /></div>' },
@@ -42,7 +40,6 @@ describe('ToolBar Export Integration', () => {
   let mockUserStore: any
 
   beforeEach(() => {
-    // Setup mock stores
     mockCourseStore = {
       currentCourse: {
         name: 'Test Course',
@@ -57,14 +54,13 @@ describe('ToolBar Export Integration', () => {
       currentUser: {
         id: 1,
         username: 'testuser'
-      }
+      },
+      isAuthenticated: true
     }
 
-    // Mock store functions
     vi.mocked(useCourseStore).mockReturnValue(mockCourseStore)
     vi.mocked(useUserStore).mockReturnValue(mockUserStore)
 
-    // Mock DOM elements
     Object.defineProperty(document, 'querySelector', {
       value: vi.fn(() => ({
         getBoundingClientRect: () => ({ width: 800, height: 600 }),
@@ -88,16 +84,14 @@ describe('ToolBar Export Integration', () => {
     expect(wrapper.find('.export-dropdown').exists()).toBe(true)
   })
 
-  it('should show export options dialog when format is selected', async () => {
-    // Simulate clicking PNG export
-    await wrapper.vm.handleExport('png')
+  it('should show export options dialog when pdf format is selected', async () => {
+    await wrapper.vm.handleUnifiedExport('pdf')
 
-    expect(wrapper.vm.currentExportFormat).toBe(ExportFormat.PNG)
+    expect(wrapper.vm.currentExportFormat).toBe(ExportFormat.PDF)
     expect(wrapper.vm.exportOptionsVisible).toBe(true)
   })
 
   it('should check user authentication before export', async () => {
-    // Test with no user
     mockUserStore.currentUser = null
 
     const result = wrapper.vm.checkExportPermissions()
@@ -105,7 +99,6 @@ describe('ToolBar Export Integration', () => {
   })
 
   it('should handle collaboration export correctly', async () => {
-    // Mock canvas with collaboration methods
     const mockCanvas = {
       isCollaborating: vi.fn(() => true),
       triggerExportEvent: vi.fn()
@@ -118,23 +111,19 @@ describe('ToolBar Export Integration', () => {
     expect(mockCanvas.triggerExportEvent).toHaveBeenCalled()
   })
 
-  it('should maintain export options for different formats', () => {
-    const pngOptions = wrapper.vm.exportOptions[ExportFormat.PNG]
+  it('should keep only pdf export options in component state', () => {
     const pdfOptions = wrapper.vm.exportOptions[ExportFormat.PDF]
-    const jsonOptions = wrapper.vm.exportOptions[ExportFormat.JSON]
 
-    expect(pngOptions).toHaveProperty('scale')
-    expect(pngOptions).toHaveProperty('backgroundColor')
+    expect(Object.keys(wrapper.vm.exportOptions)).toEqual([ExportFormat.PDF])
     expect(pdfOptions).toHaveProperty('paperSize')
     expect(pdfOptions).toHaveProperty('orientation')
-    expect(jsonOptions).toHaveProperty('includeMetadata')
-    expect(jsonOptions).toHaveProperty('prettyPrint')
+    expect(pdfOptions).toHaveProperty('margins')
+    expect(pdfOptions).toHaveProperty('includeMetadata')
   })
 
-  it('should provide canvas access methods', () => {
-    // Test that the component exposes necessary methods for export system integration
-    expect(typeof wrapper.vm.handleExport).toBe('function')
-    expect(typeof wrapper.vm.executeExport).toBe('function')
+  it('should provide current export integration methods', () => {
+    expect(typeof wrapper.vm.handleUnifiedExport).toBe('function')
+    expect(typeof wrapper.vm.executePDFExport).toBe('function')
     expect(typeof wrapper.vm.checkExportPermissions).toBe('function')
     expect(typeof wrapper.vm.handleCollaborationExport).toBe('function')
   })

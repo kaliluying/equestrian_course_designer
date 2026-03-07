@@ -17,7 +17,6 @@ import type {
   ExportError,
   QualityReport,
   ExportWarning,
-  RenderOptions
 } from '@/types/export'
 
 /**
@@ -35,9 +34,6 @@ export class PNGExportEngine {
     timeout: 30000
   }
 
-  private qualityThreshold = 0.7 // 质量阈值
-  private maxRetries = 2 // 最大重试次数
-
   /**
    * 导出画布为PNG格式
    */
@@ -52,15 +48,21 @@ export class PNGExportEngine {
     const errors: ExportError[] = []
 
     try {
-      // 基本验证和渲染
-      this.validateCanvas(canvas)
+      this.updateProgress(onProgress, ExportStage.INITIALIZING, 10, '正在初始化PNG导出...')
 
+      this.validateCanvas(canvas)
+      this.updateProgress(onProgress, ExportStage.PREPARING_CANVAS, 25, '正在准备画布...')
+
+      this.collectPerformanceWarnings(canvas, mergedOptions, warnings)
+
+      this.updateProgress(onProgress, ExportStage.RENDERING, 50, '正在渲染PNG...')
       const renderedCanvas = await html2canvas(canvas, {
         scale: mergedOptions.scale,
         backgroundColor: mergedOptions.backgroundColor === 'transparent' ? null : mergedOptions.backgroundColor
       })
 
       const blob = await this.generatePNGBlob(renderedCanvas, mergedOptions)
+      this.updateProgress(onProgress, ExportStage.FINALIZING, 100, 'PNG导出完成')
 
       const metadata = this.createExportMetadata(
         blob,
@@ -97,9 +99,37 @@ export class PNGExportEngine {
     }
   }
 
+  private updateProgress(
+    onProgress: ProgressCallback | undefined,
+    stage: ExportStage,
+    progress: number,
+    message: string
+  ): void {
+    onProgress?.({ stage, progress, message })
+  }
+
   private validateCanvas(canvas: HTMLElement): void {
     if (!canvas) {
       throw new Error('画布元素不能为空')
+    }
+  }
+
+  private collectPerformanceWarnings(
+    canvas: HTMLElement,
+    options: Required<PNGExportOptions>,
+    warnings: ExportWarning[]
+  ): void {
+    const width = canvas.offsetWidth || Number.parseInt(canvas.style.width || '0', 10)
+    const height = canvas.offsetHeight || Number.parseInt(canvas.style.height || '0', 10)
+    const pixelCount = width * height * options.scale * options.scale
+
+    if (pixelCount >= 20_000_000) {
+      warnings.push({
+        type: 'performance',
+        message: '导出尺寸较大，可能导致性能下降。',
+        severity: 'medium',
+        suggestedAction: '降低缩放倍率或缩小画布尺寸后重试。'
+      })
     }
   }
 
@@ -128,7 +158,7 @@ export class PNGExportEngine {
     canvas: HTMLElement,
     options: Required<PNGExportOptions>
   ): ExportError {
-    const exportError = new Error(error.message || 'PNG导出失败') as ExportError
+    const exportError = new Error(error?.message || 'PNG导出失败') as ExportError
     exportError.type = ExportErrorType.HTML2CANVAS_ERROR
     exportError.stage = stage
     exportError.recoverable = true
@@ -218,6 +248,3 @@ export class PNGExportEngine {
     }
   }
 }
-
-// 创建全局PNG导出引擎实例
-export const pngExportEngine = new PNGExportEngine()
