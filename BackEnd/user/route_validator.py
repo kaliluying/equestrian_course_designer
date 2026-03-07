@@ -101,7 +101,7 @@ class RouteValidator:
             auto_fixed.extend(fix_messages)
             optimized.append(fixed_obs)
 
-        optimized = self._reorder_obstacles_to_reduce_turns(optimized)
+        # 保留原始编号顺序，只根据路径方向修正旋转
         self._set_rotation_from_path_direction(optimized)
         for i, o in enumerate(optimized):
             o["number"] = str(i + 1)
@@ -294,21 +294,51 @@ class RouteValidator:
         self,
         obstacles: List[Dict[str, Any]]
     ) -> Tuple[List[Dict[str, Any]], List[str]]:
-        """检查并修正障碍物间距"""
-        issues = []
+        """检查并尽量拉开相邻障碍物间距"""
+        issues: List[str] = []
+        min_distance = FEI_RULES['min_obstacle_distance']
+        margin = FEI_RULES['min_boundary_distance']
+
+        if len(obstacles) < 2:
+            return obstacles, issues
 
         for i in range(len(obstacles) - 1):
             pos1 = obstacles[i].get('position', {})
             pos2 = obstacles[i + 1].get('position', {})
 
-            x1, y1 = pos1.get('x', 0), pos1.get('y', 0)
-            x2, y2 = pos2.get('x', 0), pos2.get('y', 0)
+            x1, y1 = float(pos1.get('x', 0)), float(pos1.get('y', 0))
+            x2, y2 = float(pos2.get('x', 0)), float(pos2.get('y', 0))
 
-            distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+            dx = x2 - x1
+            dy = y2 - y1
+            distance = math.sqrt(dx * dx + dy * dy)
 
-            if distance < FEI_RULES['min_obstacle_distance']:
+            if distance < 1e-3:
+                # 完全重合时，沿水平方向尝试拉开
+                x2 = x1 + min_distance
+                y2 = y1
+            elif distance < min_distance:
+                # 沿当前连线方向把后一个障碍往外推
+                need = min_distance - distance
+                ux = dx / distance
+                uy = dy / distance
+                x2 = x2 + ux * need
+                y2 = y2 + uy * need
+
+            # 场地边界裁剪
+            x2 = max(margin, min(self.field_width - margin, x2))
+            y2 = max(margin, min(self.field_height - margin, y2))
+
+            # 写回位置
+            obstacles[i + 1]['position'] = {'x': round(x2, 2), 'y': round(y2, 2)}
+
+            # 重新计算间距，若仍不足则记录问题
+            new_dx = x2 - x1
+            new_dy = y2 - y1
+            new_distance = math.sqrt(new_dx * new_dx + new_dy * new_dy)
+            if new_distance + 1e-3 < min_distance:
                 issues.append(
-                    f"障碍物{i + 1}与{i + 2}间距{distance:.1f}米小于最小要求{FEI_RULES['min_obstacle_distance']}米"
+                    f"障碍物{i + 1}与{i + 2}间距{new_distance:.1f}米小于最小要求{min_distance}米"
                 )
 
         return obstacles, issues

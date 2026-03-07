@@ -532,6 +532,10 @@ def purchase_ai_quota(request):
     price = AI_QUOTA_PRICES.get(quota_amount, quota_amount * 1.0)
 
     # 创建订单
+    # 说明：
+    # 1. MembershipOrder 当前模型不包含 note 字段；
+    # 2. billing_cycle 当前仅允许 month/year。
+    # 为保证接口可用，AI 配额订单复用 month 作为一次性订单的占位周期。
     order = MembershipOrder.objects.create(
         user=request.user,
         order_id=f"AI{int(time.time())}{random.randint(1000, 9999)}",
@@ -539,8 +543,7 @@ def purchase_ai_quota(request):
         amount=price,
         payment_channel="alipay",
         status="pending",
-        billing_cycle="one_time",
-        note=f"AI生成次数 x {quota_amount}",
+        billing_cycle="month",
     )
 
     return Response(

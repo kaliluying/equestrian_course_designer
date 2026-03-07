@@ -113,12 +113,8 @@ const createWebSocketConnection = (
   try {
     // 使用配置文件获取WebSocket URL
     let wsUrl = apiConfig.websocket.getConnectionUrl(designId)
-
-    // 添加token参数
-    const token = localStorage.getItem('access_token')
-    if (token) {
-      wsUrl += (wsUrl.includes('?') ? '&' : '?') + `token=${token}`
-    }
+    // 鉴权已迁移到 httpOnly cookie，由后端中间件读取 cookie 中 access_token。
+    // 不再从 localStorage 拼接 token，避免旧 token 覆盖 cookie 鉴权路径。
 
     // 如果是通过链接加入，添加via_link参数
     if (viaLink) {

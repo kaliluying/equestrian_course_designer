@@ -13,6 +13,8 @@ from rest_framework_simplejwt.tokens import AccessToken
 from jwt.exceptions import InvalidTokenError, DecodeError
 from rest_framework_simplejwt.exceptions import TokenError
 from django.contrib.auth import get_user_model
+from urllib.parse import parse_qs
+from http.cookies import SimpleCookie
 
 User = get_user_model()
 
@@ -21,19 +23,10 @@ class JWTAuthMiddleware(BaseMiddleware):
     自定义JWT认证中间件，用于WebSocket连接
     """
     async def __call__(self, scope, receive, send):
-        # 从查询参数或cookie中获取token
-        query_string = scope.get('query_string', b'').decode('utf-8')
-        cookies = scope.get('cookies', {})
-        
-        # 尝试从查询参数获取token
-        token = None
-        for param in query_string.split('&'):
-            if param.startswith('token='):
-                token = param.split('=')[1]
-                break
-        
-        # 如果查询参数中没有token，尝试从cookie中获取
+        # 从查询参数或 cookie 中获取 token
+        token = self._get_query_token(scope)
         if not token:
+            cookies = self._get_cookies(scope)
             token = cookies.get('access_token')
         
         # 如果找到token，验证并获取用户
@@ -49,6 +42,31 @@ class JWTAuthMiddleware(BaseMiddleware):
             scope['user'] = AnonymousUser()
         
         return await super().__call__(scope, receive, send)
+
+    def _get_query_token(self, scope):
+        query_string = scope.get('query_string', b'').decode('utf-8')
+        params = parse_qs(query_string)
+        token_values = params.get('token', [])
+        return token_values[0] if token_values else None
+
+    def _get_cookies(self, scope):
+        """
+        Channels 在未使用 CookieMiddlewareStack 时不一定包含 scope['cookies']。
+        因此这里兜底从 headers 中手动解析 cookie。
+        """
+        cookies = scope.get('cookies')
+        if isinstance(cookies, dict):
+            return cookies
+
+        parsed = {}
+        for key, value in scope.get('headers', []):
+            if key == b'cookie':
+                cookie = SimpleCookie()
+                cookie.load(value.decode('utf-8', errors='ignore'))
+                for name, morsel in cookie.items():
+                    parsed[name] = morsel.value
+                break
+        return parsed
     
     @database_sync_to_async
     def get_user(self, user_id):

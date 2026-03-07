@@ -22,6 +22,7 @@ from .models import (
     MembershipPlan,
     CustomObstacle,
     MembershipOrder,
+    AIGenerationQuota,
 )
 from .serializers import (
     DesignSerializer,
@@ -38,6 +39,7 @@ from django.conf import settings
 from django.urls import reverse
 from django.utils import timezone
 from datetime import timedelta, datetime
+from decimal import Decimal
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 from django.middleware.csrf import get_token
@@ -62,6 +64,53 @@ from rest_framework.pagination import PageNumberPagination
 # Create your views here.
 
 logger = logging.getLogger(__name__)
+
+# AI 配额金额映射（与 ai_views.py 中的价格保持一致）
+AI_QUOTA_AMOUNT_MAP = {
+    Decimal("9.90"): 10,
+    Decimal("24.90"): 30,
+    Decimal("69.90"): 100,
+}
+
+
+def _resolve_ai_quota_amount(order_amount):
+    """
+    根据订单金额推断 AI 配额数量。
+    规则：
+    1. 命中标准套餐价时返回对应套餐次数；
+    2. 否则按 1 元=1 次向下取整，至少 1 次。
+    """
+    if order_amount is None:
+        return 1
+
+    normalized = Decimal(order_amount).quantize(Decimal("0.01"))
+    if normalized in AI_QUOTA_AMOUNT_MAP:
+        return AI_QUOTA_AMOUNT_MAP[normalized]
+
+    return max(1, int(normalized))
+
+
+def settle_paid_order(order):
+    """
+    订单支付成功后的统一落账入口：
+    - 会员订单：更新会员状态
+    - AI 配额订单（membership_plan=None）：增加 AI 可用次数
+    """
+    if order.membership_plan is None:
+        quota_amount = _resolve_ai_quota_amount(order.amount)
+        profile = order.user.profile
+        quota, _ = AIGenerationQuota.objects.get_or_create(user_profile=profile)
+        quota.purchased_quota = F("purchased_quota") + quota_amount
+        quota.save(update_fields=["purchased_quota"])
+        logger.info(
+            "AI 配额订单落账成功: order_id=%s, user=%s, quota=+%s",
+            order.order_id,
+            order.user.username,
+            quota_amount,
+        )
+        return
+
+    update_user_membership(order.user, order)
 
 # 添加CSRF令牌视图
 
@@ -1202,8 +1251,8 @@ def get_order_status(request, order_id):
             order.payment_time = datetime.now()
             order.save()
 
-            # 更新用户会员状态
-            update_user_membership(request.user, order)
+            # 统一订单落账（会员/AI 配额）
+            settle_paid_order(order)
 
             return success_response(
                 "支付成功", {"order": MembershipOrderSerializer(order).data}
@@ -1265,8 +1314,8 @@ def alipay_notify(request):
             order.payment_time = datetime.now()
             order.save()
 
-            # 更新用户会员状态
-            update_user_membership(order.user, order)
+            # 统一订单落账（会员/AI 配额）
+            settle_paid_order(order)
 
             logger.info(f"订单 {out_trade_no} 支付成功，交易号: {data.get('trade_no')}")
             return Response({"message": "SUCCESS"})
@@ -1285,6 +1334,14 @@ def update_user_membership(user, order):
 
     # 获取当前时间
     now = datetime.now()
+
+    # AI 配额等非会员订单不应触发会员状态变更
+    if order.membership_plan is None:
+        logger.info(
+            "订单 %s 非会员订单，跳过会员状态更新",
+            getattr(order, "order_id", "unknown"),
+        )
+        return profile
 
     # 会员计划等级映射（数字越大等级越高）
     plan_level = {
