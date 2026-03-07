@@ -40,7 +40,16 @@ interface EnvConfig {
   wsBaseUrl: string
   appBaseUrl: string
 }
-const apiHost = getEnvValue('API_HOST', '192.168.1.6')
+
+const getDefaultDevHost = (): string => {
+  if (typeof window !== 'undefined' && window.location.hostname) {
+    return window.location.hostname
+  }
+
+  return 'localhost'
+}
+
+const apiHost = getEnvValue('API_HOST', getDefaultDevHost())
 // 基础配置
 const BASE_CONFIG: Record<EnvType, EnvConfig> = {
   // 开发环境配置

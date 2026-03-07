@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import axios from 'axios'
 import { ref } from 'vue'
 import type { LoginForm, RegisterForm } from '@/types/user'
 import { login, logout as logoutApi, register } from '@/api/user'
@@ -15,17 +16,30 @@ export const useUserStore = defineStore('user', () => {
   const currentUser = ref<User | null>(null)
   const isAuthenticated = ref(false)
 
-  const initializeAuth = () => {
-    // Tokens are now stored in httpOnly cookies by the backend
-    // We only check localStorage for user data
+  const clearAuthState = () => {
+    localStorage.removeItem('user')
+    currentUser.value = null
+    isAuthenticated.value = false
+  }
+
+  const initializeAuth = async (): Promise<boolean> => {
+    // 鉴权最终以服务端 cookie 为准，localStorage 只用于恢复界面展示
     const userData = localStorage.getItem('user')
-    if (userData) {
+    if (!userData) {
+      clearAuthState()
+      return false
+    }
+
+    try {
       currentUser.value = JSON.parse(userData)
       isAuthenticated.value = true
 
-      // 获取最新的用户资料，包括会员状态
-      updateUserProfile()
-    } else {
+      // 刷新页面后立即向服务端确认 cookie 是否仍然有效
+      return await updateUserProfile(true)
+    } catch (error) {
+      console.error('用户状态管理: 恢复本地登录态失败:', error)
+      clearAuthState()
+      return false
     }
   }
 
@@ -104,10 +118,7 @@ export const useUserStore = defineStore('user', () => {
       }
     }
 
-    localStorage.removeItem('user')
-
-    currentUser.value = null
-    isAuthenticated.value = false
+    clearAuthState()
 
     const { useObstacleStore } = await import('@/stores/obstacle')
     const obstacleStore = useObstacleStore()
@@ -119,8 +130,8 @@ export const useUserStore = defineStore('user', () => {
   }
 
   // 更新用户资料，包括会员状态
-  const updateUserProfile = async () => {
-    if (!isAuthenticated.value || !currentUser.value) return
+  const updateUserProfile = async (clearOnAuthFailure = false): Promise<boolean> => {
+    if (!isAuthenticated.value || !currentUser.value) return false
 
     try {
       const { getUserProfile } = await import('@/api/user')
@@ -140,8 +151,17 @@ export const useUserStore = defineStore('user', () => {
         // 更新本地存储
         localStorage.setItem('user', JSON.stringify(currentUser.value))
       }
+
+      return true
     } catch (error) {
       console.error('更新用户资料失败:', error)
+
+      const statusCode = axios.isAxiosError(error) ? error.response?.status : undefined
+      if (clearOnAuthFailure && (statusCode === 401 || statusCode === 403)) {
+        clearAuthState()
+      }
+
+      return false
     }
   }
 

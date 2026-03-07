@@ -646,8 +646,8 @@ const handleCollaborationPremiumRequired = (event: CustomEvent) => {
   })
 }
 
-onMounted(() => {
-  userStore.initializeAuth()
+onMounted(async () => {
+  await userStore.initializeAuth()
 
   // 初始化面板宽度
   initializePanelWidths()

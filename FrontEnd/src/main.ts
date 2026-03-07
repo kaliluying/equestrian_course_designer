@@ -15,7 +15,7 @@ app.use(pinia)
 
 // 在使用路由器之前初始化用户认证状态
 const userStore = useUserStore()
-userStore.initializeAuth()
+void userStore.initializeAuth()
 
 app.use(ElementPlus)
 app.use(router)
