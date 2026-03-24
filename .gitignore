@@ -77,4 +77,4 @@ front.bat
 AGENTS.md
 .env
 .sisyphus/
-keys/
+keys/package-lock.json

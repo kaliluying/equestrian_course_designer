@@ -27,8 +27,9 @@ from django.conf import settings
 # 设置日志记录器
 logger = logging.getLogger("django.channels")
 
-# 全局字典，用于存储所有活跃的协作会话
-# 结构: {design_id: {session_info}}
+# Redis-backed 会话存储已准备就绪（见 user/session_store.py）。
+# 当前仍使用进程内 dict；完成 consumers.py 全量适配后可切换为：
+#     from user.session_store import active_sessions
 active_sessions = {}
 
 # Close codes for collaboration
@@ -133,16 +134,6 @@ def validate_share_token(token, design_id):
     except Exception as e:
         logger.error(f"验证分享令牌时出错: {str(e)}")
         return False, CLOSE_CODE_INVALID_SHARE_TOKEN, "invalid_share_token"
-    try:
-        design = Design.objects.get(id=design_id)
-        is_owner = design.author_id == user.id
-        has_access = is_owner or design.is_shared
-        return has_access, is_owner
-    except Design.DoesNotExist:
-        return False, False
-    except Exception as e:
-        logger.error(f"检查设计访问权限失败: {str(e)}")
-        return False, False
 
 
 class CollaborationConsumer(AsyncWebsocketConsumer):

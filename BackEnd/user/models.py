@@ -457,10 +457,8 @@ class MembershipOrder(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.order_id:
-            import random
             now = timezone.now()
-            order_id = f"ECD{now.strftime('%Y%m%d%H%M%S')}{random.randint(1000, 9999)}"
-            self.order_id = order_id
+            self.order_id = f"ECD{now.strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:8].upper()}"
         super().save(*args, **kwargs)
 
 

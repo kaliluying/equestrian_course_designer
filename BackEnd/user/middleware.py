@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib.auth import login
 from django.contrib.auth.models import User
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
@@ -5,18 +7,17 @@ from django.http import HttpResponseRedirect
 from jwt.exceptions import InvalidTokenError
 from rest_framework_simplejwt.exceptions import TokenError
 
-
 from channels.middleware import BaseMiddleware
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
-from rest_framework_simplejwt.tokens import AccessToken
-from jwt.exceptions import InvalidTokenError, DecodeError
-from rest_framework_simplejwt.exceptions import TokenError
+from jwt.exceptions import DecodeError
 from django.contrib.auth import get_user_model
 from urllib.parse import parse_qs
 from http.cookies import SimpleCookie
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
+
 
 class JWTAuthMiddleware(BaseMiddleware):
     """
@@ -86,58 +87,57 @@ class TokenAuthenticationMiddleware:
             token = request.GET.get('token')
             if token:
                 try:
-                    # 验证 token
-                    print(f"Received token: {token}")  # 调试信息
                     access_token = AccessToken(token)
-                    print(f"Decoded token: {access_token}")  # 调试信息
                     user_id = access_token['user_id']
-                    print(f"User ID: {user_id}")  # 调试信息
                     user = User.objects.get(id=user_id)
-                    print(f"Found user: {user.username}")  # 调试信息
 
                     # 如果用户有效且有后台访问权限
                     if user.is_active and user.is_staff:
-                        # 登录用户
                         login(request, user)
-                        # 调试信息
-                        print(f"User logged in successfully: {user.username}")
+                        logger.debug("Admin token auth: user %s logged in", user.username)
 
-                        # 重定向到不带token的URL
+                        # 重定向到不带token的URL（避免token留在URL中）
                         clean_path = request.get_full_path().split('?')[0]
-                        return HttpResponseRedirect(clean_path)
+                        response = HttpResponseRedirect(clean_path)
+                        # 通过cookie传递新token，而非URL query string
+                        response.set_cookie(
+                            'access_token', str(access_token),
+                            max_age=7 * 24 * 60 * 60,
+                            httponly=True,
+                            samesite='Lax',
+                            path='/',
+                        )
+                        return response
 
                 except TokenError as e:
-                    print(f"TokenError: {str(e)}")  # 调试信息
+                    logger.debug("Admin token auth failed: %s", str(e))
                     # 如果 access token 过期，尝试从 cookie 获取 refresh token
                     refresh_token = request.COOKIES.get('refresh_token')
                     if refresh_token:
                         try:
-                            # 使用 refresh token 获取新的 access token
                             refresh = RefreshToken(refresh_token)
-                            access_token = str(refresh.access_token)
-
-                            # 验证新的 access token
-                            new_token = AccessToken(access_token)
+                            new_access = str(refresh.access_token)
+                            new_token = AccessToken(new_access)
                             user_id = new_token['user_id']
                             user = User.objects.get(id=user_id)
 
                             if user.is_active and user.is_staff:
                                 login(request, user)
-                                # 调试信息
-                                print(
-                                    f"User logged in with refresh token: {user.username}")
+                                logger.debug("Admin refresh token auth: user %s", user.username)
 
-                                # 重定向到不带token的URL，但带上新的access token
-                                clean_path = request.get_full_path().split('?')[
-                                    0]
-                                response = HttpResponseRedirect(
-                                    f"{clean_path}?token={access_token}")
+                                clean_path = request.get_full_path().split('?')[0]
+                                response = HttpResponseRedirect(clean_path)
+                                response.set_cookie(
+                                    'access_token', new_access,
+                                    max_age=7 * 24 * 60 * 60,
+                                    httponly=True,
+                                    samesite='Lax',
+                                    path='/',
+                                )
                                 return response
                         except (TokenError, User.DoesNotExist) as e:
-                            print(f"Refresh token error: {str(e)}")  # 调试信息
-                            pass
+                            logger.debug("Admin refresh token failed: %s", str(e))
                 except (InvalidTokenError, User.DoesNotExist) as e:
-                    print(f"Invalid token or user error: {str(e)}")  # 调试信息
-                    pass
+                    logger.debug("Admin token invalid: %s", str(e))
 
         return self.get_response(request)

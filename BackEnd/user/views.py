@@ -159,10 +159,7 @@ class CSRFTokenView(APIView):
         """
         csrf_token = get_token(request)
         logger.info("生成CSRF令牌")
-        # 设置响应头，允许跨域
         response = Response({"csrfToken": csrf_token})
-        response["Access-Control-Allow-Origin"] = "http://localhost:5173"
-        response["Access-Control-Allow-Credentials"] = "true"
         return response
 
 
@@ -195,8 +192,6 @@ class RegisterView(APIView):
                     {
                         "user_id": user.id,
                         "username": user.username,
-                        "access_token": str(refresh.access_token),
-                        "refresh_token": str(refresh),
                     },
                     status.HTTP_201_CREATED,
                 )

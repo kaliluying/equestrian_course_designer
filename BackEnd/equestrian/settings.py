@@ -46,15 +46,6 @@ if not ALLOWED_HOSTS or (len(ALLOWED_HOSTS) == 1 and ALLOWED_HOSTS[0] == ""):
         raise ValueError(
             "ALLOWED_HOSTS must be set in production (DJANGO_ALLOWED_HOSTS env var)"
         )
-if not ALLOWED_HOSTS or (len(ALLOWED_HOSTS) == 1 and ALLOWED_HOSTS[0] == ""):
-    if DEBUG:
-        # Development: allow localhost and common local networks
-        ALLOWED_HOSTS = ["localhost", "127.0.0.1", "0.0.0.0"]
-    else:
-        # Production: require explicit ALLOWED_HOSTS
-        raise ValueError(
-            "ALLOWED_HOSTS must be set in production (DJANGO_ALLOWED_HOSTS env var)"
-        )
 
 # Application definition
 
@@ -79,11 +70,11 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "user.middleware.TokenAuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "user.middleware.TokenAuthenticationMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",
 ]
 
 ROOT_URLCONF = "equestrian.urls"
@@ -155,7 +146,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
 STATIC_URL = "/static/"
-# STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, "static"),
 ]
@@ -320,6 +311,14 @@ CHANNEL_LAYERS = {
         "CONFIG": {
             "hosts": [("127.0.0.1", 6379)],
         },
+    },
+}
+
+# 缓存配置 - 复用 Redis，用于 WebSocket 协作状态等
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/1",
     },
 }
 
