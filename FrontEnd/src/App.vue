@@ -206,8 +206,6 @@ import { ChatDotRound, Check, Connection, InfoFilled, Key, Position, SwitchButto
 import { useRoute, useRouter } from 'vue-router'
 import { useCourseStore } from '@/stores/course'
 import { useUserStore } from '@/stores/user'
-import { useWebSocketStore } from '@/stores/websocket'
-import type { CollaborationSession } from '@/stores/websocket'
 import CollaborationPanel from '@/components/CollaborationPanel.vue'
 import CourseCanvas from '@/components/CourseCanvas.vue'
 import CourseCanvasV2 from '@/components/CourseCanvasV2.vue'
@@ -217,6 +215,8 @@ import PropertiesPanel from '@/components/PropertiesPanel.vue'
 import RegisterForm from '@/components/RegisterForm.vue'
 import ResizableDivider from '@/components/ResizableDivider.vue'
 import ToolBar from '@/components/ToolBar.vue'
+import { useAutosave } from '@/composables/useAutosave'
+import { useCollaborationEvents, type CanvasComponentExposed } from '@/composables/useCollaborationEvents'
 
 const userStore = useUserStore()
 const courseStore = useCourseStore()
@@ -225,26 +225,35 @@ const router = useRouter()
 const loginDialogVisible = ref(false)
 const registerDialogVisible = ref(false)
 
-// 协作状态
-const isCollaborating = ref(false)
-const collaborationSession = ref<CollaborationSession | null>(null)
-interface CanvasComponentExposed {
-  startCollaboration: (viaLink?: boolean) => Promise<boolean> | boolean
-  stopCollaboration: () => Promise<boolean> | boolean
-  isCreator?: () => boolean
-  sendFullCanvasState?: (targetUserId?: string) => void
-}
+// Canvas 组件引用
 const canvasRef = ref<CanvasComponentExposed | null>(null)
 const activeCanvasComponent = computed(() =>
   courseStore.currentCourse.renderVersion === 'v2' ? CourseCanvasV2 : CourseCanvas
 )
-let isTogglingCollaboration = false
 
-// 自动保存相关变量
-const showRestoreDialog = ref(false)
-const savedTimestamp = ref('')
-const showAutosaveNotification = ref(false)
-let autosaveNotificationTimer: number | null = null
+// 协作逻辑（从 composable 引入）
+const {
+  isCollaborating,
+  collaborationSession,
+  toggleCollaboration,
+  checkCollaborationInvite,
+  processCollaborationInvite,
+  registerEventListeners: registerCollabEventListeners,
+  unregisterEventListeners: unregisterCollabEventListeners,
+} = useCollaborationEvents(canvasRef, loginDialogVisible)
+
+// 自动保存逻辑（从 composable 引入）
+const {
+  showRestoreDialog,
+  savedTimestamp,
+  showAutosaveNotification,
+  formatSavedTime,
+  showAutosaveNotificationHandler,
+  checkAutosave,
+  restoreAutosave,
+  discardAutosave,
+  initAutosaveCheck,
+} = useAutosave()
 
 // 比赛信息表单数据
 const competitionForm = reactive({
@@ -267,95 +276,9 @@ const competitionForm = reactive({
 
 // 监听比赛信息变化，自动保存
 watch(competitionForm, () => {
-  // 保存比赛信息到 localStorage
   localStorage.setItem('competition_info', JSON.stringify(competitionForm))
-  // 触发自动保存提示
   showAutosaveNotificationHandler()
 }, { deep: true })
-
-// 格式化保存时间
-const formatSavedTime = computed(() => {
-  if (!savedTimestamp.value) return ''
-
-  try {
-    const date = new Date(savedTimestamp.value)
-    return date.toLocaleString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    })
-  } catch {
-    return savedTimestamp.value
-  }
-})
-
-// 显示自动保存提示
-const showAutosaveNotificationHandler = () => {
-  // 显示自动保存提示
-  showAutosaveNotification.value = true
-
-  // 清除之前的定时器
-  if (autosaveNotificationTimer !== null) {
-    window.clearTimeout(autosaveNotificationTimer)
-  }
-
-  // 3秒后自动隐藏提示
-  autosaveNotificationTimer = window.setTimeout(() => {
-    showAutosaveNotification.value = false
-    autosaveNotificationTimer = null
-  }, 3000)
-}
-
-// 检查是否有自动保存的路线设计
-const checkAutosave = () => {
-  const timestamp = localStorage.getItem('autosaved_timestamp')
-  const savedCourse = localStorage.getItem('autosaved_course')
-
-  if (!timestamp || !savedCourse) return
-
-  try {
-    const courseData = JSON.parse(savedCourse)
-    if (!courseData || !courseData.id) {
-      courseStore.clearAutosave()
-      return
-    }
-  } catch {
-    courseStore.clearAutosave()
-    return
-  }
-
-  const savedDate = new Date(timestamp)
-  const now = new Date()
-  const hoursDiff = (now.getTime() - savedDate.getTime()) / (1000 * 60 * 60)
-
-  if (hoursDiff <= 24) {
-    savedTimestamp.value = timestamp
-    showRestoreDialog.value = true
-  } else {
-    courseStore.clearAutosave()
-  }
-}
-
-// 恢复自动保存的路线设计
-const restoreAutosave = () => {
-  const success = courseStore.restoreFromLocalStorage(true)
-  if (success) {
-    ElMessage.success('已恢复未完成的路线设计')
-  } else {
-    ElMessage.error('恢复失败，可能是数据已损坏')
-  }
-  showRestoreDialog.value = false
-}
-
-// 放弃自动保存的路线设计
-const discardAutosave = () => {
-  courseStore.clearAutosave()
-  showRestoreDialog.value = false
-  ElMessage.info('已放弃恢复')
-}
 
 // 监听 token 过期事件
 const handleTokenExpired = () => {
@@ -363,298 +286,7 @@ const handleTokenExpired = () => {
   loginDialogVisible.value = true
 }
 
-// 监听协作连接成功事件
-const handleCollaborationConnected = (event: CustomEvent) => {
-
-  // 检查是否是延迟事件，如果是普通事件已经处理过，则不重复处理
-  if (event.detail.delayed && isCollaborating.value) {
-    return
-  }
-
-  // 如果已经在协作状态，不重复设置
-  if (isCollaborating.value) {
-    return
-  }
-
-  isCollaborating.value = true
-
-  // 更新会话信息
-  if (event.detail.session) {
-    collaborationSession.value = event.detail.session
-  }
-
-  // 不显示成功消息
-
-  // 同步当前画布状态
-  nextTick(() => {
-    if (canvasRef.value) {
-
-      // 如果是通过链接加入（协作者），发送同步请求获取完整画布状态
-      const viaLink = localStorage.getItem('via_link') === 'true'
-      if (viaLink) {
-
-        // 检查是否已经发送过同步请求
-        const syncRequested = localStorage.getItem('sync_requested') === 'true'
-        if (!syncRequested) {
-          // 使用WebSocket store发送同步请求
-          const webSocketStore = useWebSocketStore()
-
-          // 延迟1秒后发送同步请求，确保WebSocket连接已完全建立
-          setTimeout(() => {
-            localStorage.setItem('sync_requested', 'true')
-            // 使用类型断言访问sendSyncRequest方法
-            if (typeof (webSocketStore as any).sendSyncRequest === 'function') {
-              (webSocketStore as any).sendSyncRequest()
-            } else {
-              console.warn('webSocketStore中没有sendSyncRequest方法')
-            }
-          }, 1000)
-        } else {
-        }
-      } else {
-        // 如果是创建者，触发画布状态同步
-        const event = new CustomEvent('sync-canvas-state', {
-          detail: {
-            course: courseStore.currentCourse,
-            obstacles: courseStore.currentCourse.obstacles,
-            timestamp: Date.now()
-          }
-        })
-        document.dispatchEvent(event)
-      }
-    } else {
-      console.warn('canvasRef 不存在，无法同步画布状态')
-    }
-  })
-}
-
-// 监听协作连接失败事件
-const handleCollaborationFailed = (event: CustomEvent) => {
-  console.error('协作连接失败:', event.detail)
-  isCollaborating.value = false
-}
-
-// 监听协作断开连接事件
-const handleCollaborationDisconnected = (event: CustomEvent) => {
-  isCollaborating.value = false
-}
-
-// 监听协作状态同步事件
-const handleCollaborationSync = (event: CustomEvent) => {
-  if (event.detail.course) {
-    // 确保路径数据存在
-    const courseData = {
-      ...event.detail.course,
-      path: event.detail.course.path || {
-        visible: false,
-        points: [],
-        startPoint: { x: 0, y: 0, rotation: 270 },
-        endPoint: { x: 0, y: 0, rotation: 270 }
-      }
-    }
-    courseStore.importCourse(courseData)
-  }
-}
-
-// 监听路线生成事件
-const handleRouteGenerated = () => {
-  if (isCollaborating.value) {
-    if (canvasRef.value) {
-      // 确保 courseStore.currentCourse 存在
-      if (!courseStore.currentCourse) {
-        console.error('courseStore.currentCourse 不存在，无法同步状态')
-        return
-      }
-
-      // 获取完整的路径数据
-      const pathData = {
-        visible: courseStore.coursePath.visible,
-        points: courseStore.coursePath.points,
-        startPoint: courseStore.startPoint,
-        endPoint: courseStore.endPoint
-      }
-
-
-      // 触发画布状态同步
-      const event = new CustomEvent('sync-canvas-state', {
-        detail: {
-          course: {
-            ...courseStore.currentCourse,
-            path: pathData
-          },
-          obstacles: courseStore.currentCourse.obstacles,
-          timestamp: Date.now()
-        }
-      })
-      document.dispatchEvent(event)
-    } else {
-      console.warn('canvasRef 不存在，无法同步状态')
-    }
-  } else {
-  }
-}
-
-// 监听新协作者加入事件
-const handleCollaboratorJoined = (event: CustomEvent) => {
-
-  // 防抖处理：检查是否在短时间内已经处理过该协作者的加入事件
-  const collaborator = event.detail.collaborator
-  if (!collaborator || !collaborator.id) {
-    console.error('事件中缺少协作者信息')
-    return
-  }
-
-  const responseKey = `sync_response_sent_${collaborator.id}`
-  const lastResponseTime = parseInt(localStorage.getItem(responseKey) || '0')
-  const now = Date.now()
-  const debounceTime = 10000 // 10秒内不重复发送
-
-  if (now - lastResponseTime < debounceTime) {
-    return
-  }
-
-  // 记录本次响应时间
-  localStorage.setItem(responseKey, now.toString())
-
-  // 获取当前用户ID和WebSocket会话信息
-  const userStore = useUserStore()
-  const webSocketStore = useWebSocketStore()
-  const currentUserId = userStore.currentUser?.id
-
-  // 从事件中获取更多信息
-  const eventSession = event.detail.session
-  const eventIsOwner = event.detail.isOwner
-  const eventCurrentUserId = event.detail.currentUserId
-
-
-  // 获取会话信息，包括所有者ID
-  const session = (webSocketStore as any).session || eventSession
-  const sessionOwnerId = session?.owner
-
-
-  // 判断当前用户是否为所有者
-  const isOwner = (currentUserId && sessionOwnerId && String(currentUserId) === String(sessionOwnerId)) || eventIsOwner === true
-
-  // 检查是否通过链接加入
-  const viaLink = localStorage.getItem('via_link') === 'true'
-
-  // 如果当前用户是所有者（或创建者）且在协作状态，则发送完整画布状态
-  if (isCollaborating.value) {
-    // 使用Canvas组件的isCreator方法判断当前用户是否为创建者
-    if (canvasRef.value && typeof canvasRef.value.isCreator === 'function') {
-      const isCreator = canvasRef.value.isCreator()
-
-      if (isCreator) {
-
-        // 使用Canvas组件的sendFullCanvasState方法发送完整画布状态
-        if (typeof canvasRef.value.sendFullCanvasState === 'function') {
-          // 发送给特定用户
-          canvasRef.value.sendFullCanvasState(event.detail.collaborator.id)
-        } else {
-          console.warn('Canvas组件没有sendFullCanvasState方法')
-        }
-      } else {
-      }
-    } else if (isOwner || !viaLink) {
-      // 回退到原来的判断逻辑
-
-      if (canvasRef.value) {
-
-        // 确保 courseStore.currentCourse 存在
-        if (!courseStore.currentCourse) {
-          console.error('courseStore.currentCourse 不存在，无法发送完整画布状态')
-          return
-        }
-
-        // 构建同步响应消息
-        const syncResponse = {
-          obstacles: JSON.parse(JSON.stringify(courseStore.currentCourse.obstacles)),
-          path: {
-            visible: courseStore.coursePath.visible,
-            points: JSON.parse(JSON.stringify(courseStore.coursePath.points)),
-            startPoint: courseStore.startPoint ? JSON.parse(JSON.stringify(courseStore.startPoint)) : null,
-            endPoint: courseStore.endPoint ? JSON.parse(JSON.stringify(courseStore.endPoint)) : null
-          },
-          timestamp: new Date().toISOString(),
-          targetUser: event.detail.collaborator.id // 指定目标用户
-        }
-
-        // 发送同步响应
-
-        // 为确保消息能够正确发送，尝试直接发送
-        try {
-          // 使用类型断言访问socket属性
-          const socket = (webSocketStore as any).$state?.socket
-          const userStore = useUserStore()
-          const currentUserId = userStore.currentUser?.id
-
-          if (socket && socket.readyState === WebSocket.OPEN) {
-            const directMessage = {
-              type: 'sync_response',
-              senderId: String(currentUserId),
-              senderName: userStore.currentUser?.username || '未知用户',
-              // 使用类型断言访问session属性
-              sessionId: (webSocketStore as any).session?.id || '',
-              timestamp: new Date().toISOString(),
-              payload: syncResponse
-            }
-
-            socket.send(JSON.stringify(directMessage))
-          }
-        } catch (error) {
-          console.error('直接发送同步响应失败:', error)
-        }
-      } else {
-        console.warn('canvasRef 不存在，无法发送完整画布状态')
-      }
-    } else {
-    }
-  } else {
-  }
-}
-
-// 防抖变量，避免短时间内多次触发弹窗
-let premiumPromptDebounceTimer: number | null = null;
-let premiumPromptShowing = false;
-
-// 监听会员检查事件
-const handleCollaborationPremiumRequired = (event: CustomEvent) => {
-  isCollaborating.value = false
-
-  // 如果已经在显示弹窗，不再重复显示
-  if (premiumPromptShowing) {
-    return
-  }
-
-  // 如果在短时间内已经触发过，不再重复显示
-  if (premiumPromptDebounceTimer !== null) {
-    return
-  }
-
-  // 设置防抖标记
-  premiumPromptShowing = true
-  premiumPromptDebounceTimer = window.setTimeout(() => {
-    premiumPromptDebounceTimer = null
-  }, 5000) // 5秒内不重复触发
-
-  // 显示会员提示对话框
-  ElMessageBox.confirm(
-    '协作功能是会员专属功能，请升级到会员以使用此功能。',
-    '会员专属功能',
-    {
-      confirmButtonText: '立即升级',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }
-  ).then(() => {
-    // 跳转到用户资料页面
-    router.push('/profile')
-    premiumPromptShowing = false
-  }).catch(() => {
-    // 用户取消操作
-    premiumPromptShowing = false
-  })
-}
+// 协作事件处理和连接管理已移至 composables/useCollaborationEvents.ts
 
 onMounted(async () => {
   await userStore.initializeAuth()
@@ -674,55 +306,16 @@ onMounted(async () => {
   // 检查是否需要显示首次访问引导
   checkOnboarding()
 
-  // 添加事件监听
+  // 注册事件监听
   window.addEventListener('token-expired', handleTokenExpired)
-  document.addEventListener('collaboration-connected', handleCollaborationConnected as EventListener)
-  document.addEventListener('collaboration-failed', handleCollaborationFailed as EventListener)
-  document.addEventListener('collaboration-disconnected', handleCollaborationDisconnected as EventListener)
-  document.addEventListener('collaboration-premium-required', handleCollaborationPremiumRequired as EventListener)
-  document.addEventListener('sync-canvas-state', handleCollaborationSync as EventListener)
-  document.addEventListener('route-generated', handleRouteGenerated as EventListener)
-  document.addEventListener('collaborator-joined', handleCollaboratorJoined as EventListener)
+  registerCollabEventListeners()
+  document.addEventListener('course-autosaved', showAutosaveNotificationHandler as EventListener)
 
   // 检查URL参数中是否有协作邀请
   checkCollaborationInvite()
 
-  // 监听自动保存事件
-  document.addEventListener('course-autosaved', showAutosaveNotificationHandler as EventListener)
-
-  // 检查是否有自动保存的路线设计
-  if (route.path === '/') {
-    // 使用多种方法尝试显示对话框
-    // 1. 立即检查
-    checkAutosave()
-
-    // 2. 使用nextTick
-    nextTick(() => {
-      checkAutosave()
-    })
-
-    // 3. 使用setTimeout
-    setTimeout(() => {
-      checkAutosave()
-
-      // 4. 如果还是没有显示，尝试直接设置
-      if (!showRestoreDialog.value) {
-        const timestamp = localStorage.getItem('autosaved_timestamp')
-        const savedCourse = localStorage.getItem('autosaved_course')
-
-        if (timestamp && savedCourse) {
-          try {
-            JSON.parse(savedCourse) // 验证JSON格式
-            savedTimestamp.value = timestamp
-
-            showRestoreDialog.value = true
-          } catch (e) {
-            console.error('解析失败', e)
-          }
-        }
-      }
-    }, 500)
-  }
+  // 检查自动保存
+  initAutosaveCheck()
 
   // 检查并恢复比赛信息
   const savedCompetitionInfo = localStorage.getItem('competition_info')
@@ -740,14 +333,8 @@ onMounted(async () => {
 // 在组件卸载时移除事件监听
 onUnmounted(() => {
   window.removeEventListener('token-expired', handleTokenExpired)
-  document.removeEventListener('collaboration-connected', handleCollaborationConnected as EventListener)
-  document.removeEventListener('collaboration-failed', handleCollaborationFailed as EventListener)
-  document.removeEventListener('collaboration-disconnected', handleCollaborationDisconnected as EventListener)
-  document.removeEventListener('collaboration-premium-required', handleCollaborationPremiumRequired as EventListener)
-  document.removeEventListener('sync-canvas-state', handleCollaborationSync as EventListener)
+  unregisterCollabEventListeners()
   document.removeEventListener('course-autosaved', showAutosaveNotificationHandler as EventListener)
-  document.removeEventListener('route-generated', handleRouteGenerated as EventListener)
-  document.removeEventListener('collaborator-joined', handleCollaboratorJoined as EventListener)
 })
 
 const showRegisterDialog = () => {
@@ -867,6 +454,9 @@ const handleLogout = () => {
   ElMessage.success('已退出登录')
 }
 
+// toggleCollaboration, checkCollaborationInvite, processCollaborationInvite
+// 已移至 composables/useCollaborationEvents.ts
+
 // 为window添加debugCanvas类型声明
 declare global {
   interface Window {
@@ -874,142 +464,6 @@ declare global {
       startCollaboration: (viaLink?: boolean) => void;
       stopCollaboration: () => void;
     };
-  }
-}
-
-// 切换协作状态
-const toggleCollaboration = async (viaLink = false) => {
-  if (isTogglingCollaboration) return
-  isTogglingCollaboration = true
-
-  try {
-    // 如果已经在协作中，停止协作（无需检查会员）
-    if (isCollaborating.value) {
-      if (canvasRef.value) {
-        await canvasRef.value.stopCollaboration()
-      }
-      isCollaborating.value = false
-      isTogglingCollaboration = false
-      return
-    }
-
-    // 开始协作前检查会员状态（通过链接加入除外）
-    if (!viaLink) {
-      // 调用后端 API 检查会员状态
-      const { checkPremiumStatus } = await import('@/api/user')
-      const premiumCheck = await checkPremiumStatus()
-
-      if (!premiumCheck.is_premium_active) {
-        ElMessageBox.confirm(
-          '协作功能是会员专属功能，请升级到会员以使用此功能。',
-          '会员专属功能',
-          {
-            confirmButtonText: '立即升级',
-            cancelButtonText: '取消',
-            type: 'warning'
-          }
-        ).then(() => {
-          router.push('/profile')
-        }).catch(() => {
-          // 用户取消操作
-        })
-        isTogglingCollaboration = false
-        return
-      }
-    } else {
-    }
-
-    // 开始协作
-    if (canvasRef.value) {
-      await canvasRef.value.startCollaboration(viaLink)
-    }
-    isCollaborating.value = true
-  } catch (error) {
-    console.error('切换协作状态时出错:', error)
-    ElMessage.error('操作失败，请稍后重试')
-  } finally {
-    isTogglingCollaboration = false
-  }
-}
-
-// 检查URL参数中是否有协作邀请
-const checkCollaborationInvite = async () => {
-  const urlParams = new URLSearchParams(window.location.search)
-  const isCollaboration = urlParams.get('collaboration') === 'true'
-  const designId = urlParams.get('designId')
-
-  if (isCollaboration && designId) {
-    try {
-      // 先显示确认对话框
-      try {
-        await ElMessageBox.confirm(
-          '您收到了一个协作邀请，是否加入该协作会话？',
-          '协作邀请',
-          {
-            confirmButtonText: '加入',
-            cancelButtonText: '取消',
-            type: 'info',
-          }
-        )
-
-        // 用户点击确认后，检查登录状态
-        if (!userStore.isAuthenticated) {
-          // 保存邀请信息到本地存储，以便登录后继续处理
-          localStorage.setItem('pendingInvitation', JSON.stringify({
-            designId,
-            timestamp: new Date().toISOString()
-          }))
-
-          loginDialogVisible.value = true
-          return
-        }
-
-        // 如果已登录，直接处理协作邀请
-        await processCollaborationInvite(designId)
-      } catch (confirmError) {
-        // 如果用户点击取消按钮或关闭对话框
-        if (confirmError === 'cancel') {
-          ElMessage.info('已取消加入协作')
-          return
-        } else {
-          // 其他错误，重新抛出以便外层catch捕获
-          throw confirmError
-        }
-      }
-
-    } catch (error) {
-      // 处理其他非取消类型的错误
-      console.error('处理协作邀请时出错:', error)
-      ElMessage.error('加入协作失败，请稍后重试')
-    } finally {
-      // 清除URL参数，避免刷新页面重复处理
-      const url = new URL(window.location.href)
-      url.searchParams.delete('collaboration')
-      url.searchParams.delete('designId')
-      window.history.replaceState({}, document.title, url.toString())
-    }
-  }
-}
-
-// 处理协作邀请的共用函数
-const processCollaborationInvite = async (designId: string) => {
-  try {
-    // 加载设计
-    courseStore.setCurrentCourseId(designId)
-
-    // 等待Canvas组件加载
-    await nextTick()
-
-    // 启动协作模式
-    if (canvasRef.value) {
-      await canvasRef.value.startCollaboration(true)
-    } else {
-      throw new Error('Canvas组件未加载')
-    }
-  } catch (error) {
-    console.error('处理协作邀请时出错:', error)
-    console.error('加入协作失败，请稍后重试')
-    throw error
   }
 }
 
