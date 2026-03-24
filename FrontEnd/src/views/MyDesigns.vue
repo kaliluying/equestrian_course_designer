@@ -142,6 +142,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { formatDateTime } from '@/utils/datetime'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getUserDesigns, deleteDesign, toggleDesignSharing, downloadDesign } from '@/api/design'
@@ -203,17 +204,8 @@ const fetchUserDesigns = async () => {
   }
 }
 
-// 格式化日期
-const formatDate = (dateString: string) => {
-  const date = new Date(dateString)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
+// 格式化日期（UTC → 东八区）
+const formatDate = (dateString: string) => formatDateTime(dateString)
 
 // 打开设计
 const openDesign = async (design: DesignResponse) => {

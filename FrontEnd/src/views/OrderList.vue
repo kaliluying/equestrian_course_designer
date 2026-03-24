@@ -141,6 +141,7 @@
 import { ref, reactive, defineProps, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
+import { formatDateTimeWithSeconds } from '@/utils/datetime'
 import { orderApi } from '@/api/order'
 import type { Order } from '@/types/order'
 import type { GetOrdersParams } from '@/api/order'
@@ -338,10 +339,8 @@ const handleCurrentChange = (val: number) => {
   fetchOrders()
 }
 
-// 格式化日期
-const formatDate = (date: string) => {
-  return dayjs(date).format('YYYY-MM-DD HH:mm:ss')
-}
+// 格式化日期（UTC → 东八区）
+const formatDate = (date: string) => formatDateTimeWithSeconds(date)
 
 // 获取状态类型
 const getStatusType = (status: string) => {

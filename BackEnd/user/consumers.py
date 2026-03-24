@@ -17,7 +17,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async  # 用于在异步环境中执行同步数据库操作
 from django.contrib.auth.models import User  # Django用户模型
 import uuid  # 用于生成唯一标识符
-from datetime import datetime  # 用于处理日期和时间
+from django.utils import timezone  # 用于时区感知的日期和时间处理
 import logging  # 用于日志记录
 import traceback  # 用于异常跟踪
 import asyncio  # 用于异步IO操作
@@ -123,7 +123,7 @@ def validate_share_token(token, design_id):
             return False, CLOSE_CODE_INVALID_SHARE_TOKEN, "invalid_share_token"
 
         # 验证过期时间
-        if exp and datetime.now().timestamp() > exp:
+        if exp and timezone.now().timestamp() > exp:
             return False, CLOSE_CODE_INVALID_SHARE_TOKEN, "expired_share_token"
 
         return True, None, None
@@ -234,7 +234,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                             {
                                 "type": "error",
                                 "message": "请先登录或使用有效的分享链接",
-                                "timestamp": datetime.now().isoformat(),
+                                "timestamp": timezone.now().isoformat(),
                             }
                         )
                     )
@@ -252,7 +252,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                             {
                                 "type": "error",
                                 "message": "只有高级会员才能创建协作会话",
-                                "timestamp": datetime.now().isoformat(),
+                                "timestamp": timezone.now().isoformat(),
                             }
                         )
                     )
@@ -273,7 +273,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                             {
                                 "type": "error",
                                 "message": "您没有权限访问此设计",
-                                "timestamp": datetime.now().isoformat(),
+                                "timestamp": timezone.now().isoformat(),
                             }
                         )
                     )
@@ -291,7 +291,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                             {
                                 "type": "error",
                                 "message": "只有设计作者才能发起协作",
-                                "timestamp": datetime.now().isoformat(),
+                                "timestamp": timezone.now().isoformat(),
                             }
                         )
                     )
@@ -309,7 +309,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                             {
                                 "type": "error",
                                 "message": "设计不存在",
-                                "timestamp": datetime.now().isoformat(),
+                                "timestamp": timezone.now().isoformat(),
                             }
                         )
                     )
@@ -337,7 +337,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                     "collaborators": [],
                     "owner": None,
                     "initiator": None,
-                    "created_at": datetime.now().isoformat(),
+                    "created_at": timezone.now().isoformat(),
                 }
                 logger.info(f"新会话创建完成: {active_sessions[self.design_id]}")
 
@@ -350,7 +350,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                     {
                         "type": "connection_established",
                         "message": "连接已建立",
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": timezone.now().isoformat(),
                         "design_id": self.design_id,
                         "session": {
                             "id": active_sessions[self.design_id]["id"],
@@ -382,7 +382,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                     "username": self.user.username,
                     "color": self._generate_color(),
                     "role": user_role,
-                    "last_active": datetime.now().isoformat(),
+                    "last_active": timezone.now().isoformat(),
                 }
 
                 # 检查是否已存在
@@ -420,7 +420,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                                 "senderId": str(self.user.id),
                                 "senderName": self.user.username,
                                 "sessionId": active_sessions[self.design_id]["id"],
-                                "timestamp": datetime.now().isoformat(),
+                                "timestamp": timezone.now().isoformat(),
                                 "payload": {
                                     "session": active_sessions[self.design_id],
                                     "user_role": user_role,
@@ -430,7 +430,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                     )
                 else:
                     # 更新现有协作者的活跃时间
-                    existing_collaborator["last_active"] = datetime.now().isoformat()
+                    existing_collaborator["last_active"] = timezone.now().isoformat()
 
         except Exception as e:
             # 异常处理
@@ -448,7 +448,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                         {
                             "type": "error",
                             "message": error_message,
-                            "timestamp": datetime.now().isoformat(),
+                            "timestamp": timezone.now().isoformat(),
                         }
                     )
                 )
@@ -511,7 +511,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                             "senderId": str(self.user.id),
                             "senderName": self.user.username,
                             "sessionId": active_sessions[self.design_id]["id"],
-                            "timestamp": datetime.now().isoformat(),
+                            "timestamp": timezone.now().isoformat(),
                             "payload": {"session": active_sessions[self.design_id]},
                         },
                     },
@@ -564,7 +564,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
             logger.info(f"消息内容: {text_data_json}")
 
             # 添加服务器时间戳
-            text_data_json["server_timestamp"] = datetime.now().isoformat()
+            text_data_json["server_timestamp"] = timezone.now().isoformat()
 
             # 处理加入消息
             if message_type == "join" and self.user and self.user.is_authenticated:
@@ -591,7 +591,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                     "username": self.user.username,
                     "color": user_color,
                     "role": user_role,
-                    "last_active": datetime.now().isoformat(),
+                    "last_active": timezone.now().isoformat(),
                 }
                 logger.info(f"创建协作者信息: {collaborator}")
 
@@ -636,7 +636,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                         # 如果用户已在协作者列表中，更新信息
                         logger.info(f"更新现有协作者: {self.user.username}")
                         existing_collaborator["last_active"] = (
-                            datetime.now().isoformat()
+                            timezone.now().isoformat()
                         )
                         existing_collaborator["color"] = collaborator["color"]
                         logger.info(f"更新后的协作者信息: {existing_collaborator}")
@@ -654,7 +654,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                         "senderId": str(self.user.id),
                         "senderName": self.user.username,
                         "sessionId": active_sessions[self.design_id]["id"],
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": timezone.now().isoformat(),
                         "payload": {
                             "session": active_sessions[self.design_id],
                             "user_role": user_role,  # 添加用户角色信息
@@ -681,7 +681,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                             {
                                 "type": "error",
                                 "message": "会话不存在",
-                                "timestamp": datetime.now().isoformat(),
+                                "timestamp": timezone.now().isoformat(),
                             }
                         )
                     )
@@ -728,7 +728,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                             "username": self.user.username,
                             "color": self._generate_color(),
                             "role": user_role,
-                            "last_active": datetime.now().isoformat(),
+                            "last_active": timezone.now().isoformat(),
                         }
                         active_sessions[self.design_id]["collaborators"].append(
                             collaborator
@@ -749,7 +749,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                     else:
                         # 更新用户的活跃时间
                         existing_collaborator["last_active"] = (
-                            datetime.now().isoformat()
+                            timezone.now().isoformat()
                         )
 
                 # 构建同步响应消息
@@ -758,7 +758,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                     "senderId": "server",
                     "senderName": "System",
                     "sessionId": active_sessions[self.design_id]["id"],
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": timezone.now().isoformat(),
                     "payload": {"session": active_sessions[self.design_id]},
                 }
 
@@ -776,7 +776,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                             "senderId": "server",
                             "senderName": "System",
                             "sessionId": active_sessions[self.design_id]["id"],
-                            "timestamp": datetime.now().isoformat(),
+                            "timestamp": timezone.now().isoformat(),
                             "payload": {"session": active_sessions[self.design_id]},
                         },
                     },
@@ -794,7 +794,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
             ):
                 for collaborator in active_sessions[self.design_id]["collaborators"]:
                     if collaborator["id"] == str(self.user.id):
-                        collaborator["last_active"] = datetime.now().isoformat()
+                        collaborator["last_active"] = timezone.now().isoformat()
                         break
 
             # 将消息发送到房间组（广播给所有连接的客户端）
@@ -812,7 +812,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                     {
                         "type": "error",
                         "message": f"无效的JSON数据: {str(e)}",
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": timezone.now().isoformat(),
                     }
                 )
             )
@@ -825,7 +825,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                     {
                         "type": "error",
                         "message": f"处理消息时出错: {str(e)}",
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": timezone.now().isoformat(),
                     }
                 )
             )
@@ -855,7 +855,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                         {
                             "type": "error",
                             "message": f"发送消息时出错: {str(e)}",
-                            "timestamp": datetime.now().isoformat(),
+                            "timestamp": timezone.now().isoformat(),
                         }
                     )
                 )

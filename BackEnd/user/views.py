@@ -38,7 +38,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.urls import reverse
 from django.utils import timezone
-from datetime import timedelta, datetime
+from datetime import timedelta
 from decimal import Decimal
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
@@ -480,10 +480,10 @@ class DesignViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """根据不同的操作返回不同的查询集"""
         if self.action == "shared_designs":
-            # 公开分享的设计
-            return Design.objects.filter(is_shared=True)
+            # 公开分享的设计，预加载作者避免 N+1
+            return Design.objects.filter(is_shared=True).select_related('author')
         # 默认只返回当前用户的设计
-        return Design.objects.filter(author=self.request.user)
+        return Design.objects.filter(author=self.request.user).select_related('author')
 
     def perform_create(self, serializer):
         """保存时自动设置作者为当前用户"""
@@ -522,7 +522,7 @@ class DesignViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="my")
     def my_designs(self, request):
         """获取当前用户的所有设计"""
-        queryset = Design.objects.filter(author=request.user)
+        queryset = Design.objects.filter(author=request.user).select_related('author')
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
@@ -1277,7 +1277,7 @@ def get_order_status(request, order_id):
             # 更新订单状态
             order.status = "paid"
             order.trade_no = query_result.get("trade_no")
-            order.payment_time = datetime.now()
+            order.payment_time = timezone.now()
             order.save()
 
             # 统一订单落账（会员/AI 配额）
@@ -1340,7 +1340,7 @@ def alipay_notify(request):
             # 更新订单状态
             order.status = "paid"
             order.trade_no = data.get("trade_no")
-            order.payment_time = datetime.now()
+            order.payment_time = timezone.now()
             order.save()
 
             # 统一订单落账（会员/AI 配额）
@@ -1362,7 +1362,7 @@ def update_user_membership(user, order):
     profile = user.profile
 
     # 获取当前时间
-    now = datetime.now()
+    now = timezone.now()
 
     # AI 配额等非会员订单不应触发会员状态变更
     if order.membership_plan is None:

@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 import os
 import uuid
 from django.utils import timezone
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 
 def get_file_path(instance, filename, base_path):
@@ -28,13 +28,13 @@ def get_file_path(instance, filename, base_path):
         if route_name:
             new_filename = f"{route_name}_{instance.id}.{ext}"
         else:
-            new_filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{instance.id}.{ext}"
+            new_filename = f"{timezone.now().strftime('%Y%m%d%H%M%S')}_{instance.id}.{ext}"
     else:
         # 如果是新创建的实例，使用UUID
         if route_name:
             new_filename = f"{route_name}_{uuid.uuid4().hex[:8]}.{ext}"
         else:
-            new_filename = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}.{ext}"
+            new_filename = f"{timezone.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}.{ext}"
 
     # 返回完整路径
     return os.path.join(base_path, new_filename)
@@ -177,12 +177,12 @@ class PasswordResetToken(models.Model):
     def save(self, *args, **kwargs):
         """保存时自动设置过期时间为24小时后"""
         if not self.expires_at:
-            self.expires_at = datetime.now() + timedelta(hours=24)
+            self.expires_at = timezone.now() + timedelta(hours=24)
         super().save(*args, **kwargs)
 
     def is_valid(self):
         """检查令牌是否有效"""
-        return not self.is_used and self.expires_at > datetime.now()
+        return not self.is_used and self.expires_at > timezone.now()
 
     class Meta:
         verbose_name = '密码重置令牌'
@@ -457,9 +457,8 @@ class MembershipOrder(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.order_id:
-            import datetime
             import random
-            now = datetime.datetime.now()
+            now = timezone.now()
             order_id = f"ECD{now.strftime('%Y%m%d%H%M%S')}{random.randint(1000, 9999)}"
             self.order_id = order_id
         super().save(*args, **kwargs)
