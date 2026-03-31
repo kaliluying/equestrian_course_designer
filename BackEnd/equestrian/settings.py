@@ -31,8 +31,12 @@ DEBUG = os.environ.get("DJANGO_DEBUG", "True").lower() == "true"
 # SECURITY WARNING: keep the secret key used in production secret!
 # Security fix: SECRET_KEY must be non-empty in production
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
-if not SECRET_KEY and not DEBUG:
-    raise ValueError("SECRET_KEY must be set in production (DJANGO_SECRET_KEY env var)")
+if not SECRET_KEY:
+    if DEBUG:
+        # Development fallback — never use this in production
+        SECRET_KEY = "django-insecure-dev-only-do-not-use-in-production"
+    else:
+        raise ValueError("SECRET_KEY must be set in production (DJANGO_SECRET_KEY env var)")
 
 # Security fix: ALLOWED_HOSTS must not be wildcard in production
 allowed_hosts_env = os.environ.get("DJANGO_ALLOWED_HOSTS", "")

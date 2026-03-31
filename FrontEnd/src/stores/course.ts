@@ -9,6 +9,7 @@ import { ref, computed } from 'vue'
 import type { CourseDesign, Obstacle, PathPoint, CoursePath, Pole } from '@/types/obstacle'
 import { ObstacleType } from '@/types/obstacle'
 import { v4 as uuidv4 } from 'uuid'
+import { useHistoryStore } from './history'
 
 /**
  * 马术路线设计状态管理
@@ -227,6 +228,39 @@ export const useCourseStore = defineStore('course', () => {
     }
 
     updateCourse()
+  }
+
+  /**
+   * 提交快照至历史记录
+   */
+  function commitHistory() {
+    const historyStore = useHistoryStore()
+    const snapshot = JSON.stringify({
+      obstacles: currentCourse.value.obstacles,
+      path: coursePath.value,
+      startPoint: startPoint.value,
+      endPoint: endPoint.value
+    })
+    historyStore.commit(snapshot)
+  }
+
+  /**
+   * 从历史记录中恢复快照
+   */
+  function hydrateFromSnapshot(snapshot: string | null) {
+    if (!snapshot) return
+    try {
+      const state = JSON.parse(snapshot)
+      // 使用普通对象赋值触发 Vue 深层响应式更新
+      currentCourse.value.obstacles = state.obstacles
+      coursePath.value = state.path
+      startPoint.value = state.startPoint
+      endPoint.value = state.endPoint
+      selectedObstacle.value = null
+      updateCourse()
+    } catch (e) {
+      console.error('Failed to restore history snapshot:', e)
+    }
   }
 
   /**
@@ -2100,6 +2134,8 @@ export const useCourseStore = defineStore('course', () => {
     setCurrentCourseId,
     resetCourse,
     importAIResult,
+    commitHistory,
+    hydrateFromSnapshot
   }
 })
 

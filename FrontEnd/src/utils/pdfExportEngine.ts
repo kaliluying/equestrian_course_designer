@@ -4,6 +4,7 @@
  */
 
 import jsPDF from 'jspdf'
+import 'svg2pdf.js'
 import {
   ExportFormat,
   ExportStage
@@ -55,17 +56,61 @@ export class PDFExportEngine {
       // 更新进度 - 准备阶段
       this.updateProgress(onProgress, ExportStage.PREPARING_CANVAS, 10, '正在准备PDF导出...')
 
-      // 1. 渲染画布为图像
-      const canvasImage = await this.renderCanvasToImage(canvas, mergedOptions, onProgress)
+      const svgElement = canvas.tagName.toLowerCase() === 'svg' ? canvas : canvas.querySelector('svg')
+      
+      let pdfDoc: jsPDF
+      let canvasImage: HTMLCanvasElement | null = null
+      let exportWidth = 800
+      let exportHeight = 600
 
-      // 更新进度 - 生成PDF阶段
-      this.updateProgress(onProgress, ExportStage.GENERATING_FILE, 60, '正在生成PDF文档...')
+      if (svgElement) {
+         this.updateProgress(onProgress, ExportStage.GENERATING_FILE, 40, '检测到 SVG 源，正在使用纯矢量渲染引擎...')
+         const rect = svgElement.getBoundingClientRect()
+         exportWidth = rect.width
+         exportHeight = rect.height
+         
+         const { pageWidth, pageHeight, orientation } = this.calculatePageDimensionsFromSize(exportWidth, exportHeight, mergedOptions)
+         
+         pdfDoc = new jsPDF({
+           orientation: orientation as 'portrait' | 'landscape',
+           unit: 'mm',
+           format: this.getPaperFormat(mergedOptions.paperSize)
+         })
 
-      // 2. 创建PDF文档
-      const pdfDoc = await this.createPDFDocument(canvasImage, mergedOptions, onProgress)
+         const availWidth = pageWidth - mergedOptions.margins.left - mergedOptions.margins.right
+         const availHeight = pageHeight - mergedOptions.margins.top - mergedOptions.margins.bottom
+         const scale = Math.min(availWidth / exportWidth, availHeight / exportHeight)
+         
+         const drawWidth = exportWidth * scale
+         const drawHeight = exportHeight * scale
+
+         const imageX = mergedOptions.margins.left + (availWidth - drawWidth) / 2
+         const imageY = mergedOptions.margins.top + (availHeight - drawHeight) / 2
+
+         // 使用 svg2pdf 构建原生的无损路径
+         await pdfDoc.svg(svgElement as any, {
+           x: imageX,
+           y: imageY,
+           width: drawWidth,
+           height: drawHeight
+         })
+
+         if (mergedOptions.includeMetadata) this.addMetadataToPDF(pdfDoc, mergedOptions)
+         if (mergedOptions.includeMetadata) this.addHeaderToPDF(pdfDoc, pageWidth, mergedOptions)
+         if (mergedOptions.includeFooter) this.addFooterToPDF(pdfDoc, pageWidth, pageHeight, mergedOptions)
+         this.optimizePageLayout(pdfDoc, pageWidth, pageHeight, mergedOptions)
+
+      } else {
+         // Fallback to old Raster method
+         this.updateProgress(onProgress, ExportStage.RENDERING, 20, '未检测到纯矢量源，使用备用画布截制...')
+         canvasImage = await this.renderCanvasToImage(canvas, mergedOptions, onProgress)
+         exportWidth = canvasImage.width
+         exportHeight = canvasImage.height
+         pdfDoc = await this.createPDFDocument(canvasImage, mergedOptions, onProgress)
+      }
 
       // 更新进度 - 完成阶段
-      this.updateProgress(onProgress, ExportStage.FINALIZING, 90, '正在完成PDF生成...')
+      this.updateProgress(onProgress, ExportStage.FINALIZING, 90, '正在生成PDF Blob...')
 
       // 3. 生成PDF数据
       const pdfBlob = this.generatePDFBlob(pdfDoc)
@@ -74,13 +119,15 @@ export class PDFExportEngine {
       const metadata = this.createExportMetadata(
         mergedOptions,
         pdfBlob.size,
-        canvasImage.width,
-        canvasImage.height,
+        exportWidth,
+        exportHeight,
         performance.now() - startTime
       )
 
-      // 5. 生成质量报告（简化版，因为PDF是基于渲染的图像）
-      const qualityReport = await this.generateQualityReport(canvas, canvasImage, mergedOptions)
+      // 5. 生成质量报告（基于渲染元素）
+      const qualityReport = canvasImage 
+          ? await this.generateQualityReport(canvas, canvasImage, mergedOptions)
+          : this.createEmptyQualityReport() // For vector, it's 100% loss-less
 
       // 更新进度 - 完成
       this.updateProgress(onProgress, ExportStage.FINALIZING, 100, 'PDF导出完成')
@@ -249,6 +296,17 @@ export class PDFExportEngine {
     canvasImage: HTMLCanvasElement,
     options: PDFExportOptions
   ): { pageWidth: number; pageHeight: number; orientation: string } {
+    return this.calculatePageDimensionsFromSize(canvasImage.width, canvasImage.height, options)
+  }
+
+  /**
+   * 基于宽高计算页面尺寸和方向
+   */
+  private calculatePageDimensionsFromSize(
+    sourceWidth: number,
+    sourceHeight: number,
+    options: PDFExportOptions
+  ): { pageWidth: number; pageHeight: number; orientation: string } {
     const paperSizes = {
       'a3': { width: 297, height: 420 },
       'a4': { width: 210, height: 297 },
@@ -257,7 +315,7 @@ export class PDFExportEngine {
     }
 
     const paperSize = paperSizes[options.paperSize] || paperSizes.a4
-    const canvasAspectRatio = canvasImage.width / canvasImage.height
+    const canvasAspectRatio = sourceWidth / sourceHeight
 
     let orientation = options.orientation
     let pageWidth = paperSize.width

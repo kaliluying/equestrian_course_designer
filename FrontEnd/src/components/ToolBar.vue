@@ -9,18 +9,8 @@
       </div>
     </div>
 
-    <!-- 可折叠区域导航 -->
-    <div class="section-tabs">
-      <div class="section-tab" :class="{ active: activeSection === 'templates' }" @click="activeSection = 'templates'">
-        障碍物模板
-      </div>
-      <div class="section-tab" :class="{ active: activeSection === 'actions' }" @click="activeSection = 'actions'">
-        操作
-      </div>
-    </div>
-
-    <!-- 障碍物模板部分 - 可滚动区域 -->
-    <div class="scrollable-section" v-show="activeSection === 'templates'">
+    <!-- 路线名称下方的模板区块直接展开 -->
+    <div class="scrollable-section templates-only">
       <div class="section obstacle-templates">
         <!-- 自定义障碍标签导航 -->
         <div class="obstacle-type-tabs">
@@ -75,81 +65,54 @@
       </div>
     </div>
 
-    <!-- 操作部分 -->
-    <div class="scrollable-section" v-show="activeSection === 'actions'">
-      <div class="section actions">
-        <div class="action-buttons">
-          <el-button @click="handleSaveDesign" type="primary" class="action-button"
-            :title="!userStore.currentUser ? '需要登录才能保存' : '保存设计'">
-            <el-icon>
-              <Download />
-            </el-icon>
-            保存设计
-            <el-icon v-if="!userStore.currentUser" class="lock-icon">
-              <Lock />
-            </el-icon>
-          </el-button>
-
-          <el-dropdown @command="handleUnifiedExport" trigger="click" class="export-dropdown">
-            <el-button type="primary" class="action-button" :loading="isExporting"
-              :title="!userStore.currentUser ? '需要登录才能导出' : '导出设计'">
-              <el-icon>
-                <Download />
-              </el-icon>
-              导出
-              <el-icon class="el-icon--right">
-                <ArrowDown />
-              </el-icon>
-              <el-icon v-if="!userStore.currentUser" class="lock-icon">
-                <Lock />
-              </el-icon>
-            </el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="png">导出PNG</el-dropdown-item>
-                <el-dropdown-item command="pdf">导出PDF</el-dropdown-item>
-                <el-dropdown-item command="json">导出JSON</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-
-          <el-button class="action-button" @click="triggerFileInput"
-            :title="!userStore.currentUser ? '需要登录才能导入' : '导入设计'">
-            <el-icon>
-              <Upload />
-            </el-icon>
-            导入设计
-            <el-icon v-if="!userStore.currentUser" class="lock-icon">
-              <Lock />
-            </el-icon>
-          </el-button>
-
-          <input type="file" ref="fileInput" style="display: none" accept=".json" @change="handleFileChange" />
-
-          <el-button @click="generateCourse" type="success" class="action-button">
-            <el-icon>
-              <Pointer />
-            </el-icon>
-            自动生成路线
-          </el-button>
-
-
-          <el-button @click="clearCourse" type="danger" class="action-button">
-            <el-icon>
-              <Delete />
-            </el-icon>
-            清空画布
-          </el-button>
-
-          <el-button @click="showAIGenerate" type="primary" class="action-button">
-            <el-icon>
-              <Edit />
-            </el-icon>
-            AI生成
-          </el-button>
+    <!-- AI 魔法球 (悬浮在右下角) -->
+    <teleport to="#app">
+      <el-tooltip content="✨ 唤醒 AI 助手" placement="left" :show-after="100">
+        <div class="floating-magic-orb" @click="showAIGenerate">
+          <el-icon><MagicStick /></el-icon>
         </div>
+      </el-tooltip>
+    </teleport>
+
+    <!-- 全局操作面板 (悬浮于顶部中央) -->
+    <teleport to="#app">
+      <div class="floating-global-actions">
+        <el-button @click="handleSaveDesign" class="global-action-btn"
+          :title="!userStore.currentUser ? '需要登录才能保存' : '保存设计'">
+          <el-icon><Download /></el-icon> <span>保存</span>
+        </el-button>
+
+        <el-dropdown @command="handleUnifiedExport" trigger="hover">
+          <div class="global-action-btn glass-dropdown">
+            <el-icon><Download /></el-icon> <span>导出</span>
+            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </div>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="png">导出 PNG</el-dropdown-item>
+              <el-dropdown-item command="pdf">导出 PDF</el-dropdown-item>
+              <el-dropdown-item command="json">导出 JSON</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+
+        <el-button class="global-action-btn" @click="triggerFileInput"
+          :title="!userStore.currentUser ? '需要登录才能导入' : '导入设计'">
+          <el-icon><Upload /></el-icon> <span>导入</span>
+        </el-button>
+        <input type="file" ref="fileInput" style="display: none" accept=".json" @change="handleFileChange" />
+
+        <div class="global-action-divider"></div>
+
+        <el-button @click="generateCourse" type="primary" class="global-action-btn primary-solid">
+          <el-icon><Pointer /></el-icon> <span>生成路线</span>
+        </el-button>
+
+        <el-button @click="clearCourse" class="global-action-btn danger-text">
+          <el-icon><Delete /></el-icon> <span>清空</span>
+        </el-button>
       </div>
-    </div>
+    </teleport>
 
 
 
@@ -236,7 +199,7 @@ import { ref } from 'vue'
 import { ObstacleType } from '@/types/obstacle'
 import { useCourseStore } from '@/stores/course'
 import { useUserStore } from '@/stores/user'
-import { Download, Upload, Delete, Pointer, Edit, Lock, ArrowDown } from '@element-plus/icons-vue'
+import { Download, Upload, Delete, Pointer, Edit, Lock, ArrowDown, MagicStick } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage, ElLoading } from 'element-plus'
 import html2canvas from 'html2canvas'
 import { saveDesign } from '@/api/design'
@@ -1059,56 +1022,39 @@ const getTypeName = (type: string) => {
 
 <style scoped>
 .toolbar {
-  padding: 10px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
   height: 100%;
   box-sizing: border-box;
   overflow: hidden;
-}
-
-/* 导出加载样式 */
-:deep(.export-loading) {
-  background: rgba(0, 0, 0, 0.8) !important;
-}
-
-:deep(.export-loading .el-loading-text) {
-  color: #ffffff !important;
-  font-size: 14px !important;
-  line-height: 1.4 !important;
-  white-space: pre-line !important;
-  text-align: center !important;
-}
-
-:deep(.export-loading .el-loading-spinner) {
-  margin-top: -40px !important;
+  background: transparent;
 }
 
 .section {
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.1);
+  background-color: transparent;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .section-title {
-  font-size: 16px;
+  font-size: 15px;
   margin: 0;
-  padding: 12px 15px;
-  background-color: var(--bg-color);
-  border-bottom: 1px solid var(--border-color);
-  font-weight: 500;
+  padding: 8px 12px;
+  background-color: transparent;
+  font-weight: 600;
+  color: #0f172a;
 }
 
 .section-tabs {
   display: flex;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.1);
-  margin-bottom: 10px;
+  background-color: rgba(241, 245, 249, 0.6);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  padding: 4px;
+  margin-bottom: 12px;
   overflow: hidden;
 }
 
@@ -1116,18 +1062,18 @@ const getTypeName = (type: string) => {
   flex: 1;
   text-align: center;
   padding: 8px 0;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s;
-  border-bottom: 3px solid transparent;
-  color: var(--el-text-color-secondary);
+  color: #64748b;
+  border-radius: 8px;
 }
 
 .section-tab.active {
-  color: var(--el-color-primary);
-  border-bottom-color: var(--el-color-primary);
-  background-color: var(--el-color-primary-light-9);
+  color: var(--primary-color);
+  background-color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
 .scrollable-section {
@@ -1279,36 +1225,38 @@ const getTypeName = (type: string) => {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 6px;
-  background-color: white;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 12px;
+  background-color: #ffffff;
   cursor: grab;
-  transition: all 0.3s ease;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
 }
 
 .obstacle-template:hover {
-  background-color: #f0f0f0;
+  transform: translateY(-3px) scale(1.02);
   border-color: var(--primary-color);
-  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(99, 102, 241, 0.12);
+  z-index: 2;
 }
 
 .obstacle-template:active {
   cursor: grabbing;
-  transform: translateY(0);
-  background-color: var(--el-color-primary-light-9);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  transform: translateY(0) scale(0.98);
+  background-color: rgba(248, 250, 252, 1);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
   transition: all 0.1s;
 }
 
 .action-button {
   position: relative;
-  border-radius: 6px;
-  padding: 10px 15px;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-  font-weight: 500;
+  border-radius: 12px;
+  padding: 12px 18px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  font-weight: 600;
   font-size: 14px;
   text-align: left;
   height: auto;
@@ -1316,32 +1264,40 @@ const getTypeName = (type: string) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  letter-spacing: 0.3px;
 }
 
 .action-button .el-icon {
-  margin-right: 8px;
-  font-size: 16px;
+  margin-right: 10px;
+  font-size: 18px;
   flex-shrink: 0;
 }
 
 .action-button.el-button--default {
-  background-color: white;
-  color: var(--el-text-color-primary);
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #334155;
 }
 
 .action-button.el-button--primary {
   border: none;
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
   color: white !important;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
 }
 
 .action-button.el-button--success {
   border: none;
+  background: linear-gradient(135deg, var(--success-color) 0%, #059669 100%);
   color: white !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
 }
 
 .action-button.el-button--danger {
   border: none;
+  background: linear-gradient(135deg, var(--danger-color) 0%, #dc2626 100%);
   color: white !important;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
 }
 
 .action-button .lock-icon {
@@ -1355,7 +1311,8 @@ const getTypeName = (type: string) => {
 
 .action-button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+  filter: brightness(1.05);
 }
 
 .action-button:active {
@@ -1401,9 +1358,9 @@ const getTypeName = (type: string) => {
 
 .template-name {
   font-size: 14px;
-  font-weight: 500;
-  color: var(--el-text-color-primary);
-  margin-left: 5px;
+  font-weight: 600;
+  color: #334155;
+  margin-left: 8px;
   flex: 1;
 }
 
@@ -1412,14 +1369,15 @@ const getTypeName = (type: string) => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  padding: 8px;
-  width: 60px;
-  height: 60px;
+  gap: 6px;
+  padding: 10px;
+  width: 64px;
+  height: 64px;
   justify-content: center;
-  background-color: #f9fafc;
-  border-radius: 4px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
   overflow: visible;
   pointer-events: none;
 }
@@ -1566,5 +1524,137 @@ const getTypeName = (type: string) => {
 .percentage-value {
   font-size: 12px;
   color: var(--el-text-color-regular);
+}
+
+/* AI 魔法入口悬浮球 */
+.floating-magic-orb {
+  position: fixed;
+  bottom: 84px; /* 避开下方 24px 处的比赛信息按钮 */
+  right: 32px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7F00FF 0%, #E100FF 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  box-shadow: 0 8px 32px rgba(225, 0, 255, 0.4);
+  cursor: pointer;
+  z-index: 2000;
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.floating-magic-orb:hover {
+  transform: translateY(-5px) scale(1.1);
+  box-shadow: 0 12px 40px rgba(225, 0, 255, 0.6);
+  background: linear-gradient(135deg, #8A19FF 0%, #E833FF 100%);
+}
+
+.floating-magic-orb:active {
+  transform: translateY(2px) scale(0.95);
+}
+
+.floating-magic-orb .el-icon {
+  animation: ai-sparkle 2s infinite ease-in-out;
+}
+
+@keyframes ai-sparkle {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.2) rotate(10deg); opacity: 1; filter: drop-shadow(0 0 6px rgba(255,255,255,0.8)); }
+}
+
+/* 全局操作面板 - 顶部悬浮胶囊 */
+.floating-global-actions {
+  position: fixed;
+  top: 24px;
+  right: 360px; /* 避开右侧属性面板 */
+  height: 48px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 24px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  z-index: 100;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.global-action-btn {
+  height: 36px;
+  line-height: normal;
+  padding: 0 16px;
+  border-radius: 18px;
+  border: none;
+  background: transparent;
+  color: #475569;
+  font-weight: 600;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: none;
+  outline: none;
+}
+
+.global-action-btn:hover {
+  background: rgba(241, 245, 249, 0.8);
+  color: #0f172a;
+}
+
+.global-action-btn:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+.glass-dropdown {
+  outline: none;
+}
+
+.global-action-divider {
+  width: 1px;
+  height: 20px;
+  background-color: #cbd5e1;
+  margin: 0 8px;
+}
+
+/* 生成路线按钮高亮 */
+.global-action-btn.primary-solid {
+  background: #3b82f6;
+  color: white;
+}
+.global-action-btn.primary-solid:hover {
+  background: #2563eb;
+  color: white;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+/* 清空按钮危险色 */
+.global-action-btn.danger-text {
+  color: #ef4444;
+}
+.global-action-btn.danger-text:hover {
+  background: rgba(254, 226, 226, 0.8);
+  color: #b91c1c;
+}
+
+/* 适配中屏幕 */
+@media screen and (max-width: 1400px) {
+  .floating-global-actions {
+    right: 320px;
+  }
+}
+
+@media screen and (max-width: 1200px) {
+  .floating-global-actions {
+    right: 24px;
+    top: 80px;
+  }
 }
 </style>

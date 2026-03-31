@@ -105,6 +105,7 @@
       <g
         v-for="obstacle in courseStore.currentCourse.obstacles"
         :key="obstacle.id"
+        :data-obstacle-id="obstacle.id"
         class="obstacle-group"
         :class="{ selected: isObstacleSelected(obstacle.id) }"
         :transform="obstacleTransform(obstacle)"
@@ -186,6 +187,31 @@
           />
         </template>
 
+        <!-- 方向箭头：垂直穿过障碍物，从上到下（马的行进方向） -->
+        <g
+          v-if="obstacle.type !== ObstacleType.DECORATION ||
+            (obstacle.type === ObstacleType.DECORATION && obstacle.decorationProperties?.showDirectionArrow)"
+          class="direction-arrow-group"
+        >
+          <!-- 箭头线 -->
+          <line
+            :x1="getObstacleMetrics(obstacle).width / 2"
+            :y1="getObstacleMetrics(obstacle).height / 2 - 3"
+            :x2="getObstacleMetrics(obstacle).width / 2"
+            :y2="getObstacleMetrics(obstacle).height / 2 + 2.5"
+            class="direction-arrow-line"
+          />
+          <!-- 箭头头部（三角形，尖端朝下） -->
+          <polygon
+            :points="`
+              ${getObstacleMetrics(obstacle).width / 2 - 0.4},${getObstacleMetrics(obstacle).height / 2 + 2.5}
+              ${getObstacleMetrics(obstacle).width / 2 + 0.4},${getObstacleMetrics(obstacle).height / 2 + 2.5}
+              ${getObstacleMetrics(obstacle).width / 2},${getObstacleMetrics(obstacle).height / 2 + 3.2}
+            `"
+            class="direction-arrow-head"
+          />
+        </g>
+
         <rect
           v-if="isObstacleSelected(obstacle.id)"
           class="selection-outline"
@@ -196,14 +222,29 @@
           fill="none"
         />
 
-        <text
-          v-if="obstacle.number"
-          class="obstacle-number"
-          :x="getObstacleMetrics(obstacle).width / 2"
-          y="-0.35"
+        <!-- 障碍物编号：圆形背景 + 数字 -->
+        <g 
+          v-if="obstacle.number" 
+          class="obstacle-number-group"
+          style="cursor: move; pointer-events: all;"
+          @pointerdown.stop.prevent="startDraggingNumber($event, obstacle)"
         >
-          {{ obstacle.number }}
-        </text>
+          <g :transform="`translate(${getObstacleNumberPosition(obstacle).x}, ${getObstacleNumberPosition(obstacle).y})`">
+            <circle
+              cx="0"
+              cy="0"
+              r="0.55"
+              class="obstacle-number-bg"
+            />
+            <text
+              class="obstacle-number"
+              x="0"
+              y="0.2"
+            >
+              {{ obstacle.number }}
+            </text>
+          </g>
+        </g>
 
         <circle
           v-if="selectedObstacleId === obstacle.id"
@@ -225,32 +266,46 @@
       />
     </svg>
 
-    <div class="field-dimensions">
-      {{ fieldWidth }}m × {{ fieldHeight }}m
-    </div>
-    <div class="scale-indicator">
-      <div class="line" />
-      <span>5m</span>
-    </div>
+    <!-- 统一画布信息胶囊 (Glass Capsule HUD) -->
+    <div class="canvas-hud">
+      <div class="hud-item field-dimensions">
+        场地: {{ fieldWidth }}m × {{ fieldHeight }}m
+      </div>
+      
+      <div class="hud-divider"></div>
+      
+      <div class="hud-item scale-indicator">
+        <div class="line" />
+        <span>5m</span>
+      </div>
 
-    <div v-if="courseStore.coursePath.visible" class="path-tools">
-      <button type="button" class="path-tool-btn" @click="toggleDistanceLabels">
-        {{ showDistanceLabels ? '隐藏距离' : '显示距离' }}
-      </button>
-      <button type="button" class="path-tool-btn danger" @click="clearPath">
-        删除路线
-      </button>
-    </div>
+      <template v-if="courseStore.coursePath.visible && showDistanceLabels && totalDistanceValue > 0">
+        <div class="hud-divider"></div>
+        <div class="hud-item total-distance">
+          总距: {{ totalDistanceText }}m
+        </div>
+      </template>
 
-    <div v-if="courseStore.coursePath.visible && showDistanceLabels && totalDistanceValue > 0" class="total-distance">
-      总距离: {{ totalDistanceText }}m
+      <template v-if="courseStore.coursePath.visible">
+        <div class="hud-divider"></div>
+        <div class="hud-item path-tools">
+          <button type="button" class="path-tool-btn" @click="toggleDistanceLabels">
+            {{ showDistanceLabels ? '隐藏距离' : '显示距离' }}
+          </button>
+          <button type="button" class="path-tool-btn danger" @click="clearPath">
+            删路线
+          </button>
+        </div>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { throttle } from 'lodash'
 import { useCourseStore } from '@/stores/course'
+import { useHistoryStore } from '@/stores/history'
 import { useObstacleStore } from '@/stores/obstacle'
 import { useUserStore } from '@/stores/user'
 import { ConnectionStatus, useWebSocketStore } from '@/stores/websocket'
@@ -260,6 +315,7 @@ import type { CustomObstacleTemplate, Obstacle } from '@/types/obstacle'
 const PATH_MARKER_HALF_LENGTH = 3
 
 const courseStore = useCourseStore()
+const historyStore = useHistoryStore()
 const webSocketStore = useWebSocketStore()
 const userStore = useUserStore()
 const obstacleStore = useObstacleStore()
@@ -282,6 +338,14 @@ const draggingObstacles = ref<{
   ids: string[]
   pointerStart: { x: number; y: number }
   startPositions: Record<string, { x: number; y: number }>
+  currentPositions?: Record<string, { x: number; y: number }>
+} | null>(null)
+
+const draggingNumber = ref<{
+  id: string
+  pointerStart: { x: number; y: number }
+  startPosition: { x: number; y: number }
+  currentPosition?: { x: number; y: number }
 } | null>(null)
 
 const rotatingObstacle = ref<{
@@ -289,6 +353,7 @@ const rotatingObstacle = ref<{
   center: { x: number; y: number }
   startAngle: number
   startRotation: number
+  currentRotation?: number
 } | null>(null)
 
 const draggingPathPoint = ref<{
@@ -672,6 +737,36 @@ const selectObstacle = (obstacle: Obstacle | null, multiSelect = false) => {
   setSelectedObstacleIds([obstacle.id])
 }
 
+const getObstacleNumberPosition = (obstacle: Obstacle) => {
+  if (draggingNumber.value?.id === obstacle.id && draggingNumber.value.currentPosition) {
+    return draggingNumber.value.currentPosition
+  }
+  if (obstacle.numberPosition) {
+    return obstacle.numberPosition
+  }
+  const metrics = getObstacleMetrics(obstacle)
+  return { x: metrics.width / 2, y: -0.8 }
+}
+
+const startDraggingNumber = (event: PointerEvent, obstacle: Obstacle) => {
+  if (event.button !== 0) return
+  const world = screenToWorld(event.clientX, event.clientY)
+  if (!world) return
+  
+  draggingNumber.value = {
+    id: obstacle.id,
+    pointerStart: { x: world.x, y: world.y },
+    startPosition: { ...getObstacleNumberPosition(obstacle) }
+  }
+  
+  if (!isObstacleSelected(obstacle.id)) {
+    setSelectedObstacleIds([obstacle.id])
+  }
+  
+  window.addEventListener('pointermove', handlePointerMove)
+  window.addEventListener('pointerup', handlePointerUp)
+}
+
 const startDraggingObstacle = (event: PointerEvent, obstacle: Obstacle) => {
   if (event.ctrlKey || event.metaKey) {
     selectObstacle(obstacle, true)
@@ -760,6 +855,12 @@ const startDraggingControlPoint = (
   }
 }
 
+const throttledSendObstacleUpdate = throttle((id: string, updates: Partial<Obstacle>) => {
+  if (isCollaborating.value) {
+    webSocketStore.sendObstacleUpdate(id, updates)
+  }
+}, 50)
+
 const handlePointerMove = (event: PointerEvent) => {
   const world = screenToWorld(event.clientX, event.clientY)
   if (!world) return
@@ -783,10 +884,22 @@ const handlePointerMove = (event: PointerEvent) => {
         x: startPosition.x + deltaX,
         y: startPosition.y + deltaY
       })
-      courseStore.updateObstacle(obstacle.id, { position })
-      if (isCollaborating.value) {
-        webSocketStore.sendObstacleUpdate(obstacle.id, { position })
+      
+      // Save local position for pointer up
+      if (!draggingObstacles.value!.currentPositions) {
+        draggingObstacles.value!.currentPositions = {}
       }
+      draggingObstacles.value!.currentPositions[id] = position
+
+      const el = document.querySelector(`[data-obstacle-id="${id}"]`)
+      if (el) {
+        const metrics = getObstacleMetrics(obstacle)
+        const centerX = metrics.width / 2
+        const centerY = metrics.height / 2
+        el.setAttribute('transform', `translate(${position.x} ${position.y}) rotate(${obstacle.rotation} ${centerX} ${centerY})`)
+      }
+
+      throttledSendObstacleUpdate(obstacle.id, { position })
     })
     return
   }
@@ -801,10 +914,17 @@ const handlePointerMove = (event: PointerEvent) => {
     const delta = currentAngle - rotatingObstacle.value.startAngle
     const rotation = normalizeRotation(rotatingObstacle.value.startRotation + delta)
 
-    courseStore.updateObstacle(obstacle.id, { rotation })
-    if (isCollaborating.value) {
-      webSocketStore.sendObstacleUpdate(obstacle.id, { rotation })
+    rotatingObstacle.value.currentRotation = rotation
+
+    const el = document.querySelector(`[data-obstacle-id="${obstacle.id}"]`)
+    if (el) {
+      const metrics = getObstacleMetrics(obstacle)
+      const centerX = metrics.width / 2
+      const centerY = metrics.height / 2
+      el.setAttribute('transform', `translate(${obstacle.position.x} ${obstacle.position.y}) rotate(${rotation} ${centerX} ${centerY})`)
     }
+
+    throttledSendObstacleUpdate(obstacle.id, { rotation })
     return
   }
 
@@ -847,6 +967,24 @@ const handlePointerMove = (event: PointerEvent) => {
     )
     sendPathUpdateIfNeeded()
   }
+
+  if (draggingNumber.value) {
+    const obstacle = courseStore.currentCourse.obstacles.find(o => o.id === draggingNumber.value!.id)
+    if (obstacle) {
+      const deltaX = world.x - draggingNumber.value.pointerStart.x
+      const deltaY = world.y - draggingNumber.value.pointerStart.y
+      
+      const rad = (-obstacle.rotation * Math.PI) / 180
+      const localDeltaX = deltaX * Math.cos(rad) - deltaY * Math.sin(rad)
+      const localDeltaY = deltaX * Math.sin(rad) + deltaY * Math.cos(rad)
+      
+      draggingNumber.value.currentPosition = {
+        x: draggingNumber.value.startPosition.x + localDeltaX,
+        y: draggingNumber.value.startPosition.y + localDeltaY
+      }
+    }
+    return
+  }
 }
 
 const handlePointerUp = () => {
@@ -855,11 +993,53 @@ const handlePointerUp = () => {
     selectingState.value = null
   }
 
+  // Commit drag changes to store
+  let hasChanges = false
+  if (draggingObstacles.value?.currentPositions) {
+    Object.entries(draggingObstacles.value.currentPositions).forEach(([id, position]) => {
+      courseStore.updateObstacle(id, { position })
+      if (isCollaborating.value) {
+        webSocketStore.sendObstacleUpdate(id, { position })
+      }
+      hasChanges = true
+    })
+  }
+
+  // Commit rotation changes to store
+  if (rotatingObstacle.value?.currentRotation !== undefined) {
+    courseStore.updateObstacle(rotatingObstacle.value.id, { rotation: rotatingObstacle.value.currentRotation })
+    if (isCollaborating.value) {
+      webSocketStore.sendObstacleUpdate(rotatingObstacle.value.id, { rotation: rotatingObstacle.value.currentRotation })
+    }
+    hasChanges = true
+  }
+
+  if (draggingNumber.value && draggingNumber.value.currentPosition) {
+    courseStore.updateObstacle(draggingNumber.value.id, {
+      numberPosition: draggingNumber.value.currentPosition
+    })
+    if (isCollaborating.value) {
+      webSocketStore.sendObstacleUpdate(draggingNumber.value.id, {
+        numberPosition: draggingNumber.value.currentPosition
+      })
+    }
+    hasChanges = true
+  }
+
+  if (draggingPathPoint.value || rotatingPathPoint.value || draggingControlPoint.value) {
+    hasChanges = true
+  }
+
+  if (hasChanges) {
+    courseStore.commitHistory()
+  }
+
   draggingObstacles.value = null
   rotatingObstacle.value = null
   draggingPathPoint.value = null
   rotatingPathPoint.value = null
   draggingControlPoint.value = null
+  draggingNumber.value = null
 }
 
 const createBuiltInObstacle = (
@@ -1012,6 +1192,7 @@ const handleDrop = (event: DragEvent) => {
 const handleGenerateCoursePath = () => {
   courseStore.generatePath()
   sendPathUpdateIfNeeded()
+  courseStore.commitHistory()
 }
 
 const handleClearCanvas = () => {
@@ -1243,6 +1424,36 @@ const handleKeyDown = (event: KeyboardEvent) => {
     return
   }
 
+  // Undo (Ctrl+Z)
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+    event.preventDefault()
+    if (event.shiftKey) {
+      const snap = historyStore.redo()
+      if (snap) {
+        courseStore.hydrateFromSnapshot(snap)
+        if (isCollaborating.value) sendFullCanvasState()
+      }
+    } else {
+      const snap = historyStore.undo()
+      if (snap) {
+        courseStore.hydrateFromSnapshot(snap)
+        if (isCollaborating.value) sendFullCanvasState()
+      }
+    }
+    return
+  }
+
+  // Redo (Ctrl+Y)
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
+    event.preventDefault()
+    const snap = historyStore.redo()
+    if (snap) {
+      courseStore.hydrateFromSnapshot(snap)
+      if (isCollaborating.value) sendFullCanvasState()
+    }
+    return
+  }
+
   if (event.ctrlKey || event.metaKey) {
     if (event.key.toLowerCase() === 'c') {
       event.preventDefault()
@@ -1272,6 +1483,10 @@ onMounted(() => {
     canvasContainerRef.value.addEventListener('generate-course-path', handleGenerateCoursePath as EventListener)
     canvasContainerRef.value.addEventListener('clear-canvas', handleClearCanvas as EventListener)
   }
+
+  // Init history baseline
+  historyStore.clear()
+  courseStore.commitHistory()
 })
 
 onUnmounted(() => {
@@ -1332,6 +1547,26 @@ defineExpose({
 
 .obstacle-group {
   cursor: move;
+
+  .direction-arrow-group {
+    pointer-events: none;
+    opacity: 0.8;
+  }
+
+  &.selected .direction-arrow-group,
+  &:hover .direction-arrow-group {
+    opacity: 1;
+  }
+}
+
+.direction-arrow-line {
+  stroke: var(--primary-color, #409eff);
+  stroke-width: 0.12;
+  fill: none;
+}
+
+.direction-arrow-head {
+  fill: var(--primary-color, #409eff);
 }
 
 .selection-outline {
@@ -1340,11 +1575,22 @@ defineExpose({
   stroke-dasharray: 0.24, 0.16;
 }
 
-.obstacle-number {
+.obstacle-number-group {
+  cursor: move;
+}
+
+.obstacle-number-bg {
   fill: var(--primary-color, #409eff);
-  font-size: 0.8px;
+  opacity: 0.9;
+}
+
+.obstacle-number {
+  fill: #ffffff;
+  font-size: 0.55px;
   text-anchor: middle;
-  font-weight: 600;
+  dominant-baseline: middle;
+  font-weight: 700;
+  user-select: none;
 }
 
 .path-marker {
@@ -1405,100 +1651,104 @@ defineExpose({
   font-weight: 600;
 }
 
-.field-dimensions {
+.canvas-hud {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 16px;
   background: rgba(255, 255, 255, 0.9);
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
-  padding: 4px 8px;
-  font-size: 12px;
-  color: #303133;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 999px; /* Pill shape */
+  padding: 8px 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  z-index: 100;
+}
+
+.hud-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hud-divider {
+  width: 1px;
+  height: 16px;
+  background: #cbd5e1;
 }
 
 .scale-indicator {
-  position: absolute;
-  left: 10px;
-  top: 10px;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
-  padding: 6px 8px;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-
-  .line {
-    width: 70px;
-    height: 2px;
-    background: #303133;
-    position: relative;
-  }
-
-  .line::before,
-  .line::after {
-    content: '';
-    position: absolute;
-    width: 2px;
-    height: 8px;
-    background: #303133;
-    top: -3px;
-  }
-
-  .line::before {
-    left: 0;
-  }
-
-  .line::after {
-    right: 0;
-  }
-
-  span {
-    font-size: 11px;
-    color: #303133;
-  }
-}
-
-.path-tools {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  display: flex;
-  gap: 8px;
   align-items: center;
 }
 
-.path-tool-btn {
-  border: 1px solid #dcdfe6;
-  background: rgba(255, 255, 255, 0.96);
-  color: #303133;
-  border-radius: 4px;
+.scale-indicator .line {
+  width: 40px;
+  height: 2px;
+  background: #334155;
+  position: relative;
+  margin-right: 6px;
+}
+
+.scale-indicator .line::before,
+.scale-indicator .line::after {
+  content: '';
+  position: absolute;
+  width: 2px;
+  height: 6px;
+  background: #334155;
+  top: -2px;
+}
+
+.scale-indicator .line::before {
+  left: 0;
+}
+
+.scale-indicator .line::after {
+  right: 0;
+}
+
+.scale-indicator span {
   font-size: 12px;
-  line-height: 18px;
-  padding: 4px 10px;
+  color: #475569;
+  font-weight: 500;
+}
+
+.path-tools {
+  display: flex;
+  gap: 6px;
+}
+
+.path-tool-btn {
+  border: none;
+  background: rgba(241, 245, 249, 0.8);
+  color: #334155;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .path-tool-btn:hover {
-  border-color: #c0c4cc;
+  background: #e2e8f0;
+  color: var(--primary-color);
 }
 
 .path-tool-btn.danger {
-  color: #f56c6c;
-  border-color: #fbc4c4;
+  color: #ef4444;
+  background: transparent;
 }
 
-.total-distance {
-  position: absolute;
-  left: 10px;
-  bottom: 10px;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
-  padding: 4px 8px;
-  font-size: 12px;
-  color: #303133;
-  font-weight: 600;
+.path-tool-btn.danger:hover {
+  background: #fef2f2;
 }
 </style>

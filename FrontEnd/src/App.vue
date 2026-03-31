@@ -84,11 +84,13 @@
     <div class="main">
       <!-- 只在主页显示这些组件 -->
       <template v-if="$route.path === '/'">
-        <ToolBar class="toolbar" :style="{ width: `${leftPanelWidth}px` }" @show-login="showLoginDialog" />
-        <ResizableDivider direction="vertical" @resize="handleLeftPanelResize" />
-        <component :is="activeCanvasComponent" class="canvas" ref="canvasRef" />
-        <ResizableDivider direction="vertical" @resize="handleRightPanelResize" />
-        <PropertiesPanel class="properties-panel" :style="{ width: `${rightPanelWidth}px` }" />
+        <CourseCanvasV2 class="canvas fullscreen-canvas" ref="canvasRef" />
+        <ToolBar class="toolbar floating-panel left-panel" :style="{ width: `${leftPanelWidth}px` }" @show-login="showLoginDialog" />
+        <PropertiesPanel 
+          class="properties-panel floating-panel right-panel" 
+          :class="{ 'panel-hidden': !courseStore.selectedObstacle && !courseStore.coursePath.visible }"
+          :style="{ width: `${rightPanelWidth}px` }" 
+        />
       </template>
 
       <!-- 路由视图，用于显示其他页面 -->
@@ -207,7 +209,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { useCourseStore } from '@/stores/course'
 import { useUserStore } from '@/stores/user'
 import CollaborationPanel from '@/components/CollaborationPanel.vue'
-import CourseCanvas from '@/components/CourseCanvas.vue'
 import CourseCanvasV2 from '@/components/CourseCanvasV2.vue'
 import LoginForm from '@/components/LoginForm.vue'
 import OnboardingTour from '@/components/OnboardingTour.vue'
@@ -227,9 +228,6 @@ const registerDialogVisible = ref(false)
 
 // Canvas 组件引用
 const canvasRef = ref<CanvasComponentExposed | null>(null)
-const activeCanvasComponent = computed(() =>
-  courseStore.currentCourse.renderVersion === 'v2' ? CourseCanvasV2 : CourseCanvas
-)
 
 // 协作逻辑（从 composable 引入）
 const {
@@ -717,17 +715,20 @@ body,
 }
 
 .header {
-  height: 60px;
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
-  color: white;
+  height: 64px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #0f172a;
   display: flex;
   align-items: center;
   padding: 0 24px;
   justify-content: space-between;
-  box-shadow: var(--shadow);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
   flex-shrink: 0;
   position: relative;
-  z-index: 10;
+  z-index: 20;
 
   .header-left {
     display: flex;
@@ -735,28 +736,26 @@ body,
     gap: 16px;
 
     .header-icon {
-      color: white;
-      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+      color: var(--primary-color);
     }
 
     h1 {
       margin: 0;
-      font-size: 20px;
-      font-weight: 600;
+      font-size: 19px;
+      font-weight: 700;
       letter-spacing: -0.5px;
+      color: #0f172a;
     }
 
     .logo-link {
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 12px;
       text-decoration: none;
-      color: white;
       transition: var(--transition);
 
       &:hover {
-        opacity: 0.95;
-        transform: translateY(-1px);
+        opacity: 0.8;
       }
     }
   }
@@ -772,48 +771,52 @@ body,
     display: flex;
     align-items: center;
     gap: 16px;
+    
+    .feedback-link {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #475569;
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 14px;
+      transition: var(--transition);
+      
+      &:hover {
+        color: var(--primary-color);
+      }
+    }
   }
 }
 
 .nav-menu {
   display: flex;
-  gap: 20px;
-  background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  padding: 6px 16px;
+  gap: 12px;
+  background-color: rgba(241, 245, 249, 0.6);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 4px;
   margin: 0;
 
   .nav-link {
-    color: rgba(255, 255, 255, 0.85);
+    color: #475569;
     text-decoration: none;
-    font-size: 15px;
+    font-size: 14px;
     position: relative;
-    padding: 6px 10px;
+    padding: 6px 16px;
     transition: var(--transition);
-    font-weight: 500;
-    border-radius: 6px;
+    font-weight: 600;
+    border-radius: 8px;
 
     &:hover {
-      color: white;
-      background-color: rgba(255, 255, 255, 0.15);
+      color: #0f172a;
+      background-color: rgba(226, 232, 240, 0.5);
     }
 
     &.router-link-active {
-      color: white;
-      font-weight: 600;
-      background-color: rgba(255, 255, 255, 0.2);
-
-      &:after {
-        content: '';
-        position: absolute;
-        bottom: 2px;
-        left: 10px;
-        right: 10px;
-        height: 2px;
-        background-color: white;
-        border-radius: 3px;
-        box-shadow: 0 1px 3px rgba(255, 255, 255, 0.3);
-      }
+      color: var(--primary-color);
+      background-color: #ffffff;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.04);
     }
   }
 }
@@ -842,13 +845,13 @@ body,
   }
 
   .username-display {
-    color: white;
-    font-weight: 500;
+    color: #334155;
+    font-weight: 600;
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 4px 8px 4px 4px;
-    background-color: rgba(255, 255, 255, 0.1);
+    padding: 4px 12px 4px 4px;
+    background-color: #f1f5f9;
     border-radius: 30px;
   }
 
@@ -856,16 +859,18 @@ body,
     display: flex;
     align-items: center;
     gap: 5px;
-    background-color: rgba(255, 255, 255, 0.15);
-    border-color: transparent;
-    font-weight: 500;
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #475569;
+    font-weight: 600;
 
     .el-icon {
       font-size: 14px;
     }
 
     &:hover {
-      background-color: rgba(255, 255, 255, 0.25);
+      background-color: #f1f5f9;
+      color: var(--primary-color);
       transform: translateY(-1px);
     }
 
@@ -880,50 +885,53 @@ body,
   .login-button {
     padding: 8px 20px;
     font-weight: 600;
-    background-color: var(--accent-color);
-    border-color: var(--accent-color);
+    color: white;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+    border: none;
     display: flex;
     align-items: center;
     gap: 6px;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+    transition: all 0.3s ease;
 
     .el-icon {
       font-size: 15px;
     }
 
     &:hover {
-      background-color: #00b090;
-      border-color: #00b090;
-      box-shadow: 0 3px 8px rgba(0, 198, 162, 0.3);
+      box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3);
+      transform: translateY(-1px);
     }
   }
 
   .register-button {
     padding: 8px 20px;
     font-weight: 600;
-    color: white;
-    border: 2px solid rgba(255, 255, 255, 0.65);
-    background-color: transparent;
+    color: #334155;
+    border: 1px solid #e2e8f0;
+    background-color: #f8fafc;
     display: flex;
     align-items: center;
     gap: 6px;
+    transition: all 0.3s ease;
 
     .el-icon {
       font-size: 15px;
     }
 
     &:hover {
-      border-color: white;
-      background-color: rgba(255, 255, 255, 0.1);
+      background-color: #f1f5f9;
+      border-color: #cbd5e1;
       transform: translateY(-1px);
     }
   }
 
   .logout-button {
     padding: 6px 14px;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    background-color: rgba(255, 255, 255, 0.05);
+    font-weight: 600;
+    color: #ef4444;
+    border: 1px solid #fee2e2;
+    background-color: #fef2f2;
     display: flex;
     align-items: center;
     gap: 5px;
@@ -935,8 +943,8 @@ body,
 
     &:hover {
       color: white;
-      border-color: rgba(255, 255, 255, 0.4);
-      background-color: rgba(255, 255, 255, 0.15);
+      border-color: #ef4444;
+      background-color: #ef4444;
     }
   }
 }
@@ -945,11 +953,9 @@ body,
   flex: 1;
   display: flex;
   overflow: hidden;
-  background-color: var(--bg-color);
-  height: calc(100vh - 60px);
+  background-color: #e2e8f0; /* 纯白画布下的灰底，提供极境深 */
   position: relative;
-  justify-content: space-around;
-
+  
   .router-view {
     flex: 1;
     overflow: auto;
@@ -957,40 +963,59 @@ body,
     border-radius: var(--radius) var(--radius) 0 0;
     box-shadow: var(--shadow-sm);
     margin: 0 1px;
+    position: relative;
+    z-index: 10;
   }
 }
 
-.toolbar {
-  width: 400px;
-  background-color: var(--card-bg);
-  border-right: 1px solid var(--border-color);
-  overflow-y: auto;
-  min-width: 220px;
-  max-width: 500px;
-  transition: width 0.2s ease;
-  box-shadow: var(--shadow-sm);
-  z-index: 5;
+.fullscreen-canvas {
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1; /* 画纸在最底层 */
 }
 
-.canvas {
-  flex: 1;
-  background-color: var(--card-bg);
+/* 浮岛模式通用类 */
+.floating-panel {
+  position: absolute !important;
+  top: 20px;
+  bottom: 20px;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 20px;
+  box-shadow: 0 10px 40px -10px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
   overflow: hidden;
-  min-width: 300px;
-  box-shadow: var(--shadow-sm);
-  z-index: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.left-panel {
+  left: 20px;
+}
+
+.right-panel {
+  right: 20px;
+}
+
+.toolbar {
+  width: 360px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .properties-panel {
-  width: 300px;
-  background-color: var(--card-bg);
-  border-left: 1px solid var(--border-color);
-  overflow-y: auto;
-  min-width: 220px;
-  max-width: 600px;
-  transition: width 0.2s ease;
-  box-shadow: var(--shadow-sm);
-  z-index: 4;
+  width: 320px;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease, width 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.properties-panel.panel-hidden {
+  transform: translateX(120%) !important;
+  opacity: 0 !important;
+  pointer-events: none;
 }
 
 :deep(.el-dialog) {

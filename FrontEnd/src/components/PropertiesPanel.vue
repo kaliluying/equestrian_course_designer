@@ -135,7 +135,7 @@
 
               <el-form-item label="编号">
                 <el-input v-model="pole.number" maxlength="3" placeholder="输入编号（仅限数字）" class="full-width"
-                  @input="(value) => validatePoleNumber(index, value)" />
+                  @input="validatePoleNumber(index, $event)" />
                 <div v-if="poleNumberErrors[index]" class="error-message"
                   style="color: #F56C6C; font-size: 12px; margin-top: 5px;">
                   {{ poleNumberErrors[index] }}
@@ -725,15 +725,15 @@ const updateShowDirectionArrow = (show: boolean): void => {
 /* 属性面板容器样式 */
 .properties-panel {
   height: 100%;
-  background-color: white;
+  background-color: transparent;
   display: flex;
   flex-direction: column;
 }
 
 /* 面板头部样式 */
 .panel-header {
-  padding: 20px;
-  border-bottom: 1px solid var(--border-color);
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -745,8 +745,8 @@ const updateShowDirectionArrow = (show: boolean): void => {
 .panel-title {
   margin: 0;
   font-size: 16px;
-  font-weight: 500;
-  color: var(--text-color);
+  font-weight: 600;
+  color: #0f172a;
   flex: 1;
 }
 
@@ -784,17 +784,18 @@ const updateShowDirectionArrow = (show: boolean): void => {
 .section-title {
   margin: 0 0 16px;
   font-size: 14px;
-  font-weight: 500;
-  color: #606266;
+  font-weight: 600;
+  color: #334155;
 }
 
 /* 横木设置卡片样式 */
 .pole-settings {
-  padding: 20px;
+  padding: 16px;
   margin-bottom: 16px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background-color: var(--bg-color);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 12px;
+  background-color: rgba(248, 250, 252, 0.6);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.02);
 }
 
 /* 横木卡片头部样式 */
@@ -808,8 +809,8 @@ const updateShowDirectionArrow = (show: boolean): void => {
 
 /* 横木标题样式 */
 .pole-title {
-  font-weight: 500;
-  color: var(--text-color);
+  font-weight: 600;
+  color: #334155;
   flex: 1;
 }
 
