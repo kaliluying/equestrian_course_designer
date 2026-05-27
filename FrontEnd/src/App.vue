@@ -1,7 +1,8 @@
 <template>
-  <div class="app">
-    <!-- 顶部导航栏 -->
-    <div class="header">
+  <ErrorBoundary>
+    <div class="app">
+      <!-- 顶部导航栏 -->
+      <div class="header">
       <div class="header-left">
         <router-link to="/" class="logo-link">
           <el-icon :size="24" class="header-icon">
@@ -28,6 +29,9 @@
 
       <!-- 右侧区域 - 将反馈和用户信息放在一个容器内 -->
       <div class="header-right">
+        <!-- 主题切换 -->
+        <ThemeToggle />
+        
         <!-- 反馈入口 - 无论是否登录都显示 -->
         <router-link to="/feedback" class="feedback-link">
           <el-icon class="feedback-icon">
@@ -143,6 +147,9 @@
     <!-- 协作面板 -->
     <CollaborationPanel v-if="isCollaborating" :designId="courseStore.currentCourse.id" />
 
+    <!-- 自动保存指示器 -->
+    <AutoSaveIndicator />
+
     <!-- 比赛信息抽屉 -->
     <el-drawer v-model="showCompetitionDrawer" title="比赛信息" direction="rtl" size="400px" :with-header="true"
       :destroy-on-close="false" :modal="true" :show-close="true" :append-to-body="true"
@@ -198,7 +205,11 @@
 
     <!-- 首次访问引导 -->
     <OnboardingTour :show="showOnboarding" @complete="handleOnboardingComplete" @close="handleOnboardingClose" />
-  </div>
+    
+    <!-- 快捷键帮助面板 -->
+    <ShortcutHelper />
+    </div>
+  </ErrorBoundary>
 </template>
 
 <script setup lang="ts">
@@ -208,8 +219,11 @@ import { ChatDotRound, Check, Connection, InfoFilled, Key, Position, SwitchButto
 import { useRoute, useRouter } from 'vue-router'
 import { useCourseStore } from '@/stores/course'
 import { useUserStore } from '@/stores/user'
+import { useThemeStore } from '@/stores/theme'
 import CollaborationPanel from '@/components/CollaborationPanel.vue'
 import CourseCanvasV2 from '@/components/CourseCanvasV2.vue'
+import ErrorBoundary from '@/components/ErrorBoundary.vue'
+import AutoSaveIndicator from '@/components/AutoSaveIndicator.vue'
 import LoginForm from '@/components/LoginForm.vue'
 import OnboardingTour from '@/components/OnboardingTour.vue'
 import PropertiesPanel from '@/components/PropertiesPanel.vue'
@@ -218,13 +232,21 @@ import ResizableDivider from '@/components/ResizableDivider.vue'
 import ToolBar from '@/components/ToolBar.vue'
 import { useAutosave } from '@/composables/useAutosave'
 import { useCollaborationEvents, type CanvasComponentExposed } from '@/composables/useCollaborationEvents'
+import { setupGlobalErrorHandler } from '@/utils/errorHandler'
+import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
+import ShortcutHelper from '@/components/ShortcutHelper.vue'
+import ThemeToggle from '@/components/ThemeToggle.vue'
 
 const userStore = useUserStore()
 const courseStore = useCourseStore()
+const themeStore = useThemeStore()
 const route = useRoute()
 const router = useRouter()
 const loginDialogVisible = ref(false)
 const registerDialogVisible = ref(false)
+
+// 启用键盘快捷键
+useKeyboardShortcuts()
 
 // Canvas 组件引用
 const canvasRef = ref<CanvasComponentExposed | null>(null)
@@ -287,6 +309,12 @@ const handleTokenExpired = () => {
 // 协作事件处理和连接管理已移至 composables/useCollaborationEvents.ts
 
 onMounted(async () => {
+  // 设置全局错误处理
+  setupGlobalErrorHandler()
+  
+  // 初始化主题
+  themeStore.initTheme()
+  
   await userStore.initializeAuth()
 
   // 初始化面板宽度

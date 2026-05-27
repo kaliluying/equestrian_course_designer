@@ -20,7 +20,7 @@
     </div>
 
     <div v-if="loading" class="loading-container">
-      <el-skeleton :rows="5" animated />
+      <SkeletonLoader type="card" :count="6" />
     </div>
 
     <div v-else-if="designs.length === 0" class="empty-container">
@@ -151,6 +151,7 @@ import { useUserStore } from '@/stores/user'
 import { useCourseStore } from '@/stores/course'
 import { Star, Download, HomeFilled, Share, Clock, Timer, Document, Picture, Tickets } from '@element-plus/icons-vue'
 import ImagePreview from '@/components/ImagePreview.vue'
+import SkeletonLoader from '@/components/SkeletonLoader.vue'
 import { v4 as uuidv4 } from 'uuid'
 
 // 状态

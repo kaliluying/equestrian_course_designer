@@ -2097,6 +2097,90 @@ export const useCourseStore = defineStore('course', () => {
     return true
   }
 
+  /**
+   * 自动保存状态管理
+   */
+  const saveStatus = ref<'idle' | 'saving' | 'saved' | 'failed'>('idle')
+  const lastSavedAt = ref<number | null>(null)
+  const saveError = ref<string | null>(null)
+
+  /**
+   * 设置保存状态
+   */
+  function setSaveStatus(status: 'idle' | 'saving' | 'saved' | 'failed', error?: string) {
+    saveStatus.value = status
+    if (status === 'saved') {
+      lastSavedAt.value = Date.now()
+      saveError.value = null
+    } else if (status === 'failed') {
+      saveError.value = error || '保存失败'
+    }
+  }
+
+  /**
+   * 剪贴板状态管理
+   */
+  const clipboard = ref<Obstacle | null>(null)
+
+  /**
+   * 复制障碍物
+   */
+  function copyObstacle(obstacle: Obstacle | null = null) {
+    const obstacleToCopy = obstacle || selectedObstacle.value
+    if (!obstacleToCopy) {
+      return false
+    }
+    
+    // 深拷贝障碍物数据
+    clipboard.value = JSON.parse(JSON.stringify(obstacleToCopy))
+    return true
+  }
+
+  /**
+   * 粘贴障碍物
+   */
+  function pasteObstacle(offsetX: number = 5, offsetY: number = 5) {
+    if (!clipboard.value) {
+      return null
+    }
+    
+    // 创建新障碍物（带偏移）
+    const newObstacle: Obstacle = {
+      ...JSON.parse(JSON.stringify(clipboard.value)),
+      id: uuidv4(),
+      position: {
+        x: clipboard.value.position.x + offsetX,
+        y: clipboard.value.position.y + offsetY
+      }
+    }
+    
+    // 添加到场地
+    addObstacle(newObstacle)
+    
+    // 选中新障碍物
+    selectedObstacle.value = newObstacle
+    
+    return newObstacle
+  }
+
+  /**
+   * 剪切障碍物
+   */
+  function cutObstacle(obstacle: Obstacle | null = null) {
+    const obstacleToCut = obstacle || selectedObstacle.value
+    if (!obstacleToCut) {
+      return false
+    }
+    
+    // 复制到剪贴板
+    copyObstacle(obstacleToCut)
+    
+    // 删除原障碍物
+    removeObstacle(obstacleToCut.id)
+    
+    return true
+  }
+
   return {
     currentCourse,
     isV2Design,
@@ -2104,7 +2188,11 @@ export const useCourseStore = defineStore('course', () => {
     coursePath,
     startPoint,
     endPoint,
-    selectedPoint: ref<'start' | 'end' | null>(null), // 添加选中点状态
+    selectedPoint: ref<'start' | 'end' | null>(null),
+    saveStatus,
+    lastSavedAt,
+    saveError,
+    clipboard,
     initializeStore,
     updateStartRotation,
     updateEndRotation,
@@ -2135,7 +2223,11 @@ export const useCourseStore = defineStore('course', () => {
     resetCourse,
     importAIResult,
     commitHistory,
-    hydrateFromSnapshot
+    hydrateFromSnapshot,
+    setSaveStatus,
+    copyObstacle,
+    pasteObstacle,
+    cutObstacle
   }
 })
 

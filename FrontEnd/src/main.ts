@@ -7,6 +7,7 @@ import router from '@/router'
 
 import App from './App.vue'
 import './assets/main.css'
+import './styles/dark-theme.scss'
 
 const app = createApp(App)
 const pinia = createPinia()
