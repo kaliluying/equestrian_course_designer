@@ -184,7 +184,7 @@ export class CanvasBackupRenderer {
           console.log('步骤5: 恢复原始状态')
         }
 
-        this.svgEnhancer.restoreSVGState(svgProcessingResult)
+        this.svgEnhancer.restoreProcessingResult(svgProcessingResult)
 
         if (styleConversionResults.length > 0) {
           restoreSVGStyles(styleConversionResults)
@@ -615,11 +615,21 @@ export class CanvasBackupRenderer {
       strokeWidth: this.getNumericStyleValue(element, computedStyle, 'stroke-width'),
       strokeDasharray: this.getStrokeDashArray(element, computedStyle),
       strokeDashoffset: this.getNumericStyleValue(element, computedStyle, 'stroke-dashoffset'),
-      strokeLinecap: this.getStyleValue(element, computedStyle, 'stroke-linecap') as any,
-      strokeLinejoin: this.getStyleValue(element, computedStyle, 'stroke-linejoin') as any,
+      strokeLinecap: this.getStrokeLinecap(element, computedStyle),
+      strokeLinejoin: this.getStrokeLinejoin(element, computedStyle),
       opacity: this.getNumericStyleValue(element, computedStyle, 'opacity'),
       transform: element.getAttribute('transform') || computedStyle.transform
     }
+  }
+
+  private getStrokeLinecap(element: SVGElement, computedStyle: CSSStyleDeclaration): 'butt' | 'round' | 'square' {
+    const value = this.getStyleValue(element, computedStyle, 'stroke-linecap')
+    return value === 'round' || value === 'square' ? value : 'butt'
+  }
+
+  private getStrokeLinejoin(element: SVGElement, computedStyle: CSSStyleDeclaration): 'miter' | 'round' | 'bevel' {
+    const value = this.getStyleValue(element, computedStyle, 'stroke-linejoin')
+    return value === 'round' || value === 'bevel' ? value : 'miter'
   }
 
   // 几何形状转换方法

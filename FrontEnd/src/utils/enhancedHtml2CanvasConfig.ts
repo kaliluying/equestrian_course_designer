@@ -50,7 +50,7 @@ export interface RenderingContext {
 export function createEnhancedHtml2CanvasConfig(
   canvas: HTMLElement,
   options: EnhancedHtml2CanvasOptions = {}
-): Html2CanvasOptions {
+): Partial<Html2CanvasOptions> {
   const {
     backgroundColor = '#ffffff',
     scale = 2,
@@ -66,7 +66,7 @@ export function createEnhancedHtml2CanvasConfig(
   } = options
 
   // 基础html2canvas配置
-  const baseConfig: Html2CanvasOptions = {
+  const baseConfig: Partial<Html2CanvasOptions> = {
     backgroundColor,
     scale,
     useCORS: true,
@@ -74,8 +74,14 @@ export function createEnhancedHtml2CanvasConfig(
     foreignObjectRendering: true,
     removeContainer: false,
     logging: enableDebugMode,
-    width,
-    height,
+    x: 0,
+    y: 0,
+    width: width ?? canvas.scrollWidth,
+    height: height ?? canvas.scrollHeight,
+    scrollX: window.scrollX,
+    scrollY: window.scrollY,
+    windowWidth: window.innerWidth,
+    windowHeight: window.innerHeight,
     onclone: (clonedDoc, element) => {
       // 在克隆的文档中进行SVG预处理
       if (svgRenderingMode !== 'standard') {
@@ -422,8 +428,9 @@ export function cleanupHtml2CanvasProcessing(canvas: HTMLElement): void {
     })
 
     // 触发垃圾回收（如果可能）
-    if (window.gc && typeof window.gc === 'function') {
-      window.gc()
+    const debugWindow = window as Window & { gc?: () => void }
+    if (typeof debugWindow.gc === 'function') {
+      debugWindow.gc()
     }
   } catch (error) {
     console.warn('清理html2canvas处理上下文时出错:', error)

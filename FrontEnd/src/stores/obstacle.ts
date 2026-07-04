@@ -383,14 +383,16 @@ export const useObstacleStore = defineStore('obstacle', () => {
       // 转换回模板格式
       const savedTemplate = convertApiObstacleToTemplate(savedObstacle)
 
+      let savedIndex = -1
+
       // 重新加载当前页以获取最新数据
       if (paginationInfo.value) {
         await loadObstaclesPage(paginationInfo.value.currentPage, paginationInfo.value.pageSize)
       } else {
         // 如果没有分页信息，更新本地列表
-        const index = customObstacles.value.findIndex((o) => o.id === savedTemplate.id)
-        if (index >= 0) {
-          customObstacles.value[index] = savedTemplate
+        savedIndex = customObstacles.value.findIndex((o) => o.id === savedTemplate.id)
+        if (savedIndex >= 0) {
+          customObstacles.value[savedIndex] = savedTemplate
         } else {
           customObstacles.value.push(savedTemplate)
         }
@@ -412,7 +414,7 @@ export const useObstacleStore = defineStore('obstacle', () => {
       // 明确标记操作成功
       error.value = null
       if (showMessage) {
-        ElMessage.success(index >= 0 ? '障碍物已更新' : '障碍物已创建')
+        ElMessage.success(savedIndex >= 0 ? '障碍物已更新' : '障碍物已创建')
       }
       return savedTemplate
     } catch (e) {
@@ -440,7 +442,7 @@ export const useObstacleStore = defineStore('obstacle', () => {
           response.data.errors.some((err) => err.includes('already exists'))
         ) {
           error.value = createErrorResponse(
-            ErrorCode.DUPLICATE_NAME,
+            ErrorCode.OBSTACLE_NAME_EXISTS,
             '障碍物名称已存在，请使用其他名称',
             ErrorSeverity.ERROR,
           )
@@ -460,7 +462,7 @@ export const useObstacleStore = defineStore('obstacle', () => {
         // 其他API错误
         if (response?.data?.message) {
           error.value = createErrorResponse(
-            ErrorCode.API_ERROR,
+            ErrorCode.SERVER_ERROR,
             response.data.message,
             ErrorSeverity.ERROR,
           )

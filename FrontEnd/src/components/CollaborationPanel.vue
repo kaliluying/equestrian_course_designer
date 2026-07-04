@@ -149,7 +149,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useUserStore } from '@/stores/user'
-import { useWebSocketStore, ConnectionStatus, type CollaboratorInfo } from '@/stores/websocket'
+import { useWebSocketStore, ConnectionStatus, MessageType, type CollaboratorInfo } from '@/stores/websocket'
 import { ElMessage } from 'element-plus'
 import { Document, Check, ChatDotRound, ChatLineRound } from '@element-plus/icons-vue'
 // 导入API配置
@@ -762,9 +762,8 @@ const refreshCollaborators = () => {
       // 发送同步请求，但不触发画布同步
       try {
         // 使用特殊的同步请求，只请求协作者列表，不请求画布状态
-        // 使用类型断言访问sendMessage方法
-        if (typeof (webSocketStore as any).sendMessage === 'function') {
-          (webSocketStore as any).sendMessage('sync_request', {
+        if (typeof webSocketStore.sendMessage === 'function') {
+          webSocketStore.sendMessage(MessageType.SYNC_REQUEST, {
             requestType: 'collaborators_only', // 只请求协作者列表
             includeObstacles: false, // 不包括障碍物
             includePaths: false, // 不包括路径

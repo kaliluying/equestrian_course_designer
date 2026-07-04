@@ -6,6 +6,8 @@
 import type {
   ExportError,
   ExportContext,
+  ExportFormat,
+  ExportResult,
   RecoveryStrategy,
   RecoveryResult,
   AlternativeApproach,
@@ -23,7 +25,7 @@ export class ExportErrorImpl extends Error implements ExportError {
   public readonly type: ExportErrorType
   public readonly stage: ExportStage
   public readonly recoverable: boolean
-  public readonly context: any
+  public readonly context: ExportError['context']
   public readonly suggestedActions: string[]
 
   constructor(
@@ -31,7 +33,7 @@ export class ExportErrorImpl extends Error implements ExportError {
     type: ExportErrorType,
     stage: ExportStage,
     recoverable: boolean = true,
-    context: any = {},
+    context: Partial<ExportError['context']> = {},
     suggestedActions: string[] = []
   ) {
     super(message)
@@ -42,8 +44,10 @@ export class ExportErrorImpl extends Error implements ExportError {
     this.context = {
       timestamp: new Date().toISOString(),
       userAgent: navigator.userAgent,
+      format: context.format as ExportFormat,
+      options: context.options || {} as ExportError['context']['options'],
       ...context
-    }
+    } as ExportError['context']
     this.suggestedActions = suggestedActions.length > 0 ? suggestedActions : this.getDefaultSuggestedActions()
   }
 
@@ -155,33 +159,39 @@ export class RetryManager {
   /**
    * 标准化错误对象
    */
-  private normalizeError(error: any, context: ExportContext): ExportError {
+  private normalizeError(error: unknown, context: ExportContext): ExportError {
     if (error instanceof ExportErrorImpl) {
       return error
     }
+
+    const errorMessage = error instanceof Error ? error.message : String(error)
 
     // 根据错误消息推断错误类型
     let errorType = ExportErrorType.HTML2CANVAS_ERROR
     let stage = ExportStage.RENDERING
 
-    if (error.message?.includes('canvas')) {
+    if (errorMessage.includes('canvas')) {
       errorType = ExportErrorType.CANVAS_ACCESS_ERROR
       stage = ExportStage.PREPARING_CANVAS
-    } else if (error.message?.includes('svg')) {
+    } else if (errorMessage.includes('svg')) {
       errorType = ExportErrorType.SVG_RENDERING_ERROR
       stage = ExportStage.PROCESSING_SVG
-    } else if (error.message?.includes('memory') || error.message?.includes('Memory')) {
+    } else if (errorMessage.includes('memory') || errorMessage.includes('Memory')) {
       errorType = ExportErrorType.MEMORY_ERROR
-    } else if (error.message?.includes('timeout') || error.message?.includes('Timeout')) {
+    } else if (errorMessage.includes('timeout') || errorMessage.includes('Timeout')) {
       errorType = ExportErrorType.TIMEOUT_ERROR
     }
 
     return new ExportErrorImpl(
-      error.message || '未知导出错误',
+      errorMessage || '未知导出错误',
       errorType,
       stage,
       true,
-      { originalError: error, context }
+      {
+        format: context.format,
+        options: context.options,
+        canvasElement: context.canvas
+      }
     )
   }
 }
@@ -299,7 +309,7 @@ export class FallbackManager implements RecoveryStrategy {
   private async executeAlternativeApproach(
     approach: AlternativeApproach,
     context: ExportContext
-  ): Promise<any> {
+  ): Promise<ExportResult> {
     // 这里将在后续任务中实现具体的替代渲染逻辑
     throw new ExportErrorImpl(
       '替代渲染方法尚未实现',
@@ -442,7 +452,7 @@ export function createExportError(
   type: ExportErrorType,
   stage: ExportStage,
   recoverable: boolean = true,
-  context: any = {},
+  context: Partial<ExportError['context']> = {},
   suggestedActions: string[] = []
 ): ExportError {
   return new ExportErrorImpl(message, type, stage, recoverable, context, suggestedActions)

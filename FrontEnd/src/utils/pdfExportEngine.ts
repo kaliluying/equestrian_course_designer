@@ -6,6 +6,7 @@
 import jsPDF from 'jspdf'
 import 'svg2pdf.js'
 import {
+  ExportErrorType,
   ExportFormat,
   ExportStage
 } from '@/types/export'
@@ -18,8 +19,29 @@ import type {
   ExportWarning,
   ExportError
 } from '@/types/export'
-import { exportQualityValidator } from './exportQualityValidator'
+import {
+  exportQualityValidator,
+  type ComprehensiveQualityReport,
+  type SVGRenderingCheck,
+  type ValidationIssue,
+  type ValidationResult
+} from './exportQualityValidator'
 import { canvasRenderer } from './canvasRenderer'
+
+type JsPDFWithSvg = jsPDF & {
+  svg: (
+    element: Element,
+    options: { x: number; y: number; width: number; height: number }
+  ) => Promise<void>
+}
+
+interface BrowserPerformanceMemory {
+  usedJSHeapSize: number
+}
+
+interface PerformanceWithMemory extends Performance {
+  memory?: BrowserPerformanceMemory
+}
 
 /**
  * PDF导出引擎类
@@ -88,7 +110,7 @@ export class PDFExportEngine {
          const imageY = mergedOptions.margins.top + (availHeight - drawHeight) / 2
 
          // 使用 svg2pdf 构建原生的无损路径
-         await pdfDoc.svg(svgElement as any, {
+         await (pdfDoc as unknown as JsPDFWithSvg).svg(svgElement, {
            x: imageX,
            y: imageY,
            width: drawWidth,
@@ -125,9 +147,9 @@ export class PDFExportEngine {
       )
 
       // 5. 生成质量报告（基于渲染元素）
-      const qualityReport = canvasImage 
+      const qualityReport = canvasImage
           ? await this.generateQualityReport(canvas, canvasImage, mergedOptions)
-          : this.createEmptyQualityReport() // For vector, it's 100% loss-less
+          : this.createVectorQualityReport()
 
       // 更新进度 - 完成
       this.updateProgress(onProgress, ExportStage.FINALIZING, 100, 'PDF导出完成')
@@ -696,16 +718,10 @@ export class PDFExportEngine {
 
       if (quality < 0.7) {
         // 低质量模式：更高压缩
-        pdf.setProperties({
-          ...pdf.getProperties(),
-          producer: pdf.getProperties().producer + ' (优化压缩)'
-        })
+        pdf.setProperties({ creator: '马术赛道设计工具 (优化压缩)' })
       } else if (quality > 0.9) {
         // 高质量模式：保持最佳质量
-        pdf.setProperties({
-          ...pdf.getProperties(),
-          producer: pdf.getProperties().producer + ' (高质量)'
-        })
+        pdf.setProperties({ creator: '马术赛道设计工具 (高质量)' })
       }
 
     } catch (error) {
@@ -800,9 +816,10 @@ export class PDFExportEngine {
       )
 
       // 5. 添加PDF特定建议
-      this.addPDFSpecificRecommendations(comprehensiveReport, options, pdfSpecificValidation)
+      const qualityReport = this.toExportQualityReport(comprehensiveReport)
+      this.addPDFSpecificRecommendations(qualityReport, options, pdfSpecificValidation)
 
-      return comprehensiveReport
+      return qualityReport
     } catch (error) {
       console.warn('质量报告生成失败:', error)
       return this.createEmptyQualityReport()
@@ -820,8 +837,8 @@ export class PDFExportEngine {
     originalCanvas: HTMLElement,
     renderedCanvas: HTMLCanvasElement,
     options: PDFExportOptions
-  ): Promise<any> {
-    const issues: any[] = []
+  ): Promise<ValidationResult> {
+    const issues: ValidationIssue[] = []
     let pathCompleteness = 100
     let keyPointsValidated = 0
     let continuityScore = 100
@@ -833,8 +850,7 @@ export class PDFExportEngine {
         issues.push({
           type: 'style_mismatch',
           severity: 'medium',
-          message: `PDF页面尺寸可能不是最优的: ${dimensionCheck.reason}`,
-          suggestedFix: dimensionCheck.suggestion
+          message: `PDF页面尺寸可能不是最优的: ${dimensionCheck.reason}，建议: ${dimensionCheck.suggestion}`
         })
         pathCompleteness -= 10
       }
@@ -842,13 +858,13 @@ export class PDFExportEngine {
       // 2. 检查图像质量和分辨率
       const resolutionCheck = this.validatePDFResolution(renderedCanvas, options)
       if (!resolutionCheck.isAdequate) {
+        const severity = resolutionCheck.severity === 'high' ? 'high' : 'medium'
         issues.push({
           type: 'rendering_error',
-          severity: resolutionCheck.severity,
-          message: `PDF图像分辨率问题: ${resolutionCheck.message}`,
-          suggestedFix: resolutionCheck.suggestion
+          severity,
+          message: `PDF图像分辨率问题: ${resolutionCheck.message}，建议: ${resolutionCheck.suggestion}`
         })
-        pathCompleteness -= resolutionCheck.severity === 'high' ? 20 : 10
+        pathCompleteness -= severity === 'high' ? 20 : 10
       }
 
       // 3. 检查颜色空间和打印适配性
@@ -857,8 +873,7 @@ export class PDFExportEngine {
         issues.push({
           type: 'style_mismatch',
           severity: 'low',
-          message: `PDF颜色空间建议: ${colorCheck.message}`,
-          suggestedFix: colorCheck.suggestion
+          message: `PDF颜色空间建议: ${colorCheck.message}，建议: ${colorCheck.suggestion}`
         })
         continuityScore -= 5
       }
@@ -867,10 +882,9 @@ export class PDFExportEngine {
       const metadataCheck = this.validatePDFMetadata(options)
       if (!metadataCheck.isComplete) {
         issues.push({
-          type: 'missing_element',
+          type: 'visibility_issue',
           severity: 'low',
-          message: `PDF元数据不完整: ${metadataCheck.missingFields.join(', ')}`,
-          suggestedFix: '启用完整的元数据包含选项'
+          message: `PDF元数据不完整: ${metadataCheck.missingFields.join(', ')}，建议: 启用完整的元数据包含选项`
         })
       }
 
@@ -880,9 +894,8 @@ export class PDFExportEngine {
       console.warn('PDF特定验证失败:', error)
       issues.push({
         type: 'rendering_error',
-   severity: 'medium',
-        message: `PDF验证过程出错: ${error instanceof Error ? error.message : String(error)}`,
-        suggestedFix: '检查PDF导出配置和浏览器兼容性'
+        severity: 'medium',
+        message: `PDF验证过程出错: ${error instanceof Error ? error.message : String(error)}，建议: 检查PDF导出配置和浏览器兼容性`
       })
       pathCompleteness = 50
     }
@@ -939,7 +952,7 @@ export class PDFExportEngine {
   private validatePDFResolution(
     canvas: HTMLCanvasElement,
     options: PDFExportOptions
-  ): { isAdequate: boolean; severity: string; message?: string; suggestion?: string } {
+  ): { isAdequate: boolean; severity: 'none' | 'medium' | 'high'; message?: string; suggestion?: string } {
     const dpi = this.calculateEffectiveDPI(canvas, options)
 
     if (dpi < 150) {
@@ -972,6 +985,10 @@ export class PDFExportEngine {
     options: PDFExportOptions
   ): { hasIssues: boolean; message?: string; suggestion?: string } {
     // 检查是否使用了透明背景（PDF打印时可能有问题）
+    if (typeof canvas.getContext !== 'function') {
+      return { hasIssues: false }
+    }
+
     const ctx = canvas.getContext('2d')
     if (!ctx) {
       return { hasIssues: false }
@@ -1053,7 +1070,10 @@ export class PDFExportEngine {
    * @param pdfValidation PDF特定验证结果
    * @returns 合并后的验证结果
    */
-  private mergeValidationResults(baseValidation: any, pdfValidation: any): any {
+  private mergeValidationResults(
+    baseValidation: ValidationResult,
+    pdfValidation: ValidationResult
+  ): ValidationResult {
     return {
       isValid: baseValidation.isValid && pdfValidation.isValid,
       issues: [...baseValidation.issues, ...pdfValidation.issues],
@@ -1069,7 +1089,10 @@ export class PDFExportEngine {
    * @param svgValidation SVG验证结果
    * @returns 渲染准确性分数
    */
-  private calculatePDFRenderingAccuracy(options: PDFExportOptions, svgValidation: any): number {
+  private calculatePDFRenderingAccuracy(
+    options: PDFExportOptions,
+    svgValidation: SVGRenderingCheck
+  ): number {
     let accuracy = svgValidation.svgElementsFound > 0
       ? svgValidation.svgElementsRendered / svgValidation.svgElementsFound
       : 1
@@ -1131,7 +1154,10 @@ export class PDFExportEngine {
    * @param pathValidation 路径验证结果
    * @returns 视觉保真度分数
    */
-  private calculatePDFVisualFidelity(options: PDFExportOptions, pathValidation: any): number {
+  private calculatePDFVisualFidelity(
+    options: PDFExportOptions,
+    pathValidation: ValidationResult
+  ): number {
     const baseScore = pathValidation.pathCompleteness / 100
     const qualityMultiplier = options.quality || 0.9
 
@@ -1145,9 +1171,9 @@ export class PDFExportEngine {
    * @param pdfValidation PDF验证结果
    */
   private addPDFSpecificRecommendations(
-    report: any,
+    report: QualityReport,
     options: PDFExportOptions,
-    pdfValidation: any
+    pdfValidation: ValidationResult
   ): void {
     const pdfRecommendations: string[] = []
 
@@ -1168,7 +1194,7 @@ export class PDFExportEngine {
     }
 
     // 颜色建议
-    if (pdfValidation.issues.some((issue: any) => issue.type === 'style_mismatch' && issue.message.includes('透明'))) {
+    if (pdfValidation.issues.some(issue => issue.type === 'style_mismatch' && issue.message.includes('透明'))) {
       pdfRecommendations.push('考虑使用白色背景替代透明背景以确保打印一致性')
     }
 
@@ -1176,6 +1202,62 @@ export class PDFExportEngine {
     if (pdfRecommendations.length > 0) {
       report.recommendations = [...report.recommendations, ...pdfRecommendations]
     }
+  }
+
+  /**
+   * 转换导出质量验证器报告为统一导出结果结构
+   * @param report 综合质量报告
+   * @returns 统一质量报告
+   */
+  private toExportQualityReport(report: ComprehensiveQualityReport): QualityReport {
+    const exportMetadata = report.exportMetadata || {
+      canvasSize: { width: 0, height: 0 },
+      elementCount: 0,
+      svgElementCount: 0
+    }
+
+    return {
+      overallScore: report.overallScore,
+      pathCompleteness: report.pathCompleteness,
+      renderingAccuracy: report.renderingQuality,
+      performanceMetrics: {
+        renderingTime: report.executionTime,
+        memoryUsage: report.memoryUsage || 0,
+        canvasSize: exportMetadata.canvasSize,
+        elementCount: exportMetadata.elementCount,
+        svgElementCount: exportMetadata.svgElementCount
+      },
+      recommendations: report.recommendations,
+      detailedIssues: (report.detailedResults || []).flatMap(result =>
+        result.issues.map(issue => ({
+          type: this.toExportQualityIssueType(issue.type),
+          severity: issue.severity,
+          description: issue.message,
+          element: issue.element?.tagName,
+          suggestedFix: typeof issue.expectedValue === 'string' ? issue.expectedValue : undefined
+        }))
+      )
+    }
+  }
+
+  /**
+   * 转换质量验证问题类型为导出报告问题类型
+   * @param type 验证问题类型
+   * @returns 导出问题类型
+   */
+  private toExportQualityIssueType(
+    type: ValidationIssue['type']
+  ): 'missing_element' | 'rendering_error' | 'style_mismatch' | 'position_offset' {
+    if (type === 'missing_path' || type === 'incomplete_path' || type === 'visibility_issue') {
+      return 'missing_element'
+    }
+    if (type === 'position_offset') {
+      return 'position_offset'
+    }
+    if (type === 'style_mismatch') {
+      return 'style_mismatch'
+    }
+    return 'rendering_error'
   }
 
   /**
@@ -1187,9 +1269,36 @@ export class PDFExportEngine {
       overallScore: 0,
       pathCompleteness: 0,
       renderingAccuracy: 0,
-      styleAccuracy: 0,
+      performanceMetrics: {
+        renderingTime: 0,
+        memoryUsage: 0,
+        canvasSize: { width: 0, height: 0 },
+        elementCount: 0,
+        svgElementCount: 0
+      },
       recommendations: ['PDF导出过程中出现错误，无法生成质量报告'],
-      detailedResults: []
+      detailedIssues: []
+    }
+  }
+
+  /**
+   * 创建矢量导出质量报告
+   * @returns 矢量质量报告
+   */
+  private createVectorQualityReport(): QualityReport {
+    return {
+      overallScore: 1,
+      pathCompleteness: 100,
+      renderingAccuracy: 1,
+      performanceMetrics: {
+        renderingTime: 0,
+        memoryUsage: 0,
+        canvasSize: { width: 0, height: 0 },
+        elementCount: 0,
+        svgElementCount: 0
+      },
+      recommendations: ['PDF使用矢量渲染生成，适合高质量打印'],
+      detailedIssues: []
     }
   }
 
@@ -1218,8 +1327,9 @@ export class PDFExportEngine {
    * @param stage 导出阶段
    * @returns 导出错误对象
    */
-  private createExportError(error: any, stage: ExportStage): ExportError {
-    const exportError = new Error(error.message || 'PDF导出失败') as ExportError
+  private createExportError(error: unknown, stage: ExportStage): ExportError {
+    const errorMessage = this.getErrorMessage(error)
+    const exportError = new Error(errorMessage || 'PDF导出失败') as ExportError
 
     // 根据错误类型和阶段确定错误类型
     exportError.type = this.determineErrorType(error, stage)
@@ -1228,7 +1338,7 @@ export class PDFExportEngine {
 
     exportError.context = {
       format: ExportFormat.PDF,
-      options: {},
+      options: this.defaultOptions,
       timestamp: new Date().toISOString(),
       userAgent: navigator.userAgent,
       memoryUsage: this.getMemoryUsage()
@@ -1245,43 +1355,43 @@ export class PDFExportEngine {
    * @param stage 导出阶段
    * @returns 错误类型
    */
-  private determineErrorType(error: any, stage: ExportStage): string {
+  private determineErrorType(error: unknown, stage: ExportStage): ExportErrorType {
     // 检查错误消息中的关键词
-    const errorMessage = error.message?.toLowerCase() || ''
+    const errorMessage = this.getErrorMessage(error).toLowerCase()
 
     if (errorMessage.includes('canvas') || errorMessage.includes('context')) {
-      return 'CANVAS_ACCESS_ERROR'
+      return ExportErrorType.CANVAS_ACCESS_ERROR
     }
 
     if (errorMessage.includes('svg') || errorMessage.includes('path')) {
-      return 'SVG_RENDERING_ERROR'
+      return ExportErrorType.SVG_RENDERING_ERROR
     }
 
     if (errorMessage.includes('html2canvas')) {
-      return 'HTML2CANVAS_ERROR'
+      return ExportErrorType.HTML2CANVAS_ERROR
     }
 
     if (errorMessage.includes('memory') || errorMessage.includes('out of memory')) {
-      return 'MEMORY_ERROR'
+      return ExportErrorType.MEMORY_ERROR
     }
 
     if (errorMessage.includes('timeout') || errorMessage.includes('time')) {
-      return 'TIMEOUT_ERROR'
+      return ExportErrorType.TIMEOUT_ERROR
     }
 
     // 根据阶段确定默认错误类型
     switch (stage) {
       case ExportStage.PREPARING_CANVAS:
       case ExportStage.PROCESSING_SVG:
-        return 'CANVAS_ACCESS_ERROR'
+        return ExportErrorType.CANVAS_ACCESS_ERROR
       case ExportStage.RENDERING:
-        return 'HTML2CANVAS_ERROR'
+        return ExportErrorType.HTML2CANVAS_ERROR
       case ExportStage.GENERATING_FILE:
-        return 'FILE_GENERATION_ERROR'
+        return ExportErrorType.FILE_GENERATION_ERROR
       case ExportStage.VALIDATING_QUALITY:
-        return 'QUALITY_VALIDATION_ERROR'
+        return ExportErrorType.QUALITY_VALIDATION_ERROR
       default:
-        return 'FILE_GENERATION_ERROR'
+        return ExportErrorType.FILE_GENERATION_ERROR
     }
   }
 
@@ -1291,8 +1401,8 @@ export class PDFExportEngine {
    * @param stage 导出阶段
    * @returns 是否可恢复
    */
-  private isErrorRecoverable(error: any, stage: ExportStage): boolean {
-    const errorMessage = error.message?.toLowerCase() || ''
+  private isErrorRecoverable(error: unknown, stage: ExportStage): boolean {
+    const errorMessage = this.getErrorMessage(error).toLowerCase()
 
     // 不可恢复的错误
     if (errorMessage.includes('out of memory') ||
@@ -1322,8 +1432,8 @@ export class PDFExportEngine {
    * @param stage 导出阶段
    * @returns 建议操作列表
    */
-  private generateErrorSuggestedActions(error: any, stage: ExportStage): string[] {
-    const errorMessage = error.message?.toLowerCase() || ''
+  private generateErrorSuggestedActions(error: unknown, stage: ExportStage): string[] {
+    const errorMessage = this.getErrorMessage(error).toLowerCase()
     const actions: string[] = []
 
     // 通用建议
@@ -1386,14 +1496,30 @@ export class PDFExportEngine {
    */
   private getMemoryUsage(): number | undefined {
     try {
-      if ('memory' in performance) {
-        const memory = (performance as any).memory
+      const performanceWithMemory = performance as PerformanceWithMemory
+      if (performanceWithMemory.memory) {
+        const memory = performanceWithMemory.memory
         return memory.usedJSHeapSize
       }
     } catch (error) {
       // 忽略错误
     }
     return undefined
+  }
+
+  /**
+   * 提取未知错误的消息
+   * @param error 未知错误
+   * @returns 错误消息
+   */
+  private getErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message
+    }
+    if (typeof error === 'string') {
+      return error
+    }
+    return ''
   }
 
   /**

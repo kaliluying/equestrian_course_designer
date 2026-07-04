@@ -58,6 +58,28 @@ export interface CollaborationSession {
   createdAt: Date
 }
 
+interface CanvasVueElement extends Element {
+  __vueParentComponent?: {
+    ctx?: {
+      isPathUpdateFromWebSocket?: { value: boolean }
+    }
+  }
+}
+
+interface RawCollaboratorInfo {
+  id: string
+  username: string
+  color: string
+  last_active?: string
+  role?: string
+}
+
+interface SyncSessionPayload {
+  id?: string
+  collaborators?: RawCollaboratorInfo[]
+  owner?: string
+}
+
 /**
  * 消息类型枚举
  */
@@ -790,7 +812,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
       const canvasElement = document.querySelector('.course-canvas')
       if (canvasElement) {
         // 获取Canvas组件实例
-        const canvasInstance = (canvasElement as any).__vueParentComponent?.ctx
+        const canvasInstance = (canvasElement as CanvasVueElement).__vueParentComponent?.ctx
         if (canvasInstance && canvasInstance.isPathUpdateFromWebSocket !== undefined) {
           // 设置标志，表示路径更新来自WebSocket
           console.log('设置路径更新标志为true，表示更新来自WebSocket')
@@ -958,7 +980,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
           startPoint?: { x: number; y: number; rotation: number }
           endPoint?: { x: number; y: number; rotation: number }
         }
-        session?: any // 会话信息
+        session?: SyncSessionPayload // 会话信息
         collaboratorsOnly?: boolean // 标记是否只包含协作者列表
       }
 
@@ -990,7 +1012,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
             // 如果有协作者列表，更新它
             if (payload.session.collaborators && Array.isArray(payload.session.collaborators)) {
               const mappedCollaborators: CollaboratorInfo[] = payload.session.collaborators.map(
-                (collab: any) => ({
+                (collab: RawCollaboratorInfo) => ({
                   id: collab.id,
                   username: collab.username,
                   color: collab.color,
@@ -1102,7 +1124,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
         const canvasElement = document.querySelector('.course-canvas')
         if (canvasElement) {
           // 获取Canvas组件实例
-          const canvasInstance = (canvasElement as any).__vueParentComponent?.ctx
+          const canvasInstance = (canvasElement as CanvasVueElement).__vueParentComponent?.ctx
           if (canvasInstance && canvasInstance.isPathUpdateFromWebSocket !== undefined) {
             // 设置标志，表示路径更新来自WebSocket
             console.log('设置路径更新标志为true，表示更新来自WebSocket')
@@ -1884,6 +1906,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     // 方法
     connect,
     disconnect,
+    sendMessage,
     sendObstacleUpdate,
     sendAddObstacle,
     sendRemoveObstacle,

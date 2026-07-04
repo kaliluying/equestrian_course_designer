@@ -44,9 +44,9 @@
 import { ref, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
-import type { AxiosResponse } from 'axios'
 import { useUserStore } from '@/stores/user'
 import type { RegisterForm, ErrorResponse } from '@/types/user'
+import { getApiErrorMessage } from '@/utils/apiErrorMessage'
 
 const emit = defineEmits(['switch-mode', 'register-success'])
 const userStore = useUserStore()
@@ -74,6 +74,13 @@ const clearErrors = () => {
   Object.keys(errors).forEach(key => {
     errors[key] = []
   })
+}
+
+const getRegisterErrorMessage = (error: unknown): ErrorResponse['message'] | null => {
+  if (!error || typeof error !== 'object' || !('response' in error)) return null
+
+  const data = (error as { response?: { data?: Partial<ErrorResponse> } }).response?.data
+  return data?.message && typeof data.message === 'object' ? data.message : null
 }
 
 // 表单验证规则
@@ -134,53 +141,23 @@ const handleSubmit = async () => {
     ElMessage.success('注册成功')
     emit('register-success', user)
   } catch (error) {
-    // 处理后端返回的错误信息
-    if (
-      error &&
-      typeof error === 'object' &&
-      'response' in error &&
-      (error.response as AxiosResponse)?.data
-    ) {
-      const errorData = (error.response as AxiosResponse).data as ErrorResponse
-      if (errorData.message) {
-        // 更新错误信息
-        let hasFieldErrors = false
-        Object.keys(errorData.message).forEach(key => {
-          if (key in errors) {
-            errors[key] = errorData.message[key]
-            hasFieldErrors = true
-          } else if (key === 'non_field_errors') {
-            // 处理非字段错误
-            ElMessage.error(errorData.message[key].join('，'))
-          }
-        })
+    const errorMessage = getRegisterErrorMessage(error)
+    if (errorMessage) {
+      let hasFieldErrors = false
+      Object.keys(errorMessage).forEach(key => {
+        if (key in errors) {
+          errors[key] = errorMessage[key]
+          hasFieldErrors = true
+        } else if (key === 'non_field_errors') {
+          ElMessage.error(errorMessage[key].join('，'))
+        }
+      })
 
-        // 如果有字段错误，显示概要错误信息
-        if (hasFieldErrors) {
-          ElMessage.error('请检查表单中的错误信息')
-        }
-      }
-    } else if (error instanceof Error) {
-      // 处理网络错误或其他错误
-      if ('code' in error) {
-        switch (error.code) {
-          case 'ECONNREFUSED':
-            ElMessage.error('无法连接到服务器，请检查网络连接')
-            break
-          case 'TIMEOUT':
-            ElMessage.error('服务器响应超时，请稍后重试')
-            break
-          case 'NETWORK_ERROR':
-            ElMessage.error('网络错误，请检查网络连接')
-            break
-          default:
-            ElMessage.error(error.message || '注册失败，请稍后重试')
-        }
-      } else {
-        ElMessage.error(error.message || '注册失败，请稍后重试')
+      if (hasFieldErrors) {
+        ElMessage.error('请检查表单中的错误信息')
       }
     } else {
-      ElMessage.error('注册失败，请稍后重试')
+      ElMessage.error(getApiErrorMessage(error, '注册失败，请稍后重试'))
     }
   } finally {
     loading.value = false

@@ -2,6 +2,24 @@ import { request } from '@/utils/request'
 import axios from 'axios'
 import apiConfig from '@/config/api'
 
+interface MembershipOrderResponse {
+  success: boolean
+  message?: string
+  order: {
+    order_id: string
+    status: string
+  }
+  payment_url: string
+}
+
+interface OrderStatusResponse {
+  success: boolean
+  order: {
+    order_id: string
+    status: string
+  }
+}
+
 // 获取CSRF令牌
 export const getCsrfToken = async () => {
   try {
@@ -113,9 +131,23 @@ export const getUserProfile = async () => {
 }
 
 // 检查用户会员状态（轻量级接口）
-export const checkPremiumStatus = async () => {
+export const checkPremiumStatus = async (): Promise<{
+  is_premium_active: boolean
+  membership_plan?: {
+    id: number
+    name: string
+    code: string
+  } | null
+}> => {
   try {
-    const response = await request.get(`${apiConfig.apiBaseUrl}/user/users/check_premium/`)
+    const response = await request.get<{
+      is_premium_active: boolean
+      membership_plan?: {
+        id: number
+        name: string
+        code: string
+      } | null
+    }>(`${apiConfig.apiBaseUrl}/user/users/check_premium/`)
     return response
   } catch (error) {
     console.error('检查会员状态失败:', error)
@@ -169,10 +201,10 @@ export const changeEmail = async (data: { password: string; new_email: string })
 export const createMembershipOrder = async (data: {
   plan_id: number
   billing_cycle: 'month' | 'year'
-}) => {
+}): Promise<MembershipOrderResponse> => {
 
   try {
-    const response = await request.post(apiConfig.endpoints.user.createOrder, data)
+    const response = await request.post<MembershipOrderResponse>(apiConfig.endpoints.user.createOrder, data)
 
     return response
   } catch (error) {
@@ -195,10 +227,10 @@ export const getUserOrders = async () => {
 }
 
 // 获取订单状态
-export const getOrderStatus = async (orderId: string) => {
+export const getOrderStatus = async (orderId: string): Promise<OrderStatusResponse> => {
 
   try {
-    const response = await request.get(apiConfig.endpoints.user.orderStatus(orderId))
+    const response = await request.get<OrderStatusResponse>(apiConfig.endpoints.user.orderStatus(orderId))
 
     return response
   } catch (error) {

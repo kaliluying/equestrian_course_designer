@@ -2,7 +2,7 @@ import json
 from alipay.utils import AliPayConfig
 from alipay import AliPay
 from django.conf import settings
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 import random
 import string
 from hashlib import sha1
@@ -11,6 +11,36 @@ import os
 import uuid
 from rest_framework.response import Response
 from rest_framework import status
+
+
+class ExternalServiceConfigError(RuntimeError):
+    """外部服务配置错误。"""
+
+
+def _read_text_file(path):
+    try:
+        with open(path, "r", encoding="utf-8") as file:
+            return file.read()
+    except FileNotFoundError as exc:
+        raise ExternalServiceConfigError(f"配置文件不存在: {path}") from exc
+
+
+def _is_placeholder_key(content):
+    return "REPLACE_WITH_LOCAL_" in content or "REPLACE_WITH_" in content
+
+
+def validate_alipay_config():
+    """校验支付宝配置是否可用。"""
+    if not settings.ALIPAY_APPID:
+        raise ExternalServiceConfigError("未配置 ALIPAY_APPID，支付功能已停用")
+
+    app_private_key = _read_text_file(settings.ALIPAY_APP_PRIVATE_KEY_PATH)
+    alipay_public_key = _read_text_file(settings.ALIPAY_ALIPAY_PUBLIC_KEY_PATH)
+
+    if _is_placeholder_key(app_private_key) or _is_placeholder_key(alipay_public_key):
+        raise ExternalServiceConfigError("支付宝密钥仍为占位内容，支付功能已停用")
+
+    return app_private_key, alipay_public_key
 
 
 def get_absolute_media_url(path):
@@ -23,6 +53,9 @@ def get_absolute_media_url(path):
     Returns:
         完整的URL路径
     """
+    if urlparse(path).scheme in ("http", "https"):
+        return path
+
     # 构建协议
     protocol = 'https' if settings.USE_HTTPS else 'http'
 
@@ -64,9 +97,7 @@ def get_alipay_client():
     - ALIPAY_RETURN_URL: 支付宝同步返回URL
     - ALIPAY_DEBUG: 是否为沙箱环境(布尔值)
     """
-    app_private_key_string = open(settings.ALIPAY_APP_PRIVATE_KEY_PATH).read()
-    alipay_public_key_string = open(
-        settings.ALIPAY_ALIPAY_PUBLIC_KEY_PATH).read()
+    app_private_key_string, alipay_public_key_string = validate_alipay_config()
 
     alipay = AliPay(
         appid=settings.ALIPAY_APPID,

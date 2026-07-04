@@ -51,8 +51,38 @@ interface JSONExportData {
     exportDuration: number
     dataSize: number
     compressionRatio?: number
-    validationResults?: any
+    validationResults?: CourseValidationResult
   }
+}
+
+interface CourseValidationResult {
+  isValid: boolean
+  issues: string[]
+  warnings: string[]
+  suggestions: string[]
+  statistics: {
+    obstacleCount: number
+    hasPath: boolean
+    pathPointCount: number
+    hasStartPoint: boolean
+    hasEndPoint: boolean
+    fieldDimensions: {
+      width: number
+      height: number
+    }
+  }
+}
+
+interface GlobalCourseStore {
+  getCompleteDesign?: () => CourseDesign
+  currentCourse?: CourseDesign
+  coursePath?: CoursePathData
+  startPoint?: CoursePathData['startPoint']
+  endPoint?: CoursePathData['endPoint']
+}
+
+interface WindowWithCourseStore extends Window {
+  __COURSE_STORE__?: GlobalCourseStore
 }
 
 /**
@@ -95,7 +125,8 @@ export class JSONExportEngine {
     fileName: 'course-design.json',
     includeBackground: true,
     quality: 1.0,
-    timeout: 30000
+    timeout: 30000,
+    sourceVersion: 'v2'
   }
 
   private readonly exportVersion = '1.0.0'
@@ -248,8 +279,9 @@ export class JSONExportEngine {
       }
 
       // 方法1.5: 从全局变量获取（备用方案）
-      if (typeof window !== 'undefined' && (window as any).__COURSE_STORE__) {
-        const store = (window as any).__COURSE_STORE__
+      const courseWindow = window as WindowWithCourseStore
+      if (typeof window !== 'undefined' && courseWindow.__COURSE_STORE__) {
+        const store = courseWindow.__COURSE_STORE__
         if (typeof store.getCompleteDesign === 'function') {
           const completeDesign = store.getCompleteDesign()
           console.log('从全局__COURSE_STORE__的getCompleteDesign方法获取课程数据', completeDesign)
@@ -263,8 +295,8 @@ export class JSONExportEngine {
             design.path = {
               visible: store.coursePath.visible,
               points: store.coursePath.points,
-              startPoint: store.startPoint,
-              endPoint: store.endPoint
+              startPoint: store.startPoint || store.coursePath.startPoint,
+              endPoint: store.endPoint || store.coursePath.endPoint
             }
           }
           return design
@@ -461,7 +493,7 @@ export class JSONExportEngine {
   /**
    * 验证课程设计数据
    */
-  private validateCourseDesign(courseDesign: CourseDesign): any {
+  private validateCourseDesign(courseDesign: CourseDesign): CourseValidationResult {
     const results = {
       isValid: true,
       issues: [] as string[],
@@ -708,7 +740,7 @@ export class JSONExportEngine {
       }
 
       // 2. 选择性数据包含（如果配置了）
-      let processedData = data
+      let processedData: unknown = data
       if (options.selectiveInclude && Object.keys(options.selectiveInclude).length > 0) {
         const selectiveOptions = {
           includeObstacles: options.selectiveInclude.includeObstacles ?? true,
@@ -1026,7 +1058,7 @@ export class JSONExportEngine {
   /**
    * 生成建议
    */
-  private generateRecommendations(validation: any, jsonData: JSONExportData): string[] {
+  private generateRecommendations(validation: CourseValidationResult, jsonData: JSONExportData): string[] {
     const recommendations: string[] = []
 
     if (validation.isValid) {
@@ -1073,7 +1105,7 @@ export class JSONExportEngine {
     canvas: HTMLElement,
     options: Required<JSONExportOptions>
   ): ExportError {
-    const exportError = new Error(error.message || 'JSON导出失败') as ExportError
+    const exportError = new Error(this.getErrorMessage(error) || 'JSON导出失败') as ExportError
     exportError.type = this.determineErrorType(error, stage)
     exportError.stage = stage
     exportError.recoverable = true // JSON导出错误通常是可恢复的
@@ -1095,7 +1127,7 @@ export class JSONExportEngine {
    * 确定错误类型
    */
   private determineErrorType(error: unknown, stage: ExportStage): ExportErrorType {
-    const errorMessage = error.message?.toLowerCase() || ''
+    const errorMessage = this.getErrorMessage(error).toLowerCase()
 
     if (errorMessage.includes('parse') || errorMessage.includes('json')) {
       return ExportErrorType.FILE_GENERATION_ERROR
@@ -1130,7 +1162,7 @@ export class JSONExportEngine {
    * 生成错误建议操作
    */
   private generateErrorSuggestedActions(error: unknown, stage: ExportStage): string[] {
-    const errorMessage = error.message?.toLowerCase() || ''
+    const errorMessage = this.getErrorMessage(error).toLowerCase()
     const actions: string[] = []
 
     // 通用建议
@@ -1177,6 +1209,19 @@ export class JSONExportEngine {
     actions.push('如问题持续，请联系技术支持')
 
     return actions
+  }
+
+  /**
+   * 提取未知错误的消息
+   */
+  private getErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message
+    }
+    if (typeof error === 'string') {
+      return error
+    }
+    return ''
   }
 
   /**

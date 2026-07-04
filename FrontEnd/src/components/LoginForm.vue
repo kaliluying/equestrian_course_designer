@@ -47,8 +47,8 @@ import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import type { LoginForm } from '@/types/user'
-import type { AxiosResponse } from 'axios'
 import { forgotPassword } from '@/api/user'
+import { getApiErrorMessage } from '@/utils/apiErrorMessage'
 
 const emit = defineEmits(['switch-mode', 'login-success'])
 const userStore = useUserStore()
@@ -128,29 +128,7 @@ const handleForgotPassword = async () => {
     forgotForm.value.username = ''
     forgotForm.value.email = ''
   } catch (error) {
-    // 处理错误
-    if (
-      error &&
-      typeof error === 'object' &&
-      'response' in error &&
-      (error.response as AxiosResponse)?.data
-    ) {
-      const errorData = (error.response as AxiosResponse).data
-      if (errorData.message) {
-        if (typeof errorData.message === 'object') {
-          const messages = Object.values(errorData.message).flat()
-          ElMessage.error(messages[0] || '发送重置邮件失败')
-        } else {
-          ElMessage.error(errorData.message)
-        }
-      } else {
-        ElMessage.error('发送重置邮件失败')
-      }
-    } else if (error instanceof Error) {
-      ElMessage.error(error.message || '发送重置邮件失败')
-    } else {
-      ElMessage.error('发送重置邮件失败')
-    }
+    ElMessage.error(getApiErrorMessage(error, '发送重置邮件失败'))
   } finally {
     forgotLoading.value = false
   }
@@ -177,59 +155,7 @@ const handleSubmit = async () => {
     emit('login-success', user)
   } catch (error) {
     console.error('登录错误:', error)
-
-    // 处理后端返回的错误信息
-    if (
-      error &&
-      typeof error === 'object' &&
-      'response' in error &&
-      (error.response as AxiosResponse)?.data
-    ) {
-      const errorData = (error.response as AxiosResponse).data
-      console.error('服务器返回错误:', errorData)
-
-      if (errorData.message) {
-        // 处理非字段错误
-        if (errorData.message.non_field_errors) {
-          ElMessage.error(errorData.message.non_field_errors[0])
-        }
-        // 处理字段错误
-        else if (typeof errorData.message === 'object') {
-          const messages = Object.values(errorData.message).flat()
-          ElMessage.error(messages[0] || '登录失败')
-        }
-        // 处理字符串错误
-        else if (typeof errorData.message === 'string') {
-          ElMessage.error(errorData.message)
-        }
-        else {
-          ElMessage.error('登录失败')
-        }
-      } else {
-        ElMessage.error('登录失败')
-      }
-    } else if (error instanceof Error) {
-      // 处理网络错误或其他错误
-      if ('code' in error) {
-        switch (error.code) {
-          case 'ECONNREFUSED':
-            ElMessage.error('无法连接到服务器，请检查网络连接')
-            break
-          case 'TIMEOUT':
-            ElMessage.error('服务器响应超时，请稍后重试')
-            break
-          case 'NETWORK_ERROR':
-            ElMessage.error('网络错误，请检查网络连接')
-            break
-          default:
-            ElMessage.error('登录失败，请稍后重试')
-        }
-      } else {
-        ElMessage.error(error.message || '登录失败，请稍后重试')
-      }
-    } else {
-      ElMessage.error('登录失败，请稍后重试')
-    }
+    ElMessage.error(getApiErrorMessage(error, '登录失败，请稍后重试'))
   } finally {
     loading.value = false
   }

@@ -20,10 +20,14 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic import TemplateView
 from django.views.static import serve
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from user.views import ForgotPasswordView, ResetPasswordView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     path('user/', include('user.urls')),  # 用户相关的API端点
     path('api/feedback/', include('feedback.urls')),  # 新增反馈URL
 

@@ -1,12 +1,17 @@
 """设计管理视图：设计的CRUD、点赞、分享、下载。"""
 
 import logging
+from io import BytesIO
 
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from django.db.models import F
+from django.utils.text import get_valid_filename
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
-from django.db.models import F
+from PIL import Image
 
 from ..models import (
     Design,
@@ -21,6 +26,48 @@ from ..utils import get_absolute_media_url, success_response, error_response
 from .user_views import check_and_update_membership
 
 logger = logging.getLogger(__name__)
+
+SUPPORTED_DOWNLOAD_TYPES = ("json", "png", "pdf")
+
+
+def _stored_file_exists(field_file):
+    """校验文件字段有值且存储中实际存在该文件。"""
+    if not field_file:
+        return False
+    return field_file.storage.exists(field_file.name)
+
+
+def _build_download_filename(title, file_type):
+    """生成浏览器下载文件名，避免标题中的路径字符污染文件名。"""
+    filename = get_valid_filename(f"{title}.{file_type}")
+    return filename or f"design.{file_type}"
+
+
+def _generate_design_pdf(design):
+    """基于设计图片生成 PDF，并返回存储路径。"""
+    relative_pdf_path = f"user_{design.author.id}/designs/{design.id}/design.pdf"
+    pdf_buffer = BytesIO()
+
+    with design.image.open("rb") as image_file:
+        with Image.open(image_file) as image:
+            if image.mode in ("RGBA", "LA"):
+                background = Image.new("RGB", image.size, "white")
+                background.paste(image, mask=image.getchannel("A"))
+                pdf_image = background
+            else:
+                pdf_image = image.convert("RGB")
+
+            try:
+                pdf_image.save(pdf_buffer, "PDF", resolution=100.0)
+            finally:
+                if pdf_image is not image:
+                    pdf_image.close()
+
+    if default_storage.exists(relative_pdf_path):
+        default_storage.delete(relative_pdf_path)
+    default_storage.save(relative_pdf_path, ContentFile(pdf_buffer.getvalue()))
+
+    return relative_pdf_path
 
 
 class DesignViewSet(viewsets.ModelViewSet):
@@ -160,8 +207,8 @@ class DesignViewSet(viewsets.ModelViewSet):
         """下载设计并增加下载计数"""
         try:
             # 获取下载类型参数，默认为json
-            file_type = request.query_params.get("type", "json").lower()
-            if file_type not in ["json", "png", "pdf"]:
+            file_type = request.query_params.get("type", "json").strip().lower()
+            if file_type not in SUPPORTED_DOWNLOAD_TYPES:
                 return error_response(
                     "不支持的文件类型，支持的类型有：json, png, pdf",
                     status.HTTP_400_BAD_REQUEST,
@@ -176,36 +223,45 @@ class DesignViewSet(viewsets.ModelViewSet):
                     "您无权下载未共享的设计", status.HTTP_403_FORBIDDEN
                 )
 
-            # 检查是否有下载文件
-            if not design.download and file_type == "json":
-                return error_response(
-                    "该设计没有可下载的JSON文件", status.HTTP_404_NOT_FOUND
-                )
+            # 根据文件类型返回不同的下载URL
+            if file_type == "json":
+                if not _stored_file_exists(design.download):
+                    return error_response(
+                        "该设计没有可下载的JSON文件", status.HTTP_404_NOT_FOUND
+                    )
+                download_url = get_absolute_media_url(design.download.url)
+            elif file_type == "png":
+                if not _stored_file_exists(design.image):
+                    return error_response(
+                        "该设计没有可下载的PNG图片", status.HTTP_404_NOT_FOUND
+                    )
+                download_url = get_absolute_media_url(design.image.url)
+            elif file_type == "pdf":
+                if not _stored_file_exists(design.image):
+                    return error_response(
+                        "该设计没有可用于生成PDF的图片",
+                        status.HTTP_404_NOT_FOUND,
+                    )
 
-            # 检查是否有图片文件
-            if not design.image and file_type == "png":
-                return error_response(
-                    "该设计没有可下载的PNG图片", status.HTTP_404_NOT_FOUND
-                )
+                try:
+                    relative_pdf_path = _generate_design_pdf(design)
+                except Exception:
+                    logger.exception("生成设计PDF失败: ID=%s", design.id)
+                    return error_response(
+                        "PDF生成失败，请稍后重试",
+                        status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    )
 
-            # 增加下载计数
+                download_url = get_absolute_media_url(
+                    default_storage.url(relative_pdf_path)
+                )
+            filename = _build_download_filename(design.title, file_type)
+
+            # 文件准备成功后再增加下载计数
             Design.objects.filter(pk=pk).update(
                 downloads_count=F("downloads_count") + 1
             )
             design.refresh_from_db()
-
-            # 根据文件类型返回不同的下载URL
-            if file_type == "json":
-                download_url = get_absolute_media_url(design.download.url)
-                filename = f"{design.title}.json"
-            elif file_type == "png":
-                download_url = get_absolute_media_url(design.image.url)
-                filename = f"{design.title}.png"
-            elif file_type == "pdf":
-                # 这里需要实现PDF生成逻辑，暂时返回错误
-                return error_response(
-                    "PDF下载功能正在开发中，敬请期待", status.HTTP_501_NOT_IMPLEMENTED
-                )
 
             # 返回下载URL和文件名
             return success_response(

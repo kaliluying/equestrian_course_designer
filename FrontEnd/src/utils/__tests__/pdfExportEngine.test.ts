@@ -6,6 +6,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { PDFExportEngine } from '../pdfExportEngine'
 import { ExportFormat } from '@/types/export'
+import { canvasRenderer } from '../canvasRenderer'
+import { exportQualityValidator } from '../exportQualityValidator'
 
 vi.mock('jspdf', () => {
   function MockJsPDF() {
@@ -20,8 +22,14 @@ vi.mock('jspdf', () => {
       getTextWidth: vi.fn().mockReturnValue(50),
       getCurrentPageInfo: vi.fn().mockReturnValue({ pageNumber: 1 }),
       output: vi.fn().mockReturnValue(new Blob(['test'], { type: 'application/pdf' })),
+      svg: vi.fn().mockResolvedValue(undefined),
       internal: {
-        pageSize: { width: 210, height: 297 }
+        pageSize: {
+          width: 210,
+          height: 297,
+          getWidth: vi.fn().mockReturnValue(210),
+          getHeight: vi.fn().mockReturnValue(297)
+        }
       },
       setDrawColor: vi.fn(),
       setLineWidth: vi.fn(),
@@ -92,6 +100,45 @@ describe('PDFExportEngine', () => {
   let mockCanvas: HTMLElement
 
   beforeEach(() => {
+    vi.mocked(canvasRenderer.render).mockResolvedValue({
+      width: 800,
+      height: 600,
+      toDataURL: vi.fn().mockReturnValue('data:image/jpeg;base64,test')
+    } as unknown as HTMLCanvasElement)
+    vi.mocked(canvasRenderer.renderWithBackup).mockResolvedValue({
+      width: 800,
+      height: 600,
+      toDataURL: vi.fn().mockReturnValue('data:image/jpeg;base64,test')
+    } as unknown as HTMLCanvasElement)
+    vi.mocked(exportQualityValidator.validatePathCompleteness).mockResolvedValue({
+      isValid: true,
+      issues: [],
+      pathCompleteness: 95,
+      keyPointsValidated: 10,
+      continuityScore: 90
+    })
+    vi.mocked(exportQualityValidator.checkSVGRendering).mockResolvedValue({
+      svgElementsFound: 5,
+      svgElementsRendered: 5,
+      pathElementsFound: 3,
+      pathElementsRendered: 3,
+      renderingIssues: []
+    })
+    vi.mocked(exportQualityValidator.generateComprehensiveReport).mockReturnValue({
+      overallScore: 0.9,
+      pathCompleteness: 95,
+      renderingAccuracy: 0.9,
+      performanceMetrics: {
+        renderingTime: 0,
+        memoryUsage: 0,
+        canvasSize: { width: 800, height: 600 },
+        elementCount: 3,
+        svgElementCount: 2
+      },
+      recommendations: ['PDF导出质量良好'],
+      detailedIssues: []
+    })
+
     pdfEngine = new PDFExportEngine()
 
     mockCanvas = document.createElement('div')
@@ -127,7 +174,8 @@ describe('PDFExportEngine', () => {
         quality: 0.9
       }
 
-      const result = await pdfEngine.exportToPDF(mockCanvas, options)
+      const rasterCanvas = document.createElement('div')
+      const result = await pdfEngine.exportToPDF(rasterCanvas, options)
 
       expect(result.success).toBe(true)
       expect(result.format).toBe(ExportFormat.PDF)
@@ -177,7 +225,8 @@ describe('PDFExportEngine', () => {
         fileName: '测试文档'
       }
 
-      const result = await pdfEngine.exportToPDF(mockCanvas, options)
+      const rasterCanvas = document.createElement('div')
+      const result = await pdfEngine.exportToPDF(rasterCanvas, options)
 
       expect(result.success).toBe(true)
       expect(result.metadata.fileName).toBe('测试文档')
@@ -191,7 +240,8 @@ describe('PDFExportEngine', () => {
         includeFooter: true
       }
 
-      const result = await pdfEngine.exportToPDF(mockCanvas, options)
+      const rasterCanvas = document.createElement('div')
+      const result = await pdfEngine.exportToPDF(rasterCanvas, options)
 
       expect(result.success).toBe(true)
     })
@@ -250,7 +300,8 @@ describe('PDFExportEngine', () => {
         detailedIssues: []
       })
 
-      const result = await pdfEngine.exportToPDF(mockCanvas, options)
+      const rasterCanvas = document.createElement('div')
+      const result = await pdfEngine.exportToPDF(rasterCanvas, options)
 
       expect(result.success).toBe(true)
       expect(result.qualityReport.pathCompleteness).toBeLessThan(95)
@@ -273,7 +324,8 @@ describe('PDFExportEngine', () => {
         margins: { top: 20, right: 20, bottom: 20, left: 20 }
       }
 
-      const result = await pdfEngine.exportToPDF(mockCanvas, options)
+      const rasterCanvas = document.createElement('div')
+      const result = await pdfEngine.exportToPDF(rasterCanvas, options)
 
       expect(result.success).toBe(true)
     })
@@ -289,7 +341,8 @@ describe('PDFExportEngine', () => {
         margins: { top: 20, right: 20, bottom: 20, left: 20 }
       }
 
-      const result = await pdfEngine.exportToPDF(mockCanvas, options)
+      const rasterCanvas = document.createElement('div')
+      const result = await pdfEngine.exportToPDF(rasterCanvas, options)
 
       expect(result.success).toBe(false)
       expect(result.errors.length).toBeGreaterThan(0)
@@ -318,5 +371,3 @@ describe('PDFExportEngine', () => {
     })
   })
 })
-
-

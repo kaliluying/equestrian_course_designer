@@ -31,7 +31,8 @@ export class PNGExportEngine {
     includeWatermark: false,
     fileName: 'course-design.png',
     includeBackground: true,
-    timeout: 30000
+    timeout: 30000,
+    sourceVersion: 'v2'
   }
 
   /**
@@ -153,12 +154,13 @@ export class PNGExportEngine {
   }
 
   private createExportError(
-    error: any,
+    error: unknown,
     stage: ExportStage,
     canvas: HTMLElement,
     options: Required<PNGExportOptions>
   ): ExportError {
-    const exportError = new Error(error?.message || 'PNG导出失败') as ExportError
+    const message = error instanceof Error ? error.message : 'PNG导出失败'
+    const exportError = new Error(message) as ExportError
     exportError.type = ExportErrorType.HTML2CANVAS_ERROR
     exportError.stage = stage
     exportError.recoverable = true
@@ -248,3 +250,5 @@ export class PNGExportEngine {
     }
   }
 }
+
+export const pngExportEngine = new PNGExportEngine()

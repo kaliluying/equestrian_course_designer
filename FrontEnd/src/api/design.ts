@@ -1,4 +1,9 @@
-import type { DesignResponse, SaveDesignRequest } from '@/types/design'
+import type {
+  DesignDownloadResponse,
+  DesignDownloadType,
+  DesignResponse,
+  SaveDesignRequest
+} from '@/types/design'
 import { request } from '@/utils/request'
 import { cachedRequest, invalidateCache } from '@/utils/apiCache'
 
@@ -130,21 +135,15 @@ export const toggleDesignSharing = async (
 // 下载设计
 export const downloadDesign = async (
   id: number,
-  fileType: 'json' | 'png' | 'pdf' = 'json',
-): Promise<{
-  message: string
-  download_url: string
-  filename: string
-  file_type: string
-  downloads_count: number
-}> => {
-  return request.get<{
-    message: string
-    download_url: string
-    filename: string
-    file_type: string
-    downloads_count: number
-  }>(`/user/designs/${id}/download/?type=${fileType}`)
+  fileType: DesignDownloadType = 'json',
+): Promise<DesignDownloadResponse> => {
+  const response = await request.get<DesignDownloadResponse>(
+    `/user/designs/${id}/download/`,
+    { params: { type: fileType } }
+  )
+  invalidateCache()
+
+  return response
 }
 
 // 删除设计

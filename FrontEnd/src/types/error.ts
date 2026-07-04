@@ -75,7 +75,19 @@ export function createErrorResponse(
 /**
  * 从服务器响应或错误对象中提取错误信息
  */
-export function extractErrorFromResponse(error: any): ErrorResponse {
+interface ApiErrorLike {
+  response?: {
+    status?: number
+    data?: unknown
+  }
+  message?: string
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+export function extractErrorFromResponse(error: unknown): ErrorResponse {
   // 默认错误响应
   const defaultError = createErrorResponse(
     ErrorCode.UNKNOWN_ERROR,
@@ -86,19 +98,21 @@ export function extractErrorFromResponse(error: any): ErrorResponse {
   if (!error) return defaultError
 
   // 处理标准 API 错误响应
-  if (error.response && error.response.data) {
-    const responseData = error.response.data
+  const apiError = isRecord(error) ? error as ApiErrorLike : null
+
+  if (apiError?.response?.data) {
+    const responseData = apiError.response.data
 
     // 如果后端已经按照我们的错误格式返回
-    if (responseData.code && responseData.message) {
+    if (isRecord(responseData) && responseData.code && responseData.message) {
       return {
         code: responseData.code as ErrorCode,
-        message: responseData.message,
+        message: String(responseData.message),
         severity: (responseData.severity as ErrorSeverity) || ErrorSeverity.ERROR,
-        details: responseData.details,
-        solutions: responseData.solutions,
-        field: responseData.field,
-        timestamp: responseData.timestamp || Date.now(),
+        details: typeof responseData.details === 'string' ? responseData.details : undefined,
+        solutions: Array.isArray(responseData.solutions) ? responseData.solutions.map(String) : undefined,
+        field: typeof responseData.field === 'string' ? responseData.field : undefined,
+        timestamp: typeof responseData.timestamp === 'number' ? responseData.timestamp : Date.now(),
       }
     }
 
@@ -106,22 +120,23 @@ export function extractErrorFromResponse(error: any): ErrorResponse {
     if (typeof responseData === 'string') {
       // 字符串错误消息
       return createErrorResponse(ErrorCode.SERVER_ERROR, responseData, ErrorSeverity.ERROR)
-    } else if (responseData.detail) {
+    } else if (isRecord(responseData) && responseData.detail) {
       // Django REST 风格错误
-      return createErrorResponse(ErrorCode.SERVER_ERROR, responseData.detail, ErrorSeverity.ERROR)
-    } else if (responseData.message) {
+      return createErrorResponse(ErrorCode.SERVER_ERROR, String(responseData.detail), ErrorSeverity.ERROR)
+    } else if (isRecord(responseData) && responseData.message) {
       // 带有 message 属性的常见格式
-      return createErrorResponse(ErrorCode.SERVER_ERROR, responseData.message, ErrorSeverity.ERROR)
-    } else if (responseData.error) {
+      return createErrorResponse(ErrorCode.SERVER_ERROR, String(responseData.message), ErrorSeverity.ERROR)
+    } else if (isRecord(responseData) && responseData.error) {
       // 带有 error 属性的常见格式
-      return createErrorResponse(ErrorCode.SERVER_ERROR, responseData.error, ErrorSeverity.ERROR)
-    } else if (typeof responseData === 'object') {
+      return createErrorResponse(ErrorCode.SERVER_ERROR, String(responseData.error), ErrorSeverity.ERROR)
+    } else if (isRecord(responseData)) {
       // 尝试查找第一个错误字段
       const firstField = Object.keys(responseData)[0]
       if (firstField && Array.isArray(responseData[firstField])) {
+        const fieldErrors = responseData[firstField]
         return createErrorResponse(
           ErrorCode.VALIDATION_ERROR,
-          `${firstField}: ${responseData[firstField][0]}`,
+          `${firstField}: ${String(fieldErrors[0])}`,
           ErrorSeverity.WARNING,
           { field: firstField },
         )
@@ -129,7 +144,7 @@ export function extractErrorFromResponse(error: any): ErrorResponse {
     }
 
     // 根据 HTTP 状态码生成错误
-    const status = error.response.status
+    const status = apiError.response.status || 0
     if (status === 400) {
       return createErrorResponse(
         ErrorCode.VALIDATION_ERROR,
@@ -158,7 +173,7 @@ export function extractErrorFromResponse(error: any): ErrorResponse {
   }
 
   // 处理网络错误
-  if (error.message && error.message.includes('Network Error')) {
+  if (apiError?.message && apiError.message.includes('Network Error')) {
     return createErrorResponse(
       ErrorCode.NETWORK_ERROR,
       '网络连接失败，请检查您的网络连接',

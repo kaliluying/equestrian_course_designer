@@ -1,5 +1,14 @@
 import { request } from '@/utils/request'
 import { AI_API } from '@/config/api'
+import { getApiErrorMessage } from '@/utils/apiErrorMessage'
+import type {
+  LiverpoolProperties,
+  ObstacleType,
+  PathPoint,
+  Pole,
+  WallProperties,
+  WaterProperties,
+} from '@/types/obstacle'
 
 export interface AIGenerateRequest {
   prompt: string
@@ -13,10 +22,10 @@ export interface AIGenerateRequest {
 
 export interface AIGenerateResponse {
   history_id: number
-  obstacles: Obstacle[]
+  obstacles: AIObstacle[]
   path: {
     visible: boolean
-    points: Array<{ x: number; y: number }>
+    points: Array<Pick<PathPoint, 'x' | 'y' | 'controlPoint1' | 'controlPoint2'>>
     startPoint: { x: number; y: number; rotation: number }
     endPoint: { x: number; y: number; rotation: number }
   }
@@ -24,7 +33,37 @@ export interface AIGenerateResponse {
   estimated_time: number
   explanation: string
   teaching_notes: string
+  validation: AIGenerationValidation
+  metrics?: AIRouteMetrics
   remaining_quota: number
+}
+
+export interface AIObstacle {
+  id: string
+  type: ObstacleType | string
+  position: { x: number; y: number }
+  rotation: number
+  number: string
+  poles: Pole[]
+  wallProperties?: WallProperties
+  liverpoolProperties?: LiverpoolProperties
+  waterProperties?: WaterProperties
+}
+
+export interface AIGenerationValidation {
+  is_valid: boolean
+  issues: string[]
+  warnings: string[]
+  auto_fixed: string[]
+  source: 'llm' | 'fallback'
+  fallback_reason: string
+}
+
+export interface AIRouteMetrics {
+  total_distance?: number
+  avg_obstacle_distance?: number
+  turn_count?: number
+  difficulty_score?: number
 }
 
 export interface AIQuotaInfo {
@@ -52,16 +91,6 @@ export interface PurchaseResponse {
   quota_count: number
 }
 
-// 障碍物类型定义
-interface Obstacle {
-  id: string
-  type: string
-  position: { x: number; y: number }
-  rotation: number
-  number: string
-  poles: Array<{ height: number; width: number; color: string }>
-}
-
 export const aiApi = {
   generate(data: AIGenerateRequest) {
     return request.post<{ code: number; message: string; data: AIGenerateResponse }>(
@@ -85,4 +114,8 @@ export const aiApi = {
     const url = limit ? `${AI_API.history}?limit=${limit}` : AI_API.history
     return request.get<{ code: number; data: { histories: AIHistoryItem[] } }>(url)
   }
+}
+
+export const getAIGenerateErrorMessage = (error: unknown): string => {
+  return getApiErrorMessage(error, '生成失败，请稍后重试')
 }

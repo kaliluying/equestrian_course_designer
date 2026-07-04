@@ -142,17 +142,18 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { formatDateTime } from '@/utils/datetime'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Star, Download, HomeFilled, Share, Clock, Timer, Document, Picture, Tickets } from '@element-plus/icons-vue'
+import { v4 as uuidv4 } from 'uuid'
 import { getUserDesigns, deleteDesign, toggleDesignSharing, downloadDesign } from '@/api/design'
-import type { DesignResponse } from '@/types/design'
+import type { DesignDownloadType, DesignResponse } from '@/types/design'
 import { useUserStore } from '@/stores/user'
 import { useCourseStore } from '@/stores/course'
-import { Star, Download, HomeFilled, Share, Clock, Timer, Document, Picture, Tickets } from '@element-plus/icons-vue'
+import { formatDateTime } from '@/utils/datetime'
+import { triggerDesignDownload } from '@/utils/designDownload'
 import ImagePreview from '@/components/ImagePreview.vue'
 import SkeletonLoader from '@/components/SkeletonLoader.vue'
-import { v4 as uuidv4 } from 'uuid'
 
 // 状态
 const designs = ref<DesignResponse[]>([])
@@ -172,7 +173,7 @@ const previewImageTitle = ref('')
 
 // 下载相关状态
 const downloadDialogVisible = ref(false)
-const selectedDownloadType = ref('json')
+const selectedDownloadType = ref<DesignDownloadType>('json')
 const currentDesign = ref<DesignResponse | null>(null)
 
 // 下载类型选项
@@ -180,7 +181,7 @@ const downloadTypeOptions = [
   { label: 'JSON格式 (设计数据)', value: 'json' },
   { label: 'PNG格式 (设计图片)', value: 'png' },
   { label: 'PDF格式 (设计文档)', value: 'pdf' }
-]
+] satisfies Array<{ label: string; value: DesignDownloadType }>
 
 // 预览图片
 const previewImage = (design: DesignResponse) => {
@@ -394,7 +395,7 @@ const confirmDownload = async () => {
 
     const response = await downloadDesign(
       currentDesign.value.id,
-      selectedDownloadType.value as 'json' | 'png' | 'pdf'
+      selectedDownloadType.value
     )
 
     // 更新下载计数
@@ -402,18 +403,7 @@ const confirmDownload = async () => {
       currentDesign.value.downloads_count = response.downloads_count
     }
 
-    // 检查下载URL
-    if (!response.download_url) {
-      throw new Error('服务器未返回有效的下载链接')
-    }
-
-    // 创建下载链接并触发下载
-    const link = document.createElement('a')
-    link.href = response.download_url
-    link.download = response.filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    await triggerDesignDownload(response)
 
     ElMessage.success('下载成功')
     downloadDialogVisible.value = false

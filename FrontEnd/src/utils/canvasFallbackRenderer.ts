@@ -257,8 +257,8 @@ export class CanvasFallbackRenderer {
         strokeWidth: this.getNumericStyleValue(element, computedStyle, 'stroke-width'),
         strokeDasharray: this.getStrokeDashArray(element, computedStyle),
         strokeDashoffset: this.getNumericStyleValue(element, computedStyle, 'stroke-dashoffset'),
-        strokeLinecap: this.getStyleValue(element, computedStyle, 'stroke-linecap') as any,
-        strokeLinejoin: this.getStyleValue(element, computedStyle, 'stroke-linejoin') as any,
+        strokeLinecap: this.getStrokeLinecap(element, computedStyle),
+        strokeLinejoin: this.getStrokeLinejoin(element, computedStyle),
         opacity: this.getNumericStyleValue(element, computedStyle, 'opacity'),
         transform: element.getAttribute('transform') || computedStyle.transform
       }
@@ -274,6 +274,16 @@ export class CanvasFallbackRenderer {
       console.warn('提取SVG元素信息失败:', error, element)
       return null
     }
+  }
+
+  private getStrokeLinecap(element: SVGElement, computedStyle: CSSStyleDeclaration): 'butt' | 'round' | 'square' {
+    const value = this.getStyleValue(element, computedStyle, 'stroke-linecap')
+    return value === 'round' || value === 'square' ? value : 'butt'
+  }
+
+  private getStrokeLinejoin(element: SVGElement, computedStyle: CSSStyleDeclaration): 'miter' | 'round' | 'bevel' {
+    const value = this.getStyleValue(element, computedStyle, 'stroke-linejoin')
+    return value === 'round' || value === 'bevel' ? value : 'miter'
   }
 
   /**

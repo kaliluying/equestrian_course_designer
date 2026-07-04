@@ -1,3 +1,5 @@
+import type { Obstacle, PathPoint } from './obstacle'
+
 export interface ViewportInfo {
   width: number
   height: number

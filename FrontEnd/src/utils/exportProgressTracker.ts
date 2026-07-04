@@ -31,6 +31,8 @@ export type ExtendedExportStage = ExportStage | 'completed' | 'failed'
 
 // 扩展的进度接口，兼容现有代码
 export interface ExportProgress extends ProgressState {
+  percentage: number
+  timestamp: number
   details?: string
 }
 
@@ -67,9 +69,9 @@ export interface TimeEstimationConfig {
 
 // 事件发射器接口
 export interface ProgressEventEmitter {
-  on(event: string, callback: Function): void
-  off(event: string, callback: Function): void
-  emit(event: string, data: any): void
+  on(event: string, callback: (data: unknown) => void): void
+  off(event: string, callback: (data: unknown) => void): void
+  emit(event: string, data: unknown): void
 }
 
 /**
@@ -82,10 +84,10 @@ export class ExportProgressTracker implements ProgressEventEmitter {
   private startTime: number = 0
   private stageStartTime: number = 0
   private stageHistory: Array<{ stage: ExtendedExportStage; duration: number; timestamp: number }> = []
-  private eventListeners: Map<string, Function[]> = new Map()
+  private eventListeners: Map<string, Array<(data: unknown) => void>> = new Map()
 
   // 回调函数
-  private progressCallback?: ProgressCallback
+  private progressCallback?: (progress: ExportProgress) => void
   private completionCallback?: CompletionCallback
   private errorCallback?: ErrorCallback
 
@@ -100,7 +102,7 @@ export class ExportProgressTracker implements ProgressEventEmitter {
   // 增强的阶段配置
   private readonly stageConfigs: ExportStageConfig[] = [
     {
-      stage: 'initializing',
+      stage: ExportStage.INITIALIZING,
       message: '正在初始化导出...',
       description: '准备导出环境和配置',
       estimatedDuration: 500,
@@ -108,7 +110,7 @@ export class ExportProgressTracker implements ProgressEventEmitter {
       criticalPath: true
     },
     {
-      stage: 'preparing_canvas',
+      stage: ExportStage.PREPARING_CANVAS,
       message: '正在准备画布内容...',
       description: '分析画布元素和结构',
       estimatedDuration: 1000,
@@ -116,7 +118,7 @@ export class ExportProgressTracker implements ProgressEventEmitter {
       criticalPath: true
     },
     {
-      stage: 'processing_svg',
+      stage: ExportStage.PROCESSING_SVG,
       message: '正在处理SVG路径元素...',
       description: '优化SVG元素和路径数据',
       estimatedDuration: 2000,
@@ -124,7 +126,7 @@ export class ExportProgressTracker implements ProgressEventEmitter {
       criticalPath: true
     },
     {
-      stage: 'rendering',
+      stage: ExportStage.RENDERING,
       message: '正在渲染图像...',
       description: '执行画布到图像的转换',
       estimatedDuration: 3000,
@@ -132,7 +134,7 @@ export class ExportProgressTracker implements ProgressEventEmitter {
       criticalPath: true
     },
     {
-      stage: 'validating_quality',
+      stage: ExportStage.VALIDATING_QUALITY,
       message: '正在验证导出质量...',
       description: '检查导出结果的完整性和质量',
       estimatedDuration: 800,
@@ -140,7 +142,7 @@ export class ExportProgressTracker implements ProgressEventEmitter {
       criticalPath: false
     },
     {
-      stage: 'generating_file',
+      stage: ExportStage.GENERATING_FILE,
       message: '正在生成文件...',
       description: '创建最终的导出文件',
       estimatedDuration: 1500,
@@ -148,7 +150,7 @@ export class ExportProgressTracker implements ProgressEventEmitter {
       criticalPath: true
     },
     {
-      stage: 'finalizing',
+      stage: ExportStage.FINALIZING,
       message: '正在完成处理...',
       description: '清理资源和完成导出',
       estimatedDuration: 500,
@@ -192,14 +194,14 @@ export class ExportProgressTracker implements ProgressEventEmitter {
   }
 
   // 事件发射器实现
-  on(event: string, callback: Function): void {
+  on(event: string, callback: (data: unknown) => void): void {
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, [])
     }
     this.eventListeners.get(event)!.push(callback)
   }
 
-  off(event: string, callback: Function): void {
+  off(event: string, callback: (data: unknown) => void): void {
     const listeners = this.eventListeners.get(event)
     if (listeners) {
       const index = listeners.indexOf(callback)
@@ -209,7 +211,7 @@ export class ExportProgressTracker implements ProgressEventEmitter {
     }
   }
 
-  emit(event: string, data: any): void {
+  emit(event: string, data: unknown): void {
     const listeners = this.eventListeners.get(event)
     if (listeners) {
       listeners.forEach(callback => {
@@ -281,7 +283,7 @@ export class ExportProgressTracker implements ProgressEventEmitter {
     }
 
     // 开始第一个阶段
-    this.updateStage('initializing')
+    this.updateStage(ExportStage.INITIALIZING)
   }
 
   /**
@@ -591,7 +593,7 @@ export class ExportProgressTracker implements ProgressEventEmitter {
    * @param error 导出错误
    * @param context 错误上下文
    */
-  handleError(error: ExportError, context?: any): void {
+  handleError(error: ExportError, context?: unknown): void {
     // 调用错误回调
     if (this.errorCallback) {
       this.errorCallback(error)

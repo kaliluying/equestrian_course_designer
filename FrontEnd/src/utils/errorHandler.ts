@@ -69,6 +69,20 @@ const ERROR_MESSAGES: Record<string, string> = {
   '504': '服务器响应超时'
 }
 
+interface HttpErrorLike {
+  code?: string
+  response?: {
+    status?: number
+    data?: {
+      message?: string | Record<string, unknown>
+    }
+  }
+}
+
+function toHttpError(error: unknown): HttpErrorLike {
+  return typeof error === 'object' && error !== null ? error as HttpErrorLike : {}
+}
+
 /**
  * 分类错误类型
  */
@@ -76,7 +90,7 @@ function classifyError(error: unknown): ErrorType {
   if (!error) return ErrorType.UNKNOWN
 
   const errorStr = String(error)
-  const errorObj = error as any
+  const errorObj = toHttpError(error)
 
   // 网络错误
   if (
@@ -115,8 +129,9 @@ function classifyError(error: unknown): ErrorType {
   }
 
   // 系统错误
+  const status = errorObj.response?.status || 0
   if (
-    errorObj?.response?.status >= 500 ||
+    status >= 500 ||
     error instanceof TypeError ||
     error instanceof ReferenceError
   ) {
@@ -132,7 +147,7 @@ function classifyError(error: unknown): ErrorType {
 function getUserFriendlyMessage(error: unknown): string {
   if (!error) return '发生未知错误'
 
-  const errorObj = error as any
+  const errorObj = toHttpError(error)
 
   // 优先使用后端返回的消息
   if (errorObj?.response?.data?.message) {
@@ -189,7 +204,7 @@ function determineErrorLevel(type: ErrorType, statusCode?: number): ErrorLevel {
 export function handleError(error: unknown, context?: Record<string, unknown>): ErrorInfo {
   const type = classifyError(error)
   const message = getUserFriendlyMessage(error)
-  const statusCode = (error as any)?.response?.status
+  const statusCode = toHttpError(error).response?.status
   const level = determineErrorLevel(type, statusCode)
 
   const errorInfo: ErrorInfo = {
@@ -281,7 +296,7 @@ function reportError(errorInfo: ErrorInfo): void {
 /**
  * 创建错误处理装饰器（用于 async 函数）
  */
-export function withErrorHandler<T extends (...args: any[]) => Promise<any>>(
+export function withErrorHandler<T extends (...args: unknown[]) => Promise<unknown>>(
   fn: T,
   context?: Record<string, unknown>
 ): T {

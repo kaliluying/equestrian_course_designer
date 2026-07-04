@@ -13,12 +13,13 @@
 ## 技术栈
 
 ### 后端
-- Python 3.8+
+- Python 3.12+
 - Django 5.1.3
 - Django REST framework
 - SimpleUI (Django Admin 美化)
 - MySQL 8.0+
 - JWT 认证
+- Django Channels + Redis 实时协作
 
 ### 前端
 - Vue 3
@@ -80,9 +81,10 @@ equestrian_course_designer/
 ## 快速开始
 
 ### 环境要求
-- Python 3.8+
-- Node.js 16+
+- Python 3.12+
+- Node.js 22+
 - MySQL 8.0+
+- Redis 6.0+
 
 ### 后端设置
 ```bash
@@ -95,6 +97,8 @@ source venv/bin/activate  # Windows 使用: venv\Scripts\activate
 
 # 安装依赖
 pip install -r requirements.txt
+# 或使用 pyproject.toml/uv.lock
+uv sync
 
 # 配置数据库
 # 编辑 equestrian/settings.py 中的数据库配置
@@ -105,6 +109,9 @@ mkdir -p static media staticfiles
 # 迁移数据库
 python manage.py makemigrations
 python manage.py migrate
+
+# 本地环境检查（数据库、Redis、AI、支付配置）
+python manage.py check_local_setup
 
 # 创建超级用户
 python manage.py createsuperuser
@@ -119,7 +126,8 @@ python manage.py collectstatic
 cd FrontEnd
 
 # 安装依赖
-npm install
+pnpm install
+# 或 npm install
 
 # 开发环境运行
 npm run dev
@@ -183,7 +191,18 @@ npm run dev
 ## 开发指南
 
 ### API 文档
-API 文档位于 `/api/docs/`，包含所有接口的详细说明。
+当前主要接口前缀：
+- 用户、设计、自定义障碍物、会员支付、AI 生成：`/user/`
+- 反馈：`/api/feedback/`
+- 实时协作：`/ws/collaboration/<design_id>/`
+- Django 管理后台：`/admin/`
+
+README 中历史遗留的 `/api/v1/` 前缀不再代表当前代码实现。
+
+完整接口清单见 `docs/API.md`。
+
+### 敏感文件
+仓库曾包含 `cookies.txt` 和 `BackEnd/equestrian/keys/*.pem` 等敏感文件路径。后续提交前应确认这些文件不再被跟踪，并在生产环境通过安全的密钥管理或环境变量配置真实密钥。
 
 ### 开发规范
 - 后端代码遵循 PEP 8 规范
@@ -194,4 +213,4 @@ API 文档位于 `/api/docs/`，包含所有接口的详细说明。
 
 ## 许可证
 
-MIT License 
+MIT License

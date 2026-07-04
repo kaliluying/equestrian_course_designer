@@ -44,7 +44,7 @@ export function useExportNotifications(config?: Partial<NotificationConfig>) {
   }
 
   // 事件监听器
-  const eventListeners = new Map<string, Function>()
+  const eventListeners = new Map<string, (data: unknown) => void>()
 
   /**
    * 监听通知事件
@@ -103,11 +103,11 @@ export function useExportNotifications(config?: Partial<NotificationConfig>) {
     exportNotificationService.on('history-cleared', onHistoryCleared)
 
     // 保存监听器引用以便清理
-    eventListeners.set('progress', onProgress)
-    eventListeners.set('success', onSuccess)
-    eventListeners.set('error', onError)
-    eventListeners.set('warning', onWarning)
-    eventListeners.set('info', onInfo)
+    eventListeners.set('progress', onProgress as (data: unknown) => void)
+    eventListeners.set('success', onSuccess as (data: unknown) => void)
+    eventListeners.set('error', onError as (data: unknown) => void)
+    eventListeners.set('warning', onWarning as (data: unknown) => void)
+    eventListeners.set('info', onInfo as (data: unknown) => void)
     eventListeners.set('removed', onRemoved)
     eventListeners.set('history-cleared', onHistoryCleared)
   }
@@ -151,7 +151,7 @@ export function useExportNotifications(config?: Partial<NotificationConfig>) {
     exportNotificationService.showSuccessNotification(result, customMessage)
   }
 
-  const showErrorNotification = (error: ExportError, context?: any) => {
+  const showErrorNotification = (error: ExportError, context?: unknown) => {
     exportNotificationService.showErrorNotification(error, context)
   }
 

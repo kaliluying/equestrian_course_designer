@@ -31,7 +31,7 @@ export class ExportManager {
   private preferences: ExportPreferences
   private presets: Map<string, ExportPreset> = new Map()
   private activeExports: Map<string, ExportContext> = new Map()
-  private eventListeners: Map<string, Function[]> = new Map()
+  private eventListeners: Map<string, Array<(data: unknown) => void>> = new Map()
 
   constructor(preferences?: Partial<ExportPreferences>) {
     this.preferences = {
@@ -203,7 +203,7 @@ export class ExportManager {
   /**
    * 添加事件监听器
    */
-  addEventListener(event: string, callback: Function): void {
+  addEventListener(event: string, callback: (data: unknown) => void): void {
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, [])
     }
@@ -213,7 +213,7 @@ export class ExportManager {
   /**
    * 移除事件监听器
    */
-  removeEventListener(event: string, callback: Function): void {
+  removeEventListener(event: string, callback: (data: unknown) => void): void {
     const listeners = this.eventListeners.get(event)
     if (listeners) {
       const index = listeners.indexOf(callback)
@@ -647,7 +647,7 @@ export class ExportManager {
   /**
    * 发射事件
    */
-  private emitEvent(event: string, data: any): void {
+  private emitEvent(event: string, data: unknown): void {
     const listeners = this.eventListeners.get(event)
     if (listeners) {
       listeners.forEach(callback => {
@@ -665,7 +665,7 @@ export class ExportManager {
    */
   private createExportError(error: unknown, context: ExportContext): ExportError {
     const errorMessage = error instanceof Error ? error.message : '导出失败'
-    const errorType = (error as unknown)?.type || ExportErrorType.HTML2CANVAS_ERROR
+    const errorType = this.getExportErrorType(error)
 
     const exportError = Object.assign(new Error(errorMessage), {
       type: errorType,
@@ -682,6 +682,19 @@ export class ExportManager {
     }) as ExportError
 
     return exportError
+  }
+
+  /**
+   * 从未知错误对象中提取导出错误类型
+   */
+  private getExportErrorType(error: unknown): ExportErrorType {
+    if (error && typeof error === 'object' && 'type' in error) {
+      const type = (error as { type?: unknown }).type
+      if (typeof type === 'string' && Object.values(ExportErrorType).includes(type as ExportErrorType)) {
+        return type as ExportErrorType
+      }
+    }
+    return ExportErrorType.HTML2CANVAS_ERROR
   }
 
   /**

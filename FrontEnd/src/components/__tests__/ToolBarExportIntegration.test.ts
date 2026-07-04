@@ -3,9 +3,8 @@
  * Tests the integration between ToolBar component and the enhanced export system
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
-import { ElButton, ElDialog } from 'element-plus'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { mount, type VueWrapper } from '@vue/test-utils'
 import ToolBar from '../ToolBar.vue'
 import { useCourseStore } from '@/stores/course'
 import { useUserStore } from '@/stores/user'
@@ -34,12 +33,24 @@ vi.mock('element-plus', () => ({
   ElLoading: { service: vi.fn(() => ({ close: vi.fn() })) }
 }))
 
+interface ToolBarExportVm {
+  currentExportFormat: ExportFormat | ''
+  exportOptionsVisible: boolean
+  exportOptions: Record<string, Record<string, unknown>>
+  handleUnifiedExport: (format: string) => Promise<void>
+  executePDFExport: () => Promise<unknown>
+  checkExportPermissions: () => boolean
+  handleCollaborationExport: () => Promise<boolean>
+}
+
 describe('ToolBar Export Integration', () => {
-  let wrapper: any
-  let mockCourseStore: any
-  let mockUserStore: any
+  let wrapper: VueWrapper<ToolBarExportVm>
+  let mockCourseStore: ReturnType<typeof useCourseStore>
+  let mockUserStore: ReturnType<typeof useUserStore>
+  let originalQuerySelector: typeof document.querySelector
 
   beforeEach(() => {
+    originalQuerySelector = document.querySelector.bind(document)
     mockCourseStore = {
       currentCourse: {
         name: 'Test Course',
@@ -48,7 +59,7 @@ describe('ToolBar Export Integration', () => {
         fieldHeight: 60
       },
       exportCourse: vi.fn(() => ({ name: 'Test Course', obstacles: [] }))
-    }
+    } as unknown as ReturnType<typeof useCourseStore>
 
     mockUserStore = {
       currentUser: {
@@ -56,28 +67,40 @@ describe('ToolBar Export Integration', () => {
         username: 'testuser'
       },
       isAuthenticated: true
-    }
+    } as unknown as ReturnType<typeof useUserStore>
 
     vi.mocked(useCourseStore).mockReturnValue(mockCourseStore)
     vi.mocked(useUserStore).mockReturnValue(mockUserStore)
 
-    Object.defineProperty(document, 'querySelector', {
-      value: vi.fn(() => ({
-        getBoundingClientRect: () => ({ width: 800, height: 600 }),
-        querySelectorAll: () => [],
-        dispatchEvent: vi.fn()
-      })),
-      writable: true
-    })
-
     wrapper = mount(ToolBar, {
       global: {
-        components: {
-          ElButton,
-          ElDialog
+        stubs: {
+          teleport: true,
+          'el-button': { template: '<button><slot /></button>' },
+          'el-dialog': { template: '<div><slot /><slot name="footer" /></div>' },
+          'el-dropdown': { template: '<div class="export-dropdown"><slot /><slot name="dropdown" /></div>' },
+          'el-dropdown-menu': { template: '<div><slot /></div>' },
+          'el-dropdown-item': { props: ['command'], template: '<div><slot /></div>' },
+          'el-form': { template: '<div><slot /></div>' },
+          'el-form-item': { template: '<div><slot /></div>' },
+          'el-select': { template: '<div><slot /></div>' },
+          'el-option': { template: '<div><slot /></div>' },
+          'el-slider': { template: '<div><slot /></div>' },
+          'el-checkbox': { template: '<div><slot /></div>' },
+          'el-input': { template: '<input />' },
+          'el-input-number': { template: '<input />' },
+          'el-progress': { template: '<div><slot :percentage="0" /></div>' },
+          'el-tooltip': { template: '<div><slot /></div>' },
+          'el-icon': { template: '<span><slot /></span>' },
+          CustomObstacleManager: true,
+          AIGenerateDialog: true
         }
       }
-    })
+    }) as VueWrapper<ToolBarExportVm>
+  })
+
+  afterEach(() => {
+    document.querySelector = originalQuerySelector
   })
 
   it('should render export dropdown with all format options', () => {
@@ -104,7 +127,10 @@ describe('ToolBar Export Integration', () => {
       triggerExportEvent: vi.fn()
     }
 
-    document.querySelector = vi.fn(() => mockCanvas as any)
+    document.querySelector = vi.fn((selector: string) => {
+      if (selector === '.course-canvas') return mockCanvas as unknown as Element
+      return originalQuerySelector(selector)
+    })
 
     const result = await wrapper.vm.handleCollaborationExport()
     expect(result).toBe(true)

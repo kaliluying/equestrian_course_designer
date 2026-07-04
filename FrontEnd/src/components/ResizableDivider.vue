@@ -31,11 +31,10 @@ const startResize = (e: MouseEvent) => {
     startPosition = props.direction === 'vertical' ? e.clientX : e.clientY;
 
     // 获取当前大小
-    const panel = props.direction === 'vertical'
-        ? e.currentTarget.previousElementSibling
-        : e.currentTarget.previousElementSibling;
+    const target = e.currentTarget instanceof HTMLElement ? e.currentTarget : null;
+    const panel = target?.previousElementSibling;
 
-    if (panel) {
+    if (panel instanceof HTMLElement) {
         startSize = props.direction === 'vertical'
             ? panel.getBoundingClientRect().width
             : panel.getBoundingClientRect().height;

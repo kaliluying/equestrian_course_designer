@@ -292,7 +292,7 @@ export class SVGExportEnhancer {
    * @param canvas 画布元素
    * @returns 唯一ID
    */
-  private generateCanvasId(canvas: HTMLElement): string {
+  protected generateCanvasId(canvas: HTMLElement): string {
     const existingId = canvas.id
     if (existingId) {
       return existingId
@@ -417,7 +417,7 @@ export class SVGExportEnhancer {
    * @param element 元素（用于获取计算样式）
    * @returns 解析后的值
    */
-  private resolveCSSVariables(value: string, element: Element): string {
+  protected resolveCSSVariables(value: string, element: Element): string {
     if (!value.includes('var(')) {
       return value
     }
@@ -1302,7 +1302,7 @@ export class SVGExportEnhancerExtended extends SVGExportEnhancer {
    * @param canvas 画布元素
    * @returns 画布ID
    */
-  private generateCanvasId(canvas: HTMLElement): string {
+  protected generateCanvasId(canvas: HTMLElement): string {
     const existingId = canvas.id
     if (existingId) {
       return existingId

@@ -149,12 +149,13 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { formatDateTime } from '@/utils/datetime'
 import { ElMessage } from 'element-plus'
-import { getSharedDesigns, likeDesign, downloadDesign } from '@/api/design'
-import type { DesignResponse } from '@/types/design'
-import { useUserStore } from '@/stores/user'
 import { HomeFilled, User, Download, Clock, Document, Picture, Tickets, Share } from '@element-plus/icons-vue'
+import { getSharedDesigns, likeDesign, downloadDesign } from '@/api/design'
+import type { DesignDownloadType, DesignResponse } from '@/types/design'
+import { useUserStore } from '@/stores/user'
+import { formatDateTime } from '@/utils/datetime'
+import { triggerDesignDownload } from '@/utils/designDownload'
 import ImagePreview from '@/components/ImagePreview.vue'
 import SharedObstaclesView from '@/components/SharedObstaclesView.vue'
 // 状态
@@ -174,7 +175,7 @@ const previewImageTitle = ref('')
 
 // 下载对话框状态
 const downloadDialogVisible = ref(false)
-const selectedDownloadType = ref('json')
+const selectedDownloadType = ref<DesignDownloadType>('json')
 const currentDesign = ref<DesignResponse | null>(null)
 
 // 预览图片
@@ -227,7 +228,7 @@ const downloadTypeOptions = [
   { label: 'JSON格式 (设计数据)', value: 'json' },
   { label: 'PNG格式 (设计图片)', value: 'png' },
   { label: 'PDF格式 (设计文档)', value: 'pdf' }
-]
+] satisfies Array<{ label: string; value: DesignDownloadType }>
 
 // 处理下载
 const handleDownload = async (design: DesignResponse) => {
@@ -248,7 +249,7 @@ const confirmDownload = async () => {
 
     const response = await downloadDesign(
       currentDesign.value.id,
-      selectedDownloadType.value as 'json' | 'png' | 'pdf'
+      selectedDownloadType.value
     )
 
     // 更新下载计数
@@ -256,18 +257,7 @@ const confirmDownload = async () => {
       currentDesign.value.downloads_count = response.downloads_count
     }
 
-    // 检查下载URL
-    if (!response.download_url) {
-      throw new Error('服务器未返回有效的下载链接')
-    }
-
-    // 创建一个临时链接并点击它来下载文件
-    const link = document.createElement('a')
-    link.href = response.download_url
-    link.download = response.filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    await triggerDesignDownload(response)
 
     ElMessage.success('下载成功')
     // 关闭对话框

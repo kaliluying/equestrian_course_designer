@@ -17,6 +17,8 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
 
 from .models import Design
 from .utils import error_response, success_response
@@ -29,6 +31,7 @@ class ShareLinkView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(request=None, responses=OpenApiTypes.OBJECT, summary="生成协作分享链接")
     def post(self, request, design_id):
         try:
             design = get_object_or_404(Design, id=design_id)

@@ -196,8 +196,9 @@ export class PNGExportErrorRecovery {
   /**
    * 创建恢复错误
    */
-  private createRecoveryError(error: any, strategyName: string): ExportError {
-    const recoveryError = new Error(`恢复策略 ${strategyName} 失败: ${error.message}`) as ExportError
+  private createRecoveryError(error: unknown, strategyName: string): ExportError {
+    const message = error instanceof Error ? error.message : String(error)
+    const recoveryError = new Error(`恢复策略 ${strategyName} 失败: ${message}`) as ExportError
     recoveryError.type = ExportErrorType.FILE_GENERATION_ERROR
     recoveryError.stage = ExportStage.RENDERING
     recoveryError.recoverable = false

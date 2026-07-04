@@ -68,9 +68,8 @@ export function useCollaborationEvents(
             // 延迟1秒后发送同步请求，确保WebSocket连接已完全建立
             setTimeout(() => {
               localStorage.setItem('sync_requested', 'true')
-              // 使用类型断言访问sendSyncRequest方法
-              if (typeof (webSocketStore as any).sendSyncRequest === 'function') {
-                (webSocketStore as any).sendSyncRequest()
+              if (typeof webSocketStore.sendSyncRequest === 'function') {
+                webSocketStore.sendSyncRequest()
               } else {
                 console.warn('webSocketStore中没有sendSyncRequest方法')
               }
@@ -187,7 +186,7 @@ export function useCollaborationEvents(
     const eventIsOwner = event.detail.isOwner
 
     // 获取会话信息，包括所有者ID
-    const session = (webSocketStore as any).session || eventSession
+    const session = webSocketStore.session || eventSession
     const sessionOwnerId = session?.owner
 
     // 判断当前用户是否为所有者
@@ -233,7 +232,7 @@ export function useCollaborationEvents(
 
           // 尝试直接发送
           try {
-            const socket = (webSocketStore as any).$state?.socket
+            const socket = webSocketStore.socket
             const currentUserId = userStore.currentUser?.id
 
             if (socket && socket.readyState === WebSocket.OPEN) {
@@ -241,7 +240,7 @@ export function useCollaborationEvents(
                 type: 'sync_response',
                 senderId: String(currentUserId),
                 senderName: userStore.currentUser?.username || '未知用户',
-                sessionId: (webSocketStore as any).session?.id || '',
+                sessionId: webSocketStore.session?.id || '',
                 timestamp: new Date().toISOString(),
                 payload: syncResponse
               }

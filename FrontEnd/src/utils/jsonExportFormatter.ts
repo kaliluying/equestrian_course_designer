@@ -6,6 +6,12 @@
 import type { CourseDesign, Obstacle, CoursePathData } from '@/types/obstacle'
 import type { JSONExportOptions } from '@/types/export'
 
+type JsonObject = Record<string, unknown>
+
+function isRecord(value: unknown): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 /**
  * JSON格式化选项接口
  */
@@ -101,7 +107,7 @@ export class JSONExportFormatter {
    * 格式化JSON数据
    */
   formatJSON(
-    data: any,
+    data: unknown,
     options: Partial<JSONFormattingOptions> = {}
   ): string {
     const mergedOptions = { ...this.defaultFormattingOptions, ...options }
@@ -141,7 +147,7 @@ export class JSONExportFormatter {
     options: Partial<SelectiveDataOptions> = {}
   ): Partial<CourseDesign> {
     const mergedOptions = { ...this.defaultSelectiveOptions, ...options }
-    const result: any = {}
+    const result: JsonObject = {}
 
     // 基础字段
     if (mergedOptions.includeIds) {
@@ -179,17 +185,17 @@ export class JSONExportFormatter {
     // 自定义字段
     Object.entries(mergedOptions.customFields).forEach(([field, include]) => {
       if (include && field in courseDesign) {
-        result[field] = (courseDesign as any)[field]
+        result[field] = (courseDesign as unknown as JsonObject)[field]
       }
     })
 
-    return result
+    return result as Partial<CourseDesign>
   }
 
   /**
    * 验证JSON数据
    */
-  validateJSON(data: any): JSONValidationResult {
+  validateJSON(data: unknown): JSONValidationResult {
     const errors: JSONValidationError[] = []
     const warnings: JSONValidationWarning[] = []
     const recommendations: string[] = []
@@ -199,23 +205,26 @@ export class JSONExportFormatter {
       this.validateBasicStructure(data, errors, warnings)
 
       // 2. 课程设计数据验证
-      if (data.courseDesign) {
-        this.validateCourseDesign(data.courseDesign, errors, warnings)
+      const rootData = isRecord(data) ? data : {}
+      const courseDesign = rootData.courseDesign
+
+      if (courseDesign) {
+        this.validateCourseDesign(courseDesign, errors, warnings)
       }
 
       // 3. 障碍物数据验证
-      if (data.courseDesign?.obstacles) {
-        this.validateObstacles(data.courseDesign.obstacles, errors, warnings)
+      if (isRecord(courseDesign) && Array.isArray(courseDesign.obstacles)) {
+        this.validateObstacles(courseDesign.obstacles, errors, warnings)
       }
 
       // 4. 路径数据验证
-      if (data.courseDesign?.path) {
-        this.validatePath(data.courseDesign.path, errors, warnings)
+      if (isRecord(courseDesign) && courseDesign.path) {
+        this.validatePath(courseDesign.path, errors, warnings)
       }
 
       // 5. 视口信息验证
-      if (data.viewportInfo) {
-        this.validateViewportInfo(data.viewportInfo, errors, warnings)
+      if (rootData.viewportInfo) {
+        this.validateViewportInfo(rootData.viewportInfo, errors, warnings)
       }
 
       // 6. 生成统计信息
@@ -253,7 +262,7 @@ export class JSONExportFormatter {
   /**
    * 压缩JSON数据
    */
-  compressJSON(data: any): { compressed: string; ratio: number; originalSize: number; compressedSize: number } {
+  compressJSON(data: unknown): { compressed: string; ratio: number; originalSize: number; compressedSize: number } {
     try {
       const original = JSON.stringify(data, null, 2)
       const compressed = JSON.stringify(data)
@@ -276,7 +285,7 @@ export class JSONExportFormatter {
   /**
    * 美化JSON数据
    */
-  beautifyJSON(data: any, indentSize: number = 2): string {
+  beautifyJSON(data: unknown, indentSize: number = 2): string {
     try {
       return JSON.stringify(data, null, indentSize)
     } catch (error) {
@@ -289,7 +298,7 @@ export class JSONExportFormatter {
   /**
    * 预处理数据
    */
-  private preprocessData(data: any, options: JSONFormattingOptions): any {
+  private preprocessData(data: unknown, options: JSONFormattingOptions): unknown {
     if (options.includeComments) {
       // 添加注释字段（JSON本身不支持注释，但可以添加特殊字段）
       return {
@@ -298,7 +307,7 @@ export class JSONExportFormatter {
           _version: '1.0.0',
           _format: 'Equestrian Course Design JSON Export'
         },
-        ...data
+        ...(isRecord(data) ? data : { value: data })
       }
     }
 
@@ -308,13 +317,13 @@ export class JSONExportFormatter {
   /**
    * 排序对象键
    */
-  private sortObjectKeys(obj: any): any {
+  private sortObjectKeys(obj: unknown): unknown {
     if (Array.isArray(obj)) {
       return obj.map(item => this.sortObjectKeys(item))
     }
 
-    if (obj !== null && typeof obj === 'object') {
-      const sorted: any = {}
+    if (isRecord(obj)) {
+      const sorted: JsonObject = {}
       Object.keys(obj).sort().forEach(key => {
         sorted[key] = this.sortObjectKeys(obj[key])
       })
@@ -327,13 +336,13 @@ export class JSONExportFormatter {
   /**
    * 移除空字段
    */
-  private removeEmptyFields(obj: any): any {
+  private removeEmptyFields(obj: unknown): unknown {
     if (Array.isArray(obj)) {
       return obj.map(item => this.removeEmptyFields(item)).filter(item => item !== null && item !== undefined)
     }
 
-    if (obj !== null && typeof obj === 'object') {
-      const cleaned: any = {}
+    if (isRecord(obj)) {
+      const cleaned: JsonObject = {}
       Object.entries(obj).forEach(([key, value]) => {
         const cleanedValue = this.removeEmptyFields(value)
 
@@ -342,7 +351,7 @@ export class JSONExportFormatter {
             cleanedValue !== undefined &&
             cleanedValue !== '' &&
             !(Array.isArray(cleanedValue) && cleanedValue.length === 0) &&
-            !(typeof cleanedValue === 'object' && Object.keys(cleanedValue).length === 0)) {
+            !(isRecord(cleanedValue) && Object.keys(cleanedValue).length === 0)) {
           cleaned[key] = cleanedValue
         }
       })
@@ -356,11 +365,11 @@ export class JSONExportFormatter {
    * 选择障碍物字段
    */
   private selectObstacleFields(obstacle: Obstacle, fields: string[]): Partial<Obstacle> {
-    const result: any = {}
+    const result: Partial<Obstacle> & JsonObject = {}
 
     fields.forEach(field => {
       if (field in obstacle) {
-        result[field] = (obstacle as any)[field]
+        result[field] = (obstacle as unknown as JsonObject)[field]
       }
     })
 
@@ -371,11 +380,11 @@ export class JSONExportFormatter {
    * 选择路径字段
    */
   private selectPathFields(path: CoursePathData, fields: string[]): Partial<CoursePathData> {
-    const result: any = {}
+    const result: Partial<CoursePathData> & JsonObject = {}
 
     fields.forEach(field => {
       if (field in path) {
-        result[field] = (path as any)[field]
+        result[field] = (path as unknown as JsonObject)[field]
       }
     })
 
@@ -384,12 +393,13 @@ export class JSONExportFormatter {
   /**
    * 验证基础结构
    */
-  private validateBasicStructure(data: any, errors: JSONValidationError[], warnings: JSONValidationWarning[]): void {
+  private validateBasicStructure(data: unknown, errors: JSONValidationError[], warnings: JSONValidationWarning[]): void {
+    const rootData = isRecord(data) ? data : {}
     // 检查必需的顶级字段
     const requiredFields = ['version', 'exportInfo', 'courseDesign']
 
     requiredFields.forEach(field => {
-      if (!(field in data)) {
+      if (!(field in rootData)) {
         errors.push({
           field,
           message: `缺少必需字段: ${field}`,
@@ -400,7 +410,7 @@ export class JSONExportFormatter {
     })
 
     // 检查版本信息
-    if (data.version && typeof data.version !== 'string') {
+    if (rootData.version && typeof rootData.version !== 'string') {
       errors.push({
         field: 'version',
         message: '版本信息必须是字符串',
@@ -410,8 +420,8 @@ export class JSONExportFormatter {
     }
 
     // 检查导出信息
-    if (data.exportInfo) {
-      if (!data.exportInfo.timestamp) {
+    if (isRecord(rootData.exportInfo)) {
+      if (!rootData.exportInfo.timestamp) {
         warnings.push({
           field: 'exportInfo.timestamp',
           message: '缺少导出时间戳',
@@ -419,7 +429,7 @@ export class JSONExportFormatter {
         })
       }
 
-      if (!data.exportInfo.exportEngine) {
+      if (!rootData.exportInfo.exportEngine) {
         warnings.push({
           field: 'exportInfo.exportEngine',
           message: '缺少导出引擎信息',
@@ -432,12 +442,13 @@ export class JSONExportFormatter {
   /**
    * 验证课程设计数据
    */
-  private validateCourseDesign(courseDesign: any, errors: JSONValidationError[], warnings: JSONValidationWarning[]): void {
+  private validateCourseDesign(courseDesign: unknown, errors: JSONValidationError[], warnings: JSONValidationWarning[]): void {
+    const courseData = isRecord(courseDesign) ? courseDesign : {}
     // 检查必需字段
     const requiredFields = ['id', 'name', 'obstacles', 'fieldWidth', 'fieldHeight']
 
     requiredFields.forEach(field => {
-      if (!(field in courseDesign)) {
+      if (!(field in courseData)) {
         errors.push({
           field: `courseDesign.${field}`,
           message: `课程设计缺少必需字段: ${field}`,
@@ -448,7 +459,7 @@ export class JSONExportFormatter {
     })
 
     // 验证ID格式
-    if (courseDesign.id && typeof courseDesign.id !== 'string') {
+    if (courseData.id && typeof courseData.id !== 'string') {
       errors.push({
         field: 'courseDesign.id',
         message: '课程ID必须是字符串',
@@ -458,7 +469,7 @@ export class JSONExportFormatter {
     }
 
     // 验证名称
-    if (courseDesign.name && typeof courseDesign.name !== 'string') {
+    if (courseData.name && typeof courseData.name !== 'string') {
       errors.push({
         field: 'courseDesign.name',
         message: '课程名称必须是字符串',
@@ -468,7 +479,7 @@ export class JSONExportFormatter {
     }
 
     // 验证场地尺寸
-    if (courseDesign.fieldWidth && (typeof courseDesign.fieldWidth !== 'number' || courseDesign.fieldWidth <= 0)) {
+    if (courseData.fieldWidth && (typeof courseData.fieldWidth !== 'number' || courseData.fieldWidth <= 0)) {
       errors.push({
         field: 'courseDesign.fieldWidth',
         message: '场地宽度必须是正数',
@@ -477,7 +488,7 @@ export class JSONExportFormatter {
       })
     }
 
-    if (courseDesign.fieldHeight && (typeof courseDesign.fieldHeight !== 'number' || courseDesign.fieldHeight <= 0)) {
+    if (courseData.fieldHeight && (typeof courseData.fieldHeight !== 'number' || courseData.fieldHeight <= 0)) {
       errors.push({
         field: 'courseDesign.fieldHeight',
         message: '场地高度必须是正数',
@@ -487,7 +498,7 @@ export class JSONExportFormatter {
     }
 
     // 验证时间戳格式
-    if (courseDesign.createdAt && !this.isValidISO8601(courseDesign.createdAt)) {
+    if (typeof courseData.createdAt === 'string' && !this.isValidISO8601(courseData.createdAt)) {
       warnings.push({
         field: 'courseDesign.createdAt',
         message: '创建时间格式不正确',
@@ -495,7 +506,7 @@ export class JSONExportFormatter {
       })
     }
 
-    if (courseDesign.updatedAt && !this.isValidISO8601(courseDesign.updatedAt)) {
+    if (typeof courseData.updatedAt === 'string' && !this.isValidISO8601(courseData.updatedAt)) {
       warnings.push({
         field: 'courseDesign.updatedAt',
         message: '更新时间格式不正确',
@@ -507,7 +518,7 @@ export class JSONExportFormatter {
   /**
    * 验证障碍物数据
    */
-  private validateObstacles(obstacles: any[], errors: JSONValidationError[], warnings: JSONValidationWarning[]): void {
+  private validateObstacles(obstacles: unknown[], errors: JSONValidationError[], warnings: JSONValidationWarning[]): void {
     if (!Array.isArray(obstacles)) {
       errors.push({
         field: 'courseDesign.obstacles',
@@ -519,12 +530,13 @@ export class JSONExportFormatter {
     }
 
     obstacles.forEach((obstacle, index) => {
+      const obstacleData = isRecord(obstacle) ? obstacle : {}
       const fieldPrefix = `courseDesign.obstacles[${index}]`
 
       // 检查必需字段
       const requiredFields = ['id', 'type', 'position']
       requiredFields.forEach(field => {
-        if (!(field in obstacle)) {
+        if (!(field in obstacleData)) {
           errors.push({
             field: `${fieldPrefix}.${field}`,
             message: `障碍物 ${index + 1} 缺少必需字段: ${field}`,
@@ -535,7 +547,7 @@ export class JSONExportFormatter {
       })
 
       // 验证ID
-      if (obstacle.id && typeof obstacle.id !== 'string') {
+      if (obstacleData.id && typeof obstacleData.id !== 'string') {
         errors.push({
           field: `${fieldPrefix}.id`,
           message: `障碍物 ${index + 1} 的ID必须是字符串`,
@@ -546,18 +558,19 @@ export class JSONExportFormatter {
 
       // 验证类型
       const validTypes = ['SINGLE', 'DOUBLE', 'COMBINATION', 'WALL', 'LIVERPOOL', 'WATER', 'DECORATION', 'CUSTOM']
-      if (obstacle.type && !validTypes.includes(obstacle.type)) {
+      if (typeof obstacleData.type === 'string' && !validTypes.includes(obstacleData.type)) {
         errors.push({
           field: `${fieldPrefix}.type`,
-          message: `障碍物 ${index + 1} 的类型无效: ${obstacle.type}`,
+          message: `障碍物 ${index + 1} 的类型无效: ${obstacleData.type}`,
           severity: 'high',
           code: 'INVALID_OBSTACLE_TYPE'
         })
       }
 
       // 验证位置
-      if (obstacle.position) {
-        if (typeof obstacle.position !== 'object' || obstacle.position === null) {
+      if (obstacleData.position) {
+        const position = obstacleData.position
+        if (!isRecord(position)) {
           errors.push({
             field: `${fieldPrefix}.position`,
             message: `障碍物 ${index + 1} 的位置必须是对象`,
@@ -565,7 +578,7 @@ export class JSONExportFormatter {
             code: 'INVALID_POSITION_TYPE'
           })
         } else {
-          if (typeof obstacle.position.x !== 'number') {
+          if (typeof position.x !== 'number') {
             errors.push({
               field: `${fieldPrefix}.position.x`,
               message: `障碍物 ${index + 1} 的X坐标必须是数字`,
@@ -574,7 +587,7 @@ export class JSONExportFormatter {
             })
           }
 
-          if (typeof obstacle.position.y !== 'number') {
+          if (typeof position.y !== 'number') {
             errors.push({
               field: `${fieldPrefix}.position.y`,
               message: `障碍物 ${index + 1} 的Y坐标必须是数字`,
@@ -586,7 +599,7 @@ export class JSONExportFormatter {
       }
 
       // 验证旋转角度
-      if (obstacle.rotation !== undefined && typeof obstacle.rotation !== 'number') {
+      if (obstacleData.rotation !== undefined && typeof obstacleData.rotation !== 'number') {
         warnings.push({
           field: `${fieldPrefix}.rotation`,
           message: `障碍物 ${index + 1} 的旋转角度应该是数字`,
@@ -595,7 +608,7 @@ export class JSONExportFormatter {
       }
 
       // 验证杆子数据
-      if (obstacle.poles && !Array.isArray(obstacle.poles)) {
+      if (obstacleData.poles && !Array.isArray(obstacleData.poles)) {
         warnings.push({
           field: `${fieldPrefix}.poles`,
           message: `障碍物 ${index + 1} 的杆子数据应该是数组`,
@@ -604,26 +617,28 @@ export class JSONExportFormatter {
       }
 
       // 针对CUSTOM类型障碍物的特殊验证
-      if (obstacle.type === 'CUSTOM') {
-        this.validateCustomObstacle(obstacle, index, errors, warnings)
+      if (obstacleData.type === 'CUSTOM') {
+        this.validateCustomObstacle(obstacleData, index, errors, warnings)
       }
 
       // 针对DECORATION类型障碍物的装饰物属性验证
-      if (obstacle.type === 'DECORATION' && obstacle.decorationProperties) {
-        this.validateDecorationProperties(obstacle.decorationProperties, index, errors, warnings)
+      if (obstacleData.type === 'DECORATION' && obstacleData.decorationProperties) {
+        this.validateDecorationProperties(obstacleData.decorationProperties, index, errors, warnings)
       }
 
       // 验证特殊障碍物属性（砖墙、利物浦、水障）
-      this.validateSpecialObstacleProperties(obstacle, index, errors, warnings)
+      this.validateSpecialObstacleProperties(obstacleData, index, errors, warnings)
 
       // 验证杆件配置
-      if (obstacle.poles && Array.isArray(obstacle.poles)) {
-        this.validatePoles(obstacle.poles, index, errors, warnings)
+      if (Array.isArray(obstacleData.poles)) {
+        this.validatePoles(obstacleData.poles, index, errors, warnings)
       }
     })
 
     // 检查重复ID
-    const ids = obstacles.map(o => o.id).filter(id => id)
+    const ids = obstacles
+      .map(o => isRecord(o) ? o.id : undefined)
+      .filter((id): id is string => typeof id === 'string')
     const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index)
     if (duplicateIds.length > 0) {
       errors.push({
@@ -638,11 +653,11 @@ export class JSONExportFormatter {
   /**
    * 验证路径数据
    */
-  private validatePath(path: any, errors: JSONValidationError[], warnings: JSONValidationWarning[]): void {
+  private validatePath(path: unknown, errors: JSONValidationError[], warnings: JSONValidationWarning[]): void {
     const fieldPrefix = 'courseDesign.path'
 
     // 检查基本结构
-    if (typeof path !== 'object' || path === null) {
+    if (!isRecord(path)) {
       errors.push({
         field: fieldPrefix,
         message: '路径数据必须是对象',
@@ -679,10 +694,10 @@ export class JSONExportFormatter {
           })
         }
 
-        path.points.forEach((point: any, index: number) => {
+        path.points.forEach((point: unknown, index: number) => {
           const pointPrefix = `${fieldPrefix}.points[${index}]`
 
-          if (typeof point !== 'object' || point === null) {
+          if (!isRecord(point)) {
             errors.push({
               field: pointPrefix,
               message: `路径点 ${index + 1} 必须是对象`,
@@ -729,7 +744,7 @@ export class JSONExportFormatter {
         const point = path[pointType]
         const pointPrefix = `${fieldPrefix}.${pointType}`
 
-        if (typeof point !== 'object' || point === null) {
+        if (!isRecord(point)) {
           errors.push({
             field: pointPrefix,
             message: `${pointType === 'startPoint' ? '起点' : '终点'}必须是对象`,
@@ -753,10 +768,10 @@ export class JSONExportFormatter {
   /**
    * 验证视口信息
    */
-  private validateViewportInfo(viewportInfo: any, errors: JSONValidationError[], warnings: JSONValidationWarning[]): void {
+  private validateViewportInfo(viewportInfo: unknown, errors: JSONValidationError[], warnings: JSONValidationWarning[]): void {
     const fieldPrefix = 'viewportInfo'
 
-    if (typeof viewportInfo !== 'object' || viewportInfo === null) {
+    if (!isRecord(viewportInfo)) {
       errors.push({
         field: fieldPrefix,
         message: '视口信息必须是对象',
@@ -780,7 +795,7 @@ export class JSONExportFormatter {
 
     // 验证滚动位置
     if (viewportInfo.scrollPosition) {
-      if (typeof viewportInfo.scrollPosition !== 'object') {
+        if (!isRecord(viewportInfo.scrollPosition)) {
         warnings.push({
           field: `${fieldPrefix}.scrollPosition`,
           message: '滚动位置应该是对象',
@@ -803,7 +818,7 @@ export class JSONExportFormatter {
    * 针对CUSTOM类型障碍物进行特殊验证
    */
   private validateCustomObstacle(
-    obstacle: any,
+    obstacle: JsonObject,
     index: number,
     errors: JSONValidationError[],
     warnings: JSONValidationWarning[]
@@ -832,17 +847,18 @@ export class JSONExportFormatter {
    * 验证DECORATION类型障碍物的decorationProperties
    */
   private validateDecorationProperties(
-    properties: any,
+    properties: unknown,
     obstacleIndex: number,
     errors: JSONValidationError[],
     warnings: JSONValidationWarning[]
   ): void {
+    const decorationProperties = isRecord(properties) ? properties : {}
     const fieldPrefix = `courseDesign.obstacles[${obstacleIndex}].decorationProperties`
 
     // 验证必需字段
     const requiredFields = ['category', 'width', 'height', 'color']
     requiredFields.forEach(field => {
-      if (!(field in properties)) {
+      if (!(field in decorationProperties)) {
         errors.push({
           field: `${fieldPrefix}.${field}`,
           message: `装饰物缺少必需字段: ${field}`,
@@ -854,17 +870,17 @@ export class JSONExportFormatter {
 
     // 验证category
     const validCategories = ['TABLE', 'TREE', 'ENTRANCE', 'EXIT', 'FLOWER', 'FENCE', 'CUSTOM']
-    if (properties.category && !validCategories.includes(properties.category)) {
+    if (typeof decorationProperties.category === 'string' && !validCategories.includes(decorationProperties.category)) {
       errors.push({
         field: `${fieldPrefix}.category`,
-        message: `装饰物类别无效: ${properties.category}`,
+        message: `装饰物类别无效: ${decorationProperties.category}`,
         severity: 'high',
         code: 'INVALID_DECORATION_CATEGORY'
       })
     }
 
     // 验证尺寸
-    if (typeof properties.width !== 'number' || properties.width <= 0) {
+    if (typeof decorationProperties.width !== 'number' || decorationProperties.width <= 0) {
       errors.push({
         field: `${fieldPrefix}.width`,
         message: '装饰物宽度必须是正数',
@@ -873,7 +889,7 @@ export class JSONExportFormatter {
       })
     }
 
-    if (typeof properties.height !== 'number' || properties.height <= 0) {
+    if (typeof decorationProperties.height !== 'number' || decorationProperties.height <= 0) {
       errors.push({
         field: `${fieldPrefix}.height`,
         message: '装饰物高度必须是正数',
@@ -883,22 +899,22 @@ export class JSONExportFormatter {
     }
 
     // 验证树特定属性
-    if (properties.category === 'TREE') {
-      if (properties.trunkHeight !== undefined && (typeof properties.trunkHeight !== 'number' || properties.trunkHeight <= 0)) {
+    if (decorationProperties.category === 'TREE') {
+      if (decorationProperties.trunkHeight !== undefined && (typeof decorationProperties.trunkHeight !== 'number' || decorationProperties.trunkHeight <= 0)) {
         warnings.push({
           field: `${fieldPrefix}.trunkHeight`,
           message: '树干高度应该是正数',
           suggestion: '确保树干高度是有效的正数值'
         })
       }
-      if (properties.trunkWidth !== undefined && (typeof properties.trunkWidth !== 'number' || properties.trunkWidth <= 0)) {
+      if (decorationProperties.trunkWidth !== undefined && (typeof decorationProperties.trunkWidth !== 'number' || decorationProperties.trunkWidth <= 0)) {
         warnings.push({
           field: `${fieldPrefix}.trunkWidth`,
           message: '树干宽度应该是正数',
           suggestion: '确保树干宽度是有效的正数值'
         })
       }
-      if (properties.foliageRadius !== undefined && (typeof properties.foliageRadius !== 'number' || properties.foliageRadius <= 0)) {
+      if (decorationProperties.foliageRadius !== undefined && (typeof decorationProperties.foliageRadius !== 'number' || decorationProperties.foliageRadius <= 0)) {
         warnings.push({
           field: `${fieldPrefix}.foliageRadius`,
           message: '树冠半径应该是正数',
@@ -913,7 +929,7 @@ export class JSONExportFormatter {
    * 验证砖墙、利物浦、水障类型障碍物的特殊属性
    */
   private validateSpecialObstacleProperties(
-    obstacle: any,
+    obstacle: JsonObject,
     index: number,
     errors: JSONValidationError[],
     warnings: JSONValidationWarning[]
@@ -922,7 +938,7 @@ export class JSONExportFormatter {
 
     // 验证砖墙属性
     if (obstacle.type === 'WALL' && obstacle.wallProperties) {
-      const props = obstacle.wallProperties
+      const props = isRecord(obstacle.wallProperties) ? obstacle.wallProperties : {}
       const propPrefix = `${fieldPrefix}.wallProperties`
 
       if (typeof props.height !== 'number' || props.height <= 0) {
@@ -946,7 +962,7 @@ export class JSONExportFormatter {
 
     // 验证利物浦属性
     if (obstacle.type === 'LIVERPOOL' && obstacle.liverpoolProperties) {
-      const props = obstacle.liverpoolProperties
+      const props = isRecord(obstacle.liverpoolProperties) ? obstacle.liverpoolProperties : {}
       const propPrefix = `${fieldPrefix}.liverpoolProperties`
 
       if (typeof props.waterDepth !== 'number' || props.waterDepth <= 0) {
@@ -969,7 +985,7 @@ export class JSONExportFormatter {
 
     // 验证水障属性
     if (obstacle.type === 'WATER' && obstacle.waterProperties) {
-      const props = obstacle.waterProperties
+      const props = isRecord(obstacle.waterProperties) ? obstacle.waterProperties : {}
       const propPrefix = `${fieldPrefix}.waterProperties`
 
       if (typeof props.depth !== 'number' || props.depth <= 0) {
@@ -988,7 +1004,7 @@ export class JSONExportFormatter {
    * 验证障碍物的杆件数组中每个杆件的必需字段和有效性
    */
   private validatePoles(
-    poles: any[],
+    poles: unknown[],
     obstacleIndex: number,
     errors: JSONValidationError[],
     warnings: JSONValidationWarning[]
@@ -996,12 +1012,13 @@ export class JSONExportFormatter {
     const fieldPrefix = `courseDesign.obstacles[${obstacleIndex}].poles`
 
     poles.forEach((pole, poleIndex) => {
+      const poleData = isRecord(pole) ? pole : {}
       const polePrefix = `${fieldPrefix}[${poleIndex}]`
 
       // 验证必需字段
       const requiredFields = ['height', 'width', 'color']
       requiredFields.forEach(field => {
-        if (!(field in pole)) {
+        if (!(field in poleData)) {
           warnings.push({
             field: `${polePrefix}.${field}`,
             message: `杆件 ${poleIndex + 1} 缺少${field}字段`,
@@ -1011,7 +1028,7 @@ export class JSONExportFormatter {
       })
 
       // 验证尺寸
-      if (typeof pole.height !== 'number' || pole.height <= 0) {
+      if (typeof poleData.height !== 'number' || poleData.height <= 0) {
         warnings.push({
           field: `${polePrefix}.height`,
           message: `杆件 ${poleIndex + 1} 的高度应该是正数`,
@@ -1019,7 +1036,7 @@ export class JSONExportFormatter {
         })
       }
 
-      if (typeof pole.width !== 'number' || pole.width <= 0) {
+      if (typeof poleData.width !== 'number' || poleData.width <= 0) {
         warnings.push({
           field: `${polePrefix}.width`,
           message: `杆件 ${poleIndex + 1} 的宽度应该是正数`,
@@ -1028,8 +1045,9 @@ export class JSONExportFormatter {
       }
 
       // 验证编号位置
-      if (pole.numberPosition) {
-        if (typeof pole.numberPosition.x !== 'number' || typeof pole.numberPosition.y !== 'number') {
+      if (poleData.numberPosition) {
+        const numberPosition = isRecord(poleData.numberPosition) ? poleData.numberPosition : {}
+        if (typeof numberPosition.x !== 'number' || typeof numberPosition.y !== 'number') {
           warnings.push({
             field: `${polePrefix}.numberPosition`,
             message: `杆件 ${poleIndex + 1} 的编号位置坐标无效`,
@@ -1043,14 +1061,15 @@ export class JSONExportFormatter {
   /**
    * 生成自定义障碍物统计信息
    */
-  private generateCustomObstacleStatistics(courseDesign: any): {
+  private generateCustomObstacleStatistics(courseDesign: unknown): {
     customCount: number
     decorationCount: number
     decorationByCategory: Record<string, number>
     specialObstacleCount: { wall: number; liverpool: number; water: number }
     obstaclesWithCustomId: number
   } {
-    const obstacles = courseDesign?.obstacles || []
+    const courseData = isRecord(courseDesign) ? courseDesign : {}
+    const obstacles = Array.isArray(courseData.obstacles) ? courseData.obstacles : []
 
     let customCount = 0
     let decorationCount = 0
@@ -1058,28 +1077,32 @@ export class JSONExportFormatter {
     const specialObstacleCount = { wall: 0, liverpool: 0, water: 0 }
     let obstaclesWithCustomId = 0
 
-    obstacles.forEach((obstacle: any) => {
+    obstacles.forEach((obstacle: unknown) => {
+      const obstacleData = isRecord(obstacle) ? obstacle : {}
       // 统计CUSTOM类型
-      if (obstacle.type === 'CUSTOM') {
+      if (obstacleData.type === 'CUSTOM') {
         customCount++
       }
 
       // 统计装饰物
-      if (obstacle.type === 'DECORATION') {
+      if (obstacleData.type === 'DECORATION') {
         decorationCount++
-        if (obstacle.decorationProperties?.category) {
-          const category = obstacle.decorationProperties.category
+        const decorationProperties = isRecord(obstacleData.decorationProperties)
+          ? obstacleData.decorationProperties
+          : {}
+        if (typeof decorationProperties.category === 'string') {
+          const category = decorationProperties.category
           decorationByCategory[category] = (decorationByCategory[category] || 0) + 1
         }
       }
 
       // 统计特殊障碍物
-      if (obstacle.type === 'WALL') specialObstacleCount.wall++
-      if (obstacle.type === 'LIVERPOOL') specialObstacleCount.liverpool++
-      if (obstacle.type === 'WATER') specialObstacleCount.water++
+      if (obstacleData.type === 'WALL') specialObstacleCount.wall++
+      if (obstacleData.type === 'LIVERPOOL') specialObstacleCount.liverpool++
+      if (obstacleData.type === 'WATER') specialObstacleCount.water++
 
       // 统计包含customId的障碍物
-      if (obstacle.customId) {
+      if (obstacleData.customId) {
         obstaclesWithCustomId++
       }
     })
@@ -1096,7 +1119,7 @@ export class JSONExportFormatter {
   /**
    * 生成统计信息
    */
-  private generateStatistics(data: any): JSONStatistics {
+  private generateStatistics(data: unknown): JSONStatistics {
     try {
       const originalJson = JSON.stringify(data, null, 2)
       const compressedJson = JSON.stringify(data)
@@ -1105,13 +1128,18 @@ export class JSONExportFormatter {
       const compressedSize = compressedJson.length
       const compressionRatio = originalSize > 0 ? (originalSize - compressedSize) / originalSize : 0
 
-      const obstacleCount = data.courseDesign?.obstacles?.length || 0
-      const pathPointCount = data.courseDesign?.path?.points?.length || 0
+      const rootData = isRecord(data) ? data : {}
+      const courseDesign = isRecord(rootData.courseDesign) ? rootData.courseDesign : {}
+      const obstacles = Array.isArray(courseDesign.obstacles) ? courseDesign.obstacles : []
+      const path = isRecord(courseDesign.path) ? courseDesign.path : {}
+      const points = Array.isArray(path.points) ? path.points : []
+      const obstacleCount = obstacles.length
+      const pathPointCount = points.length
       const fieldCount = this.countFields(data)
       const nestingDepth = this.calculateNestingDepth(data)
 
       // 获取自定义障碍物统计信息
-      const customObstacleStats = this.generateCustomObstacleStatistics(data.courseDesign)
+      const customObstacleStats = this.generateCustomObstacleStatistics(courseDesign)
 
       return {
         totalSize: originalSize,
@@ -1136,7 +1164,7 @@ export class JSONExportFormatter {
    * 生成建议
    */
   private generateRecommendations(
-    data: any,
+    data: unknown,
     statistics: JSONStatistics,
     errors: JSONValidationError[],
     warnings: JSONValidationWarning[],
@@ -1230,7 +1258,7 @@ export class JSONExportFormatter {
   /**
    * 计算对象字段数量
    */
-  private countFields(obj: any, visited = new Set()): number {
+  private countFields(obj: unknown, visited = new Set<unknown>()): number {
     if (obj === null || typeof obj !== 'object' || visited.has(obj)) {
       return 0
     }
@@ -1255,7 +1283,7 @@ export class JSONExportFormatter {
   /**
    * 计算嵌套深度
    */
-  private calculateNestingDepth(obj: any, visited = new Set()): number {
+  private calculateNestingDepth(obj: unknown, visited = new Set<unknown>()): number {
     if (obj === null || typeof obj !== 'object' || visited.has(obj)) {
       return 0
     }

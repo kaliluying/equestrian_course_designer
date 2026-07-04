@@ -4,15 +4,18 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
-import CourseCanvas from '../CourseCanvas.vue'
+import { mount, type VueWrapper } from '@vue/test-utils'
+import CourseCanvasV2 from '../CourseCanvasV2.vue'
 import { useCourseStore } from '@/stores/course'
 import { useUserStore } from '@/stores/user'
 import { useWebSocketStore } from '@/stores/websocket'
+import { useHistoryStore } from '@/stores/history'
+import { useObstacleStore } from '@/stores/obstacle'
 
 vi.mock('@/stores/course')
 vi.mock('@/stores/user')
 vi.mock('@/stores/websocket')
+vi.mock('@/stores/history')
 vi.mock('@/stores/obstacle')
 
 vi.mock('element-plus', () => ({
@@ -26,11 +29,30 @@ vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 
+interface CanvasExportVm {
+  getCanvasElement: () => HTMLElement
+  getCanvasInfo: () => {
+    element: HTMLElement
+    bounds: DOMRect
+    obstacles: unknown[]
+    pathData: { visible: boolean }
+    fieldDimensions: { width: number; height: number }
+    scaleFactor: number
+  }
+  prepareCanvasForExport: () => {
+    canvas: HTMLElement
+    restore: () => void
+  }
+  triggerExportEvent: (eventName: string, detail: Record<string, unknown>) => void
+}
+
 describe('CourseCanvas Export Integration', () => {
-  let wrapper: any
-  let mockCourseStore: any
-  let mockUserStore: any
-  let mockWebSocketStore: any
+  let wrapper: VueWrapper<CanvasExportVm>
+  let mockCourseStore: ReturnType<typeof useCourseStore>
+  let mockUserStore: ReturnType<typeof useUserStore>
+  let mockWebSocketStore: ReturnType<typeof useWebSocketStore>
+  let mockHistoryStore: ReturnType<typeof useHistoryStore>
+  let mockObstacleStore: ReturnType<typeof useObstacleStore>
 
   beforeEach(() => {
     mockCourseStore = {
@@ -49,15 +71,21 @@ describe('CourseCanvas Export Integration', () => {
       },
       startPoint: { x: 50, y: 50, rotation: 0 },
       endPoint: { x: 150, y: 150, rotation: 0 },
-      selectedObstacle: null
-    }
+      selectedObstacle: null,
+      commitHistory: vi.fn(),
+      updateCourse: vi.fn(),
+      clearPath: vi.fn(),
+      removeObstacle: vi.fn(),
+      addObstacle: vi.fn(),
+      hydrateFromSnapshot: vi.fn()
+    } as unknown as ReturnType<typeof useCourseStore>
 
     mockUserStore = {
       currentUser: {
         id: 1,
         username: 'testuser'
       }
-    }
+    } as unknown as ReturnType<typeof useUserStore>
 
     mockWebSocketStore = {
       collaborators: [],
@@ -67,15 +95,31 @@ describe('CourseCanvas Export Integration', () => {
       sendObstacleUpdate: vi.fn(),
       sendRemoveObstacle: vi.fn(),
       sendPathUpdate: vi.fn(),
+      sendSyncResponse: vi.fn(),
       connect: vi.fn(),
-      disconnect: vi.fn()
-    }
+      disconnect: vi.fn(),
+      session: null,
+      socket: null
+    } as unknown as ReturnType<typeof useWebSocketStore>
+
+    mockHistoryStore = {
+      clear: vi.fn(),
+      undo: vi.fn(),
+      redo: vi.fn()
+    } as unknown as ReturnType<typeof useHistoryStore>
+
+    mockObstacleStore = {
+      getObstacleById: vi.fn(),
+      sharedObstacles: []
+    } as unknown as ReturnType<typeof useObstacleStore>
 
     vi.mocked(useCourseStore).mockReturnValue(mockCourseStore)
     vi.mocked(useUserStore).mockReturnValue(mockUserStore)
     vi.mocked(useWebSocketStore).mockReturnValue(mockWebSocketStore)
+    vi.mocked(useHistoryStore).mockReturnValue(mockHistoryStore)
+    vi.mocked(useObstacleStore).mockReturnValue(mockObstacleStore)
 
-    wrapper = mount(CourseCanvas, {
+    wrapper = mount(CourseCanvasV2, {
       global: {
         stubs: {
           'el-icon': true,
@@ -87,7 +131,7 @@ describe('CourseCanvas Export Integration', () => {
           'el-tooltip': true
         }
       }
-    })
+    }) as VueWrapper<CanvasExportVm>
   })
 
   it('should expose canvas element access method', () => {

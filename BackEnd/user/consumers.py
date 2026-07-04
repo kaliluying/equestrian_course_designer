@@ -27,10 +27,7 @@ from django.conf import settings
 # 设置日志记录器
 logger = logging.getLogger("django.channels")
 
-# Redis-backed 会话存储已准备就绪（见 user/session_store.py）。
-# 当前仍使用进程内 dict；完成 consumers.py 全量适配后可切换为：
-#     from user.session_store import active_sessions
-active_sessions = {}
+from user.session_store import active_sessions
 
 # Close codes for collaboration
 CLOSE_CODE_INVALID_SHARE_TOKEN = 4006

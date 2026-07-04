@@ -1999,14 +1999,14 @@ export const useCourseStore = defineStore('course', () => {
   function importAIResult(aiResult: {
     obstacles: Array<{
       id: string
-      type: string
+      type: string | ObstacleType
       position: { x: number; y: number }
       rotation: number
       number: string
       poles: Array<{ height: number; width: number; color: string }>
-      wallProperties?: Record<string, unknown>
-      liverpoolProperties?: Record<string, unknown>
-      waterProperties?: Record<string, unknown>
+      wallProperties?: Obstacle['wallProperties']
+      liverpoolProperties?: Obstacle['liverpoolProperties']
+      waterProperties?: Obstacle['waterProperties']
     }>
     path: {
       visible: boolean
@@ -2030,11 +2030,16 @@ export const useCourseStore = defineStore('course', () => {
     // 默认障碍物属性
     const defaultPole = { height: 1.4, width: 3.5, color: '#8B4513' }
     const defaultPosition = { x: 10, y: 10 }
+    const normalizeObstacleType = (type: string | ObstacleType): ObstacleType => {
+      return Object.values(ObstacleType).includes(type as ObstacleType)
+        ? type as ObstacleType
+        : ObstacleType.SINGLE
+    }
 
     // 应用障碍物 - 重新生成ID避免冲突
-    currentCourse.value.obstacles = aiResult.obstacles.map((obs) => ({
+    currentCourse.value.obstacles = aiResult.obstacles.map((obs): Obstacle => ({
       id: uuidv4(),
-      type: obs.type || ObstacleType.SINGLE,
+      type: normalizeObstacleType(obs.type || ObstacleType.SINGLE),
       position: obs.position || defaultPosition,
       rotation: obs.rotation || 0,
       number: obs.number || '1',
@@ -2230,4 +2235,3 @@ export const useCourseStore = defineStore('course', () => {
     cutObstacle
   }
 })
-

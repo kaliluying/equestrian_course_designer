@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "drf_spectacular",
     "corsheaders",
     "channels",
     "user.apps.UserConfig",
@@ -181,6 +182,7 @@ SIMPLEUI_HOME_PAGE = "/api/feedback/dashboard"
 
 # DRF配置
 REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "user.authentication.CookieJWTAuthentication",
         "rest_framework_simplejwt.authentication.JWTAuthentication",
@@ -188,6 +190,14 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 9,  # 每页显示9条记录
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "马术障碍赛路线设计器 API",
+    "DESCRIPTION": "路线设计、用户、会员、支付、AI 生成、反馈和协作接口",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
 }
 
 # Custom authentication backends for cookie-based JWT auth
@@ -309,11 +319,14 @@ EMAIL_HOST_PASSWORD = os.environ.get(
 
 
 # settings.py
+REDIS_URL = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")
+CACHE_REDIS_URL = os.environ.get("CACHE_REDIS_URL", "redis://127.0.0.1:6379/1")
+
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [("127.0.0.1", 6379)],
+            "hosts": [REDIS_URL],
         },
     },
 }
@@ -322,7 +335,7 @@ CHANNEL_LAYERS = {
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": "redis://127.0.0.1:6379/1",
+        "LOCATION": CACHE_REDIS_URL,
     },
 }
 

@@ -14,6 +14,8 @@ import logging
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
 
 # Create your views here.
 
@@ -58,6 +60,7 @@ class FeedbackIndexView(APIView):
     authentication_classes = [SessionAuthentication, BasicAuthentication]
     permission_classes = [permissions.IsAdminUser]
 
+    @extend_schema(responses=OpenApiTypes.OBJECT, summary="管理仪表盘首页")
     def get(self, request):
         # 验证用户是否是管理员
         if not request.user.is_staff:

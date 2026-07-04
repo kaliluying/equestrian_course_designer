@@ -2,6 +2,8 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
 from django.db.models import F
 from django.db import transaction
 import logging
@@ -299,6 +301,11 @@ def _generate_path_from_obstacles(
     }
 
 
+@extend_schema(
+    request=OpenApiTypes.OBJECT,
+    responses=OpenApiTypes.OBJECT,
+    summary="AI 生成路线",
+)
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 @transaction.atomic
@@ -315,7 +322,8 @@ def generate_route(request):
     # 2. 检查配额
     if quota.remaining_quota <= 0:
         return Response(
-            {"code": status.HTTP_403_FORBIDDEN, "message": "配额不足，请购买后再试"}
+            {"code": status.HTTP_403_FORBIDDEN, "message": "配额不足，请购买后再试"},
+            status=status.HTTP_403_FORBIDDEN,
         )
 
     # 3. 获取用户输入并验证
@@ -324,7 +332,8 @@ def generate_route(request):
 
     if not prompt or not prompt.strip():
         return Response(
-            {"code": status.HTTP_400_BAD_REQUEST, "message": "请输入设计需求描述"}
+            {"code": status.HTTP_400_BAD_REQUEST, "message": "请输入设计需求描述"},
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
         # 4. 创建历史记录
@@ -340,7 +349,6 @@ def generate_route(request):
         field_width = min(max(int(config_data.get("field_width", 90)), 30), 150)
         field_height = min(max(int(config_data.get("field_height", 60)), 30), 150)
 
-        provider = get_llm_provider()
         system_prompt = """你是一位资深的马术障碍赛路线设计师，拥有FEI（国际马联）认证资格。你需要根据用户需求设计专业、安全、有挑战性的障碍赛路线。
 
 ## 场地坐标系
@@ -412,18 +420,30 @@ def generate_route(request):
 5. 只返回JSON，不要其他内容。"""
 
         user_content = f"{prompt}\n\n当前配置：障碍物数量 {obstacle_count} 个，难度 {difficulty}，场地 {field_width}x{field_height} 米。请严格按此配置生成，只返回JSON。"
-        llm_response = provider.generate(
-            user_content, system_prompt=system_prompt, max_tokens=4000
-        )
+        llm_response = None
+        ai_result = None
+        fallback_reason = None
 
-        ai_result = _extract_json_from_llm_response(llm_response.content)
+        try:
+            provider = get_llm_provider()
+            llm_response = provider.generate(
+                user_content, system_prompt=system_prompt, max_tokens=4000
+            )
+            ai_result = _extract_json_from_llm_response(llm_response.content)
+        except Exception as exc:
+            fallback_reason = str(exc)
+            logger.warning("LLM不可用，回退到规则引擎: %s", fallback_reason)
 
         # 6. 如果LLM返回了完整设计，使用它；否则回退到规则引擎
         if ai_result and ai_result.get("obstacles"):
             # 验证和规范化AI返回的数据
             result = _normalize_ai_result(ai_result)
+            result["validation"]["source"] = "llm"
+            result["validation"]["fallback_reason"] = ""
         else:
-            logger.warning("LLM未返回有效结果，回退到规则引擎")
+            if not fallback_reason:
+                fallback_reason = "LLM未返回有效结果"
+                logger.warning("%s，回退到规则引擎", fallback_reason)
             route_config = RouteConfig(
                 field_width=field_width,
                 field_height=field_height,
@@ -441,10 +461,13 @@ def generate_route(request):
                 "design_notes": fallback_result.get("explanation"),
             }
             result = _normalize_ai_result(ai_like_result)
+            result["explanation"] = f"{result['explanation']}（规则引擎兜底：{fallback_reason}）"
+            result["validation"]["source"] = "fallback"
+            result["validation"]["fallback_reason"] = fallback_reason
 
         # 8. 更新历史记录
         history.result = result
-        history.token_used = llm_response.token_used
+        history.token_used = llm_response.token_used if llm_response else 0
         token_price_per_1k = os.getenv("AI_TOKEN_PRICE_PER_1K", "0")
         try:
             price = Decimal(token_price_per_1k)
@@ -474,6 +497,8 @@ def generate_route(request):
                     "estimated_time": result["estimated_time"],
                     "explanation": result["explanation"],
                     "teaching_notes": result["teaching_notes"],
+                    "validation": result["validation"],
+                    "metrics": result["metrics"],
                     "remaining_quota": quota.remaining_quota,
                 },
             }
@@ -489,10 +514,15 @@ def generate_route(request):
             {
                 "code": status.HTTP_500_INTERNAL_SERVER_ERROR,
                 "message": "生成失败，请稍后重试",
-            }
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 
+@extend_schema(
+    responses=OpenApiTypes.OBJECT,
+    summary="获取 AI 配额",
+)
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_ai_quota(request):
@@ -513,6 +543,11 @@ def get_ai_quota(request):
     )
 
 
+@extend_schema(
+    request=OpenApiTypes.OBJECT,
+    responses=OpenApiTypes.OBJECT,
+    summary="购买 AI 配额",
+)
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def purchase_ai_quota(request):
@@ -530,6 +565,20 @@ def purchase_ai_quota(request):
         )
 
     price = AI_QUOTA_PRICES.get(quota_amount, quota_amount * 1.0)
+
+    try:
+        from .utils import validate_alipay_config
+
+        validate_alipay_config()
+    except Exception as exc:
+        logger.warning("AI配额购买不可用: %s", str(exc))
+        return Response(
+            {
+                "code": status.HTTP_503_SERVICE_UNAVAILABLE,
+                "message": f"支付功能暂不可用：{str(exc)}",
+            },
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
 
     # 创建订单
     # 说明：
@@ -559,6 +608,10 @@ def purchase_ai_quota(request):
     )
 
 
+@extend_schema(
+    responses=OpenApiTypes.OBJECT,
+    summary="获取 AI 生成历史",
+)
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_ai_history(request):

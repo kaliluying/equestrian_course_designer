@@ -86,7 +86,7 @@ export class ExportNotificationService {
   private activeNotifications = new Map<string, NotificationData>()
   private notificationHistory: NotificationData[] = []
   private soundEnabled = false
-  private eventListeners = new Map<string, Function[]>()
+  private eventListeners = new Map<string, Array<(data: unknown) => void>>()
 
   // 默认配置
   private defaultConfig: NotificationConfig = {
@@ -127,7 +127,12 @@ export class ExportNotificationService {
       // audio.play().catch(console.warn)
 
       // 使用Web Audio API生成简单的提示音
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const audioWindow = window as Window & typeof globalThis & {
+        webkitAudioContext?: typeof AudioContext
+      }
+      const AudioContextConstructor = window.AudioContext || audioWindow.webkitAudioContext
+      if (!AudioContextConstructor) return
+      const audioContext = new AudioContextConstructor()
       const oscillator = audioContext.createOscillator()
       const gainNode = audioContext.createGain()
 
@@ -342,7 +347,7 @@ export class ExportNotificationService {
    * @param error 导出错误
    * @param context 错误上下文
    */
-  showErrorNotification(error: ExportError, context?: any): void {
+  showErrorNotification(error: ExportError, context?: unknown): void {
     const notificationId = `error-${Date.now()}`
 
     const notification: NotificationData = {
@@ -612,7 +617,7 @@ export class ExportNotificationService {
    * @param error 导出错误
    * @param context 错误上下文
    */
-  private showErrorDetails(error: ExportError, context?: any): void {
+  private showErrorDetails(error: ExportError, context?: unknown): void {
     let content = `错误类型: ${error.type}\n`
     content += `发生阶段: ${error.stage}\n`
     content += `错误信息: ${error.message}\n`
@@ -642,7 +647,7 @@ export class ExportNotificationService {
    * @param context 错误上下文
    * @returns 格式化的详情字符串
    */
-  private formatErrorDetails(error: ExportError, context?: any): string {
+  private formatErrorDetails(error: ExportError, context?: unknown): string {
     let details = `错误类型: ${error.type}\n`
     details += `发生阶段: ${error.stage}\n`
     details += `时间戳: ${new Date().toLocaleString()}\n`
@@ -718,24 +723,24 @@ export class ExportNotificationService {
   /**
    * 事件发射器方法
    */
-  on(event: string, callback: Function): void {
+  on<T = unknown>(event: string, callback: (data: T) => void): void {
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, [])
     }
-    this.eventListeners.get(event)!.push(callback)
+    this.eventListeners.get(event)!.push(callback as (data: unknown) => void)
   }
 
-  off(event: string, callback: Function): void {
+  off<T = unknown>(event: string, callback: (data: T) => void): void {
     const listeners = this.eventListeners.get(event)
     if (listeners) {
-      const index = listeners.indexOf(callback)
+      const index = listeners.indexOf(callback as (data: unknown) => void)
       if (index > -1) {
         listeners.splice(index, 1)
       }
     }
   }
 
-  private emit(event: string, data: any): void {
+  private emit(event: string, data: unknown): void {
     const listeners = this.eventListeners.get(event)
     if (listeners) {
       listeners.forEach(callback => {
@@ -767,6 +772,3 @@ export class ExportNotificationService {
 
 // 创建全局通知服务实例
 export const exportNotificationService = new ExportNotificationService()
-
-// 导出类型和枚举
-export { NotificationConfig, NotificationPriority, NotificationType, NotificationData, NotificationAction, SoundType }

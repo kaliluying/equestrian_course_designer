@@ -76,5 +76,8 @@ front.bat
 
 AGENTS.md
 .env
+cookies.txt
+*.pem
+BackEnd/equestrian/keys/*.pem
 .sisyphus/
 keys/package-lock.json

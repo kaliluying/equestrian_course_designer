@@ -1,5 +1,5 @@
 import { request } from '@/utils/request'
-import type { Order, CreateOrderParams } from '@/types/order'
+import type { Order, CreateOrderParams, PayOrderParams } from '@/types/order'
 
 // 定义获取订单列表的参数类型
 export interface GetOrdersParams {

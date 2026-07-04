@@ -1,3 +1,5 @@
+export type DesignDownloadType = 'json' | 'png' | 'pdf'
+
 // 设计数据接口
 export interface Design {
   id?: number
@@ -30,6 +32,15 @@ export interface DesignResponse {
   likes_count: number
   downloads_count: number
   is_liked: boolean
+}
+
+export interface DesignDownloadResponse {
+  success: boolean
+  message: string
+  download_url: string
+  filename: string
+  file_type: DesignDownloadType
+  downloads_count: number
 }
 
 // 设计保存请求接口

@@ -171,24 +171,24 @@ class DesignSerializer(serializers.ModelSerializer):
         read_only_fields = ('author', 'create_time',
                             'update_time', 'likes_count', 'downloads_count')
 
-    def get_author_username(self, obj):
+    def get_author_username(self, obj) -> str | None:
         """获取作者用户名"""
         return obj.author.username if obj.author else None
 
-    def get_is_liked(self, obj):
+    def get_is_liked(self, obj) -> bool:
         """当前用户是否已点赞"""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             return DesignLike.objects.filter(design=obj, user=request.user).exists()
         return False
 
-    def get_image_url(self, obj):
+    def get_image_url(self, obj) -> str | None:
         """获取正确的图片URL"""
         if obj.image:
             return get_absolute_media_url(obj.image.url)
         return None
 
-    def get_download_url(self, obj):
+    def get_download_url(self, obj) -> str | None:
         """获取正确的下载URL"""
         if obj.download:
             return get_absolute_media_url(obj.download.url)
@@ -216,18 +216,18 @@ class DesignListSerializer(serializers.ModelSerializer):
                   'is_shared', 'description', 'is_liked')
         read_only_fields = fields
 
-    def get_author_username(self, obj):
+    def get_author_username(self, obj) -> str | None:
         """获取作者用户名"""
         return obj.author.username if obj.author else None
 
-    def get_is_liked(self, obj):
+    def get_is_liked(self, obj) -> bool:
         """当前用户是否已点赞"""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             return DesignLike.objects.filter(design=obj, user=request.user).exists()
         return False
 
-    def get_image_url(self, obj):
+    def get_image_url(self, obj) -> str | None:
         """获取正确的图片URL"""
         if obj.image:
             return get_absolute_media_url(obj.image.url)
@@ -331,7 +331,7 @@ class CustomObstacleSerializer(serializers.ModelSerializer):
         read_only_fields = ('user', 'user_username',
                             'created_at', 'updated_at')
 
-    def get_user_username(self, obj):
+    def get_user_username(self, obj) -> str:
         """获取用户名"""
         return obj.user.username
 
@@ -342,7 +342,6 @@ class CustomObstacleSerializer(serializers.ModelSerializer):
         for field in required_fields:
             if field not in value:
                 raise serializers.ValidationError(f"障碍物数据缺少必要字段: {field}")
-
 
         return value
 
@@ -389,19 +388,19 @@ class MembershipOrderSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'order_id', 'trade_no',
                             'payment_time', 'created_at', 'updated_at']
 
-    def get_plan_name(self, obj):
+    def get_plan_name(self, obj) -> str:
         return obj.membership_plan.name if obj.membership_plan else '未知计划'
 
-    def get_user_username(self, obj):
+    def get_user_username(self, obj) -> str:
         return obj.user.username
 
-    def get_status_display(self, obj):
+    def get_status_display(self, obj) -> str:
         return obj.get_status_display()
 
-    def get_payment_channel_display(self, obj):
+    def get_payment_channel_display(self, obj) -> str:
         return obj.get_payment_channel_display()
 
-    def get_billing_cycle_display(self, obj):
+    def get_billing_cycle_display(self, obj) -> str:
         return obj.get_billing_cycle_display()
 
 

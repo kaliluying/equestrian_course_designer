@@ -68,6 +68,39 @@
           <h4>教学建议</h4>
           <p>{{ result.teaching_notes }}</p>
         </div>
+
+        <div class="validation-feedback">
+          <div class="validation-header">
+            <h4>校验反馈</h4>
+            <el-tag size="small" :type="validationStatus.type">
+              {{ validationStatus.label }}
+            </el-tag>
+          </div>
+
+          <p v-if="result.validation?.source === 'fallback'" class="fallback-note">
+            本次已使用规则引擎兜底：{{ result.validation.fallback_reason || 'LLM 未返回可用路线' }}
+          </p>
+
+          <div v-if="validationGroups.length" class="validation-groups">
+            <section
+              v-for="group in validationGroups"
+              :key="group.key"
+              class="validation-group"
+              :class="`validation-group--${group.key}`"
+            >
+              <div class="validation-group-title">
+                <el-icon><component :is="group.icon" /></el-icon>
+                <span>{{ group.title }}</span>
+                <b>{{ group.items.length }}</b>
+              </div>
+              <ul>
+                <li v-for="item in group.items" :key="item">{{ item }}</li>
+              </ul>
+            </section>
+          </div>
+
+          <p v-else class="validation-empty">未发现需要处理的问题。</p>
+        </div>
       </el-card>
     </div>
 
@@ -93,13 +126,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Odometer, TrendCharts, Timer } from '@element-plus/icons-vue'
+import { Odometer, Tools, TrendCharts, Timer, Warning } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useCourseStore } from '@/stores/course'
-import { aiApi, type AIQuotaInfo, type AIGenerateResponse } from '@/api/ai'
+import {
+  aiApi,
+  getAIGenerateErrorMessage,
+  type AIQuotaInfo,
+  type AIGenerateResponse
+} from '@/api/ai'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -124,6 +162,49 @@ const form = reactive({
     obstacle_count: 12,
     difficulty: 'medium' as 'easy' | 'medium' | 'hard'
   }
+})
+
+const validationStatus = computed(() => {
+  const validation = result.value?.validation
+  if (!validation) {
+    return { type: 'info' as const, label: '未返回校验信息' }
+  }
+
+  if (validation.issues.length > 0) {
+    return { type: 'danger' as const, label: '需注意' }
+  }
+
+  if (validation.warnings.length > 0 || validation.auto_fixed.length > 0) {
+    return { type: 'warning' as const, label: '已优化' }
+  }
+
+  return { type: 'success' as const, label: '已通过' }
+})
+
+const validationGroups = computed(() => {
+  const validation = result.value?.validation
+  if (!validation) return []
+
+  return [
+    {
+      key: 'issues',
+      title: '需注意',
+      icon: Warning,
+      items: validation.issues,
+    },
+    {
+      key: 'warnings',
+      title: '建议关注',
+      icon: Warning,
+      items: validation.warnings,
+    },
+    {
+      key: 'auto-fixed',
+      title: '已自动修正',
+      icon: Tools,
+      items: validation.auto_fixed,
+    },
+  ].filter((group) => group.items.length > 0)
 })
 
 const fetchQuota = async () => {
@@ -156,9 +237,8 @@ const handleGenerate = async () => {
       quotaInfo.remaining_quota = response.data.remaining_quota
       ElMessage.success(`生成成功！剩余次数: ${response.data.remaining_quota}`)
     }
-  } catch (error: any) {
-    const message = error.response?.data?.message || '生成失败，请稍后重试'
-    ElMessage.error(message)
+  } catch (error) {
+    ElMessage.error(getAIGenerateErrorMessage(error))
   } finally {
     isGenerating.value = false
   }
@@ -248,6 +328,95 @@ defineExpose({ open })
     h4 {
       color: #409eff;
     }
+  }
+
+  .validation-feedback {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px dashed #dcdfe6;
+  }
+
+  .validation-header,
+  .validation-group-title {
+    display: flex;
+    align-items: center;
+  }
+
+  .validation-header {
+    justify-content: space-between;
+    gap: 12px;
+
+    h4 {
+      margin: 0;
+      color: #303133;
+      font-size: 14px;
+    }
+  }
+
+  .fallback-note,
+  .validation-empty {
+    margin: 10px 0 0;
+    color: #606266;
+    line-height: 1.6;
+  }
+
+  .validation-groups {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .validation-group {
+    padding: 10px 12px;
+    border: 1px solid #e4e7ed;
+    border-radius: 8px;
+    background: #fafafa;
+
+    ul {
+      padding-left: 18px;
+      margin: 8px 0 0;
+      color: #606266;
+      line-height: 1.6;
+    }
+
+    li + li {
+      margin-top: 4px;
+    }
+  }
+
+  .validation-group-title {
+    gap: 6px;
+    color: #303133;
+    font-size: 13px;
+    font-weight: 600;
+
+    b {
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      margin-left: auto;
+      border-radius: 10px;
+      background: #f0f2f5;
+      color: #606266;
+      font-size: 12px;
+      line-height: 20px;
+      text-align: center;
+    }
+  }
+
+  .validation-group--issues {
+    border-color: #f3d4d4;
+    background: #fff7f7;
+  }
+
+  .validation-group--warnings {
+    border-color: #f4dfb8;
+    background: #fffaf0;
+  }
+
+  .validation-group--auto-fixed {
+    border-color: #c8e6d2;
+    background: #f4fbf6;
   }
 }
 </style>

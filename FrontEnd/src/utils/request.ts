@@ -5,6 +5,7 @@ import { logout as logoutApi } from '@/api/user'
 import { useUserStore } from '@/stores/user'
 import apiConfig from '@/config/api'
 import router from '@/router'
+import { getApiErrorMessage } from '@/utils/apiErrorMessage'
 
 // Security fix: Use httpOnly cookies for JWT tokens instead of localStorage
 // CSRF token stored in memory (not cookie) since cookie is httpOnly
@@ -114,37 +115,7 @@ axiosInstance.interceptors.response.use(
       }
     }
 
-    // 构建错误消息
-    let errorMessage = '请求失败'
-    if (error.response?.data) {
-      const data = error.response.data
-      if (typeof data === 'string') {
-        errorMessage = data
-      } else if (typeof data === 'object' && data !== null) {
-        if ('detail' in data && typeof data.detail === 'string') {
-          errorMessage = data.detail
-        } else if ('message' in data && typeof data.message === 'string') {
-          errorMessage = data.message
-        } else if ('error' in data && typeof data.error === 'string') {
-          errorMessage = data.error
-        } else {
-          // 尝试将整个对象转为字符串
-          try {
-            errorMessage = JSON.stringify(data)
-          } catch {
-            errorMessage = '未知错误'
-          }
-        }
-      }
-    } else if (error.message) {
-      if (error.message === 'Network Error') {
-        errorMessage = '网络错误，请检查您的网络连接'
-      } else if (error.message.includes('timeout')) {
-        errorMessage = '请求超时，请稍后重试'
-      } else {
-        errorMessage = error.message
-      }
-    }
+    const errorMessage = getApiErrorMessage(error)
 
     // 显示错误消息
     ElMessage.error({

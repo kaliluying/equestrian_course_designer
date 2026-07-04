@@ -23,7 +23,7 @@
     "baseUrl": ".",
     "module": "ESNext",
     "target": "ESNext",
-    "lib": ["DOM", "ESNext"],
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
     "strict": true,
     "jsx": "preserve",
     "moduleResolution": "node",

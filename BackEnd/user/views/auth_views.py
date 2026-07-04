@@ -18,6 +18,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
 
 from ..models import PasswordResetToken
 from ..serializers import (
@@ -67,6 +69,7 @@ class CSRFTokenView(APIView):
 
     permission_classes = [AllowAny]
 
+    @extend_schema(responses=OpenApiTypes.OBJECT, summary="获取 CSRF Token")
     @method_decorator(ensure_csrf_cookie)
     def get(self, request):
         """获取CSRF令牌"""
@@ -82,6 +85,11 @@ class RegisterView(APIView):
 
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        request=UserRegisterSerializer,
+        responses=OpenApiTypes.OBJECT,
+        summary="用户注册",
+    )
     def post(self, request):
         """用户注册"""
         logger.info("收到用户注册请求")
@@ -141,6 +149,11 @@ class LoginView(APIView):
 
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        request=UserLoginSerializer,
+        responses=OpenApiTypes.OBJECT,
+        summary="用户登录",
+    )
     def post(self, request):
         """用户登录 - 设置 httpOnly cookies"""
         logger.info("收到用户登录请求")
@@ -192,6 +205,7 @@ class CookieTokenRefreshView(APIView):
 
     permission_classes = [AllowAny]
 
+    @extend_schema(request=None, responses=OpenApiTypes.OBJECT, summary="刷新 Token")
     def post(self, request):
         """Refresh access token using refresh token from cookie."""
         # Debug: log cookie info
@@ -254,6 +268,7 @@ class LogoutView(APIView):
 
     permission_classes = [AllowAny]
 
+    @extend_schema(request=None, responses=OpenApiTypes.OBJECT, summary="用户登出")
     def post(self, request):
         response = success_response("登出成功")
         response.delete_cookie("access_token", path="/")
@@ -266,6 +281,11 @@ class ForgotPasswordView(APIView):
 
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        request=ForgotPasswordSerializer,
+        responses=OpenApiTypes.OBJECT,
+        summary="发送密码重置邮件",
+    )
     def post(self, request):
         """发送密码重置邮件"""
         serializer = ForgotPasswordSerializer(data=request.data)
@@ -323,6 +343,11 @@ class ResetPasswordView(APIView):
 
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        request=ResetPasswordSerializer,
+        responses=OpenApiTypes.OBJECT,
+        summary="重置密码",
+    )
     def post(self, request):
         """使用令牌重置密码"""
         serializer = ResetPasswordSerializer(data=request.data)
