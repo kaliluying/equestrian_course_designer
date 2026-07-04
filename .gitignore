@@ -81,3 +81,5 @@ cookies.txt
 BackEnd/equestrian/keys/*.pem
 .sisyphus/
 keys/package-lock.json
+
+.superpowers/
