@@ -272,6 +272,103 @@ class DesignDownloadAPITest(TestCase):
         self.assertEqual(design.downloads_count, 0)
 
 
+class MembershipAccessServiceTest(TestCase):
+    """会员权益服务测试"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="access_user",
+            email="access@example.com",
+            password="Password123",
+        )
+        self.free_plan = MembershipPlan.objects.create(
+            name="免费用户",
+            code="free",
+            monthly_price=0,
+            yearly_price=0,
+            storage_limit=5,
+            custom_obstacle_limit=10,
+        )
+        self.standard_plan = MembershipPlan.objects.create(
+            name="标准会员",
+            code="standard",
+            monthly_price=15,
+            yearly_price=150,
+            storage_limit=100,
+            custom_obstacle_limit=50,
+        )
+        self.premium_plan = MembershipPlan.objects.create(
+            name="高级会员",
+            code="premium",
+            monthly_price=30,
+            yearly_price=300,
+            storage_limit=500,
+            custom_obstacle_limit=None,
+        )
+        self.profile, _ = UserProfile.objects.get_or_create(user=self.user)
+
+    def test_free_user_entitlement_snapshot_uses_free_limits(self):
+        """免费用户权益快照应返回免费额度和无协作权限"""
+        from user.services.membership_access import get_entitlements
+
+        self.profile.is_premium = False
+        self.profile.membership_plan = self.free_plan
+        self.profile.storage_limit = self.free_plan.storage_limit
+        self.profile.save()
+
+        snapshot = get_entitlements(self.user)
+
+        self.assertEqual(snapshot.plan_code, "free")
+        self.assertFalse(snapshot.is_premium_active)
+        self.assertEqual(snapshot.design_limit, 5)
+        self.assertEqual(snapshot.custom_obstacle_limit, 10)
+        self.assertFalse(snapshot.custom_obstacle_unlimited)
+        self.assertFalse(snapshot.can_collaborate)
+
+    def test_premium_user_entitlement_snapshot_has_unlimited_obstacles_and_collaboration(self):
+        """高级会员权益快照应包含无限自定义障碍和协作权限"""
+        from user.services.membership_access import get_entitlements
+
+        self.profile.is_premium = True
+        self.profile.membership_plan = self.premium_plan
+        self.profile.premium_expire_date = timezone.now() + timezone.timedelta(days=30)
+        self.profile.storage_limit = self.premium_plan.storage_limit
+        self.profile.save()
+
+        snapshot = get_entitlements(self.user)
+
+        self.assertEqual(snapshot.plan_code, "premium")
+        self.assertTrue(snapshot.is_premium_active)
+        self.assertEqual(snapshot.design_limit, 500)
+        self.assertIsNone(snapshot.custom_obstacle_limit)
+        self.assertTrue(snapshot.custom_obstacle_unlimited)
+        self.assertTrue(snapshot.can_collaborate)
+
+    def test_expired_premium_with_pending_standard_snapshot_activates_pending_plan(self):
+        """权益快照读取应触发待生效计划并返回更新后的统一权益"""
+        from user.services.membership_access import get_entitlements
+
+        expired_at = timezone.now() - timezone.timedelta(minutes=1)
+        self.profile.is_premium = True
+        self.profile.membership_plan = self.premium_plan
+        self.profile.premium_expire_date = expired_at
+        self.profile.storage_limit = self.premium_plan.storage_limit
+        self.profile.pending_membership_plan = self.standard_plan
+        self.profile.pending_membership_start_date = expired_at
+        self.profile.pending_membership_expire_date = expired_at + timezone.timedelta(days=30)
+        self.profile.save()
+
+        snapshot = get_entitlements(self.user)
+
+        self.assertEqual(snapshot.plan_code, "standard")
+        self.assertTrue(snapshot.is_premium_active)
+        self.assertEqual(snapshot.design_limit, 100)
+        self.assertEqual(snapshot.custom_obstacle_limit, 50)
+        self.assertFalse(snapshot.can_collaborate)
+        self.profile.refresh_from_db()
+        self.assertIsNone(self.profile.pending_membership_plan)
+
+
 class MembershipDowngradeActivationTest(TestCase):
     """会员降级到期生效回归测试"""
 
