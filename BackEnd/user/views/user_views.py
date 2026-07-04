@@ -22,65 +22,108 @@ from ..utils import success_response, error_response
 logger = logging.getLogger(__name__)
 
 
-def check_and_update_membership(user):
-    """检查并更新用户的会员状态"""
+def _clear_user_profile_cache(user):
+    """清理用户资料关系缓存，确保同一次请求后续读取到最新会员状态。"""
+    user._state.fields_cache.pop("profile", None)
+
+
+def _get_or_create_free_plan():
+    """获取或创建免费会员计划。"""
     try:
-        profile = user.profile
+        return MembershipPlan.objects.get(code="free")
+    except MembershipPlan.DoesNotExist:
+        return MembershipPlan.objects.create(
+            name="免费用户",
+            code="free",
+            monthly_price=0,
+            yearly_price=0,
+            storage_limit=5,
+            custom_obstacle_limit=10,
+            description="免费用户计划，限制存储5个设计",
+        )
+
+
+def _reset_to_free_membership(profile):
+    """将资料重置为免费计划并清理待生效计划。"""
+    free_plan = _get_or_create_free_plan()
+    profile.is_premium = False
+    profile.membership_plan = free_plan
+    profile.premium_expire_date = None
+    profile.storage_limit = free_plan.storage_limit
+    profile.pending_membership_plan = None
+    profile.pending_membership_start_date = None
+    profile.pending_membership_expire_date = None
+
+
+def _activate_pending_membership(profile):
+    """激活待生效计划并清理 pending 字段。"""
+    profile.membership_plan = profile.pending_membership_plan
+    profile.premium_expire_date = profile.pending_membership_expire_date
+    profile.is_premium = True
+    if profile.membership_plan:
+        profile.storage_limit = profile.membership_plan.storage_limit
+    profile.pending_membership_plan = None
+    profile.pending_membership_start_date = None
+    profile.pending_membership_expire_date = None
+
+
+def check_and_update_membership(user):
+    """检查并更新用户的会员状态。"""
+    try:
+        profile, _ = UserProfile.objects.get_or_create(user=user)
         now = timezone.now()
 
-        if (
+        if not (
             profile.is_premium
             and profile.premium_expire_date
             and profile.premium_expire_date <= now
         ):
-            logger.info(
-                f"用户 {user.username} 的会员已过期，检查是否有待生效的会员计划"
-            )
+            return True
 
-            if profile.pending_membership_plan:
+        logger.info(f"用户 {user.username} 的会员已过期，检查是否有待生效的会员计划")
+
+        if profile.pending_membership_plan:
+            if (
+                profile.pending_membership_expire_date
+                and profile.pending_membership_expire_date > now
+            ):
                 logger.info(f"用户 {user.username} 有待生效的会员计划，将其激活")
-
-                profile.membership_plan = profile.pending_membership_plan
-                profile.premium_expire_date = profile.pending_membership_expire_date
-                profile.is_premium = True
-
-                if profile.membership_plan and profile.membership_plan.storage_limit:
-                    profile.storage_limit = profile.membership_plan.storage_limit
-
-                profile.pending_membership_plan = None
-                profile.pending_membership_start_date = None
-                profile.pending_membership_expire_date = None
-
-                profile.save()
+                _activate_pending_membership(profile)
+                profile.save(
+                    update_fields=[
+                        "is_premium",
+                        "membership_plan",
+                        "premium_expire_date",
+                        "storage_limit",
+                        "pending_membership_plan",
+                        "pending_membership_start_date",
+                        "pending_membership_expire_date",
+                    ]
+                )
                 logger.info(
                     f"用户 {user.username} 的待生效会员计划已激活，新会员类型：{profile.membership_plan.name}"
                 )
+                _clear_user_profile_cache(user)
+                return True
 
-            elif not profile.is_premium_active():
-                logger.info(
-                    f"用户 {user.username} 的会员已过期，没有待生效的会员计划，重置为非会员状态"
-                )
+            logger.info(f"用户 {user.username} 的待生效会员计划也已失效，重置为免费用户")
+        else:
+            logger.info(f"用户 {user.username} 的会员已过期，没有待生效的会员计划，重置为免费用户")
 
-                try:
-                    free_plan = MembershipPlan.objects.get(code="free")
-                except MembershipPlan.DoesNotExist:
-                    free_plan = MembershipPlan.objects.create(
-                        name="免费用户",
-                        code="free",
-                        monthly_price=0,
-                        yearly_price=0,
-                        storage_limit=5,
-                        custom_obstacle_limit=10,
-                        description="免费用户计划，限制存储5个设计",
-                    )
-
-                profile.is_premium = False
-                profile.membership_plan = free_plan
-                profile.storage_limit = 5
-                profile.save()
-
-                logger.info(f"用户 {user.username} 的会员状态已重置为免费用户")
-
+        _reset_to_free_membership(profile)
+        profile.save(
+            update_fields=[
+                "is_premium",
+                "membership_plan",
+                "premium_expire_date",
+                "storage_limit",
+                "pending_membership_plan",
+                "pending_membership_start_date",
+                "pending_membership_expire_date",
+            ]
+        )
+        logger.info(f"用户 {user.username} 的会员状态已重置为免费用户")
+        _clear_user_profile_cache(user)
         return True
     except Exception as e:
         logger.error(f"检查用户会员状态时出错: {str(e)}")

@@ -11,6 +11,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django.db.models import F
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
 
 from ..models import (
     MembershipPlan,
@@ -28,12 +30,20 @@ from ..utils import (
     query_alipay_order,
     success_response,
     error_response,
+    ExternalServiceConfigError,
 )
 from .obstacle_views import StandardResultsSetPagination
 
 logger = logging.getLogger(__name__)
 
 # AI 配额金额映射（与 ai_views.py 中的价格保持一致）
+def _clear_pending_membership(profile):
+    """清理待生效会员计划字段。"""
+    profile.pending_membership_plan = None
+    profile.pending_membership_start_date = None
+    profile.pending_membership_expire_date = None
+
+
 AI_QUOTA_AMOUNT_MAP = {
     Decimal("9.90"): 10,
     Decimal("24.90"): 30,
@@ -81,6 +91,11 @@ def settle_paid_order(order):
     update_user_membership(order.user, order)
 
 
+@extend_schema(
+    request=CreateMembershipOrderSerializer,
+    responses=OpenApiTypes.OBJECT,
+    summary="创建会员订单",
+)
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def create_membership_order(request):
@@ -124,6 +139,15 @@ def create_membership_order(request):
                     "payment_url": pay_url,
                 },
             )
+        except ExternalServiceConfigError as e:
+            logger.warning("支付宝配置不可用: %s", str(e))
+            order.status = "failed"
+            order.save()
+            return error_response(
+                str(e),
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                {"order": MembershipOrderSerializer(order).data},
+            )
         except Exception as e:
             # 记录错误并返回
             logger.error(f"创建支付宝订单失败: {str(e)}")
@@ -136,6 +160,10 @@ def create_membership_order(request):
         return error_response(serializer.errors, status.HTTP_400_BAD_REQUEST)
 
 
+@extend_schema(
+    responses=MembershipOrderSerializer(many=True),
+    summary="获取当前用户订单",
+)
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_user_orders(request):
@@ -169,6 +197,10 @@ def get_user_orders(request):
     return paginator.get_paginated_response(serializer.data)
 
 
+@extend_schema(
+    responses=OpenApiTypes.OBJECT,
+    summary="查询订单状态",
+)
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_order_status(request, order_id):
@@ -211,6 +243,13 @@ def get_order_status(request, order_id):
                     "alipay_status": query_result.get("trade_status"),
                 },
             )
+    except ExternalServiceConfigError as e:
+        logger.warning("支付宝配置不可用: %s", str(e))
+        return error_response(
+            str(e),
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            {"order": MembershipOrderSerializer(order).data},
+        )
     except Exception as e:
         logger.error(f"查询支付宝订单状态失败: {str(e)}")
         return error_response(
@@ -220,6 +259,11 @@ def get_order_status(request, order_id):
         )
 
 
+@extend_schema(
+    request=OpenApiTypes.OBJECT,
+    responses=OpenApiTypes.OBJECT,
+    summary="支付宝异步通知",
+)
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def alipay_notify(request):
@@ -268,6 +312,9 @@ def alipay_notify(request):
         else:
             # 其他状态不处理
             return Response({"message": "SUCCESS", "detail": "等待交易完成"})
+    except ExternalServiceConfigError as e:
+        logger.warning("支付宝回调处理时配置不可用: %s", str(e))
+        return Response({"message": "FAIL", "detail": str(e)})
     except Exception as e:
         logger.error(f"处理支付宝回调时出错: {str(e)}")
         return Response({"message": "FAIL", "detail": str(e)})
@@ -320,6 +367,8 @@ def update_user_membership(user, order):
             )
             profile.membership_plan = order.membership_plan
             profile.premium_expire_date = now + duration
+            profile.is_premium = True
+            _clear_pending_membership(profile)
 
         # 2. 同等级续费（延长到期时间）
         elif new_level == current_level:
@@ -329,6 +378,7 @@ def update_user_membership(user, order):
                 profile.premium_expire_date = profile.premium_expire_date + duration
             else:
                 profile.premium_expire_date = now + duration
+            _clear_pending_membership(profile)
 
         # 3. 降级会员（当前会员到期后生效）
         else:
@@ -351,6 +401,7 @@ def update_user_membership(user, order):
         profile.membership_plan = order.membership_plan
         profile.premium_expire_date = now + duration
         profile.is_premium = True
+        _clear_pending_membership(profile)
 
     # 更新存储限制
     if order.membership_plan:

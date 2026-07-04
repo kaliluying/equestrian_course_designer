@@ -9,6 +9,7 @@ from rest_framework.response import Response
 
 from ..models import CustomObstacle
 from ..serializers import CustomObstacleSerializer
+from .user_views import check_and_update_membership
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -26,6 +27,7 @@ class CustomObstacleViewSet(viewsets.ModelViewSet):
     支持分页、搜索和排序
     """
 
+    queryset = CustomObstacle.objects.all()
     serializer_class = CustomObstacleSerializer
     permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
@@ -63,6 +65,7 @@ class CustomObstacleViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         """创建自定义障碍物时，自动关联当前用户"""
+        check_and_update_membership(self.request.user)
         serializer.save(user=self.request.user)
 
     def perform_update(self, serializer):
@@ -84,6 +87,7 @@ class CustomObstacleViewSet(viewsets.ModelViewSet):
     def get_obstacle_count(self, request):
         """获取用户自定义障碍物数量和限制"""
         user = request.user
+        check_and_update_membership(user)
         count = CustomObstacle.objects.filter(user=user).count()
 
         # 从会员计划中获取自定义障碍物数量限制

@@ -58,8 +58,8 @@
                 <div class="pending-plan-details">
                   将在当前会员到期后自动生效
                   <div class="pending-dates">
-                    <span>生效时间：{{ formatDate(userProfile.pending_membership_plan.start_date) }}</span>
-                    <span>到期时间：{{ formatDate(userProfile.pending_membership_plan.expire_date) }}</span>
+                    <span>生效时间：{{ formatDate(userProfile.pending_membership_plan.start_date || null) }}</span>
+                    <span>到期时间：{{ formatDate(userProfile.pending_membership_plan.expire_date || null) }}</span>
                   </div>
                 </div>
               </span>
@@ -166,10 +166,10 @@
 
         <div class="pricing-grid" v-else>
           <!-- 免费用户卡片 -->
-          <div class="pricing-card" :class="{ 'is-active': !userProfile.is_premium }">
+          <div class="pricing-card" :class="{ 'is-active': !userProfile.is_premium_active }">
             <div class="pricing-header">
               <h4>免费用户</h4>
-              <div v-if="!userProfile.is_premium" class="active-badge">当前方案</div>
+              <div v-if="!userProfile.is_premium_active" class="active-badge">当前方案</div>
             </div>
             <div class="pricing-price">
               <div class="price-value">¥0/月</div>
@@ -202,17 +202,17 @@
               </div>
             </div>
             <div class="pricing-cta">
-              <span class="current-plan-label" v-if="!userProfile.is_premium">当前方案</span>
+              <span class="current-plan-label" v-if="!userProfile.is_premium_active">当前方案</span>
             </div>
           </div>
 
           <!-- 标准会员卡片 -->
           <div class="pricing-card"
-            :class="{ 'is-selected': selectedPlan && selectedPlan.code === 'standard', 'is-active': userProfile.membership_plan && userProfile.membership_plan.code === 'standard' }"
+            :class="{ 'is-selected': selectedPlan && selectedPlan.code === 'standard', 'is-active': userProfile.is_premium_active && userProfile.membership_plan && userProfile.membership_plan.code === 'standard' }"
             @click="selectStandardPlan()">
             <div class="pricing-header">
               <h4>标准会员</h4>
-              <div v-if="userProfile.membership_plan && userProfile.membership_plan.code === 'standard'"
+              <div v-if="userProfile.is_premium_active && userProfile.membership_plan && userProfile.membership_plan.code === 'standard'"
                 class="active-badge">当前方案</div>
             </div>
             <div class="pricing-price">
@@ -265,12 +265,12 @@
 
           <!-- 高级会员卡片 -->
           <div class="pricing-card premium"
-            :class="{ 'is-selected': selectedPlan && selectedPlan.code === 'premium', 'is-active': userProfile.membership_plan && userProfile.membership_plan.code === 'premium' }"
+            :class="{ 'is-selected': selectedPlan && selectedPlan.code === 'premium', 'is-active': userProfile.is_premium_active && userProfile.membership_plan && userProfile.membership_plan.code === 'premium' }"
             @click="selectPremiumPlan()">
             <div class="pricing-badge">推荐</div>
             <div class="pricing-header">
               <h4>高级会员</h4>
-              <div v-if="userProfile.membership_plan && userProfile.membership_plan.code === 'premium'"
+              <div v-if="userProfile.is_premium_active && userProfile.membership_plan && userProfile.membership_plan.code === 'premium'"
                 class="active-badge">当前方案</div>
             </div>
             <div class="pricing-price">
@@ -397,6 +397,8 @@ interface MembershipPlan {
   yearly_price: number;
   storage_limit: number;
   description: string;
+  start_date?: string;
+  expire_date?: string;
 }
 
 // 定义用户资料类型
@@ -567,6 +569,8 @@ const fetchUserProfile = async () => {
       // 更新用户存储中的会员状态
       if (userStore.currentUser) {
         userStore.currentUser.is_premium_active = response.is_premium_active
+        userStore.currentUser.membership_plan = response.membership_plan || null
+        userStore.currentUser.design_storage_limit = response.design_storage_limit || 5
         // 更新本地存储
         localStorage.setItem('user', JSON.stringify(userStore.currentUser))
       }

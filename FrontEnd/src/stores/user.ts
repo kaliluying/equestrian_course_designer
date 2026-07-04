@@ -6,10 +6,18 @@ import { login, logout as logoutApi, register } from '@/api/user'
 import type { Router } from 'vue-router'
 
 // 定义用户类型
+interface MembershipPlan {
+  id: number
+  name: string
+  code: string
+}
+
 interface User {
   id: number
   username: string
   is_premium_active?: boolean
+  membership_plan?: MembershipPlan | null
+  design_storage_limit?: number
 }
 
 export const useUserStore = defineStore('user', () => {
@@ -138,6 +146,8 @@ export const useUserStore = defineStore('user', () => {
       interface UserProfileResponse {
         success: boolean
         is_premium_active?: boolean
+        membership_plan?: MembershipPlan | null
+        design_storage_limit?: number
       }
       const response = (await getUserProfile()) as UserProfileResponse
 
@@ -146,6 +156,8 @@ export const useUserStore = defineStore('user', () => {
         currentUser.value = {
           ...currentUser.value,
           is_premium_active: response.is_premium_active,
+          membership_plan: response.membership_plan || null,
+          design_storage_limit: response.design_storage_limit || 5,
         }
 
         // 更新本地存储
