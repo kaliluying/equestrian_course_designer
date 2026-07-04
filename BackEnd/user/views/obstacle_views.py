@@ -2,14 +2,18 @@
 
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from ..models import CustomObstacle
 from ..serializers import CustomObstacleSerializer
-from .user_views import check_and_update_membership
+from ..services.membership_access import (
+    MembershipAccessError,
+    assert_custom_obstacle_capacity,
+    get_entitlements,
+)
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -65,7 +69,10 @@ class CustomObstacleViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         """创建自定义障碍物时，自动关联当前用户"""
-        check_and_update_membership(self.request.user)
+        try:
+            assert_custom_obstacle_capacity(self.request.user)
+        except MembershipAccessError as exc:
+            raise ValidationError(exc.message)
         serializer.save(user=self.request.user)
 
     def perform_update(self, serializer):
@@ -87,27 +94,15 @@ class CustomObstacleViewSet(viewsets.ModelViewSet):
     def get_obstacle_count(self, request):
         """获取用户自定义障碍物数量和限制"""
         user = request.user
-        check_and_update_membership(user)
-        count = CustomObstacle.objects.filter(user=user).count()
-
-        # 从会员计划中获取自定义障碍物数量限制
-        max_count = 10  # 默认限制（免费用户）
-        is_unlimited = False
-        if hasattr(user, "profile") and user.profile.membership_plan:
-            plan_limit = user.profile.membership_plan.custom_obstacle_limit
-            if plan_limit is not None:
-                max_count = plan_limit
-            else:
-                # null 表示无限制
-                is_unlimited = True
+        snapshot = get_entitlements(user)
 
         return Response(
             {
-                "count": count,
-                "max_count": max_count if not is_unlimited else None,
-                "is_unlimited": is_unlimited,
-                "is_premium": hasattr(user, "profile")
-                and user.profile.is_premium_active(),
+                "count": snapshot.custom_obstacle_count,
+                "max_count": snapshot.custom_obstacle_limit,
+                "is_unlimited": snapshot.custom_obstacle_unlimited,
+                "is_premium": snapshot.is_premium_active,
+                "plan_code": snapshot.plan_code,
             }
         )
 

@@ -393,6 +393,56 @@ class MembershipAccessServiceTest(TestCase):
         self.assertEqual(context.exception.data["plan_code"], "free")
 
 
+    def test_assert_custom_obstacle_capacity_uses_standard_limit(self):
+        """标准会员自定义障碍容量检查应使用统一权益服务"""
+        from user.models import CustomObstacle
+        from user.services.membership_access import (
+            MembershipAccessError,
+            assert_custom_obstacle_capacity,
+        )
+
+        self.profile.is_premium = True
+        self.profile.membership_plan = self.standard_plan
+        self.profile.premium_expire_date = timezone.now() + timezone.timedelta(days=30)
+        self.profile.storage_limit = self.standard_plan.storage_limit
+        self.profile.save()
+        for index in range(50):
+            CustomObstacle.objects.create(
+                user=self.user,
+                name=f"障碍{index}",
+                obstacle_data={"type": "vertical", "poles": [], "width": 1, "height": 1},
+            )
+
+        with self.assertRaises(MembershipAccessError) as context:
+            assert_custom_obstacle_capacity(self.user)
+
+        self.assertEqual(context.exception.data["current_count"], 50)
+        self.assertEqual(context.exception.data["limit"], 50)
+        self.assertEqual(context.exception.data["plan_code"], "standard")
+
+    def test_assert_custom_obstacle_capacity_allows_premium_unlimited(self):
+        """高级会员自定义障碍无限制"""
+        from user.models import CustomObstacle
+        from user.services.membership_access import assert_custom_obstacle_capacity
+
+        self.profile.is_premium = True
+        self.profile.membership_plan = self.premium_plan
+        self.profile.premium_expire_date = timezone.now() + timezone.timedelta(days=30)
+        self.profile.storage_limit = self.premium_plan.storage_limit
+        self.profile.save()
+        for index in range(60):
+            CustomObstacle.objects.create(
+                user=self.user,
+                name=f"高级障碍{index}",
+                obstacle_data={"type": "vertical", "poles": [], "width": 1, "height": 1},
+            )
+
+        snapshot = assert_custom_obstacle_capacity(self.user)
+
+        self.assertTrue(snapshot.custom_obstacle_unlimited)
+        self.assertIsNone(snapshot.custom_obstacle_limit)
+
+
 class MembershipDowngradeActivationTest(TestCase):
     """会员降级到期生效回归测试"""
 

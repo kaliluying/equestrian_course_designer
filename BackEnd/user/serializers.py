@@ -348,18 +348,6 @@ class CustomObstacleSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """创建自定义障碍物"""
         user = self.context['request'].user
-        # 从会员计划中获取自定义障碍物数量限制
-        max_obstacles = 10  # 默认限制（免费用户）
-        if hasattr(user, 'profile') and user.profile.membership_plan:
-            plan_limit = user.profile.membership_plan.custom_obstacle_limit
-            if plan_limit is not None:
-                max_obstacles = plan_limit
-            # null 表示无限制，不检查
-
-        current_count = CustomObstacle.objects.filter(user=user).count()
-        if max_obstacles is not None and current_count >= max_obstacles:
-            raise serializers.ValidationError(
-                f"您已达到自定义障碍物的最大数量限制: {max_obstacles}")
 
         # 检查障碍物名称是否重复
         if CustomObstacle.objects.filter(name=validated_data['name'], user=user).exists():

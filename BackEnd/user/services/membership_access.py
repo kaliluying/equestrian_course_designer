@@ -133,3 +133,27 @@ def assert_design_capacity(user: User) -> EntitlementSnapshot:
             },
         )
     return snapshot
+
+
+
+def assert_custom_obstacle_capacity(user: User) -> EntitlementSnapshot:
+    """检查用户是否还能创建自定义障碍。"""
+    snapshot = get_entitlements(user)
+    if snapshot.custom_obstacle_unlimited:
+        return snapshot
+    if (
+        snapshot.custom_obstacle_limit is not None
+        and snapshot.custom_obstacle_count >= snapshot.custom_obstacle_limit
+    ):
+        raise MembershipAccessError(
+            f"您已达到自定义障碍物的最大数量限制: {snapshot.custom_obstacle_limit}",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            data={
+                "is_limit_reached": True,
+                "current_count": snapshot.custom_obstacle_count,
+                "limit": snapshot.custom_obstacle_limit,
+                "plan_code": snapshot.plan_code,
+                "is_premium_active": snapshot.is_premium_active,
+            },
+        )
+    return snapshot
