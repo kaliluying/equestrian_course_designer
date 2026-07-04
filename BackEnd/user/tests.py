@@ -369,6 +369,30 @@ class MembershipAccessServiceTest(TestCase):
         self.assertIsNone(self.profile.pending_membership_plan)
 
 
+    def test_assert_design_capacity_raises_unified_error_when_limit_reached(self):
+        """设计数量达到额度时应抛出统一容量错误"""
+        from user.services.membership_access import (
+            MembershipAccessError,
+            assert_design_capacity,
+        )
+
+        self.profile.is_premium = False
+        self.profile.membership_plan = self.free_plan
+        self.profile.storage_limit = self.free_plan.storage_limit
+        self.profile.save()
+        for index in range(5):
+            Design.objects.create(author=self.user, title=f"设计{index}")
+
+        with self.assertRaises(MembershipAccessError) as context:
+            assert_design_capacity(self.user)
+
+        self.assertEqual(context.exception.status_code, 403)
+        self.assertTrue(context.exception.data["is_limit_reached"])
+        self.assertEqual(context.exception.data["current_count"], 5)
+        self.assertEqual(context.exception.data["limit"], 5)
+        self.assertEqual(context.exception.data["plan_code"], "free")
+
+
 class MembershipDowngradeActivationTest(TestCase):
     """会员降级到期生效回归测试"""
 

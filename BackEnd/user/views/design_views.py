@@ -24,6 +24,7 @@ from ..serializers import (
 )
 from ..utils import get_absolute_media_url, success_response, error_response
 from .user_views import check_and_update_membership
+from ..services.membership_access import MembershipAccessError, assert_design_capacity
 
 logger = logging.getLogger(__name__)
 
@@ -281,30 +282,10 @@ class DesignViewSet(viewsets.ModelViewSet):
         """创建设计前检查存储限制"""
         user = request.user
 
-        check_and_update_membership(user)
-
         try:
-            profile = user.profile
-        except UserProfile.DoesNotExist:
-            profile = UserProfile.objects.create(user=user)
-
-        # 获取用户的设计数量
-        user_designs_count = Design.objects.filter(author=user).count()
-
-        # 检查是否超出存储限制
-        storage_limit = profile.get_storage_limit()
-        if user_designs_count >= storage_limit:
-            return error_response(
-                f"您已达到存储限制（{storage_limit}个设计）。升级为会员可获得更多存储空间！",
-                status.HTTP_403_FORBIDDEN,
-                {
-                    "is_limit_reached": True,
-                    "current_count": user_designs_count,
-                    "limit": storage_limit,
-                    "is_premium": profile.is_premium,
-                    "is_premium_active": profile.is_premium_active(),
-                },
-            )
+            assert_design_capacity(user)
+        except MembershipAccessError as exc:
+            return error_response(exc.message, exc.status_code, exc.data)
 
         # 继续正常的创建流程
         return super().create(request, *args, **kwargs)

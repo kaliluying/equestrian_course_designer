@@ -115,3 +115,21 @@ def get_entitlements(user: User) -> EntitlementSnapshot:
         can_collaborate=can_collaborate,
         pending_plan=_plan_summary(profile.pending_membership_plan),
     )
+
+
+
+def assert_design_capacity(user: User) -> EntitlementSnapshot:
+    """检查用户是否还能创建设计。"""
+    snapshot = get_entitlements(user)
+    if snapshot.design_count >= snapshot.design_limit:
+        raise MembershipAccessError(
+            f"您已达到存储限制（{snapshot.design_limit}个设计）。升级为会员可获得更多存储空间！",
+            data={
+                "is_limit_reached": True,
+                "current_count": snapshot.design_count,
+                "limit": snapshot.design_limit,
+                "plan_code": snapshot.plan_code,
+                "is_premium_active": snapshot.is_premium_active,
+            },
+        )
+    return snapshot
