@@ -296,6 +296,53 @@ class MembershipPlan(models.Model):
         ordering = ['monthly_price']
 
 
+class CourseTemplate(models.Model):
+    """路线模板模型，支持官方模板和用户公开模板市场。"""
+
+    DIFFICULTY_CHOICES = (
+        ('easy', '初级'),
+        ('medium', '中级'),
+        ('hard', '高级'),
+    )
+
+    title = models.CharField(max_length=120, verbose_name='模板标题')
+    description = models.TextField(blank=True, null=True, verbose_name='模板描述')
+    difficulty = models.CharField(max_length=20, choices=DIFFICULTY_CHOICES, default='medium', verbose_name='难度')
+    field_width = models.PositiveIntegerField(default=90, verbose_name='场地宽度')
+    field_height = models.PositiveIntegerField(default=60, verbose_name='场地高度')
+    obstacle_count = models.PositiveIntegerField(default=0, verbose_name='障碍数量')
+    course_data = models.JSONField(default=dict, verbose_name='路线数据')
+    cover_image = models.ImageField(upload_to='templates/covers', blank=True, null=True, verbose_name='封面图')
+    is_public = models.BooleanField(default=True, verbose_name='是否公开')
+    is_official = models.BooleanField(default=False, verbose_name='是否官方')
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='course_templates', verbose_name='作者')
+    copy_count = models.PositiveIntegerField(default=0, verbose_name='复制次数')
+    favorite_count = models.PositiveIntegerField(default=0, verbose_name='收藏次数')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    def __str__(self):
+        return self.title
+
+    class Meta:
+        verbose_name = '路线模板'
+        verbose_name_plural = '路线模板'
+        ordering = ['-is_official', '-copy_count', '-created_at']
+
+
+class CourseTemplateFavorite(models.Model):
+    """路线模板收藏记录。"""
+
+    template = models.ForeignKey(CourseTemplate, on_delete=models.CASCADE, related_name='favorites', verbose_name='模板')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='favorite_templates', verbose_name='用户')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+
+    class Meta:
+        verbose_name = '路线模板收藏'
+        verbose_name_plural = '路线模板收藏'
+        unique_together = ('template', 'user')
+
+
 # 添加用户资料模型
 class UserProfile(models.Model):
     """用户资料模型，扩展Django内置的User模型"""

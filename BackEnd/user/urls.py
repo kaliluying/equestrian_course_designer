@@ -20,12 +20,14 @@ from .views import (
 from .share_link_view import ShareLinkView
 from .views import CookieTokenRefreshView
 from . import ai_views
+from .views.template_views import CourseTemplateViewSet
 
 # 创建路由器并注册视图集
 router = DefaultRouter()
 router.register(r"designs", DesignViewSet)
 router.register(r"users", UserViewSet)
 router.register(r"obstacles", CustomObstacleViewSet, basename="obstacle")
+router.register(r"templates", CourseTemplateViewSet, basename="template")
 
 urlpatterns = [
     # CSRF令牌

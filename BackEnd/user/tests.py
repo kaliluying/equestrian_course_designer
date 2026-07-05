@@ -1201,6 +1201,122 @@ class DesignVersionHistoryAPITest(TestCase):
         self.assertEqual(versions.last().version_number, 56)
 
 
+class CourseTemplateMarketAPITest(TestCase):
+    """路线模板库与公开模板市场测试"""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="template_user",
+            email="template@example.com",
+            password="Password123",
+        )
+        self.other_user = User.objects.create_user(
+            username="template_other",
+            email="template_other@example.com",
+            password="Password123",
+        )
+        UserProfile.objects.get_or_create(user=self.user)
+        UserProfile.objects.get_or_create(user=self.other_user)
+        self.client.force_authenticate(user=self.user)
+
+    def _template_payload(self, title="标准训练模板", is_public=True, is_official=False):
+        return {
+            "title": title,
+            "description": "适合标准训练的路线模板",
+            "difficulty": "medium",
+            "field_width": 90,
+            "field_height": 60,
+            "obstacle_count": 8,
+            "course_data": {
+                "obstacles": [
+                    {"id": "obs-1", "number": "1", "type": "SINGLE", "position": {"x": 20, "y": 20}, "poles": [{"height": 1.1, "width": 3.5}]}
+                ]
+            },
+            "is_public": is_public,
+            "is_official": is_official,
+        }
+
+    def test_create_and_list_public_template(self):
+        """用户可发布公开模板，模板市场可按难度筛选"""
+        response = self.client.post("/user/templates/", data=self._template_payload(), format="json")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["title"], "标准训练模板")
+
+        list_response = self.client.get("/user/templates/?difficulty=medium")
+        self.assertEqual(list_response.status_code, 200)
+        data = list_response.json()
+        results = data.get("results", data)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["difficulty"], "medium")
+
+    def test_private_template_is_not_visible_to_other_users(self):
+        """私有模板不能被其他用户访问"""
+        create_response = self.client.post(
+            "/user/templates/",
+            data=self._template_payload(title="私有模板", is_public=False),
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        template_id = create_response.json()["id"]
+
+        self.client.force_authenticate(user=self.other_user)
+        detail_response = self.client.get(f"/user/templates/{template_id}/")
+        self.assertEqual(detail_response.status_code, 404)
+
+    def test_create_design_from_template(self):
+        """用户可从模板复制为新设计"""
+        create_response = self.client.post(
+            "/user/templates/",
+            data=self._template_payload(title="复制模板"),
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        template_id = create_response.json()["id"]
+
+        copy_response = self.client.post(f"/user/templates/{template_id}/create-design/")
+
+        self.assertEqual(copy_response.status_code, 201)
+        self.assertIn("复制模板", copy_response.json()["title"])
+        self.assertEqual(copy_response.json()["template_id"], template_id)
+
+    def test_template_favorite_and_copy_count(self):
+        """模板支持收藏并统计复制次数"""
+        create_response = self.client.post(
+            "/user/templates/",
+            data=self._template_payload(title="收藏模板"),
+            format="json",
+        )
+        template_id = create_response.json()["id"]
+
+        favorite_response = self.client.post(f"/user/templates/{template_id}/favorite/")
+        self.assertEqual(favorite_response.status_code, 200)
+        self.assertTrue(favorite_response.json()["is_favorited"])
+
+        self.client.post(f"/user/templates/{template_id}/create-design/")
+        detail_response = self.client.get(f"/user/templates/{template_id}/")
+        self.assertEqual(detail_response.json()["copy_count"], 1)
+        self.assertTrue(detail_response.json()["is_favorited"])
+
+    def test_user_cannot_edit_other_users_template(self):
+        """用户不能编辑他人模板"""
+        create_response = self.client.post(
+            "/user/templates/",
+            data=self._template_payload(title="他人不可编辑模板"),
+            format="json",
+        )
+        template_id = create_response.json()["id"]
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.patch(
+            f"/user/templates/{template_id}/",
+            data={"title": "非法编辑"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+
 class MembershipPlanCommandTest(TestCase):
     """会员计划初始化命令测试"""
 

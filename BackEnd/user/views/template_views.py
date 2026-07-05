@@ -1,0 +1,101 @@
+"""路线模板库与公开模板市场视图。"""
+
+from django.db.models import F, Q
+from django.core.files.base import ContentFile
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from ..models import CourseTemplate, CourseTemplateFavorite, Design
+from ..serializers import CourseTemplateSerializer, DesignSerializer
+from ..utils import error_response
+
+
+class CourseTemplateViewSet(viewsets.ModelViewSet):
+    """路线模板视图集。"""
+
+    serializer_class = CourseTemplateSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = CourseTemplate.objects.filter(Q(is_public=True) | Q(author=user)).select_related('author')
+        difficulty = self.request.query_params.get('difficulty')
+        obstacle_count = self.request.query_params.get('obstacle_count')
+        field_width = self.request.query_params.get('field_width')
+        field_height = self.request.query_params.get('field_height')
+        search = self.request.query_params.get('search')
+        ordering = self.request.query_params.get('ordering')
+
+        if difficulty:
+            queryset = queryset.filter(difficulty=difficulty)
+        if obstacle_count:
+            queryset = queryset.filter(obstacle_count=obstacle_count)
+        if field_width:
+            queryset = queryset.filter(field_width=field_width)
+        if field_height:
+            queryset = queryset.filter(field_height=field_height)
+        if search:
+            queryset = queryset.filter(Q(title__icontains=search) | Q(description__icontains=search))
+        if ordering in {'latest', '-created_at'}:
+            queryset = queryset.order_by('-created_at')
+        elif ordering in {'popular', 'copy_count', '-copy_count'}:
+            queryset = queryset.order_by('-copy_count', '-favorite_count', '-created_at')
+        return queryset
+
+    def get_object(self):
+        obj = super().get_object()
+        if not obj.is_public and obj.author_id != self.request.user.id:
+            from django.http import Http404
+            raise Http404
+        return obj
+
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user)
+
+    def perform_update(self, serializer):
+        template = self.get_object()
+        if template.author_id != self.request.user.id:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('您无权编辑此模板')
+        serializer.save(author=template.author)
+
+    def destroy(self, request, *args, **kwargs):
+        template = self.get_object()
+        if template.author_id != request.user.id:
+            return error_response('您无权删除此模板', status.HTTP_403_FORBIDDEN)
+        return super().destroy(request, *args, **kwargs)
+
+    @action(detail=True, methods=['post'], url_path='favorite')
+    def favorite(self, request, pk=None):
+        template = self.get_object()
+        favorite, created = CourseTemplateFavorite.objects.get_or_create(template=template, user=request.user)
+        if not created:
+            favorite.delete()
+            CourseTemplate.objects.filter(id=template.id, favorite_count__gt=0).update(favorite_count=F('favorite_count') - 1)
+            is_favorited = False
+        else:
+            CourseTemplate.objects.filter(id=template.id).update(favorite_count=F('favorite_count') + 1)
+            is_favorited = True
+        template.refresh_from_db()
+        return Response({'is_favorited': is_favorited, 'favorite_count': template.favorite_count})
+
+    @action(detail=True, methods=['post'], url_path='create-design')
+    def create_design(self, request, pk=None):
+        template = self.get_object()
+        design = Design.objects.create(
+            title=f"{template.title} 设计",
+            description=template.description,
+            author=request.user,
+            is_shared=False,
+        )
+        design.download.save(
+            'design.json',
+            ContentFile(__import__('json').dumps(template.course_data, ensure_ascii=False).encode('utf-8')),
+            save=True,
+        )
+        CourseTemplate.objects.filter(id=template.id).update(copy_count=F('copy_count') + 1)
+        data = DesignSerializer(design, context={'request': request}).data
+        data['template_id'] = template.id
+        return Response(data, status=status.HTTP_201_CREATED)

@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
-from .models import Design, DesignLike, DesignVersion, UserProfile, MembershipPlan, CustomObstacle, MembershipOrder
+from .models import CourseTemplate, CourseTemplateFavorite, Design, DesignLike, DesignVersion, UserProfile, MembershipPlan, CustomObstacle, MembershipOrder
 from .utils import get_absolute_media_url
 
 
@@ -374,6 +374,36 @@ class CustomObstacleSerializer(serializers.ModelSerializer):
 
         validated_data['user'] = user
         return super().create(validated_data)
+
+
+class CourseTemplateSerializer(serializers.ModelSerializer):
+    """路线模板序列化器。"""
+    author_username = serializers.SerializerMethodField()
+    is_favorited = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CourseTemplate
+        fields = (
+            'id', 'title', 'description', 'difficulty', 'field_width', 'field_height',
+            'obstacle_count', 'course_data', 'cover_image', 'is_public', 'is_official',
+            'author', 'author_username', 'copy_count', 'favorite_count', 'is_favorited',
+            'created_at', 'updated_at'
+        )
+        read_only_fields = ('author', 'copy_count', 'favorite_count', 'created_at', 'updated_at')
+
+    def get_author_username(self, obj) -> str | None:
+        return obj.author.username if obj.author else None
+
+    def get_is_favorited(self, obj) -> bool:
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return CourseTemplateFavorite.objects.filter(template=obj, user=request.user).exists()
+        return False
+
+    def validate_course_data(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError('路线数据必须是对象')
+        return value
 
 
 # 会员订单序列化器
