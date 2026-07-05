@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import axios from 'axios'
 import { ref } from 'vue'
-import type { LoginForm, RegisterForm } from '@/types/user'
+import type { EntitlementSnapshot, LoginForm, RegisterForm } from '@/types/user'
 import { login, logout as logoutApi, register } from '@/api/user'
 import type { Router } from 'vue-router'
 
@@ -18,6 +18,7 @@ interface User {
   is_premium_active?: boolean
   membership_plan?: MembershipPlan | null
   design_storage_limit?: number
+  entitlements?: EntitlementSnapshot | null
 }
 
 export const useUserStore = defineStore('user', () => {
@@ -148,6 +149,7 @@ export const useUserStore = defineStore('user', () => {
         is_premium_active?: boolean
         membership_plan?: MembershipPlan | null
         design_storage_limit?: number
+        entitlements?: EntitlementSnapshot | null
       }
       const response = (await getUserProfile()) as UserProfileResponse
 
@@ -157,7 +159,8 @@ export const useUserStore = defineStore('user', () => {
           ...currentUser.value,
           is_premium_active: response.is_premium_active,
           membership_plan: response.membership_plan || null,
-          design_storage_limit: response.design_storage_limit || 5,
+          design_storage_limit: response.design_storage_limit || response.entitlements?.design_limit || 5,
+          entitlements: response.entitlements || null,
         }
 
         // 更新本地存储
