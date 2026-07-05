@@ -6,6 +6,7 @@ that allow anonymous users to join collaboration sessions via share links.
 """
 
 from datetime import timedelta
+import hashlib
 import logging
 
 from django.conf import settings
@@ -42,11 +43,18 @@ class ShareLinkView(APIView):
                 )
                 return error_response("只有设计作者才能生成分享链接", status.HTTP_403_FORBIDDEN)
 
-            ttl_seconds = getattr(settings, "COLLAB_SHARE_TOKEN_TTL_SECONDS", 3600)
+            ttl_seconds = int(request.data.get("expires_in_seconds") or getattr(settings, "COLLAB_SHARE_TOKEN_TTL_SECONDS", 3600))
+            role = request.data.get("role") or "editor"
+            if role not in {"editor", "viewer", "commenter"}:
+                role = "editor"
+            password = request.data.get("password") or ""
+            password_hash = hashlib.sha256(password.encode("utf-8")).hexdigest() if password else ""
             expires_at = timezone.now() + timedelta(seconds=ttl_seconds)
             payload = {
                 "design_id": design_id,
                 "scope": "collaboration:join",
+                "role": role,
+                "password_hash": password_hash,
                 "exp": int(expires_at.timestamp()),
             }
             share_token = signing.dumps(payload, salt="collab-share")
@@ -62,14 +70,19 @@ class ShareLinkView(APIView):
                 f"用户 {request.user.username} 生成了设计 {design_id} 的分享链接，过期时间: {expires_at.isoformat()}"
             )
 
-            return success_response(
-                "分享链接已生成",
+            return Response(
                 {
-                    "shareUrl": share_url,
-                    "shareToken": share_token,
-                    "expiresAt": expires_at.isoformat(),
-                    "ttlSeconds": ttl_seconds,
-                },
+                    "success": True,
+                    "message": "分享链接已生成",
+                    "data": {
+                        "shareUrl": share_url,
+                        "shareToken": share_token,
+                        "expiresAt": expires_at.isoformat(),
+                        "ttlSeconds": ttl_seconds,
+                        "role": role,
+                        "passwordProtected": bool(password),
+                    },
+                }
             )
         except Http404:
             return error_response("设计不存在", status.HTTP_404_NOT_FOUND)

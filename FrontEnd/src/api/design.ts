@@ -253,3 +253,81 @@ export const updateDesignVersion = async (
 ): Promise<DesignVersion> => {
   return request.patch<DesignVersion>(`/user/designs/${designId}/versions/${versionId}/`, data)
 }
+
+
+export interface DesignComment {
+  id: number
+  design: number
+  user: number
+  user_username: string | null
+  content: string
+  obstacle_id: string | null
+  x: number | null
+  y: number | null
+  is_resolved: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface CollaborationEvent {
+  id: number
+  design: number
+  user: number | null
+  user_username: string | null
+  event_type: string
+  object_id: string | null
+  payload: Record<string, unknown>
+  created_at: string
+}
+
+export interface ShareLinkOptions {
+  role?: 'editor' | 'viewer' | 'commenter'
+  expires_in_seconds?: number
+  password?: string
+}
+
+export interface ShareLinkResponse {
+  success: boolean
+  message: string
+  data: {
+    shareUrl: string
+    shareToken: string
+    expiresAt: string
+    ttlSeconds: number
+    role: 'editor' | 'viewer' | 'commenter'
+    passwordProtected: boolean
+  }
+}
+
+export const generateDesignShareLink = async (
+  designId: number | string,
+  options: ShareLinkOptions = {},
+): Promise<ShareLinkResponse> => {
+  return request.post<ShareLinkResponse>(`/user/designs/${designId}/share-link/`, options)
+}
+
+export const getDesignComments = async (designId: number | string): Promise<DesignComment[]> => {
+  return request.get<DesignComment[]>(`/user/designs/${designId}/comments/`)
+}
+
+export const createDesignComment = async (
+  designId: number | string,
+  data: { content: string; obstacle_id?: string | null; x?: number | null; y?: number | null },
+): Promise<DesignComment> => {
+  return request.post<DesignComment>(`/user/designs/${designId}/comments/`, data)
+}
+
+export const resolveDesignComment = async (
+  designId: number | string,
+  commentId: number,
+): Promise<DesignComment> => {
+  return request.post<DesignComment>(`/user/designs/${designId}/comments/${commentId}/resolve/`)
+}
+
+export const getCollaborationEvents = async (
+  designId: number | string,
+  userId?: number | string,
+): Promise<CollaborationEvent[]> => {
+  const query = userId ? `?user=${userId}` : ''
+  return request.get<CollaborationEvent[]>(`/user/designs/${designId}/collaboration-events/${query}`)
+}

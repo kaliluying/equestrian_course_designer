@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
-from .models import CourseTemplate, CourseTemplateFavorite, Design, DesignLike, DesignVersion, UserProfile, MembershipPlan, CustomObstacle, MembershipOrder
+from .models import CollaborationEvent, CollaborationRole, CourseTemplate, CourseTemplateFavorite, Design, DesignComment, DesignLike, DesignVersion, UserProfile, MembershipPlan, CustomObstacle, MembershipOrder
 from .utils import get_absolute_media_url
 
 
@@ -201,6 +201,43 @@ class DesignSerializer(serializers.ModelSerializer):
         ret['image'] = self.get_image_url(instance)
         ret['download'] = self.get_download_url(instance)
         return ret
+
+
+class DesignCommentSerializer(serializers.ModelSerializer):
+    """设计评论序列化器。"""
+    user_username = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DesignComment
+        fields = ('id', 'design', 'user', 'user_username', 'content', 'obstacle_id', 'x', 'y', 'is_resolved', 'created_at', 'updated_at')
+        read_only_fields = ('design', 'user', 'user_username', 'is_resolved', 'created_at', 'updated_at')
+
+    def get_user_username(self, obj):
+        return obj.user.username if obj.user else None
+
+
+class CollaborationEventSerializer(serializers.ModelSerializer):
+    """协作事件序列化器。"""
+    user_username = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CollaborationEvent
+        fields = ('id', 'design', 'user', 'user_username', 'event_type', 'object_id', 'payload', 'created_at')
+        read_only_fields = fields
+
+    def get_user_username(self, obj):
+        return obj.user.username if obj.user else None
+
+
+class CollaborationRoleSerializer(serializers.ModelSerializer):
+    """协作角色序列化器。"""
+    can_edit = serializers.BooleanField(read_only=True)
+    can_comment = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = CollaborationRole
+        fields = ('id', 'design', 'user', 'role', 'can_edit', 'can_comment', 'created_at', 'updated_at')
+        read_only_fields = ('created_at', 'updated_at')
 
 
 class DesignVersionSerializer(serializers.ModelSerializer):

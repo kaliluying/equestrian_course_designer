@@ -14,12 +14,16 @@ from rest_framework.response import Response
 from PIL import Image
 
 from ..models import (
+    CollaborationEvent,
     Design,
+    DesignComment,
     DesignLike,
     DesignVersion,
     UserProfile,
 )
 from ..serializers import (
+    CollaborationEventSerializer,
+    DesignCommentSerializer,
     DesignSerializer,
     DesignListSerializer,
     DesignVersionSerializer,
@@ -173,6 +177,56 @@ class DesignViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
+
+
+    @action(detail=True, methods=["get", "post"], url_path="comments")
+    def list_comments(self, request, pk=None):
+        """获取或创建设计评论。"""
+        design = self.get_object()
+        if request.method == "GET":
+            serializer = DesignCommentSerializer(DesignComment.objects.filter(design=design), many=True)
+            return Response(serializer.data)
+
+        serializer = DesignCommentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        comment = serializer.save(design=design, user=request.user)
+        CollaborationEvent.objects.create(
+            design=design,
+            user=request.user,
+            event_type="comment_created",
+            object_id=str(comment.id),
+            payload={"content": comment.content, "obstacle_id": comment.obstacle_id},
+        )
+        return Response(DesignCommentSerializer(comment).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path=r"comments/(?P<comment_id>[^/.]+)/resolve")
+    def resolve_comment(self, request, pk=None, comment_id=None):
+        """解决或取消解决设计评论。"""
+        design = self.get_object()
+        try:
+            comment = DesignComment.objects.get(id=comment_id, design=design)
+        except DesignComment.DoesNotExist:
+            return error_response("评论不存在", status.HTTP_404_NOT_FOUND)
+        comment.is_resolved = not comment.is_resolved
+        comment.save(update_fields=["is_resolved", "updated_at"])
+        CollaborationEvent.objects.create(
+            design=design,
+            user=request.user,
+            event_type="comment_resolved" if comment.is_resolved else "comment_unresolved",
+            object_id=str(comment.id),
+            payload={"is_resolved": comment.is_resolved},
+        )
+        return Response(DesignCommentSerializer(comment).data)
+
+    @action(detail=True, methods=["get"], url_path="collaboration-events")
+    def collaboration_events(self, request, pk=None):
+        """获取设计协作活动时间线。"""
+        design = self.get_object()
+        user_id = request.query_params.get("user")
+        events = CollaborationEvent.objects.filter(design=design).select_related("user")
+        if user_id:
+            events = events.filter(user_id=user_id)
+        return Response(CollaborationEventSerializer(events, many=True).data)
 
     @action(detail=True, methods=["get"], url_path="versions")
     def list_versions(self, request, pk=None):

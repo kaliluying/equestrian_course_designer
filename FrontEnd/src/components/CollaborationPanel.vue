@@ -22,6 +22,19 @@
       <!-- 邀请链接（只有所有者可见） -->
       <div v-if="isConnected && isCurrentUserOwner()" class="invite-section">
         <h4>邀请他人</h4>
+        <div class="invite-options">
+          <el-select v-model="inviteRole" size="small" style="width: 110px">
+            <el-option label="可编辑" value="editor" />
+            <el-option label="可评论" value="commenter" />
+            <el-option label="只读" value="viewer" />
+          </el-select>
+          <el-input v-model="invitePassword" size="small" placeholder="访问密码（可选）" show-password />
+          <el-select v-model="inviteTtl" size="small" style="width: 110px">
+            <el-option label="1小时" :value="3600" />
+            <el-option label="2小时" :value="7200" />
+            <el-option label="1天" :value="86400" />
+          </el-select>
+        </div>
         <div class="invite-link-container">
           <div class="invite-link-display">
             <span class="invite-link-text">{{ inviteLink }}</span>
@@ -71,6 +84,7 @@
           </div>
           <div class="collaborator-info">
             <span class="collaborator-name">{{ collaborator.username || '未知用户' }}</span>
+            <span class="collaborator-role">{{ roleLabel(collaborator.role) }}</span>
           </div>
           <div v-if="String(currentUser?.id) === collaborator.id" class="collaborator-badge">
             (我)
@@ -136,6 +150,42 @@
       </div>
     </div>
 
+    <!-- 评论标注 -->
+    <div v-if="isConnected" class="comments-section">
+      <div class="section-title-row">
+        <h4>画布评论</h4>
+        <el-button size="small" @click="loadCollaborationContext">刷新</el-button>
+      </div>
+      <div class="comment-input-row">
+        <el-input v-model="commentInput" placeholder="给当前设计添加评论..." size="small" @keyup.enter="sendComment" />
+        <el-button size="small" type="primary" :disabled="!commentInput.trim()" @click="sendComment">评论</el-button>
+      </div>
+      <div v-if="comments.length === 0" class="empty-mini">暂无评论</div>
+      <ul v-else class="comments-list">
+        <li v-for="comment in comments" :key="comment.id" :class="{ resolved: comment.is_resolved }">
+          <div>
+            <strong>{{ comment.user_username || '用户' }}</strong>
+            <span>{{ comment.content }}</span>
+          </div>
+          <el-button size="small" text @click="toggleResolveComment(comment)">
+            {{ comment.is_resolved ? '重新打开' : '解决' }}
+          </el-button>
+        </li>
+      </ul>
+    </div>
+
+    <!-- 协作历史 -->
+    <div v-if="isConnected" class="activity-section">
+      <h4>协作历史</h4>
+      <div v-if="collaborationEvents.length === 0" class="empty-mini">暂无活动</div>
+      <ul v-else class="activity-list">
+        <li v-for="event in collaborationEvents" :key="event.id">
+          <span>{{ formatEventType(event.event_type) }}</span>
+          <small>{{ event.user_username || '系统' }} · {{ formatDateTime(event.created_at) }}</small>
+        </li>
+      </ul>
+    </div>
+
     <!-- 连接错误提示 -->
     <div v-if="connectionStatus === ConnectionStatus.ERROR" class="connection-error">
       <el-alert title="连接错误" type="error" description="无法连接到协作服务器，请检查网络连接或后端服务是否正常运行。" show-icon :closable="false" />
@@ -151,6 +201,15 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useWebSocketStore, ConnectionStatus, MessageType, type CollaboratorInfo } from '@/stores/websocket'
 import { ElMessage } from 'element-plus'
+import {
+  createDesignComment,
+  generateDesignShareLink,
+  getCollaborationEvents,
+  getDesignComments,
+  resolveDesignComment,
+  type CollaborationEvent,
+  type DesignComment,
+} from '@/api/design'
 import { Document, Check, ChatDotRound, ChatLineRound } from '@element-plus/icons-vue'
 // 导入API配置
 import apiConfig from '@/config/api'
@@ -174,6 +233,13 @@ const session = ref(webSocketStore.session)
 const chatInput = ref('') // 添加聊天输入框的值
 const chatMessagesRef = ref<HTMLElement | null>(null) // 添加聊天消息容器引用
 const isChatExpanded = ref(false) // 聊天区域是否展开
+const inviteRole = ref<'editor' | 'viewer' | 'commenter'>('editor')
+const invitePassword = ref('')
+const inviteTtl = ref(3600)
+const generatedInviteLink = ref('')
+const comments = ref<DesignComment[]>([])
+const collaborationEvents = ref<CollaborationEvent[]>([])
+const commentInput = ref('')
 
 // 监听webSocketStore中的值变化并同步到本地ref
 watch(
@@ -353,34 +419,102 @@ onUnmounted(() => {
 
 // 邀请链接
 const inviteLink = computed(() => {
+  if (generatedInviteLink.value) return generatedInviteLink.value
   if (!props.designId) {
     console.error('设计ID不存在，无法生成邀请链接')
     return ''
   }
 
-  // 使用配置文件中的应用基础URL
   const baseUrl = apiConfig.appBaseUrl
-
-  // 构建URL
   try {
     const url = new URL(baseUrl)
     url.pathname = window.location.pathname
     url.searchParams.set('collaboration', 'true')
     url.searchParams.set('designId', props.designId)
-
-    const link = url.toString()
-    console.log('生成邀请链接:', link, '设计ID:', props.designId)
-    return link
+    url.searchParams.set('role', inviteRole.value)
+    return url.toString()
   } catch (error) {
     console.error('生成邀请链接失败:', error)
-    // 降级方案：使用字符串拼接
-    return `${baseUrl}${window.location.pathname}?collaboration=true&designId=${props.designId}`
+    return `${baseUrl}${window.location.pathname}?collaboration=true&designId=${props.designId}&role=${inviteRole.value}`
   }
 })
+
+
+const roleLabel = (role?: string) => {
+  const labels: Record<string, string> = {
+    owner: '所有者',
+    initiator: '发起者',
+    editor: '编辑者',
+    commenter: '评论者',
+    viewer: '查看者',
+    collaborator: '协作者',
+  }
+  return labels[role || 'collaborator'] || role || '协作者'
+}
+
+const formatEventType = (type: string) => {
+  const labels: Record<string, string> = {
+    move_obstacle: '移动障碍',
+    update_obstacle: '更新障碍',
+    add_obstacle: '新增障碍',
+    remove_obstacle: '删除障碍',
+    update_path: '更新路径',
+    comment_created: '新增评论',
+    comment_resolved: '解决评论',
+    comment_unresolved: '重新打开评论',
+  }
+  return labels[type] || type
+}
+
+const formatDateTime = (value: string) => new Date(value).toLocaleString('zh-CN')
+
+const loadCollaborationContext = async () => {
+  if (!props.designId || !userStore.currentUser) return
+  try {
+    const [commentList, eventList] = await Promise.all([
+      getDesignComments(props.designId),
+      getCollaborationEvents(props.designId),
+    ])
+    comments.value = commentList
+    collaborationEvents.value = eventList
+  } catch (error) {
+    console.error('加载协作上下文失败:', error)
+  }
+}
+
+const sendComment = async () => {
+  if (!commentInput.value.trim()) return
+  try {
+    const comment = await createDesignComment(props.designId, {
+      content: commentInput.value.trim(),
+    })
+    comments.value.unshift(comment)
+    commentInput.value = ''
+    await loadCollaborationContext()
+    ElMessage.success('评论已添加')
+  } catch (error) {
+    console.error('添加评论失败:', error)
+    ElMessage.error('添加评论失败')
+  }
+}
+
+const toggleResolveComment = async (comment: DesignComment) => {
+  const updated = await resolveDesignComment(props.designId, comment.id)
+  const index = comments.value.findIndex((item) => item.id === updated.id)
+  if (index >= 0) comments.value[index] = updated
+  await loadCollaborationContext()
+}
 
 // 复制邀请链接
 const copyInviteLink = async () => {
   try {
+    const response = await generateDesignShareLink(props.designId, {
+      role: inviteRole.value,
+      password: invitePassword.value || undefined,
+      expires_in_seconds: inviteTtl.value,
+    })
+    generatedInviteLink.value = response.data.shareUrl
+
     // 尝试使用 Clipboard API
     if (navigator.clipboard && navigator.clipboard.writeText) {
       await navigator.clipboard.writeText(inviteLink.value)
@@ -534,6 +668,7 @@ onMounted(() => {
       if (newStatus === ConnectionStatus.CONNECTED) {
         console.log('尝试获取会话信息')
         tryGetSessionInfo()
+        loadCollaborationContext()
       }
 
       // 强制更新计算属性
@@ -1493,5 +1628,58 @@ watch(chatMessages, () => {
   font-size: 14px;
   color: #909399;
   margin-top: 10px;
+}
+
+.invite-options,
+.comment-input-row,
+.section-title-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.section-title-row {
+  justify-content: space-between;
+}
+.collaborator-role {
+  display: block;
+  margin-top: 2px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.comments-section,
+.activity-section {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+.comments-list,
+.activity-list {
+  padding: 0;
+  margin: 8px 0 0;
+  list-style: none;
+}
+.comments-list li,
+.activity-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--el-border-color-lighter);
+}
+.comments-list li.resolved span {
+  text-decoration: line-through;
+  color: var(--el-text-color-secondary);
+}
+.comments-list span,
+.activity-list small {
+  display: block;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.empty-mini {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  padding: 8px 0;
 }
 </style>
