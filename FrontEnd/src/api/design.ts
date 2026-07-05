@@ -5,6 +5,7 @@ import type {
   SaveDesignRequest
 } from '@/types/design'
 import { request } from '@/utils/request'
+import type { PaginatedResponse } from '@/types/api'
 import { cachedRequest, invalidateCache } from '@/utils/apiCache'
 
 // 保存设计
@@ -54,14 +55,6 @@ export const saveDesign = async (data: SaveDesignRequest): Promise<DesignRespons
 // 获取设计列表
 export const getDesigns = async (): Promise<DesignResponse[]> => {
   return request.get<DesignResponse[]>('/user/designs/')
-}
-
-// 定义分页响应接口
-export interface PaginatedResponse<T> {
-  count: number
-  next: string | null
-  previous: string | null
-  results: T[]
 }
 
 // 获取用户自己的设计列表

@@ -1,6 +1,7 @@
 import { request } from '@/utils/request'
 import { AI_API } from '@/config/api'
 import { getApiErrorMessage } from '@/utils/apiErrorMessage'
+import type { ApiCodeResponse } from '@/types/api'
 import type {
   LiverpoolProperties,
   ObstacleType,
@@ -143,32 +144,32 @@ export interface PurchaseResponse {
 
 export const aiApi = {
   generate(data: AIGenerateRequest) {
-    return request.post<{ code: number; message: string; data: AIGenerateResponse }>(
+    return request.post<ApiCodeResponse<AIGenerateResponse>>(
       AI_API.generate,
       data
     )
   },
 
   getQuota() {
-    return request.get<{ code: number; data: AIQuotaInfo }>(AI_API.quota)
+    return request.get<ApiCodeResponse<AIQuotaInfo>>(AI_API.quota)
   },
 
   editCourse(data: AIEditCourseRequest) {
-    return request.post<{ code: number; message: string; data: AIEditCourseResponse }>(
+    return request.post<ApiCodeResponse<AIEditCourseResponse>>(
       AI_API.editCourse,
       data
     )
   },
 
   coachNotes(data: CoachNotesRequest) {
-    return request.post<{ code: number; message: string; data: CoachNotesResponse }>(
+    return request.post<ApiCodeResponse<CoachNotesResponse>>(
       AI_API.coachNotes,
       data
     )
   },
 
   purchase(data: PurchaseRequest) {
-    return request.post<{ code: number; message: string; data: PurchaseResponse }>(
+    return request.post<ApiCodeResponse<PurchaseResponse>>(
       AI_API.purchase,
       data
     )
@@ -176,7 +177,7 @@ export const aiApi = {
 
   getHistory(limit?: number) {
     const url = limit ? `${AI_API.history}?limit=${limit}` : AI_API.history
-    return request.get<{ code: number; data: { histories: AIHistoryItem[] } }>(url)
+    return request.get<ApiCodeResponse<{ histories: AIHistoryItem[] }>>(url)
   }
 }
 

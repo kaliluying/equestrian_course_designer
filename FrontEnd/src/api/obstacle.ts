@@ -1,4 +1,6 @@
 import { request } from '@/utils/request'
+import type { PaginatedResponse } from '@/types/api'
+export type { PaginatedResponse } from '@/types/api'
 import { cachedRequest, invalidateCache } from '@/utils/apiCache'
 import { CUSTOM_OBSTACLE_API } from '@/config/api'
 
@@ -103,14 +105,6 @@ export interface ObstacleCountInfo {
   is_premium: boolean
   is_unlimited?: boolean
   plan_code?: string
-}
-
-// 分页响应接口
-export interface PaginatedResponse<T> {
-  count: number
-  next: string | null
-  previous: string | null
-  results: T[]
 }
 
 /**

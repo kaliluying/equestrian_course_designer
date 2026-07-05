@@ -1,4 +1,5 @@
 import { request } from '@/utils/request'
+import type { PaginatedResponse } from '@/types/api'
 
 export interface CourseTemplate {
   id: number
@@ -30,12 +31,7 @@ export interface TemplateListParams {
   ordering?: 'latest' | 'popular'
 }
 
-export interface PaginatedTemplateResponse {
-  count: number
-  next: string | null
-  previous: string | null
-  results: CourseTemplate[]
-}
+export type PaginatedTemplateResponse = PaginatedResponse<CourseTemplate>
 
 const buildQuery = (params: TemplateListParams = {}) => {
   const search = new URLSearchParams()

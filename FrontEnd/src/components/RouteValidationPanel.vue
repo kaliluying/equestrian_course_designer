@@ -172,14 +172,18 @@ const generateCoachNotes = async () => {
       },
       validation: result.value,
     })
-    coachNotes.value = response.data
+    if (!response.data) {
+      throw new Error('未返回教练说明')
+    }
+    const notes = response.data
+    coachNotes.value = notes
     ElMessageBox.alert(
       [
-        `训练目标：${response.data.training_goals.join('；')}`,
-        `节奏建议：${response.data.rhythm_advice.join('；')}`,
-        `常见错误：${response.data.common_mistakes.join('；')}`,
-        `教练口令：${response.data.coach_commands.join('；')}`,
-        `风险重点：${response.data.risk_focus.join('；')}`,
+        `训练目标：${notes.training_goals.join('；')}`,
+        `节奏建议：${notes.rhythm_advice.join('；')}`,
+        `常见错误：${notes.common_mistakes.join('；')}`,
+        `教练口令：${notes.coach_commands.join('；')}`,
+        `风险重点：${notes.risk_focus.join('；')}`,
       ].join('\n\n'),
       '教练说明',
     )
