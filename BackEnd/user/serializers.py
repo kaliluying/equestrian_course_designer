@@ -215,6 +215,7 @@ class DesignVersionSerializer(serializers.ModelSerializer):
             'source',
             'title',
             'description',
+            'remark',
             'course_data',
             'created_at',
         )

@@ -140,6 +140,9 @@ const request = {
   put: <T>(url: string, data?: unknown, config: AxiosRequestConfig = {}) => {
     return axiosInstance.put<T, T>(url, data, config)
   },
+  patch: <T>(url: string, data?: unknown, config: AxiosRequestConfig = {}) => {
+    return axiosInstance.patch<T, T>(url, data, config)
+  },
   delete: <T>(url: string, config: AxiosRequestConfig = {}) => {
     return axiosInstance.delete<T, T>(url, config)
   },

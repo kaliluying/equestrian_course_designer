@@ -182,14 +182,22 @@ class DesignViewSet(viewsets.ModelViewSet):
         serializer = DesignVersionSerializer(versions, many=True)
         return Response(serializer.data)
 
-    @action(detail=True, methods=["get"], url_path=r"versions/(?P<version_id>[^/.]+)")
+    @action(detail=True, methods=["get", "patch"], url_path=r"versions/(?P<version_id>[^/.]+)")
     def retrieve_version(self, request, pk=None, version_id=None):
-        """获取设计版本详情。"""
+        """获取或更新设计版本详情。"""
         design = self.get_object()
         try:
             version = DesignVersion.objects.get(id=version_id, design=design, author=request.user)
         except DesignVersion.DoesNotExist:
             return error_response("版本不存在", status.HTTP_404_NOT_FOUND)
+
+        if request.method == "PATCH":
+            if "title" in request.data:
+                version.title = request.data.get("title") or version.title
+            if "remark" in request.data:
+                version.remark = request.data.get("remark")
+            version.save(update_fields=["title", "remark"])
+
         return Response(DesignVersionSerializer(version).data)
 
     @action(detail=True, methods=["post"], url_path=r"versions/(?P<version_id>[^/.]+)/restore")

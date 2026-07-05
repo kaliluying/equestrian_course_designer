@@ -1130,6 +1130,77 @@ class DesignVersionHistoryAPITest(TestCase):
         self.assertTrue(Design.objects.filter(id=new_design_id, title__contains="历史副本").exists())
 
 
+    def test_update_version_remark_and_title(self):
+        """版本详情应支持备注和标题更新"""
+        design = self._create_design(title="备注设计")
+        from user.models import DesignVersion
+
+        version = DesignVersion.objects.create(
+            design=design,
+            author=self.user,
+            version_number=1,
+            source="manual",
+            title="旧版本名",
+            description="历史描述",
+            course_data={"obstacles": []},
+        )
+
+        response = self.client.patch(
+            f"/user/designs/{design.id}/versions/{version.id}/",
+            data={"title": "新版本名", "remark": "赛前调整版本"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        version.refresh_from_db()
+        self.assertEqual(version.title, "新版本名")
+        self.assertEqual(version.remark, "赛前调整版本")
+        self.assertEqual(response.json()["remark"], "赛前调整版本")
+
+    def test_version_detail_is_private_to_owner(self):
+        """其他用户不能访问版本详情"""
+        design = self._create_design(title="私有版本设计")
+        from user.models import DesignVersion
+
+        version = DesignVersion.objects.create(
+            design=design,
+            author=self.user,
+            version_number=1,
+            source="manual",
+            title="私有版本",
+            course_data={"obstacles": []},
+        )
+        other = User.objects.create_user("other_version_user", "other@example.com", "Password123")
+        self.client.force_authenticate(user=other)
+
+        response = self.client.get(f"/user/designs/{design.id}/versions/{version.id}/")
+
+        self.assertIn(response.status_code, [403, 404])
+
+    def test_version_retention_keeps_latest_50_versions(self):
+        """保存新版本时应只保留最近 50 个版本"""
+        design = self._create_design(title="保留策略设计")
+        from user.models import DesignVersion
+        from user.services.design_version import create_design_version
+
+        for index in range(55):
+            DesignVersion.objects.create(
+                design=design,
+                author=self.user,
+                version_number=index + 1,
+                source="manual",
+                title=f"版本{index + 1}",
+                course_data={"index": index + 1},
+            )
+
+        create_design_version(design, source="manual")
+
+        versions = DesignVersion.objects.filter(design=design).order_by("version_number")
+        self.assertEqual(versions.count(), 50)
+        self.assertEqual(versions.first().version_number, 7)
+        self.assertEqual(versions.last().version_number, 56)
+
+
 class MembershipPlanCommandTest(TestCase):
     """会员计划初始化命令测试"""
 

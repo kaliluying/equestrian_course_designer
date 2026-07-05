@@ -3,7 +3,7 @@
  * 从 App.vue 提取的自动保存和恢复功能
  */
 import { computed, ref, nextTick } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute } from 'vue-router'
 import { useCourseStore } from '@/stores/course'
 
@@ -76,6 +76,10 @@ export function useAutosave() {
 
     if (hoursDiff <= 24) {
       savedTimestamp.value = timestamp
+      const conflict = courseStore.getAutosaveConflictState()
+      if (conflict?.hasConflict) {
+        ElMessage.warning('检测到本地草稿比云端版本更新，请选择恢复方式')
+      }
       showRestoreDialog.value = true
     } else {
       courseStore.clearAutosave()
@@ -89,6 +93,22 @@ export function useAutosave() {
       ElMessage.success('已恢复未完成的路线设计')
     } else {
       ElMessage.error('恢复失败，可能是数据已损坏')
+    }
+    showRestoreDialog.value = false
+  }
+
+  const useServerAutosave = () => {
+    courseStore.keepServerAutosaveVersion()
+    showRestoreDialog.value = false
+    ElMessage.info('已使用云端版本')
+  }
+
+  const saveAutosaveAsNewDesign = async () => {
+    const success = courseStore.saveAutosaveAsNewDesign()
+    if (success) {
+      await ElMessageBox.alert('已将本地草稿恢复为一个新的未保存设计，请点击保存生成云端记录。', '另存为新设计')
+    } else {
+      ElMessage.error('另存为新设计失败')
     }
     showRestoreDialog.value = false
   }
@@ -148,6 +168,8 @@ export function useAutosave() {
     checkAutosave,
     restoreAutosave,
     discardAutosave,
+    useServerAutosave,
+    saveAutosaveAsNewDesign,
     initAutosaveCheck,
   }
 }

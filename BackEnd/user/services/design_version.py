@@ -6,6 +6,8 @@ from django.core.files.base import ContentFile
 
 from user.models import Design, DesignVersion
 
+MAX_VERSIONS_PER_DESIGN = 50
+
 
 def _read_course_data(design: Design):
     """从设计 JSON 文件中读取路线数据。"""
@@ -19,6 +21,17 @@ def _read_course_data(design: Design):
         return {}
 
 
+def _prune_old_versions(design: Design) -> None:
+    """只保留每个设计最近的版本快照。"""
+    version_ids_to_keep = list(
+        DesignVersion.objects.filter(design=design)
+        .order_by('-version_number')
+        .values_list('id', flat=True)[:MAX_VERSIONS_PER_DESIGN]
+    )
+    if version_ids_to_keep:
+        DesignVersion.objects.filter(design=design).exclude(id__in=version_ids_to_keep).delete()
+
+
 def _next_version_number(design: Design) -> int:
     latest = DesignVersion.objects.filter(design=design).order_by('-version_number').first()
     return 1 if latest is None else latest.version_number + 1
@@ -26,7 +39,7 @@ def _next_version_number(design: Design) -> int:
 
 def create_design_version(design: Design, source: str = 'manual') -> DesignVersion:
     """为当前设计创建版本快照。"""
-    return DesignVersion.objects.create(
+    version = DesignVersion.objects.create(
         design=design,
         author=design.author,
         version_number=_next_version_number(design),
@@ -35,6 +48,8 @@ def create_design_version(design: Design, source: str = 'manual') -> DesignVersi
         description=design.description,
         course_data=_read_course_data(design),
     )
+    _prune_old_versions(design)
+    return version
 
 
 def restore_design_version(design: Design, version: DesignVersion) -> DesignVersion:

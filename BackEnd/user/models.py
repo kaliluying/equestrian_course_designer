@@ -149,6 +149,7 @@ class DesignVersion(models.Model):
     )
     title = models.CharField(max_length=100, verbose_name='设计标题')
     description = models.TextField(blank=True, null=True, verbose_name='设计描述')
+    remark = models.TextField(blank=True, null=True, verbose_name='版本备注')
     course_data = models.JSONField(default=dict, verbose_name='路线数据')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
 

@@ -206,6 +206,7 @@ export interface DesignVersion {
   source: 'manual' | 'autosave' | 'ai' | 'restore'
   title: string
   description: string | null
+  remark?: string | null
   course_data: Record<string, unknown>
   created_at: string
 }
@@ -242,4 +243,13 @@ export const fixCourse = async (
   data: RouteValidationRequest,
 ): Promise<RouteFixResult> => {
   return request.post<RouteFixResult>('/user/designs/fix-course/', data)
+}
+
+
+export const updateDesignVersion = async (
+  designId: number,
+  versionId: number,
+  data: { title?: string; remark?: string | null },
+): Promise<DesignVersion> => {
+  return request.patch<DesignVersion>(`/user/designs/${designId}/versions/${versionId}/`, data)
 }

@@ -1505,6 +1505,11 @@ export const useCourseStore = defineStore('course', () => {
     }
   }
 
+  function quarantineCorruptAutosave(raw: string) {
+    const corruptKey = `autosave_corrupt:${Date.now()}`
+    localStorage.setItem(corruptKey, raw)
+  }
+
   function readAutosaveDraft() {
     const keys = getAutosaveKeys()
     const bucketCourse = localStorage.getItem(keys.courseKey)
@@ -1555,6 +1560,7 @@ export const useCourseStore = defineStore('course', () => {
           course_id: currentCourse.value.id,
           saved_at: savedAt,
           dirty: true,
+          server_updated_at: currentCourse.value.updatedAt,
           schema_version: AUTOSAVE_SCHEMA_VERSION,
         }))
         // 保留旧 key 兼容已有恢复流程和旧版本用户
@@ -1603,6 +1609,8 @@ export const useCourseStore = defineStore('course', () => {
 
         if (!parsedData || !parsedData.id || !Array.isArray(parsedData.obstacles)) {
           console.error('自动保存的数据格式无效')
+          quarantineCorruptAutosave(savedCourse)
+          clearAutosave()
           return false
         }
 
@@ -1671,6 +1679,7 @@ export const useCourseStore = defineStore('course', () => {
         return true
       } catch (error) {
         console.error('解析本地存储的JSON数据失败:', error)
+        quarantineCorruptAutosave(savedCourse)
         const keys = getAutosaveKeys()
         localStorage.removeItem(keys.courseKey)
         localStorage.removeItem(keys.timestampKey)
@@ -1696,6 +1705,44 @@ export const useCourseStore = defineStore('course', () => {
     localStorage.removeItem(keys.metaKey)
     localStorage.removeItem('autosaved_course')
     localStorage.removeItem('autosaved_timestamp')
+  }
+
+
+  function getAutosaveConflictState() {
+    const { savedCourse, savedTimestamp, keys } = readAutosaveDraft()
+    if (!savedCourse || !savedTimestamp) return null
+    try {
+      const draft = JSON.parse(savedCourse)
+      const metaRaw = localStorage.getItem(keys.metaKey)
+      const meta = metaRaw ? JSON.parse(metaRaw) : {}
+      const draftTime = new Date(savedTimestamp).getTime()
+      const serverTime = new Date(meta.server_updated_at || currentCourse.value.updatedAt || 0).getTime()
+      return {
+        hasConflict: draftTime > serverTime,
+        savedTimestamp,
+        serverUpdatedAt: meta.server_updated_at || currentCourse.value.updatedAt,
+        draft,
+      }
+    } catch {
+      quarantineCorruptAutosave(savedCourse)
+      clearAutosave()
+      return null
+    }
+  }
+
+  function keepServerAutosaveVersion() {
+    clearAutosave()
+  }
+
+  function saveAutosaveAsNewDesign() {
+    const restored = restoreFromLocalStorage(false)
+    if (restored) {
+      localStorage.removeItem('design_id_to_update')
+      currentCourse.value.id = uuidv4()
+      currentCourse.value.name = `${currentCourse.value.name || '马术路线设计'} 副本`
+      updateCourse()
+    }
+    return restored
   }
 
   /**
@@ -2341,6 +2388,9 @@ export const useCourseStore = defineStore('course', () => {
     updateCourse,
     saveToLocalStorage,
     readAutosaveDraft,
+    getAutosaveConflictState,
+    keepServerAutosaveVersion,
+    saveAutosaveAsNewDesign,
     restoreFromLocalStorage,
     clearAutosave,
     saveCourse,
