@@ -150,3 +150,35 @@ export const downloadDesign = async (
 export const deleteDesign = async (id: number): Promise<void> => {
   return request.delete<void>(`/user/designs/${id}/`)
 }
+
+
+export interface RouteValidationIssue {
+  code: string
+  severity: 'error' | 'warning' | 'info'
+  message: string
+  obstacle_ids: string[]
+  suggested_action: string
+  auto_fixable: boolean
+}
+
+export interface RouteValidationResult {
+  score: number
+  is_valid: boolean
+  issues: RouteValidationIssue[]
+  warnings: RouteValidationIssue[]
+  auto_fixed: string[]
+  summary: string
+}
+
+export interface RouteValidationRequest {
+  obstacles: unknown[]
+  field_width: number
+  field_height: number
+  difficulty?: 'easy' | 'medium' | 'hard'
+}
+
+export const validateCourse = async (
+  data: RouteValidationRequest,
+): Promise<RouteValidationResult> => {
+  return request.post<RouteValidationResult>('/user/designs/validate-course/', data)
+}

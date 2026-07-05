@@ -10,6 +10,7 @@ import type { CourseDesign, Obstacle, PathPoint, CoursePath, Pole } from '@/type
 import { ObstacleType } from '@/types/obstacle'
 import { v4 as uuidv4 } from 'uuid'
 import { useHistoryStore } from './history'
+import type { RouteValidationIssue, RouteValidationResult } from '@/api/design'
 
 /**
  * 马术路线设计状态管理
@@ -41,6 +42,9 @@ export const useCourseStore = defineStore('course', () => {
    */
   const selectedObstacle = ref<Obstacle | null>(null)
 
+  const routeValidationResult = ref<RouteValidationResult | null>(null)
+  const highlightedValidationIssue = ref<RouteValidationIssue | null>(null)
+
   /**
    * 课程路径状态
    * @description 包含路径可见性和路径点列表
@@ -59,6 +63,26 @@ export const useCourseStore = defineStore('course', () => {
 
   // 只读渲染版本标记：v2 使用 SVG 世界坐标渲染
   const isV2Design = computed(() => currentCourse.value.renderVersion === 'v2')
+
+
+  function setValidationResult(result: RouteValidationResult | null) {
+    routeValidationResult.value = result
+    if (!result) {
+      highlightedValidationIssue.value = null
+    }
+  }
+
+  function highlightValidationIssue(issue: RouteValidationIssue) {
+    highlightedValidationIssue.value = issue
+    const firstId = issue.obstacle_ids[0]
+    if (firstId) {
+      selectedObstacle.value = currentCourse.value.obstacles.find((obstacle) => obstacle.id === firstId) || null
+    }
+  }
+
+  function clearValidationHighlight() {
+    highlightedValidationIssue.value = null
+  }
 
   /**
    * 初始化存储
@@ -2188,6 +2212,8 @@ export const useCourseStore = defineStore('course', () => {
 
   return {
     currentCourse,
+    routeValidationResult,
+    highlightedValidationIssue,
     isV2Design,
     selectedObstacle,
     coursePath,
@@ -2212,6 +2238,9 @@ export const useCourseStore = defineStore('course', () => {
     getWorldTransform,
     removeObstacle,
     getCompleteDesign,
+    setValidationResult,
+    highlightValidationIssue,
+    clearValidationHighlight,
     updateCourse,
     saveToLocalStorage,
     restoreFromLocalStorage,

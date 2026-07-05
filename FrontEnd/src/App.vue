@@ -95,6 +95,7 @@
           :class="{ 'panel-hidden': !courseStore.selectedObstacle && !courseStore.coursePath.visible }"
           :style="{ width: `${rightPanelWidth}px` }" 
         />
+        <RouteValidationPanel />
       </template>
 
       <!-- 路由视图，用于显示其他页面 -->
@@ -228,6 +229,7 @@ import LoginForm from '@/components/LoginForm.vue'
 import OnboardingTour from '@/components/OnboardingTour.vue'
 import PropertiesPanel from '@/components/PropertiesPanel.vue'
 import RegisterForm from '@/components/RegisterForm.vue'
+import RouteValidationPanel from '@/components/RouteValidationPanel.vue'
 import ResizableDivider from '@/components/ResizableDivider.vue'
 import ToolBar from '@/components/ToolBar.vue'
 import { useAutosave } from '@/composables/useAutosave'

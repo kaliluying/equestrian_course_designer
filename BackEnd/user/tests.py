@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import shutil
 import tempfile
@@ -865,6 +866,77 @@ class APIDocumentationTest(TestCase):
         self.assertIn("refresh_token", response.cookies)
         self.assertTrue(response.cookies["access_token"]["httponly"])
         self.assertTrue(response.cookies["refresh_token"]["httponly"])
+
+
+class RouteValidationPanelAPITest(TestCase):
+    """路线规则检查接口测试"""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="route_validation_user",
+            email="route_validation@example.com",
+            password="Password123",
+        )
+        UserProfile.objects.get_or_create(user=self.user)
+        self.client.force_authenticate(user=self.user)
+
+    def test_validate_course_returns_invalid_for_empty_route(self):
+        """空路线应返回 invalid 和结构化错误"""
+        response = self.client.post(
+            "/user/designs/validate-course/",
+            data={"obstacles": [], "field_width": 90, "field_height": 60, "difficulty": "medium"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data["is_valid"])
+        self.assertEqual(data["issues"][0]["code"], "EMPTY_ROUTE")
+        self.assertEqual(data["issues"][0]["severity"], "error")
+
+    def test_validate_course_returns_structured_distance_issue(self):
+        """障碍物距离过近应返回结构化距离错误"""
+        response = self.client.post(
+            "/user/designs/validate-course/",
+            data={
+                "field_width": 90,
+                "field_height": 60,
+                "difficulty": "medium",
+                "obstacles": [
+                    {"id": "obs-1", "number": "1", "type": "SINGLE", "position": {"x": 10, "y": 10}, "poles": [{"height": 1.1, "width": 3.5}]},
+                    {"id": "obs-2", "number": "2", "type": "SINGLE", "position": {"x": 12, "y": 10}, "poles": [{"height": 1.1, "width": 3.5}]},
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        issue = response.json()["issues"][0]
+        self.assertEqual(issue["code"], "MIN_DISTANCE")
+        self.assertEqual(issue["severity"], "error")
+        self.assertEqual(issue["obstacle_ids"], ["obs-1", "obs-2"])
+        self.assertTrue(issue["auto_fixable"])
+
+    def test_validate_course_reports_boundary_and_height_findings(self):
+        """边界和高度问题应进入结构化反馈"""
+        response = self.client.post(
+            "/user/designs/validate-course/",
+            data={
+                "field_width": 90,
+                "field_height": 60,
+                "difficulty": "easy",
+                "obstacles": [
+                    {"id": "obs-1", "number": "1", "type": "SINGLE", "position": {"x": 1, "y": 2}, "poles": [{"height": 1.5, "width": 3.5}]},
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        codes = {item["code"] for item in response.json()["issues"] + response.json()["warnings"]}
+        self.assertIn("BOUNDARY_DISTANCE", codes)
+        self.assertIn("HEIGHT_RANGE", codes)
 
 
 class MembershipPlanCommandTest(TestCase):

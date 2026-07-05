@@ -121,6 +121,107 @@ class RouteValidator:
             auto_fixed=auto_fixed
         )
 
+
+    def validate_course_structure(
+        self,
+        obstacles: List[Dict[str, Any]],
+        difficulty: str = 'medium'
+    ) -> Dict[str, Any]:
+        """返回供前端规则检查面板使用的结构化校验结果。"""
+        issues: List[Dict[str, Any]] = []
+        warnings: List[Dict[str, Any]] = []
+        auto_fixed: List[str] = []
+
+        if not obstacles:
+            issues.append({
+                'code': 'EMPTY_ROUTE',
+                'severity': 'error',
+                'message': '路线中没有障碍物，请至少添加一道障碍。',
+                'obstacle_ids': [],
+                'suggested_action': '添加障碍物后重新检查。',
+                'auto_fixable': False,
+            })
+            return {
+                'score': 0,
+                'is_valid': False,
+                'issues': issues,
+                'warnings': warnings,
+                'auto_fixed': auto_fixed,
+                'summary': '路线中没有障碍物。',
+            }
+
+        config = DIFFICULTY_CONFIGS.get(difficulty, DIFFICULTY_CONFIGS['medium'])
+        min_distance = FEI_RULES['min_obstacle_distance']
+        boundary_margin = FEI_RULES['min_boundary_distance']
+
+        for index, obstacle in enumerate(obstacles):
+            obstacle_id = str(obstacle.get('id') or obstacle.get('number') or index + 1)
+            number = obstacle.get('number') or str(index + 1)
+            position = obstacle.get('position') or {}
+            x = float(position.get('x', 0))
+            y = float(position.get('y', 0))
+
+            if (
+                x < boundary_margin
+                or y < boundary_margin
+                or x > self.field_width - boundary_margin
+                or y > self.field_height - boundary_margin
+            ):
+                warnings.append({
+                    'code': 'BOUNDARY_DISTANCE',
+                    'severity': 'warning',
+                    'message': f'障碍物{number}距离场地边界不足{boundary_margin}米。',
+                    'obstacle_ids': [obstacle_id],
+                    'suggested_action': '将障碍物向场地内部移动，保留安全边距。',
+                    'auto_fixable': True,
+                })
+
+            for pole_index, pole in enumerate(obstacle.get('poles') or []):
+                height = float(pole.get('height', 0))
+                if height < config.min_height or height > config.max_height:
+                    warnings.append({
+                        'code': 'HEIGHT_RANGE',
+                        'severity': 'warning',
+                        'message': f'障碍物{number}第{pole_index + 1}根横杆高度{height:.2f}m超出{difficulty}难度范围。',
+                        'obstacle_ids': [obstacle_id],
+                        'suggested_action': f'将高度调整到{config.min_height:.2f}m-{config.max_height:.2f}m之间。',
+                        'auto_fixable': True,
+                    })
+
+        for index in range(len(obstacles) - 1):
+            current = obstacles[index]
+            nxt = obstacles[index + 1]
+            current_pos = current.get('position') or {}
+            next_pos = nxt.get('position') or {}
+            dx = float(next_pos.get('x', 0)) - float(current_pos.get('x', 0))
+            dy = float(next_pos.get('y', 0)) - float(current_pos.get('y', 0))
+            distance = math.sqrt(dx * dx + dy * dy)
+            if distance < min_distance:
+                current_id = str(current.get('id') or current.get('number') or index + 1)
+                next_id = str(nxt.get('id') or nxt.get('number') or index + 2)
+                issues.append({
+                    'code': 'MIN_DISTANCE',
+                    'severity': 'error',
+                    'message': f'障碍物{current.get("number", index + 1)}与{nxt.get("number", index + 2)}间距{distance:.1f}米，小于最小要求{min_distance}米。',
+                    'obstacle_ids': [current_id, next_id],
+                    'suggested_action': '拉开相邻障碍物距离，保持安全骑乘节奏。',
+                    'auto_fixable': True,
+                })
+
+        penalty = len(issues) * 2.5 + len(warnings) * 0.75
+        score = max(0, round(10 - penalty, 1))
+        is_valid = len(issues) == 0
+        summary = f'发现{len(issues)}个严重问题、{len(warnings)}个提醒。' if issues or warnings else '未发现需要处理的问题。'
+
+        return {
+            'score': score,
+            'is_valid': is_valid,
+            'issues': issues,
+            'warnings': warnings,
+            'auto_fixed': auto_fixed,
+            'summary': summary,
+        }
+
     def _reorder_obstacles_to_reduce_turns(
         self,
         obstacles: List[Dict[str, Any]]

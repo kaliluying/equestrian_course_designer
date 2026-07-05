@@ -9,7 +9,7 @@ from django.db.models import F
 from django.utils.text import get_valid_filename
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from rest_framework.response import Response
 from PIL import Image
 
@@ -23,6 +23,7 @@ from ..serializers import (
     DesignListSerializer,
 )
 from ..utils import get_absolute_media_url, success_response, error_response
+from ..route_validator import RouteValidator
 from .user_views import check_and_update_membership
 from ..services.membership_access import MembershipAccessError, assert_design_capacity
 
@@ -76,7 +77,7 @@ class DesignViewSet(viewsets.ModelViewSet):
 
     queryset = Design.objects.all()
     serializer_class = DesignSerializer
-    parser_classes = (MultiPartParser, FormParser)
+    parser_classes = (JSONParser, MultiPartParser, FormParser)
 
     def get_serializer_class(self):
         """根据不同的操作返回不同的序列化器"""
@@ -114,6 +115,18 @@ class DesignViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.exception("设计更新失败: ID=%s", instance.id)
             raise
+
+
+    @action(detail=False, methods=["post"], url_path="validate-course")
+    def validate_course(self, request):
+        """校验当前路线并返回结构化规则检查结果。"""
+        obstacles = request.data.get("obstacles") or []
+        field_width = float(request.data.get("field_width") or request.data.get("fieldWidth") or 90)
+        field_height = float(request.data.get("field_height") or request.data.get("fieldHeight") or 60)
+        difficulty = request.data.get("difficulty") or "medium"
+
+        validator = RouteValidator(field_width=field_width, field_height=field_height)
+        return Response(validator.validate_course_structure(obstacles, difficulty))
 
     @action(detail=False, methods=["get"], url_path="shared")
     def shared_designs(self, request):
