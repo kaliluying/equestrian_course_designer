@@ -99,8 +99,10 @@ export interface ObstacleData {
 // 障碍物数量和限制信息
 export interface ObstacleCountInfo {
   count: number
-  max_count: number
+  max_count: number | null
   is_premium: boolean
+  is_unlimited?: boolean
+  plan_code?: string
 }
 
 // 分页响应接口

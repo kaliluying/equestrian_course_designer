@@ -823,10 +823,14 @@ const reconnect = () => {
     const urlParams = new URLSearchParams(window.location.search)
     const isViaLink = urlParams.has('collaboration') && urlParams.has('designId')
 
-    // 检查用户是否为高级会员或通过链接加入
-    const isPremiumOrViaLink = userStore.currentUser?.is_premium_active || isViaLink
+    // 检查用户是否具备协作权限或通过链接加入
+    const canCollaborateOrViaLink = Boolean(
+      userStore.currentUser?.entitlements?.can_collaborate
+      || userStore.currentUser?.is_premium_active
+      || isViaLink
+    )
 
-    if (!isPremiumOrViaLink) {
+    if (!canCollaborateOrViaLink) {
       // 非高级会员且不是通过链接加入，触发自定义事件
       console.error('非高级会员用户尝试使用协作功能')
 

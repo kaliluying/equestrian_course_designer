@@ -35,17 +35,17 @@
 
     <div v-else class="obstacle-grid">
       <!-- 显示数量限制信息 -->
-      <div v-if="obstacleStore.obstacleCountInfo" class="limit-info" :class="{ premium: obstacleStore.obstacleCountInfo.is_premium, exceeded: !obstacleStore.obstacleCountInfo.is_premium && obstacleStore.customObstacles.length > obstacleStore.obstacleCountInfo.max_count }">
-        <template v-if="obstacleStore.obstacleCountInfo.is_premium">
+      <div v-if="obstacleLimitInfo" class="limit-info" :class="{ premium: obstacleLimitInfo.isUnlimited, exceeded: !obstacleLimitInfo.isUnlimited && obstacleLimitInfo.maxCount !== null && obstacleLimitInfo.count > obstacleLimitInfo.maxCount }">
+        <template v-if="obstacleLimitInfo.isUnlimited">
           高级会员：无限制自定义障碍
         </template>
         <template v-else>
-          <span>已创建 {{ obstacleStore.paginationInfo?.totalCount || obstacleStore.customObstacles.length }} 个自定义障碍物</span>
-          <span v-if="(obstacleStore.paginationInfo?.totalCount || obstacleStore.customObstacles.length) > obstacleStore.obstacleCountInfo.max_count" class="exceeded-warning">
-            （超过限制 {{ obstacleStore.obstacleCountInfo.max_count }} 个，仍可查看所有障碍物）
+          <span>已创建 {{ obstacleLimitInfo.count }} 个自定义障碍物</span>
+          <span v-if="obstacleLimitInfo.maxCount !== null && obstacleLimitInfo.count > obstacleLimitInfo.maxCount" class="exceeded-warning">
+            （超过限制 {{ obstacleLimitInfo.maxCount }} 个，仍可查看所有障碍物）
           </span>
           <span v-else>
-            （限制：{{ obstacleStore.obstacleCountInfo.max_count }} 个）
+            （限制：{{ obstacleLimitInfo.maxCount }} 个）
           </span>
         </template>
       </div>
@@ -355,7 +355,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Plus, Edit, Delete, Loading, Share } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useObstacleStore } from '@/stores/obstacle'
@@ -371,6 +371,33 @@ const currentObstacle = ref<CustomObstacleTemplate | null>(null)
 const deleteDialogVisible = ref(false)
 const obstacleToDelete = ref<CustomObstacleTemplate | null>(null)
 const currentPage = ref(1)
+
+const obstacleLimitInfo = computed(() => {
+  const entitlements = userStore.currentUser?.entitlements
+  const countInfo = obstacleStore.obstacleCountInfo
+  const count = entitlements?.custom_obstacle_count
+    ?? obstacleStore.paginationInfo?.totalCount
+    ?? obstacleStore.customObstacles.length
+
+  if (entitlements) {
+    return {
+      count,
+      maxCount: entitlements.custom_obstacle_limit,
+      isUnlimited: entitlements.custom_obstacle_unlimited,
+    }
+  }
+
+  if (countInfo) {
+    return {
+      count,
+      maxCount: countInfo.max_count,
+      isUnlimited: countInfo.is_unlimited || countInfo.max_count === null,
+    }
+  }
+
+  return null
+})
+
 
 // 预览缩放比例
 const previewScale = 0.4
@@ -420,9 +447,14 @@ const showEditor = async (obstacle: CustomObstacleTemplate | null) => {
     // 注意：每次都重新获取最新的计数信息，避免缓存问题
     // 注意：只限制创建新障碍物，不限制查看和编辑已有障碍物
     const latestCountInfo = await obstacleStore.fetchCountInfo()
-    const totalCount = obstacleStore.paginationInfo?.totalCount ?? obstacleStore.customObstacles.length
-    if (latestCountInfo && !latestCountInfo.is_premium && totalCount >= latestCountInfo.max_count) {
-      ElMessage.warning(`普通用户最多创建${latestCountInfo.max_count}个自定义障碍，请升级会员享受无限创建特权`)
+    const entitlements = userStore.currentUser?.entitlements
+    const totalCount = entitlements?.custom_obstacle_count
+      ?? obstacleStore.paginationInfo?.totalCount
+      ?? obstacleStore.customObstacles.length
+    const isUnlimited = entitlements?.custom_obstacle_unlimited || latestCountInfo?.is_unlimited
+    const maxCount = entitlements?.custom_obstacle_limit ?? latestCountInfo?.max_count ?? null
+    if (!isUnlimited && maxCount !== null && totalCount >= maxCount) {
+      ElMessage.warning(`当前方案最多创建${maxCount}个自定义障碍，请升级会员享受无限创建特权`)
       return
     }
   }

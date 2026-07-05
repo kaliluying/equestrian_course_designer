@@ -42,7 +42,7 @@
 
             <div v-if="userProfile.membership_plan" class="info-item">
               <span class="label">当前会员计划：</span>
-              <span class="value">{{ userProfile.membership_plan.name }}</span>
+              <span class="value">{{ activePlanName }}</span>
             </div>
 
             <div v-if="userProfile.is_premium" class="info-item">
@@ -67,14 +67,14 @@
 
             <div class="info-item">
               <span class="label">设计存储限制：</span>
-              <span class="value">{{ userProfile.design_storage_limit }} 个</span>
+              <span class="value">{{ activeDesignLimit }} 个</span>
             </div>
 
             <div class="info-item">
               <span class="label">当前设计数量：</span>
               <span class="value">
-                {{ userProfile.design_count }} / {{ userProfile.design_storage_limit }}
-                <el-progress :percentage="(userProfile.design_count / userProfile.design_storage_limit) * 100"
+                {{ activeDesignCount }} / {{ activeDesignLimit }}
+                <el-progress :percentage="storagePercentage"
                   :status="storageStatus" :stroke-width="10" class="storage-progress" />
               </span>
             </div>
@@ -88,7 +88,7 @@
 
           <div v-else class="upgrade-section">
             <h3>会员管理</h3>
-            <p>您当前的会员计划: {{ userProfile.membership_plan?.name }} (到期时间: {{ formatDate(userProfile.premium_expire_date)
+            <p>您当前的会员计划: {{ activePlanName }} (到期时间: {{ formatDate(userProfile.premium_expire_date)
             }})
             </p>
             <el-button type="primary" @click="showUpgradeDialog">续费/升级</el-button>
@@ -387,6 +387,7 @@ import { useUserStore } from '@/stores/user'
 import type { FormInstance } from 'element-plus'
 import { Document, SetUp, Connection, Star, Check, Close } from '@element-plus/icons-vue'
 import OrderList from '@/views/OrderList.vue'
+import type { EntitlementSnapshot } from '@/types/user'
 
 // 定义会员计划类型
 interface MembershipPlan {
@@ -413,6 +414,7 @@ interface UserProfile {
   membership_plan: MembershipPlan | null;
   available_plans: MembershipPlan[];
   pending_membership_plan?: MembershipPlan;
+  entitlements?: EntitlementSnapshot | null;
 }
 
 // 定义API响应类型
@@ -429,6 +431,7 @@ interface ApiResponse {
   membership_plan?: MembershipPlan | null;
   available_plans?: MembershipPlan[];
   pending_membership_plan?: MembershipPlan;
+  entitlements?: EntitlementSnapshot | null;
 }
 
 // 定义密码修改响应类型
@@ -524,9 +527,25 @@ const emailRules = {
 // 用户存储
 const userStore = useUserStore()
 
+const activeDesignLimit = computed(() => {
+  return userProfile.value.entitlements?.design_limit || userProfile.value.design_storage_limit || 5
+})
+
+const activeDesignCount = computed(() => {
+  return userProfile.value.entitlements?.design_count ?? userProfile.value.design_count
+})
+
+const activePlanName = computed(() => {
+  return userProfile.value.entitlements?.plan_name || userProfile.value.membership_plan?.name || '免费用户'
+})
+
+const storagePercentage = computed(() => {
+  return activeDesignLimit.value > 0 ? (activeDesignCount.value / activeDesignLimit.value) * 100 : 0
+})
+
 // 计算存储状态
 const storageStatus = computed(() => {
-  const percentage = (userProfile.value.design_count / userProfile.value.design_storage_limit) * 100
+  const percentage = storagePercentage.value
   if (percentage >= 90) return 'exception'
   if (percentage >= 70) return 'warning'
   return 'success'
@@ -570,7 +589,8 @@ const fetchUserProfile = async () => {
       if (userStore.currentUser) {
         userStore.currentUser.is_premium_active = response.is_premium_active
         userStore.currentUser.membership_plan = response.membership_plan || null
-        userStore.currentUser.design_storage_limit = response.design_storage_limit || 5
+        userStore.currentUser.design_storage_limit = response.design_storage_limit || response.entitlements?.design_limit || 5
+        userStore.currentUser.entitlements = response.entitlements || null
         // 更新本地存储
         localStorage.setItem('user', JSON.stringify(userStore.currentUser))
       }

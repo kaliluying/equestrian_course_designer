@@ -337,6 +337,8 @@ export const useObstacleStore = defineStore('obstacle', () => {
     if (
       countInfo &&
       !countInfo.is_premium &&
+      !countInfo.is_unlimited &&
+      countInfo.max_count !== null &&
       !obstacle.id &&
       totalCount >= countInfo.max_count
     ) {
