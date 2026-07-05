@@ -64,6 +64,8 @@ urlpatterns = [
     path("payment/success/", PaymentSuccessView.as_view(), name="payment_success"),
     # AI 生成相关
     path("ai/generate/", ai_views.generate_route, name="ai_generate"),
+    path("ai/edit-course/", ai_views.edit_course, name="ai_edit_course"),
+    path("ai/coach-notes/", ai_views.coach_notes, name="ai_coach_notes"),
     path("ai/quota/", ai_views.get_ai_quota, name="ai_quota"),
     path("ai/purchase/", ai_views.purchase_ai_quota, name="ai_purchase"),
     path("ai/history/", ai_views.get_ai_history, name="ai_history"),

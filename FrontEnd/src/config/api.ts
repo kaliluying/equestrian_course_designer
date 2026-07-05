@@ -196,6 +196,8 @@ export const CUSTOM_OBSTACLE_API = {
 // AI 生成相关
 export const AI_API = {
   generate: '/user/ai/generate/',
+  editCourse: '/user/ai/edit-course/',
+  coachNotes: '/user/ai/coach-notes/',
   quota: '/user/ai/quota/',
   purchase: '/user/ai/purchase/',
   history: '/user/ai/history/',

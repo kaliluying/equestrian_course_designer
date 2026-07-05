@@ -81,6 +81,56 @@ export interface AIHistoryItem {
   created_at: string
 }
 
+
+
+export interface AIEditCourseRequest {
+  instruction: string
+  course: {
+    field_width?: number
+    field_height?: number
+    difficulty?: 'easy' | 'medium' | 'hard'
+    obstacles: AIObstacle[]
+    path?: unknown
+  }
+}
+
+export interface AIEditCourseResponse {
+  source: 'llm' | 'fallback'
+  field_width: number
+  field_height: number
+  difficulty: 'easy' | 'medium' | 'hard'
+  obstacles: AIObstacle[]
+  path: AIGenerateResponse['path']
+  change_summary: string[]
+  validation: {
+    score?: number
+    is_valid: boolean
+    issues: unknown[]
+    warnings: unknown[]
+    auto_fixed: string[]
+    summary?: string
+  }
+}
+
+export interface CoachNotesRequest {
+  course: {
+    obstacles: AIObstacle[]
+    field_width?: number
+    field_height?: number
+    difficulty?: string
+  }
+  validation?: unknown
+}
+
+export interface CoachNotesResponse {
+  source: 'llm' | 'fallback'
+  training_goals: string[]
+  rhythm_advice: string[]
+  common_mistakes: string[]
+  coach_commands: string[]
+  risk_focus: string[]
+}
+
 export interface PurchaseRequest {
   quota: number
 }
@@ -101,6 +151,20 @@ export const aiApi = {
 
   getQuota() {
     return request.get<{ code: number; data: AIQuotaInfo }>(AI_API.quota)
+  },
+
+  editCourse(data: AIEditCourseRequest) {
+    return request.post<{ code: number; message: string; data: AIEditCourseResponse }>(
+      AI_API.editCourse,
+      data
+    )
+  },
+
+  coachNotes(data: CoachNotesRequest) {
+    return request.post<{ code: number; message: string; data: CoachNotesResponse }>(
+      AI_API.coachNotes,
+      data
+    )
   },
 
   purchase(data: PurchaseRequest) {

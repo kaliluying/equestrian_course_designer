@@ -6,6 +6,9 @@
         <p>{{ validationSummary }}</p>
       </div>
       <div class="panel-actions">
+        <el-button size="small" :loading="isGeneratingNotes" @click="generateCoachNotes">
+          教练说明
+        </el-button>
         <el-button size="small" :disabled="!hasFixableIssues" :loading="isFixing" @click="applyAutoFix">
           一键修复
         </el-button>
@@ -67,11 +70,14 @@
 import { computed, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { fixCourse, validateCourse, type RouteValidationIssue } from '@/api/design'
+import { aiApi, type CoachNotesResponse } from '@/api/ai'
 import { useCourseStore } from '@/stores/course'
 
 const courseStore = useCourseStore()
 const isChecking = ref(false)
 const isFixing = ref(false)
+const isGeneratingNotes = ref(false)
+const coachNotes = ref<CoachNotesResponse | null>(null)
 const activeFilter = ref<'all' | 'error' | 'warning' | 'selected'>('all')
 const result = computed(() => courseStore.routeValidationResult)
 
@@ -152,6 +158,36 @@ const applyAutoFix = async () => {
     ElMessage.error('自动修复失败，请稍后重试')
   } finally {
     isFixing.value = false
+  }
+}
+
+const generateCoachNotes = async () => {
+  isGeneratingNotes.value = true
+  try {
+    const response = await aiApi.coachNotes({
+      course: {
+        obstacles: courseStore.currentCourse.obstacles as never,
+        field_width: courseStore.currentCourse.fieldWidth,
+        field_height: courseStore.currentCourse.fieldHeight,
+      },
+      validation: result.value,
+    })
+    coachNotes.value = response.data
+    ElMessageBox.alert(
+      [
+        `训练目标：${response.data.training_goals.join('；')}`,
+        `节奏建议：${response.data.rhythm_advice.join('；')}`,
+        `常见错误：${response.data.common_mistakes.join('；')}`,
+        `教练口令：${response.data.coach_commands.join('；')}`,
+        `风险重点：${response.data.risk_focus.join('；')}`,
+      ].join('\n\n'),
+      '教练说明',
+    )
+  } catch (error) {
+    console.error('生成教练说明失败:', error)
+    ElMessage.error('生成教练说明失败')
+  } finally {
+    isGeneratingNotes.value = false
   }
 }
 

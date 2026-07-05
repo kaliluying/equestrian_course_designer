@@ -301,6 +301,153 @@ def _generate_path_from_obstacles(
     }
 
 
+def _clone_course_obstacles(course: dict) -> list:
+    """复制当前路线障碍物，避免直接修改请求对象。"""
+    return json.loads(json.dumps(course.get("obstacles", []), ensure_ascii=False))
+
+
+def _renumber_obstacles(obstacles: list) -> list:
+    """按当前顺序重新编号障碍物。"""
+    for index, obstacle in enumerate(obstacles):
+        obstacle["number"] = str(index + 1)
+    return obstacles
+
+
+def _fallback_edit_course(course: dict, instruction: str) -> dict:
+    """AI 不可用时的规则引擎二次编辑。"""
+    obstacles = _clone_course_obstacles(course)
+    field_width = int(course.get("field_width") or course.get("fieldWidth") or 90)
+    field_height = int(course.get("field_height") or course.get("fieldHeight") or 60)
+    difficulty = course.get("difficulty") or "medium"
+    change_summary = []
+
+    if "降低" in instruction or "简单" in instruction:
+        difficulty = "easy"
+        for obstacle in obstacles:
+            for pole in obstacle.get("poles", []):
+                old_height = float(pole.get("height", 1.0))
+                new_height = min(old_height, 1.0)
+                if new_height != old_height:
+                    pole["height"] = round(new_height, 2)
+        change_summary.append("已将路线难度降低，并把横杆高度控制在初级范围内")
+
+    if "提高" in instruction or "困难" in instruction:
+        difficulty = "hard"
+        for obstacle in obstacles:
+            for pole in obstacle.get("poles", []):
+                old_height = float(pole.get("height", 1.0))
+                new_height = max(old_height, 1.2)
+                if new_height != old_height:
+                    pole["height"] = round(min(new_height, 1.4), 2)
+        change_summary.append("已提高路线难度，并提升横杆高度")
+
+    count_match = re.search(r"(\d+)\s*道", instruction)
+    if count_match:
+        target_count = min(max(int(count_match.group(1)), 1), 20)
+        current_count = len(obstacles)
+        if target_count < current_count:
+            obstacles = obstacles[:target_count]
+            change_summary.append(f"已将障碍数量减少到{target_count}道")
+        elif target_count > current_count:
+            generator = RouteGenerator()
+            generated = generator.generate(
+                RouteConfig(
+                    field_width=field_width,
+                    field_height=field_height,
+                    obstacle_count=target_count - current_count,
+                    difficulty=difficulty if difficulty in VALID_DIFFICULTIES else "medium",
+                )
+            )
+            existing_ids = {obs.get("id") for obs in obstacles}
+            for generated_obstacle in generated.get("obstacles", []):
+                if generated_obstacle.get("id") in existing_ids:
+                    generated_obstacle["id"] = f"edit_{random.randint(100000, 999999)}"
+                obstacles.append(generated_obstacle)
+            change_summary.append(f"已将障碍数量增加到{target_count}道")
+
+    if "组合障碍" in instruction and not any(obs.get("type") == "COMBINATION" for obs in obstacles):
+        obstacles.append(
+            {
+                "id": f"combo_{random.randint(100000, 999999)}",
+                "number": str(len(obstacles) + 1),
+                "type": "COMBINATION",
+                "position": {"x": min(field_width - 8, 35), "y": min(field_height - 8, 30)},
+                "rotation": 0,
+                "poles": [
+                    {"height": 1.0, "width": 3.5, "color": "#8B4513", "spacing": 0.7},
+                    {"height": 1.05, "width": 3.5, "color": "#654321", "spacing": 0.7},
+                    {"height": 1.1, "width": 3.5, "color": "#8B4513"},
+                ],
+            }
+        )
+        change_summary.append("已增加一道组合障碍")
+
+    if "减少急转弯" in instruction or "减少转弯" in instruction:
+        for index, obstacle in enumerate(obstacles):
+            obstacle.setdefault("position", {})
+            obstacle["position"]["x"] = round(10 + index * max(6, (field_width - 20) / max(1, len(obstacles))), 2)
+            obstacle["position"]["y"] = round(field_height / 2, 2)
+        change_summary.append("已将障碍调整为更平顺的推进路线")
+
+    obstacles = _renumber_obstacles(obstacles)
+    validator = RouteValidator(field_width=field_width, field_height=field_height)
+    validation = validator.validate_course_structure(obstacles, difficulty=difficulty)
+    path = _generate_path_from_obstacles(obstacles, field_width, field_height)
+    if not change_summary:
+        change_summary.append("已基于当前路线进行规则化微调")
+
+    return {
+        "source": "fallback",
+        "field_width": field_width,
+        "field_height": field_height,
+        "difficulty": difficulty,
+        "obstacles": obstacles,
+        "path": path,
+        "change_summary": change_summary,
+        "validation": validation,
+    }
+
+
+def _build_rule_based_coach_notes(course: dict, validation: dict | None = None) -> dict:
+    """根据路线和校验结果生成规则模板教练说明。"""
+    obstacles = course.get("obstacles", [])
+    obstacle_types = {obstacle.get("type", "SINGLE") for obstacle in obstacles}
+    warnings = (validation or {}).get("warnings", []) or []
+    issues = (validation or {}).get("issues", []) or []
+
+    training_goals = ["建立稳定节奏和清晰路线记忆"]
+    if "COMBINATION" in obstacle_types or "DOUBLE" in obstacle_types:
+        training_goals.append("强化组合障碍前后的步幅控制")
+    if len(obstacles) >= 10:
+        training_goals.append("提升完整路线中的体能分配")
+
+    rhythm_advice = [
+        "进入第一道障碍前保持直线和均匀步频",
+        "每两道障碍之间提前规划转弯线路",
+    ]
+    common_mistakes = [
+        "接近障碍前临时拉慢导致起跳点不稳定",
+        "转弯后没有及时回到直线导致马匹肩部外漂",
+    ]
+    coach_commands = ["看下一道", "保持节奏", "外方缰稳定", "落地后继续向前"]
+    risk_focus = []
+    if warnings or issues:
+        risk_focus.append("重点关注规则检查中提示的距离、转弯或高度问题")
+    if any("转弯" in str(item) for item in warnings + issues):
+        risk_focus.append("急转弯处需要提前建立弯曲和外方支撑")
+    if not risk_focus:
+        risk_focus.append("路线整体风险可控，训练重点放在节奏一致性")
+
+    return {
+        "source": "fallback",
+        "training_goals": training_goals,
+        "rhythm_advice": rhythm_advice,
+        "common_mistakes": common_mistakes,
+        "coach_commands": coach_commands,
+        "risk_focus": risk_focus,
+    }
+
+
 @extend_schema(
     request=OpenApiTypes.OBJECT,
     responses=OpenApiTypes.OBJECT,
@@ -647,3 +794,50 @@ def get_ai_history(request):
             },
         }
     )
+
+
+@extend_schema(
+    request=OpenApiTypes.OBJECT,
+    responses=OpenApiTypes.OBJECT,
+    summary="AI 二次编辑路线",
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def edit_course(request):
+    """基于当前路线进行 AI/规则二次编辑。"""
+    instruction = (request.data.get("instruction") or "").strip()[:MAX_PROMPT_LENGTH]
+    course = request.data.get("course") or {}
+    if not instruction:
+        return Response(
+            {"code": status.HTTP_400_BAD_REQUEST, "message": "请输入修改指令"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if not isinstance(course, dict):
+        return Response(
+            {"code": status.HTTP_400_BAD_REQUEST, "message": "路线数据无效"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # 当前实现优先使用规则兜底，后续可接入 LLM JSON patch。
+    result = _fallback_edit_course(course, instruction)
+    return Response({"code": status.HTTP_200_OK, "message": "编辑成功", "data": result})
+
+
+@extend_schema(
+    request=OpenApiTypes.OBJECT,
+    responses=OpenApiTypes.OBJECT,
+    summary="生成教练说明",
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def coach_notes(request):
+    """根据当前路线生成教练说明。"""
+    course = request.data.get("course") or {}
+    validation = request.data.get("validation") or {}
+    if not isinstance(course, dict):
+        return Response(
+            {"code": status.HTTP_400_BAD_REQUEST, "message": "路线数据无效"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    notes = _build_rule_based_coach_notes(course, validation)
+    return Response({"code": status.HTTP_200_OK, "message": "生成成功", "data": notes})

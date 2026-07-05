@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     v-model="dialogVisible"
-    title="AI 智能生成路线"
+    :title="isEditMode ? 'AI 二次编辑路线' : 'AI 智能生成路线'"
     width="600px"
     :close-on-click-modal="false"
     destroy-on-close
@@ -23,14 +23,16 @@
           v-model="form.prompt"
           type="textarea"
           :rows="4"
-          placeholder="例如：设计一条中等难度的路线，包含12个障碍物，要有组合障碍和利物浦..."
+          :placeholder="isEditMode ? '例如：降低难度、减少急转弯、改成10道障碍、增加一道组合障碍...' : '例如：设计一条中等难度的路线，包含12个障碍物，要有组合障碍和利物浦...'"
           :disabled="isGenerating || quotaInfo.remaining_quota <= 0"
           maxlength="500"
           show-word-limit
         />
       </el-form-item>
 
-      <el-row :gutter="16">
+      <el-alert v-if="isEditMode" title="将基于当前画布路线进行局部修改，应用前可先查看修改摘要。" type="info" show-icon :closable="false" class="edit-mode-alert" />
+
+      <el-row :gutter="16" v-if="!isEditMode">
         <el-col :span="12">
           <el-form-item label="障碍物数量">
             <el-slider v-model="form.config.obstacle_count" :min="8" :max="15" show-stops />
@@ -60,8 +62,15 @@
         </div>
 
         <div class="result-explanation">
-          <h4>设计说明</h4>
+          <h4>{{ isEditMode ? '修改说明' : '设计说明' }}</h4>
           <p>{{ result.explanation }}</p>
+        </div>
+
+        <div v-if="editSummary.length" class="teaching-notes">
+          <h4>修改摘要</h4>
+          <ul>
+            <li v-for="item in editSummary" :key="item">{{ item }}</li>
+          </ul>
         </div>
 
         <div v-if="result.teaching_notes" class="teaching-notes">
@@ -112,7 +121,7 @@
         :disabled="!form.prompt.trim() || quotaInfo.remaining_quota <= 0"
         @click="handleGenerate"
       >
-        {{ isGenerating ? '生成中...' : '生成' }}
+        {{ isGenerating ? (isEditMode ? '修改中...' : '生成中...') : (isEditMode ? '修改路线' : '生成') }}
       </el-button>
       <el-button
         type="success"
@@ -128,7 +137,7 @@
 <script setup lang="ts">
 import { computed, ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Odometer, Tools, TrendCharts, Timer, Warning } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useCourseStore } from '@/stores/course'
@@ -145,7 +154,9 @@ const courseStore = useCourseStore()
 
 const dialogVisible = ref(false)
 const isGenerating = ref(false)
+const isEditMode = ref(false)
 const result = ref<AIGenerateResponse | null>(null)
+const editSummary = ref<string[]>([])
 
 const quotaInfo = reactive<AIQuotaInfo>({
   free_quota: 0,
@@ -225,8 +236,46 @@ const handleGenerate = async () => {
 
   isGenerating.value = true
   result.value = null
+  editSummary.value = []
 
   try {
+    if (isEditMode.value) {
+      const response = await aiApi.editCourse({
+        instruction: form.prompt,
+        course: {
+          field_width: courseStore.currentCourse.fieldWidth,
+          field_height: courseStore.currentCourse.fieldHeight,
+          difficulty: form.config.difficulty,
+          obstacles: courseStore.currentCourse.obstacles as unknown as AIGenerateResponse['obstacles'],
+          path: courseStore.coursePath,
+        }
+      })
+
+      if (response.code === 200 && response.data) {
+        editSummary.value = response.data.change_summary
+        result.value = {
+          history_id: 0,
+          obstacles: response.data.obstacles,
+          path: response.data.path,
+          difficulty_score: response.data.validation.score || 0,
+          estimated_time: 0,
+          explanation: response.data.change_summary.join('；'),
+          teaching_notes: '',
+          validation: {
+            is_valid: response.data.validation.is_valid,
+            issues: response.data.validation.issues.map(String),
+            warnings: response.data.validation.warnings.map(String),
+            auto_fixed: response.data.validation.auto_fixed || [],
+            source: 'fallback',
+            fallback_reason: response.data.source === 'fallback' ? '规则引擎二次编辑' : '',
+          },
+          remaining_quota: quotaInfo.remaining_quota,
+        }
+        ElMessage.success('路线修改完成，请确认后应用到画布')
+      }
+      return
+    }
+
     const response = await aiApi.generate({
       prompt: form.prompt,
       config: form.config
@@ -244,8 +293,20 @@ const handleGenerate = async () => {
   }
 }
 
-const applyResult = () => {
+const applyResult = async () => {
   if (!result.value) return
+
+  if (isEditMode.value) {
+    try {
+      await ElMessageBox.confirm('将把 AI 修改结果应用到当前画布，并写入撤销历史。是否继续？', '应用修改结果', {
+        confirmButtonText: '应用',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+    } catch {
+      return
+    }
+  }
 
   courseStore.importAIResult({
     obstacles: result.value.obstacles,
@@ -253,7 +314,7 @@ const applyResult = () => {
   })
 
   dialogVisible.value = false
-  ElMessage.success('已应用到画布')
+  ElMessage.success(isEditMode.value ? '已应用修改到画布' : '已应用到画布')
 }
 
 const handlePurchase = () => {
@@ -261,9 +322,12 @@ const handlePurchase = () => {
   router.push('/profile')
 }
 
-const open = () => {
+const open = (mode: 'generate' | 'edit' = 'generate') => {
   dialogVisible.value = true
+  isEditMode.value = mode === 'edit'
   result.value = null
+  editSummary.value = []
+  form.prompt = ''
   fetchQuota()
 }
 
@@ -279,6 +343,10 @@ defineExpose({ open })
   margin-bottom: 16px;
   background: #f5f7fa;
   border-radius: 8px;
+}
+
+.edit-mode-alert {
+  margin-bottom: 16px;
 }
 
 .ai-form {

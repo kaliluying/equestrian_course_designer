@@ -1317,6 +1317,80 @@ class CourseTemplateMarketAPITest(TestCase):
         self.assertEqual(response.status_code, 403)
 
 
+class AICourseEditingAPITest(TestCase):
+    """AI 二次编辑和教练说明测试"""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="ai_edit_user",
+            email="ai_edit@example.com",
+            password="Password123",
+        )
+        self.profile, _ = UserProfile.objects.get_or_create(user=self.user)
+        quota = AIGenerationQuota.objects.get(user_profile=self.profile)
+        quota.free_quota = 10
+        quota.used_quota = 0
+        quota.save()
+        self.client.force_authenticate(user=self.user)
+        self.course = {
+            "field_width": 90,
+            "field_height": 60,
+            "difficulty": "medium",
+            "obstacles": [
+                {"id": "obs-1", "number": "1", "type": "SINGLE", "position": {"x": 10, "y": 10}, "rotation": 0, "poles": [{"height": 1.2, "width": 3.5}]},
+                {"id": "obs-2", "number": "2", "type": "SINGLE", "position": {"x": 20, "y": 10}, "rotation": 0, "poles": [{"height": 1.2, "width": 3.5}]},
+                {"id": "obs-3", "number": "3", "type": "DOUBLE", "position": {"x": 30, "y": 10}, "rotation": 0, "poles": [{"height": 1.2, "width": 3.5}, {"height": 1.25, "width": 3.5}]},
+            ],
+        }
+
+    def test_edit_course_can_lower_difficulty_with_rule_fallback(self):
+        """AI 不可用时，二次编辑应通过规则引擎降低难度并返回修改摘要"""
+        response = self.client.post(
+            "/user/ai/edit-course/",
+            data={"instruction": "降低难度", "course": self.course},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()["data"]
+        self.assertEqual(data["source"], "fallback")
+        self.assertGreater(len(data["change_summary"]), 0)
+        self.assertTrue(all(pole["height"] <= 1.0 for obs in data["obstacles"] for pole in obs.get("poles", [])))
+        self.assertIn("validation", data)
+
+    def test_edit_course_can_change_obstacle_count_and_keep_field_size(self):
+        """二次编辑应支持修改障碍数量且保持场地尺寸"""
+        response = self.client.post(
+            "/user/ai/edit-course/",
+            data={"instruction": "改成5道障碍，保持当前场地尺寸不变", "course": self.course},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()["data"]
+        self.assertEqual(len(data["obstacles"]), 5)
+        self.assertEqual(data["field_width"], 90)
+        self.assertEqual(data["field_height"], 60)
+
+    def test_coach_notes_returns_rule_based_notes_without_ai_config(self):
+        """无 AI 配置时，教练说明应返回规则模板说明"""
+        response = self.client.post(
+            "/user/ai/coach-notes/",
+            data={"course": self.course, "validation": {"issues": [], "warnings": ["障碍物2转弯较急"]}},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()["data"]
+        self.assertIn("training_goals", data)
+        self.assertIn("rhythm_advice", data)
+        self.assertIn("common_mistakes", data)
+        self.assertIn("coach_commands", data)
+        self.assertIn("risk_focus", data)
+        self.assertGreater(len(data["training_goals"]), 0)
+
+
 class MembershipPlanCommandTest(TestCase):
     """会员计划初始化命令测试"""
 
