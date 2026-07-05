@@ -70,18 +70,20 @@ class ShareLinkView(APIView):
                 f"用户 {request.user.username} 生成了设计 {design_id} 的分享链接，过期时间: {expires_at.isoformat()}"
             )
 
+            response_data = {
+                "shareUrl": share_url,
+                "shareToken": share_token,
+                "expiresAt": expires_at.isoformat(),
+                "ttlSeconds": ttl_seconds,
+                "role": role,
+                "passwordProtected": bool(password),
+            }
             return Response(
                 {
                     "success": True,
                     "message": "分享链接已生成",
-                    "data": {
-                        "shareUrl": share_url,
-                        "shareToken": share_token,
-                        "expiresAt": expires_at.isoformat(),
-                        "ttlSeconds": ttl_seconds,
-                        "role": role,
-                        "passwordProtected": bool(password),
-                    },
+                    "data": response_data,
+                    **response_data,
                 }
             )
         except Http404:
@@ -89,3 +91,16 @@ class ShareLinkView(APIView):
         except Exception as e:
             logger.error(f"生成分享链接时出错: {str(e)}")
             return error_response(f"生成分享链接失败: {str(e)}", status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    @extend_schema(request=None, responses=OpenApiTypes.OBJECT, summary="撤销协作分享链接")
+    def delete(self, request, design_id):
+        try:
+            design = get_object_or_404(Design, id=design_id)
+            if design.author != request.user:
+                return error_response("只有设计作者才能撤销分享链接", status.HTTP_403_FORBIDDEN)
+            design.is_shared = False
+            design.save(update_fields=["is_shared"])
+            return success_response("分享链接已撤销", {"is_shared": False})
+        except Http404:
+            return error_response("设计不存在", status.HTTP_404_NOT_FOUND)

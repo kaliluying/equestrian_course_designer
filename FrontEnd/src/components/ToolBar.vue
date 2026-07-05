@@ -91,6 +91,8 @@
             <el-dropdown-menu>
               <el-dropdown-item command="png">导出 PNG</el-dropdown-item>
               <el-dropdown-item command="pdf">导出 PDF</el-dropdown-item>
+              <el-dropdown-item command="report">导出专业报告</el-dropdown-item>
+              <el-dropdown-item command="zip">批量导出 ZIP</el-dropdown-item>
               <el-dropdown-item command="json">导出 JSON</el-dropdown-item>
             </el-dropdown-menu>
           </template>
@@ -199,6 +201,8 @@ import { ref } from 'vue'
 import { ObstacleType } from '@/types/obstacle'
 import { useCourseStore } from '@/stores/course'
 import { useUserStore } from '@/stores/user'
+import { downloadDesign } from '@/api/design'
+import { triggerDesignDownload } from '@/utils/designDownload'
 import { Download, Upload, Delete, Pointer, Edit, Lock, ArrowDown, MagicStick } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage, ElLoading } from 'element-plus'
 import html2canvas from 'html2canvas'
@@ -211,7 +215,7 @@ import AIGenerateDialog from '@/components/AIGenerateDialog.vue'
 
 
 import { exportManager } from '@/utils/exportManager'
-import { ExportFormat, type PDFExportOptions, type JSONExportOptions, type ProgressState, type ExportResult } from '@/types/export'
+import { ExportFormat, ExportStage, type PDFExportOptions, type JSONExportOptions, type ProgressState, type ExportResult } from '@/types/export'
 
 const courseStore = useCourseStore()
 const userStore = useUserStore()
@@ -780,6 +784,44 @@ const executeDirectJSONExport = async () => {
   }
 }
 
+
+const executeServerDownloadExport = async (fileType: 'report' | 'zip') => {
+  if (!userStore.currentUser) {
+    ElMessage.error('导出功能需要登录')
+    return
+  }
+
+  const designId = localStorage.getItem('design_id_to_update')
+  if (!designId) {
+    ElMessage.warning('请先保存设计，再使用专业报告或批量导出')
+    return
+  }
+
+  isExporting.value = true
+  exportProgress.value = {
+    stage: ExportStage.GENERATING_FILE,
+    progress: 20,
+    message: fileType === 'report' ? '正在生成专业报告...' : '正在生成批量导出包...',
+  }
+
+  try {
+    const response = await downloadDesign(Number(designId), fileType)
+    exportProgress.value = {
+      stage: ExportStage.FINALIZING,
+      progress: 100,
+      message: '文件已生成，正在下载...',
+    }
+    await triggerDesignDownload(response)
+    ElMessage.success(fileType === 'report' ? '专业报告导出成功' : '批量导出包已下载')
+  } catch (error) {
+    console.error('服务端导出失败:', error)
+    ElMessage.error(fileType === 'report' ? '专业报告导出失败' : '批量导出失败')
+  } finally {
+    isExporting.value = false
+    exportProgress.value = null
+  }
+}
+
 // 统一导出处理函数
 const handleUnifiedExport = async (command: string) => {
   // 检查用户是否已登录
@@ -806,6 +848,12 @@ const handleUnifiedExport = async (command: string) => {
       // 显示PDF选项对话框
       currentExportFormat.value = ExportFormat.PDF
       exportOptionsVisible.value = true
+      break
+    case 'report':
+      await executeServerDownloadExport('report')
+      break
+    case 'zip':
+      await executeServerDownloadExport('zip')
       break
     default:
       ElMessage.error('不支持的导出格式')

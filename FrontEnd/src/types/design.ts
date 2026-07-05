@@ -1,4 +1,4 @@
-export type DesignDownloadType = 'json' | 'png' | 'pdf'
+export type DesignDownloadType = 'json' | 'png' | 'pdf' | 'report' | 'zip'
 
 // 设计数据接口
 export interface Design {

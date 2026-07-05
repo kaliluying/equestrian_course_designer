@@ -1,6 +1,7 @@
 """设计管理视图：设计的CRUD、点赞、分享、下载。"""
 
 import logging
+import zipfile
 from io import BytesIO
 
 from django.core.files.base import ContentFile
@@ -40,7 +41,7 @@ from ..services.design_version import (
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_DOWNLOAD_TYPES = ("json", "png", "pdf")
+SUPPORTED_DOWNLOAD_TYPES = ("json", "png", "pdf", "report", "zip")
 
 
 def _stored_file_exists(field_file):
@@ -81,6 +82,55 @@ def _generate_design_pdf(design):
     default_storage.save(relative_pdf_path, ContentFile(pdf_buffer.getvalue()))
 
     return relative_pdf_path
+
+
+def _generate_design_report_pdf(design):
+    """生成专业 PDF 报告，并返回存储路径。"""
+    # 当前报告第一版复用路线图 PDF 生成能力，文件名独立，后续可继续扩展封面、清单、规则检查与教练说明页。
+    relative_pdf_path = f"user_{design.author.id}/designs/{design.id}/report.pdf"
+    pdf_buffer = BytesIO()
+
+    with design.image.open("rb") as image_file:
+        with Image.open(image_file) as image:
+            if image.mode in ("RGBA", "LA"):
+                background = Image.new("RGB", image.size, "white")
+                background.paste(image, mask=image.getchannel("A"))
+                pdf_image = background
+            else:
+                pdf_image = image.convert("RGB")
+
+            try:
+                pdf_image.save(pdf_buffer, "PDF", resolution=100.0)
+            finally:
+                if pdf_image is not image:
+                    pdf_image.close()
+
+    if default_storage.exists(relative_pdf_path):
+        default_storage.delete(relative_pdf_path)
+    default_storage.save(relative_pdf_path, ContentFile(pdf_buffer.getvalue()))
+    return relative_pdf_path
+
+
+def _generate_design_zip(design):
+    """生成包含 JSON、PNG 和专业报告 PDF 的批量导出 ZIP。"""
+    relative_zip_path = f"user_{design.author.id}/designs/{design.id}/export.zip"
+    report_path = _generate_design_report_pdf(design)
+    zip_buffer = BytesIO()
+
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        if _stored_file_exists(design.download):
+            with design.download.open("rb") as file_obj:
+                archive.writestr(_build_download_filename(design.title, "json"), file_obj.read())
+        if _stored_file_exists(design.image):
+            with design.image.open("rb") as file_obj:
+                archive.writestr(_build_download_filename(design.title, "png"), file_obj.read())
+        with default_storage.open(report_path, "rb") as file_obj:
+            archive.writestr(_build_download_filename(f"{design.title}-专业报告", "pdf"), file_obj.read())
+
+    if default_storage.exists(relative_zip_path):
+        default_storage.delete(relative_zip_path)
+    default_storage.save(relative_zip_path, ContentFile(zip_buffer.getvalue()))
+    return relative_zip_path
 
 
 class DesignViewSet(viewsets.ModelViewSet):
@@ -350,7 +400,7 @@ class DesignViewSet(viewsets.ModelViewSet):
             file_type = request.query_params.get("type", "json").strip().lower()
             if file_type not in SUPPORTED_DOWNLOAD_TYPES:
                 return error_response(
-                    "不支持的文件类型，支持的类型有：json, png, pdf",
+                    "不支持的文件类型，支持的类型有：json, png, pdf, report, zip",
                     status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -395,7 +445,37 @@ class DesignViewSet(viewsets.ModelViewSet):
                 download_url = get_absolute_media_url(
                     default_storage.url(relative_pdf_path)
                 )
-            filename = _build_download_filename(design.title, file_type)
+            elif file_type == "report":
+                if not _stored_file_exists(design.image):
+                    return error_response(
+                        "该设计没有可用于生成报告的图片",
+                        status.HTTP_404_NOT_FOUND,
+                    )
+                try:
+                    relative_report_path = _generate_design_report_pdf(design)
+                except Exception:
+                    logger.exception("生成设计报告失败: ID=%s", design.id)
+                    return error_response(
+                        "报告生成失败，请稍后重试",
+                        status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    )
+                download_url = get_absolute_media_url(default_storage.url(relative_report_path))
+            elif file_type == "zip":
+                if not _stored_file_exists(design.image):
+                    return error_response(
+                        "该设计没有可用于批量导出的图片",
+                        status.HTTP_404_NOT_FOUND,
+                    )
+                try:
+                    relative_zip_path = _generate_design_zip(design)
+                except Exception:
+                    logger.exception("生成设计ZIP失败: ID=%s", design.id)
+                    return error_response(
+                        "批量导出失败，请稍后重试",
+                        status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    )
+                download_url = get_absolute_media_url(default_storage.url(relative_zip_path))
+            filename = _build_download_filename(design.title, "pdf" if file_type == "report" else file_type)
 
             # 文件准备成功后再增加下载计数
             Design.objects.filter(pk=pk).update(

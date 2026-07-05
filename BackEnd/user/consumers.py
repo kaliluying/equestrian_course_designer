@@ -11,6 +11,7 @@
 """
 
 import json  # 用于JSON数据的序列化和反序列化
+import hashlib
 
 # Django Channels的异步WebSocket消费者基类
 from channels.generic.websocket import AsyncWebsocketConsumer
@@ -84,7 +85,7 @@ def get_design_by_id(design_id):
         return None
 
 
-def validate_share_token(token, design_id):
+def validate_share_token(token, design_id, password=None):
     """
     验证分享令牌
 
@@ -109,6 +110,7 @@ def validate_share_token(token, design_id):
         token_design_id = payload.get("design_id")
         scope = payload.get("scope")
         exp = payload.get("exp")
+        password_hash = payload.get("password_hash")
 
         # 验证design_id匹配
         if token_design_id != design_id:
@@ -117,6 +119,12 @@ def validate_share_token(token, design_id):
         # 验证scope
         if scope != "collaboration:join":
             return False, CLOSE_CODE_INVALID_SHARE_TOKEN, "invalid_share_token"
+
+        # 验证访问密码
+        if password_hash:
+            provided_hash = hashlib.sha256((password or "").encode("utf-8")).hexdigest()
+            if provided_hash != password_hash:
+                return False, CLOSE_CODE_INVALID_SHARE_TOKEN, "invalid_share_password"
 
         # 验证过期时间
         if exp and timezone.now().timestamp() > exp:
@@ -171,13 +179,14 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                         query_params[key] = value
 
             self.share_token = query_params.get("share_token", None)
+            self.share_password = query_params.get("password", None)
             self.is_via_link = "via_link=true" in query_string
 
             # 3. 验证分享令牌
             if self.share_token:
                 # 验证share_token
                 is_valid, error_code, error_reason = validate_share_token(
-                    self.share_token, self.design_id
+                    self.share_token, self.design_id, password=self.share_password
                 )
                 if not is_valid:
                     logger.warning(

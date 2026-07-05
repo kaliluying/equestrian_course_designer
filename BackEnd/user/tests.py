@@ -1470,6 +1470,111 @@ class CollaborationEnhancementAPITest(TestCase):
         self.assertTrue(viewer.can_comment)
 
 
+class ProfessionalExportAndSharePermissionTest(TestCase):
+    """专业导出、批量导出与分享链接权限测试"""
+
+    def setUp(self):
+        self.media_root = tempfile.mkdtemp()
+        self.override = override_settings(
+            MEDIA_ROOT=self.media_root,
+            SITE_DOMAIN="localhost:8000",
+            USE_HTTPS=False,
+        )
+        self.override.enable()
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="export_user",
+            email="export@example.com",
+            password="Password123",
+        )
+        UserProfile.objects.get_or_create(user=self.user)
+        self.client.force_authenticate(user=self.user)
+
+    def tearDown(self):
+        self.override.disable()
+        shutil.rmtree(self.media_root, ignore_errors=True)
+
+    def _png_bytes(self):
+        image = Image.new("RGB", (160, 120), "white")
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    def _create_design(self):
+        design = Design(title="专业导出设计", author=self.user, description="报告描述", is_shared=True)
+        design.image.save("design.png", ContentFile(self._png_bytes()), save=False)
+        design.download.save(
+            "design.json",
+            ContentFile(json.dumps({"obstacles": [{"id": "obs-1", "number": "1"}]}).encode("utf-8")),
+            save=False,
+        )
+        design.save()
+        return design
+
+    def test_download_report_pdf_returns_professional_report(self):
+        """report 下载应生成专业 PDF 报告"""
+        design = self._create_design()
+
+        response = self.client.get(f"/user/designs/{design.id}/download/?type=report")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["file_type"], "report")
+        self.assertTrue(data["filename"].endswith(".pdf"))
+        self.assertIn("/media/", data["download_url"])
+
+    def test_download_zip_returns_batch_package(self):
+        """zip 下载应生成包含多格式资产的批量导出包"""
+        design = self._create_design()
+
+        response = self.client.get(f"/user/designs/{design.id}/download/?type=zip")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["file_type"], "zip")
+        self.assertTrue(data["filename"].endswith(".zip"))
+        zip_path = os.path.join(self.media_root, f"user_{self.user.id}", "designs", str(design.id), "export.zip")
+        self.assertTrue(os.path.exists(zip_path))
+
+    def test_share_link_can_be_revoked(self):
+        """分享链接应支持撤销"""
+        design = self._create_design()
+
+        response = self.client.delete(f"/user/designs/{design.id}/share-link/")
+
+        self.assertEqual(response.status_code, 200)
+        design.refresh_from_db()
+        self.assertFalse(design.is_shared)
+
+    def test_password_protected_share_token_requires_matching_password(self):
+        """带密码分享令牌应校验访问密码"""
+        from user.consumers import validate_share_token, CLOSE_CODE_INVALID_SHARE_TOKEN
+        from django.core import signing
+        import hashlib
+
+        token = signing.dumps(
+            {
+                "design_id": 99,
+                "scope": "collaboration:join",
+                "role": "viewer",
+                "password_hash": hashlib.sha256("secret".encode("utf-8")).hexdigest(),
+                "exp": int((timezone.now() + timezone.timedelta(hours=1)).timestamp()),
+            },
+            salt="collab-share",
+        )
+
+        invalid, code, _ = validate_share_token(token, 99, password="wrong")
+        self.assertFalse(invalid)
+        self.assertEqual(code, CLOSE_CODE_INVALID_SHARE_TOKEN)
+
+        valid, code, reason = validate_share_token(token, 99, password="secret")
+        self.assertTrue(valid)
+        self.assertIsNone(code)
+        self.assertIsNone(reason)
+
+
 class MembershipPlanCommandTest(TestCase):
     """会员计划初始化命令测试"""
 
