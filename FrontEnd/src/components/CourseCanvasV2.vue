@@ -306,6 +306,9 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { throttle } from 'lodash'
 import { useCourseStore } from '@/stores/course'
 import { useHistoryStore } from '@/stores/history'
+import { useCanvasSelection } from '@/composables/useCanvasSelection'
+import { useCanvasDragState } from '@/composables/useCanvasDragState'
+import { usePathEditingState } from '@/composables/usePathEditingState'
 import { useObstacleStore } from '@/stores/obstacle'
 import { useUserStore } from '@/stores/user'
 import { ConnectionStatus, useWebSocketStore } from '@/stores/websocket'
@@ -326,59 +329,30 @@ const svgRef = ref<SVGSVGElement | null>(null)
 const PASTE_OFFSET_METERS = 1.5
 const CURVE_LENGTH_SAMPLE_STEPS = 24
 
-const selectedObstacleId = ref<string | null>(null)
-const selectedObstacleIds = ref<string[]>([])
+const {
+  selectedObstacleId,
+  selectedObstacleIds,
+  isObstacleSelected,
+  setSelectedObstacleIds,
+} = useCanvasSelection(courseStore)
 const showHelpers = ref(true)
 const showDistanceLabels = ref(true)
 const isPathUpdateFromWebSocket = ref(false)
 const copiedObstacles = ref<Obstacle[]>([])
 const pasteCount = ref(0)
 
-const draggingObstacles = ref<{
-  ids: string[]
-  pointerStart: { x: number; y: number }
-  startPositions: Record<string, { x: number; y: number }>
-  currentPositions?: Record<string, { x: number; y: number }>
-} | null>(null)
+const {
+  draggingObstacles,
+  draggingNumber,
+  rotatingObstacle,
+  selectingState,
+} = useCanvasDragState()
 
-const draggingNumber = ref<{
-  id: string
-  pointerStart: { x: number; y: number }
-  startPosition: { x: number; y: number }
-  currentPosition?: { x: number; y: number }
-} | null>(null)
-
-const rotatingObstacle = ref<{
-  id: string
-  center: { x: number; y: number }
-  startAngle: number
-  startRotation: number
-  currentRotation?: number
-} | null>(null)
-
-const draggingPathPoint = ref<{
-  pointType: 'start' | 'end'
-  offsetX: number
-  offsetY: number
-} | null>(null)
-
-const rotatingPathPoint = ref<{
-  pointType: 'start' | 'end'
-  startAngle: number
-  startRotation: number
-} | null>(null)
-
-const draggingControlPoint = ref<{
-  pointIndex: number
-  controlPointNumber: 1 | 2
-} | null>(null)
-
-const selectingState = ref<{
-  start: { x: number; y: number }
-  end: { x: number; y: number }
-  additive: boolean
-  baseSelectedIds: string[]
-} | null>(null)
+const {
+  draggingPathPoint,
+  rotatingPathPoint,
+  draggingControlPoint,
+} = usePathEditingState()
 
 const fieldWidth = computed(() => courseStore.currentCourse.fieldWidth)
 const fieldHeight = computed(() => courseStore.currentCourse.fieldHeight)
@@ -574,19 +548,6 @@ const getSelectedObstacles = () =>
   selectedObstacleIds.value
     .map((id) => courseStore.currentCourse.obstacles.find((obstacle) => obstacle.id === id) || null)
     .filter((item): item is Obstacle => Boolean(item))
-
-const isObstacleSelected = (obstacleId: string) => selectedObstacleIds.value.includes(obstacleId)
-
-const setSelectedObstacleIds = (ids: string[]) => {
-  const availableIds = new Set(courseStore.currentCourse.obstacles.map((obstacle) => obstacle.id))
-  const uniqueIds = Array.from(new Set(ids)).filter((id) => availableIds.has(id))
-  selectedObstacleIds.value = uniqueIds
-  selectedObstacleId.value = uniqueIds[0] || null
-  courseStore.selectedObstacle =
-    uniqueIds.length > 0
-      ? courseStore.currentCourse.obstacles.find((obstacle) => obstacle.id === uniqueIds[0]) || null
-      : null
-}
 
 const rotatePoint = (
   point: { x: number; y: number },

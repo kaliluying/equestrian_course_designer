@@ -15,7 +15,9 @@
     "serve": "vite preview --port 4173",
     "clean": "node -e \"if (require('fs').existsSync('dist')) require('fs').rmSync('dist', { recursive: true, force: true })\"",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "api-types:generate": "node scripts/generate-openapi-types.mjs ../BackEnd/openapi.json src/types/generated-api.ts",
+    "api-types:check": "node scripts/generate-openapi-types.mjs ../BackEnd/openapi.json src/types/generated-api.ts --check"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",

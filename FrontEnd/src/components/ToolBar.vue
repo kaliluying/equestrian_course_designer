@@ -214,6 +214,8 @@ import AIGenerateDialog from '@/components/AIGenerateDialog.vue'
 
 
 
+import { buildSaveDesignRequest } from '@/composables/useDesignSave'
+import { useDesignExport } from '@/composables/useDesignExport'
 import { exportManager } from '@/utils/exportManager'
 import { ExportFormat, ExportStage, type PDFExportOptions, type JSONExportOptions, type ProgressState, type ExportResult } from '@/types/export'
 
@@ -248,6 +250,7 @@ const exportOptionsVisible = ref(false)
 const currentExportFormat = ref<ExportFormat>(ExportFormat.PNG)
 const exportProgress = ref<ProgressState | null>(null)
 const isExporting = ref(false)
+const { buildTimestampedFileName, downloadBlob, exportSavedDesignPackage } = useDesignExport()
 
 // JSON默认配置常量
 const DEFAULT_JSON_OPTIONS: JSONExportOptions = {
@@ -704,9 +707,7 @@ const executeDirectJSONExport = async () => {
     }
 
     // 设置文件名
-    const date = new Date()
-    const formattedDateTime = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`
-    const fileName = `${courseStore.currentCourse.name}-${formattedDateTime}`
+    const fileName = buildTimestampedFileName(courseStore.currentCourse.name)
     const sourceVersion = courseStore.currentCourse.renderVersion ?? 'v1'
 
     // 执行JSON导出（使用默认配置常量）
@@ -805,14 +806,12 @@ const executeServerDownloadExport = async (fileType: 'report' | 'zip') => {
   }
 
   try {
-    const response = await downloadDesign(Number(designId), fileType)
+    await exportSavedDesignPackage(designId, fileType)
     exportProgress.value = {
       stage: ExportStage.FINALIZING,
       progress: 100,
       message: '文件已生成，正在下载...',
     }
-    await triggerDesignDownload(response)
-    ElMessage.success(fileType === 'report' ? '专业报告导出成功' : '批量导出包已下载')
   } catch (error) {
     console.error('服务端导出失败:', error)
     ElMessage.error(fileType === 'report' ? '专业报告导出失败' : '批量导出失败')
@@ -934,9 +933,7 @@ const executePDFExport = async () => {
     const options = exportOptions.value[ExportFormat.PDF]
 
     // 设置文件名
-    const date = new Date()
-    const formattedDateTime = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`
-    const fileName = `${courseStore.currentCourse.name}-${formattedDateTime}`
+    const fileName = buildTimestampedFileName(courseStore.currentCourse.name)
 
     // 设置文件名到选项中，并添加用户信息
     const exportOptionsWithFileName = {
@@ -1023,23 +1020,6 @@ const executePDFExport = async () => {
     exportOptionsVisible.value = false
   }
 }
-
-// 下载Blob数据
-const downloadBlob = (blob: Blob, filename: string) => {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
-}
-
-
-
-
-
 
 // 修改 emit 定义，添加 show-login 事件
 const emit = defineEmits(['show-login'])

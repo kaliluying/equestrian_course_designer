@@ -1,0 +1,5007 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "马术障碍赛路线设计器 API",
+        "version": "1.0.0",
+        "description": "路线设计、用户、会员、支付、AI 生成、反馈和协作接口"
+    },
+    "paths": {
+        "/api/feedback/": {
+            "get": {
+                "operationId": "api_feedback_list",
+                "description": "反馈视图集",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "required": false,
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedFeedbackList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "api_feedback_create",
+                "description": "创建反馈",
+                "tags": [
+                    "api"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FeedbackRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FeedbackRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FeedbackRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Feedback"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/feedback/{id}/": {
+            "get": {
+                "operationId": "api_feedback_retrieve",
+                "description": "反馈视图集",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 用户反馈.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Feedback"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "api_feedback_update",
+                "description": "反馈视图集",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 用户反馈.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FeedbackRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FeedbackRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FeedbackRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Feedback"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "api_feedback_partial_update",
+                "description": "反馈视图集",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 用户反馈.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedFeedbackRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedFeedbackRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedFeedbackRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Feedback"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "api_feedback_destroy",
+                "description": "反馈视图集",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 用户反馈.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/feedback/dashboard": {
+            "get": {
+                "operationId": "api_feedback_dashboard_retrieve",
+                "description": "管理仪表盘首页",
+                "summary": "管理仪表盘首页",
+                "tags": [
+                    "api"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {
+                        "basicAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/admin/analytics/": {
+            "get": {
+                "operationId": "user_admin_analytics_retrieve",
+                "description": "运营数据看板核心指标。",
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/user/ai/coach-notes/": {
+            "post": {
+                "operationId": "user_ai_coach_notes_create",
+                "description": "根据当前路线生成教练说明。",
+                "summary": "生成教练说明",
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/ai/edit-course/": {
+            "post": {
+                "operationId": "user_ai_edit_course_create",
+                "description": "基于当前路线进行 AI/规则二次编辑。",
+                "summary": "AI 二次编辑路线",
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/ai/generate/": {
+            "post": {
+                "operationId": "user_ai_generate_create",
+                "description": "AI 生成路线",
+                "summary": "AI 生成路线",
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/ai/history/": {
+            "get": {
+                "operationId": "user_ai_history_retrieve",
+                "description": "获取 AI 生成历史",
+                "summary": "获取 AI 生成历史",
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/ai/purchase/": {
+            "post": {
+                "operationId": "user_ai_purchase_create",
+                "description": "购买 AI 配额",
+                "summary": "购买 AI 配额",
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/ai/quota/": {
+            "get": {
+                "operationId": "user_ai_quota_retrieve",
+                "description": "获取 AI 配额信息",
+                "summary": "获取 AI 配额",
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/api/payment/alipay/notify/": {
+            "post": {
+                "operationId": "user_api_payment_alipay_notify_create",
+                "description": "支付宝异步通知处理",
+                "summary": "支付宝异步通知",
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/api/payment/create-order/": {
+            "post": {
+                "operationId": "user_api_payment_create_order_create",
+                "description": "创建会员订单并返回支付链接",
+                "summary": "创建会员订单",
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateMembershipOrderRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateMembershipOrderRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateMembershipOrderRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/api/payment/order-status/{order_id}/": {
+            "get": {
+                "operationId": "user_api_payment_order_status_retrieve",
+                "description": "查询订单状态",
+                "summary": "查询订单状态",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "order_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/api/payment/orders/": {
+            "get": {
+                "operationId": "user_api_payment_orders_list",
+                "description": "获取用户的所有订单",
+                "summary": "获取当前用户订单",
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/MembershipOrder"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/api/payment/orders/{order_id}/": {
+            "get": {
+                "operationId": "user_api_payment_orders_retrieve",
+                "description": "获取当前用户订单详情。",
+                "summary": "获取订单详情",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "order_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/api/payment/orders/{order_id}/invoice/": {
+            "post": {
+                "operationId": "user_api_payment_orders_invoice_create",
+                "description": "用户提交订单发票信息。",
+                "summary": "提交订单发票",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "order_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/api/payment/orders/{order_id}/invoice/mark-issued/": {
+            "post": {
+                "operationId": "user_api_payment_orders_invoice_mark_issued_create",
+                "description": "后台标记发票已开具。",
+                "summary": "标记发票已开具",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "order_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": {}
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/csrf/": {
+            "get": {
+                "operationId": "user_csrf_retrieve",
+                "description": "获取CSRF令牌",
+                "summary": "获取 CSRF Token",
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/designs/": {
+            "get": {
+                "operationId": "user_designs_list",
+                "description": "设计视图集",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "required": false,
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedDesignList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "user_designs_create",
+                "description": "创建设计前检查存储限制",
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Design"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/designs/{design_id}/share-link/": {
+            "post": {
+                "operationId": "user_designs_share_link_create",
+                "description": "生成协作分享链接视图。",
+                "summary": "生成协作分享链接",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "design_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "user_designs_share_link_destroy",
+                "description": "生成协作分享链接视图。",
+                "summary": "撤销协作分享链接",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "design_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/user/designs/{id}/": {
+            "get": {
+                "operationId": "user_designs_retrieve",
+                "description": "设计视图集",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 设计图.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Design"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "user_designs_update",
+                "description": "设计视图集",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 设计图.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Design"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "user_designs_partial_update",
+                "description": "设计视图集",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 设计图.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedDesignRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedDesignRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedDesignRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Design"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "user_designs_destroy",
+                "description": "设计视图集",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 设计图.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/user/designs/{id}/collaboration-events/": {
+            "get": {
+                "operationId": "user_designs_collaboration_events_retrieve",
+                "description": "获取设计协作活动时间线。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 设计图.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Design"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/designs/{id}/comments/": {
+            "get": {
+                "operationId": "user_designs_comments_retrieve",
+                "description": "获取或创建设计评论。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 设计图.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Design"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "user_designs_comments_create",
+                "description": "获取或创建设计评论。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 设计图.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Design"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/designs/{id}/comments/{comment_id}/resolve/": {
+            "post": {
+                "operationId": "user_designs_comments_resolve_create",
+                "description": "解决或取消解决设计评论。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "comment_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 设计图.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Design"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/designs/{id}/download/": {
+            "get": {
+                "operationId": "user_designs_download_retrieve",
+                "description": "下载设计并增加下载计数",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 设计图.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Design"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/designs/{id}/like/": {
+            "post": {
+                "operationId": "user_designs_like_create",
+                "description": "点赞设计",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 设计图.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Design"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/designs/{id}/share/": {
+            "post": {
+                "operationId": "user_designs_share_create",
+                "description": "分享/取消分享设计",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 设计图.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Design"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/designs/{id}/toggle-share/": {
+            "post": {
+                "operationId": "user_designs_toggle_share_create",
+                "description": "切换设计的分享状态",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 设计图.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Design"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/designs/{id}/versions/": {
+            "get": {
+                "operationId": "user_designs_versions_retrieve",
+                "description": "获取设计版本列表。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 设计图.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Design"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/designs/{id}/versions/{version_id}/": {
+            "get": {
+                "operationId": "user_designs_versions_retrieve_2",
+                "description": "获取或更新设计版本详情。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 设计图.",
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "version_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Design"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "user_designs_versions_partial_update",
+                "description": "获取或更新设计版本详情。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 设计图.",
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "version_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedDesignRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedDesignRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedDesignRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Design"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/designs/{id}/versions/{version_id}/copy/": {
+            "post": {
+                "operationId": "user_designs_versions_copy_create",
+                "description": "复制设计版本为新设计。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 设计图.",
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "version_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Design"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/designs/{id}/versions/{version_id}/restore/": {
+            "post": {
+                "operationId": "user_designs_versions_restore_create",
+                "description": "恢复设计版本。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 设计图.",
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "version_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Design"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/designs/fix-course/": {
+            "post": {
+                "operationId": "user_designs_fix_course_create",
+                "description": "自动修复当前路线中的可修复规则问题。",
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Design"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/designs/my/": {
+            "get": {
+                "operationId": "user_designs_my_retrieve",
+                "description": "获取当前用户的所有设计",
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Design"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/designs/shared/": {
+            "get": {
+                "operationId": "user_designs_shared_retrieve",
+                "description": "获取所有公开分享的设计",
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DesignList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/designs/validate-course/": {
+            "post": {
+                "operationId": "user_designs_validate_course_create",
+                "description": "校验当前路线并返回结构化规则检查结果。",
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DesignRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Design"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/forgot-password/": {
+            "post": {
+                "operationId": "user_forgot_password_create",
+                "description": "发送密码重置邮件",
+                "summary": "发送密码重置邮件",
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ForgotPasswordRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ForgotPasswordRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ForgotPasswordRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/login/": {
+            "post": {
+                "operationId": "user_login_create",
+                "description": "用户登录 - 设置 httpOnly cookies",
+                "summary": "用户登录",
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserLoginRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserLoginRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserLoginRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/logout/": {
+            "post": {
+                "operationId": "user_logout_create",
+                "description": "用户登出视图\n清除服务端设置的 httpOnly token cookies。",
+                "summary": "用户登出",
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/obstacles/": {
+            "get": {
+                "operationId": "user_obstacles_list",
+                "description": "自定义障碍物视图集\n提供自定义障碍物的CRUD操作\n支持分页、搜索和排序",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "required": false,
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "page_size",
+                        "required": false,
+                        "in": "query",
+                        "description": "Number of results to return per page.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedCustomObstacleList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "user_obstacles_create",
+                "description": "自定义障碍物视图集\n提供自定义障碍物的CRUD操作\n支持分页、搜索和排序",
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CustomObstacleRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CustomObstacleRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CustomObstacleRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CustomObstacle"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/obstacles/{id}/": {
+            "get": {
+                "operationId": "user_obstacles_retrieve",
+                "description": "自定义障碍物视图集\n提供自定义障碍物的CRUD操作\n支持分页、搜索和排序",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 自定义障碍物.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CustomObstacle"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "user_obstacles_update",
+                "description": "自定义障碍物视图集\n提供自定义障碍物的CRUD操作\n支持分页、搜索和排序",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 自定义障碍物.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CustomObstacleRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CustomObstacleRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CustomObstacleRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CustomObstacle"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "user_obstacles_partial_update",
+                "description": "自定义障碍物视图集\n提供自定义障碍物的CRUD操作\n支持分页、搜索和排序",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 自定义障碍物.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedCustomObstacleRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedCustomObstacleRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedCustomObstacleRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CustomObstacle"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "user_obstacles_destroy",
+                "description": "自定义障碍物视图集\n提供自定义障碍物的CRUD操作\n支持分页、搜索和排序",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 自定义障碍物.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/user/obstacles/{id}/toggle-share/": {
+            "post": {
+                "operationId": "user_obstacles_toggle_share_create",
+                "description": "切换障碍物的共享状态",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 自定义障碍物.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CustomObstacleRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CustomObstacleRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CustomObstacleRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CustomObstacle"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/obstacles/count/": {
+            "get": {
+                "operationId": "user_obstacles_count_retrieve",
+                "description": "获取用户自定义障碍物数量和限制",
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CustomObstacle"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/obstacles/shared/": {
+            "get": {
+                "operationId": "user_obstacles_shared_retrieve",
+                "description": "获取其他用户共享的障碍物\n支持分页、搜索和排序",
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CustomObstacle"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/register/": {
+            "post": {
+                "operationId": "user_register_create",
+                "description": "用户注册",
+                "summary": "用户注册",
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserRegisterRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserRegisterRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserRegisterRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/reset-password/": {
+            "post": {
+                "operationId": "user_reset_password_create",
+                "description": "使用令牌重置密码",
+                "summary": "重置密码",
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ResetPasswordRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ResetPasswordRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ResetPasswordRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/templates/": {
+            "get": {
+                "operationId": "user_templates_list",
+                "description": "路线模板视图集。",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "required": false,
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedCourseTemplateList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "user_templates_create",
+                "description": "路线模板视图集。",
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CourseTemplateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CourseTemplateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CourseTemplateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CourseTemplate"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/templates/{id}/": {
+            "get": {
+                "operationId": "user_templates_retrieve",
+                "description": "路线模板视图集。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CourseTemplate"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "user_templates_update",
+                "description": "路线模板视图集。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CourseTemplateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CourseTemplateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CourseTemplateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CourseTemplate"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "user_templates_partial_update",
+                "description": "路线模板视图集。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedCourseTemplateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedCourseTemplateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedCourseTemplateRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CourseTemplate"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "user_templates_destroy",
+                "description": "路线模板视图集。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/user/templates/{id}/create-design/": {
+            "post": {
+                "operationId": "user_templates_create_design_create",
+                "description": "路线模板视图集。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CourseTemplateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CourseTemplateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CourseTemplateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CourseTemplate"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/templates/{id}/favorite/": {
+            "post": {
+                "operationId": "user_templates_favorite_create",
+                "description": "路线模板视图集。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CourseTemplateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CourseTemplateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CourseTemplateRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CourseTemplate"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/token/refresh/": {
+            "post": {
+                "operationId": "user_token_refresh_create",
+                "description": "Refresh access token using refresh token from cookie.",
+                "summary": "刷新 Token",
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/users/": {
+            "get": {
+                "operationId": "user_users_list",
+                "description": "用户管理视图集，提供用户相关的API",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "required": false,
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedUserRegisterList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "user_users_create",
+                "description": "用户管理视图集，提供用户相关的API",
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserRegisterRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserRegisterRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserRegisterRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserRegister"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/users/{id}/": {
+            "get": {
+                "operationId": "user_users_retrieve",
+                "description": "用户管理视图集，提供用户相关的API",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 用户.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserRegister"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "put": {
+                "operationId": "user_users_update",
+                "description": "用户管理视图集，提供用户相关的API",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 用户.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserRegisterRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserRegisterRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserRegisterRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserRegister"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "user_users_partial_update",
+                "description": "用户管理视图集，提供用户相关的API",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 用户.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUserRegisterRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUserRegisterRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUserRegisterRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserRegister"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "user_users_destroy",
+                "description": "用户管理视图集，提供用户相关的API",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 用户.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/user/users/{id}/set_premium/": {
+            "post": {
+                "operationId": "user_users_set_premium_create",
+                "description": "设置用户的会员状态",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this 用户.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserRegisterRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserRegisterRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserRegisterRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserRegister"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/users/change_email/": {
+            "post": {
+                "operationId": "user_users_change_email_create",
+                "description": "修改用户邮箱",
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserRegisterRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserRegisterRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserRegisterRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserRegister"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/users/change_password/": {
+            "post": {
+                "operationId": "user_users_change_password_create",
+                "description": "修改用户密码",
+                "tags": [
+                    "user"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserRegisterRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserRegisterRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserRegisterRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserRegister"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/users/check_premium/": {
+            "get": {
+                "operationId": "user_users_check_premium_retrieve",
+                "description": "检查用户会员状态（轻量级接口）",
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserRegister"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/user/users/my_profile/": {
+            "get": {
+                "operationId": "user_users_my_profile_retrieve",
+                "description": "获取当前用户资料",
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserRegister"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "CourseTemplate": {
+                "type": "object",
+                "description": "路线模板序列化器。",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "title": {
+                        "type": "string",
+                        "title": "模板标题",
+                        "maxLength": 120
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true,
+                        "title": "模板描述"
+                    },
+                    "difficulty": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/DifficultyEnum"
+                            }
+                        ],
+                        "title": "难度"
+                    },
+                    "field_width": {
+                        "type": "integer",
+                        "maximum": 4294967295,
+                        "minimum": 0,
+                        "format": "int64",
+                        "title": "场地宽度"
+                    },
+                    "field_height": {
+                        "type": "integer",
+                        "maximum": 4294967295,
+                        "minimum": 0,
+                        "format": "int64",
+                        "title": "场地高度"
+                    },
+                    "obstacle_count": {
+                        "type": "integer",
+                        "maximum": 4294967295,
+                        "minimum": 0,
+                        "format": "int64",
+                        "title": "障碍数量"
+                    },
+                    "course_data": {
+                        "title": "路线数据"
+                    },
+                    "cover_image": {
+                        "type": "string",
+                        "format": "uri",
+                        "nullable": true,
+                        "title": "封面图"
+                    },
+                    "is_public": {
+                        "type": "boolean",
+                        "title": "是否公开"
+                    },
+                    "is_official": {
+                        "type": "boolean",
+                        "title": "是否官方"
+                    },
+                    "author": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "title": "作者"
+                    },
+                    "author_username": {
+                        "type": "string",
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "copy_count": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "title": "复制次数"
+                    },
+                    "favorite_count": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "title": "收藏次数"
+                    },
+                    "is_favorited": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "title": "创建时间"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "title": "更新时间"
+                    }
+                },
+                "required": [
+                    "author",
+                    "author_username",
+                    "copy_count",
+                    "created_at",
+                    "favorite_count",
+                    "id",
+                    "is_favorited",
+                    "title",
+                    "updated_at"
+                ]
+            },
+            "CourseTemplateRequest": {
+                "type": "object",
+                "description": "路线模板序列化器。",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "title": "模板标题",
+                        "maxLength": 120
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true,
+                        "title": "模板描述"
+                    },
+                    "difficulty": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/DifficultyEnum"
+                            }
+                        ],
+                        "title": "难度"
+                    },
+                    "field_width": {
+                        "type": "integer",
+                        "maximum": 4294967295,
+                        "minimum": 0,
+                        "format": "int64",
+                        "title": "场地宽度"
+                    },
+                    "field_height": {
+                        "type": "integer",
+                        "maximum": 4294967295,
+                        "minimum": 0,
+                        "format": "int64",
+                        "title": "场地高度"
+                    },
+                    "obstacle_count": {
+                        "type": "integer",
+                        "maximum": 4294967295,
+                        "minimum": 0,
+                        "format": "int64",
+                        "title": "障碍数量"
+                    },
+                    "course_data": {
+                        "title": "路线数据"
+                    },
+                    "cover_image": {
+                        "type": "string",
+                        "format": "binary",
+                        "nullable": true,
+                        "title": "封面图"
+                    },
+                    "is_public": {
+                        "type": "boolean",
+                        "title": "是否公开"
+                    },
+                    "is_official": {
+                        "type": "boolean",
+                        "title": "是否官方"
+                    }
+                },
+                "required": [
+                    "title"
+                ]
+            },
+            "CreateMembershipOrderBillingCycleEnum": {
+                "enum": [
+                    "month",
+                    "year"
+                ],
+                "type": "string",
+                "description": "* `month` - month\n* `year` - year"
+            },
+            "CreateMembershipOrderRequest": {
+                "type": "object",
+                "properties": {
+                    "plan_id": {
+                        "type": "integer"
+                    },
+                    "billing_cycle": {
+                        "$ref": "#/components/schemas/CreateMembershipOrderBillingCycleEnum"
+                    }
+                },
+                "required": [
+                    "billing_cycle",
+                    "plan_id"
+                ]
+            },
+            "CustomObstacle": {
+                "type": "object",
+                "description": "自定义障碍物序列化器",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "title": "障碍物名称",
+                        "maxLength": 100
+                    },
+                    "obstacle_data": {
+                        "title": "障碍物数据"
+                    },
+                    "user": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "title": "用户"
+                    },
+                    "user_username": {
+                        "type": "string",
+                        "description": "获取用户名",
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "title": "创建时间"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "title": "更新时间"
+                    },
+                    "is_shared": {
+                        "type": "boolean",
+                        "title": "是否共享"
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "id",
+                    "name",
+                    "obstacle_data",
+                    "updated_at",
+                    "user",
+                    "user_username"
+                ]
+            },
+            "CustomObstacleRequest": {
+                "type": "object",
+                "description": "自定义障碍物序列化器",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "title": "障碍物名称",
+                        "maxLength": 100
+                    },
+                    "obstacle_data": {
+                        "title": "障碍物数据"
+                    },
+                    "is_shared": {
+                        "type": "boolean",
+                        "title": "是否共享"
+                    }
+                },
+                "required": [
+                    "name",
+                    "obstacle_data"
+                ]
+            },
+            "Design": {
+                "type": "object",
+                "description": "设计序列化器",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "author_username": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "获取作者用户名",
+                        "readOnly": true
+                    },
+                    "is_liked": {
+                        "type": "boolean",
+                        "description": "当前用户是否已点赞",
+                        "readOnly": true
+                    },
+                    "image_url": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "获取正确的图片URL",
+                        "readOnly": true
+                    },
+                    "download_url": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "获取正确的下载URL",
+                        "readOnly": true
+                    },
+                    "title": {
+                        "type": "string",
+                        "title": "设计图标题",
+                        "maxLength": 100
+                    },
+                    "image": {
+                        "type": "string",
+                        "format": "uri",
+                        "title": "设计图图片"
+                    },
+                    "create_time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "title": "创建时间"
+                    },
+                    "update_time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "title": "更新时间"
+                    },
+                    "download": {
+                        "type": "string",
+                        "format": "uri",
+                        "nullable": true,
+                        "title": "设计图文件"
+                    },
+                    "is_shared": {
+                        "type": "boolean",
+                        "title": "是否分享"
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true,
+                        "title": "设计描述"
+                    },
+                    "likes_count": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "title": "点赞数"
+                    },
+                    "downloads_count": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "title": "下载数"
+                    },
+                    "author": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "title": "作者"
+                    }
+                },
+                "required": [
+                    "author",
+                    "author_username",
+                    "create_time",
+                    "download_url",
+                    "downloads_count",
+                    "id",
+                    "image",
+                    "image_url",
+                    "is_liked",
+                    "likes_count",
+                    "title",
+                    "update_time"
+                ]
+            },
+            "DesignList": {
+                "type": "object",
+                "description": "设计列表序列化器（用于公开分享列表）",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "title": {
+                        "type": "string",
+                        "readOnly": true,
+                        "title": "设计图标题"
+                    },
+                    "image": {
+                        "type": "string",
+                        "format": "uri",
+                        "readOnly": true,
+                        "title": "设计图图片"
+                    },
+                    "image_url": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "获取正确的图片URL",
+                        "readOnly": true
+                    },
+                    "create_time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "title": "创建时间"
+                    },
+                    "update_time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "title": "更新时间"
+                    },
+                    "author": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "title": "作者"
+                    },
+                    "author_username": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "获取作者用户名",
+                        "readOnly": true
+                    },
+                    "likes_count": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "title": "点赞数"
+                    },
+                    "downloads_count": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "title": "下载数"
+                    },
+                    "is_shared": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "title": "是否分享"
+                    },
+                    "description": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true,
+                        "title": "设计描述"
+                    },
+                    "is_liked": {
+                        "type": "boolean",
+                        "description": "当前用户是否已点赞",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "author",
+                    "author_username",
+                    "create_time",
+                    "description",
+                    "downloads_count",
+                    "id",
+                    "image",
+                    "image_url",
+                    "is_liked",
+                    "is_shared",
+                    "likes_count",
+                    "title",
+                    "update_time"
+                ]
+            },
+            "DesignRequest": {
+                "type": "object",
+                "description": "设计序列化器",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "title": "设计图标题",
+                        "maxLength": 100
+                    },
+                    "image": {
+                        "type": "string",
+                        "format": "binary",
+                        "title": "设计图图片"
+                    },
+                    "download": {
+                        "type": "string",
+                        "format": "binary",
+                        "nullable": true,
+                        "title": "设计图文件"
+                    },
+                    "is_shared": {
+                        "type": "boolean",
+                        "title": "是否分享"
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true,
+                        "title": "设计描述"
+                    }
+                },
+                "required": [
+                    "image",
+                    "title"
+                ]
+            },
+            "DifficultyEnum": {
+                "enum": [
+                    "easy",
+                    "medium",
+                    "hard"
+                ],
+                "type": "string",
+                "description": "* `easy` - 初级\n* `medium` - 中级\n* `hard` - 高级"
+            },
+            "Feedback": {
+                "type": "object",
+                "description": "反馈序列化器",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "type": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TypeEnum"
+                            }
+                        ],
+                        "title": "反馈类型"
+                    },
+                    "title": {
+                        "type": "string",
+                        "title": "标题",
+                        "maxLength": 100
+                    },
+                    "content": {
+                        "type": "string",
+                        "title": "详细描述"
+                    },
+                    "contact": {
+                        "type": "string",
+                        "nullable": true,
+                        "title": "联系方式",
+                        "maxLength": 100
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "title": "创建时间"
+                    }
+                },
+                "required": [
+                    "content",
+                    "created_at",
+                    "id",
+                    "title",
+                    "type"
+                ]
+            },
+            "FeedbackRequest": {
+                "type": "object",
+                "description": "反馈序列化器",
+                "properties": {
+                    "type": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TypeEnum"
+                            }
+                        ],
+                        "title": "反馈类型"
+                    },
+                    "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "title": "标题",
+                        "maxLength": 100
+                    },
+                    "content": {
+                        "type": "string",
+                        "minLength": 1,
+                        "title": "详细描述"
+                    },
+                    "contact": {
+                        "type": "string",
+                        "nullable": true,
+                        "title": "联系方式",
+                        "maxLength": 100
+                    }
+                },
+                "required": [
+                    "content",
+                    "title",
+                    "type"
+                ]
+            },
+            "ForgotPasswordRequest": {
+                "type": "object",
+                "description": "忘记密码序列化器",
+                "properties": {
+                    "username": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "email",
+                    "username"
+                ]
+            },
+            "MembershipOrder": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "order_id": {
+                        "type": "string",
+                        "readOnly": true,
+                        "title": "订单号"
+                    },
+                    "user": {
+                        "type": "integer",
+                        "title": "用户"
+                    },
+                    "user_username": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "membership_plan": {
+                        "type": "integer",
+                        "nullable": true,
+                        "title": "会员计划"
+                    },
+                    "plan_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "amount": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$",
+                        "title": "订单金额"
+                    },
+                    "payment_channel": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/PaymentChannelEnum"
+                            }
+                        ],
+                        "title": "支付渠道"
+                    },
+                    "payment_channel_display": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/StatusEnum"
+                            }
+                        ],
+                        "title": "订单状态"
+                    },
+                    "status_display": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "refund_status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RefundStatusEnum"
+                            }
+                        ],
+                        "title": "退款状态"
+                    },
+                    "trade_no": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true,
+                        "title": "第三方交易号"
+                    },
+                    "billing_cycle": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/MembershipOrderBillingCycleEnum"
+                            }
+                        ],
+                        "title": "计费周期"
+                    },
+                    "billing_cycle_display": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "payment_url": {
+                        "type": "string",
+                        "nullable": true,
+                        "title": "支付链接"
+                    },
+                    "payment_time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "title": "支付时间"
+                    },
+                    "invoice": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "title": "创建时间"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "title": "更新时间"
+                    }
+                },
+                "required": [
+                    "amount",
+                    "billing_cycle_display",
+                    "created_at",
+                    "id",
+                    "invoice",
+                    "order_id",
+                    "payment_channel_display",
+                    "payment_time",
+                    "plan_name",
+                    "status_display",
+                    "trade_no",
+                    "updated_at",
+                    "user",
+                    "user_username"
+                ]
+            },
+            "MembershipOrderBillingCycleEnum": {
+                "enum": [
+                    "month",
+                    "year"
+                ],
+                "type": "string",
+                "description": "* `month` - 月度\n* `year` - 年度"
+            },
+            "PaginatedCourseTemplateList": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "example": 123
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=4"
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=2"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/CourseTemplate"
+                        }
+                    }
+                }
+            },
+            "PaginatedCustomObstacleList": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "example": 123
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=4"
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=2"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/CustomObstacle"
+                        }
+                    }
+                }
+            },
+            "PaginatedDesignList": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "example": 123
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=4"
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=2"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Design"
+                        }
+                    }
+                }
+            },
+            "PaginatedFeedbackList": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "example": 123
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=4"
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=2"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Feedback"
+                        }
+                    }
+                }
+            },
+            "PaginatedUserRegisterList": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "example": 123
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=4"
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=2"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/UserRegister"
+                        }
+                    }
+                }
+            },
+            "PatchedCourseTemplateRequest": {
+                "type": "object",
+                "description": "路线模板序列化器。",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "title": "模板标题",
+                        "maxLength": 120
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true,
+                        "title": "模板描述"
+                    },
+                    "difficulty": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/DifficultyEnum"
+                            }
+                        ],
+                        "title": "难度"
+                    },
+                    "field_width": {
+                        "type": "integer",
+                        "maximum": 4294967295,
+                        "minimum": 0,
+                        "format": "int64",
+                        "title": "场地宽度"
+                    },
+                    "field_height": {
+                        "type": "integer",
+                        "maximum": 4294967295,
+                        "minimum": 0,
+                        "format": "int64",
+                        "title": "场地高度"
+                    },
+                    "obstacle_count": {
+                        "type": "integer",
+                        "maximum": 4294967295,
+                        "minimum": 0,
+                        "format": "int64",
+                        "title": "障碍数量"
+                    },
+                    "course_data": {
+                        "title": "路线数据"
+                    },
+                    "cover_image": {
+                        "type": "string",
+                        "format": "binary",
+                        "nullable": true,
+                        "title": "封面图"
+                    },
+                    "is_public": {
+                        "type": "boolean",
+                        "title": "是否公开"
+                    },
+                    "is_official": {
+                        "type": "boolean",
+                        "title": "是否官方"
+                    }
+                }
+            },
+            "PatchedCustomObstacleRequest": {
+                "type": "object",
+                "description": "自定义障碍物序列化器",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "title": "障碍物名称",
+                        "maxLength": 100
+                    },
+                    "obstacle_data": {
+                        "title": "障碍物数据"
+                    },
+                    "is_shared": {
+                        "type": "boolean",
+                        "title": "是否共享"
+                    }
+                }
+            },
+            "PatchedDesignRequest": {
+                "type": "object",
+                "description": "设计序列化器",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "title": "设计图标题",
+                        "maxLength": 100
+                    },
+                    "image": {
+                        "type": "string",
+                        "format": "binary",
+                        "title": "设计图图片"
+                    },
+                    "download": {
+                        "type": "string",
+                        "format": "binary",
+                        "nullable": true,
+                        "title": "设计图文件"
+                    },
+                    "is_shared": {
+                        "type": "boolean",
+                        "title": "是否分享"
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true,
+                        "title": "设计描述"
+                    }
+                }
+            },
+            "PatchedFeedbackRequest": {
+                "type": "object",
+                "description": "反馈序列化器",
+                "properties": {
+                    "type": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TypeEnum"
+                            }
+                        ],
+                        "title": "反馈类型"
+                    },
+                    "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "title": "标题",
+                        "maxLength": 100
+                    },
+                    "content": {
+                        "type": "string",
+                        "minLength": 1,
+                        "title": "详细描述"
+                    },
+                    "contact": {
+                        "type": "string",
+                        "nullable": true,
+                        "title": "联系方式",
+                        "maxLength": 100
+                    }
+                }
+            },
+            "PatchedUserRegisterRequest": {
+                "type": "object",
+                "description": "用户注册序列化器",
+                "properties": {
+                    "username": {
+                        "type": "string",
+                        "minLength": 1,
+                        "title": "用户名",
+                        "description": "用户名",
+                        "pattern": "^[\\w.@+-]+$",
+                        "maxLength": 150
+                    },
+                    "password": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "minLength": 1
+                    },
+                    "confirmPassword": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "minLength": 1
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "title": "电子邮件地址",
+                        "maxLength": 254
+                    },
+                    "is_staff": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "是否可以访问后台"
+                    }
+                }
+            },
+            "PaymentChannelEnum": {
+                "enum": [
+                    "alipay",
+                    "wechat",
+                    "creditcard",
+                    "other"
+                ],
+                "type": "string",
+                "description": "* `alipay` - 支付宝\n* `wechat` - 微信支付\n* `creditcard` - 信用卡\n* `other` - 其他"
+            },
+            "RefundStatusEnum": {
+                "enum": [
+                    "none",
+                    "requested",
+                    "approved",
+                    "rejected",
+                    "refunded"
+                ],
+                "type": "string",
+                "description": "* `none` - 无退款\n* `requested` - 已申请\n* `approved` - 已同意\n* `rejected` - 已拒绝\n* `refunded` - 已退款"
+            },
+            "ResetPasswordRequest": {
+                "type": "object",
+                "description": "重置密码序列化器",
+                "properties": {
+                    "token": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "password": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "minLength": 1
+                    },
+                    "confirmPassword": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "confirmPassword",
+                    "password",
+                    "token"
+                ]
+            },
+            "StatusEnum": {
+                "enum": [
+                    "pending",
+                    "paid",
+                    "canceled",
+                    "refunded",
+                    "failed"
+                ],
+                "type": "string",
+                "description": "* `pending` - 待支付\n* `paid` - 已支付\n* `canceled` - 已取消\n* `refunded` - 已退款\n* `failed` - 支付失败"
+            },
+            "TypeEnum": {
+                "enum": [
+                    "feature",
+                    "bug",
+                    "ux",
+                    "other"
+                ],
+                "type": "string",
+                "description": "* `feature` - 功能建议\n* `bug` - 问题报告\n* `ux` - 用户体验\n* `other` - 其他"
+            },
+            "UserLoginRequest": {
+                "type": "object",
+                "description": "用户登录序列化器",
+                "properties": {
+                    "username": {
+                        "type": "string",
+                        "minLength": 1,
+                        "title": "用户名",
+                        "description": "用户名"
+                    },
+                    "password": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "minLength": 1,
+                        "title": "密码",
+                        "description": "密码"
+                    }
+                },
+                "required": [
+                    "password",
+                    "username"
+                ]
+            },
+            "UserRegister": {
+                "type": "object",
+                "description": "用户注册序列化器",
+                "properties": {
+                    "username": {
+                        "type": "string",
+                        "title": "用户名",
+                        "description": "用户名",
+                        "pattern": "^[\\w.@+-]+$",
+                        "maxLength": 150
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "title": "电子邮件地址",
+                        "maxLength": 254
+                    },
+                    "is_staff": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "是否可以访问后台"
+                    }
+                },
+                "required": [
+                    "email",
+                    "username"
+                ]
+            },
+            "UserRegisterRequest": {
+                "type": "object",
+                "description": "用户注册序列化器",
+                "properties": {
+                    "username": {
+                        "type": "string",
+                        "minLength": 1,
+                        "title": "用户名",
+                        "description": "用户名",
+                        "pattern": "^[\\w.@+-]+$",
+                        "maxLength": 150
+                    },
+                    "password": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "minLength": 1
+                    },
+                    "confirmPassword": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "minLength": 1
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "title": "电子邮件地址",
+                        "maxLength": 254
+                    },
+                    "is_staff": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "是否可以访问后台"
+                    }
+                },
+                "required": [
+                    "confirmPassword",
+                    "email",
+                    "password",
+                    "username"
+                ]
+            }
+        },
+        "securitySchemes": {
+            "CookieJWTAuth": {
+                "type": "apiKey",
+                "in": "cookie",
+                "name": "access_token",
+                "description": "登录后由后端写入的 httpOnly JWT Cookie"
+            },
+            "basicAuth": {
+                "type": "http",
+                "scheme": "basic"
+            },
+            "cookieAuth": {
+                "type": "apiKey",
+                "in": "cookie",
+                "name": "sessionid"
+            },
+            "jwtAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT"
+            }
+        }
+    }
+}
