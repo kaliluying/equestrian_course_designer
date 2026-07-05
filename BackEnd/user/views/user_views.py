@@ -4,14 +4,17 @@ import logging
 from datetime import timedelta
 
 from django.contrib.auth.models import User
+from django.db.models import Sum
 from django.utils import timezone
 from rest_framework import status, viewsets
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from ..models import (
+    AIGenerationHistory,
+    CourseTemplate,
     Design,
     UserProfile,
     MembershipPlan,
@@ -361,3 +364,24 @@ class UserViewSet(viewsets.ModelViewSet):
         user.save()
 
         return success_response("邮箱修改成功", {"email": new_email})
+
+
+@api_view(["GET"])
+@permission_classes([IsAdminUser])
+def admin_analytics(request):
+    """运营数据看板核心指标。"""
+    total_users = User.objects.count()
+    premium_users = UserProfile.objects.filter(is_premium=True).count()
+    designs = Design.objects.count()
+    exports_total = Design.objects.aggregate(total=Sum("downloads_count")).get("total") or 0
+    ai_usage = AIGenerationHistory.objects.aggregate(total=Sum("quota_used")).get("total") or 0
+    template_copies = CourseTemplate.objects.aggregate(total=Sum("copy_count")).get("total") or 0
+    conversion_rate = round(premium_users / total_users, 4) if total_users else 0
+    return Response({
+        "users": total_users,
+        "designs": designs,
+        "exports": exports_total,
+        "ai_usage": ai_usage,
+        "membership_conversion_rate": conversion_rate,
+        "template_copies": template_copies,
+    })

@@ -10,6 +10,7 @@ from .auth_views import (
 from .design_views import DesignViewSet
 from .user_views import (
     UserViewSet,
+    admin_analytics,
     check_and_update_membership,
 )
 from .obstacle_views import (
@@ -21,6 +22,9 @@ from .payment_views import (
     create_membership_order,
     get_user_orders,
     get_order_status,
+    get_order_detail,
+    submit_order_invoice,
+    mark_invoice_issued,
     alipay_notify,
     update_user_membership,
     PaymentSuccessView,
@@ -39,6 +43,7 @@ __all__ = [
     "DesignViewSet",
     # User
     "UserViewSet",
+    "admin_analytics",
     "check_and_update_membership",
     # Obstacle
     "StandardResultsSetPagination",
@@ -48,6 +53,9 @@ __all__ = [
     "create_membership_order",
     "get_user_orders",
     "get_order_status",
+    "get_order_detail",
+    "submit_order_invoice",
+    "mark_invoice_issued",
     "alipay_notify",
     "update_user_membership",
     "PaymentSuccessView",

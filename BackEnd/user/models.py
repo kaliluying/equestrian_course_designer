@@ -269,6 +269,18 @@ class MembershipPlan(models.Model):
         verbose_name='自定义障碍物限制(个)',
         help_text='null表示无限制'
     )
+    can_collaborate = models.BooleanField(
+        default=False,
+        verbose_name='是否允许协作'
+    )
+    ai_monthly_quota = models.PositiveIntegerField(
+        default=0,
+        verbose_name='每月AI配额'
+    )
+    template_publish_limit = models.PositiveIntegerField(
+        default=3,
+        verbose_name='模板发布限制'
+    )
     description = models.TextField(
         blank=True,
         null=True,
@@ -523,6 +535,14 @@ class CustomObstacle(models.Model):
 # 会员订单模型
 class MembershipOrder(models.Model):
     """会员订单模型，记录会员购买记录"""
+    REFUND_STATUS_CHOICES = (
+        ('none', '无退款'),
+        ('requested', '已申请'),
+        ('approved', '已同意'),
+        ('rejected', '已拒绝'),
+        ('refunded', '已退款'),
+    )
+
     ORDER_STATUS_CHOICES = (
         ('pending', '待支付'),
         ('paid', '已支付'),
@@ -573,6 +593,12 @@ class MembershipOrder(models.Model):
         default='pending',
         verbose_name='订单状态'
     )
+    refund_status = models.CharField(
+        max_length=20,
+        choices=REFUND_STATUS_CHOICES,
+        default='none',
+        verbose_name='退款状态'
+    )
     trade_no = models.CharField(
         max_length=64,
         blank=True,
@@ -617,6 +643,33 @@ class MembershipOrder(models.Model):
             now = timezone.now()
             self.order_id = f"ECD{now.strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:8].upper()}"
         super().save(*args, **kwargs)
+
+
+class MembershipInvoice(models.Model):
+    """会员订单发票信息。"""
+
+    STATUS_CHOICES = (
+        ('submitted', '已提交'),
+        ('issued', '已开具'),
+    )
+
+    order = models.OneToOneField(
+        MembershipOrder,
+        on_delete=models.CASCADE,
+        related_name='invoice',
+        verbose_name='订单',
+    )
+    title = models.CharField(max_length=100, verbose_name='发票抬头')
+    tax_number = models.CharField(max_length=50, blank=True, null=True, verbose_name='税号')
+    email = models.EmailField(verbose_name='接收邮箱')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='submitted', verbose_name='状态')
+    invoice_number = models.CharField(max_length=50, blank=True, null=True, verbose_name='发票号码')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        verbose_name = '会员发票'
+        verbose_name_plural = '会员发票'
 
 
 class AIGenerationQuota(models.Model):
@@ -683,6 +736,16 @@ class AIGenerationHistory(models.Model):
     token_used = models.PositiveIntegerField(
         default=0,
         verbose_name='消耗token数'
+    )
+    model_name = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name='模型名称'
+    )
+    quota_used = models.PositiveIntegerField(
+        default=0,
+        verbose_name='消耗配额'
     )
     cost = models.DecimalField(
         max_digits=10,

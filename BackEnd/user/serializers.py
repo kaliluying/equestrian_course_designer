@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
-from .models import CollaborationEvent, CollaborationRole, CourseTemplate, CourseTemplateFavorite, Design, DesignComment, DesignLike, DesignVersion, UserProfile, MembershipPlan, CustomObstacle, MembershipOrder
+from .models import CollaborationEvent, CollaborationRole, CourseTemplate, CourseTemplateFavorite, Design, DesignComment, DesignLike, DesignVersion, MembershipInvoice, UserProfile, MembershipPlan, CustomObstacle, MembershipOrder
 from .utils import get_absolute_media_url
 
 
@@ -443,6 +443,15 @@ class CourseTemplateSerializer(serializers.ModelSerializer):
         return value
 
 
+class MembershipInvoiceSerializer(serializers.ModelSerializer):
+    """会员订单发票序列化器。"""
+
+    class Meta:
+        model = MembershipInvoice
+        fields = ('id', 'order', 'title', 'tax_number', 'email', 'status', 'invoice_number', 'created_at', 'updated_at')
+        read_only_fields = ('order', 'status', 'invoice_number', 'created_at', 'updated_at')
+
+
 # 会员订单序列化器
 class MembershipOrderSerializer(serializers.ModelSerializer):
     plan_name = serializers.SerializerMethodField()
@@ -450,17 +459,23 @@ class MembershipOrderSerializer(serializers.ModelSerializer):
     status_display = serializers.SerializerMethodField()
     payment_channel_display = serializers.SerializerMethodField()
     billing_cycle_display = serializers.SerializerMethodField()
+    invoice = serializers.SerializerMethodField()
 
     class Meta:
         model = MembershipOrder
         fields = [
             'id', 'order_id', 'user', 'user_username', 'membership_plan', 'plan_name',
             'amount', 'payment_channel', 'payment_channel_display', 'status', 'status_display',
-            'trade_no', 'billing_cycle', 'billing_cycle_display', 'payment_url',
-            'payment_time', 'created_at', 'updated_at'
+            'refund_status', 'trade_no', 'billing_cycle', 'billing_cycle_display', 'payment_url',
+            'payment_time', 'invoice', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'order_id', 'trade_no',
                             'payment_time', 'created_at', 'updated_at']
+
+
+    def get_invoice(self, obj):
+        invoice = getattr(obj, 'invoice', None)
+        return MembershipInvoiceSerializer(invoice).data if invoice else None
 
     def get_plan_name(self, obj) -> str:
         return obj.membership_plan.name if obj.membership_plan else '未知计划'

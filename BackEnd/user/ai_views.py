@@ -615,6 +615,8 @@ def generate_route(request):
         # 8. 更新历史记录
         history.result = result
         history.token_used = llm_response.token_used if llm_response else 0
+        history.model_name = llm_response.model if llm_response else "fallback"
+        history.quota_used = 1
         token_price_per_1k = os.getenv("AI_TOKEN_PRICE_PER_1K", "0")
         try:
             price = Decimal(token_price_per_1k)
@@ -771,9 +773,17 @@ def get_ai_history(request):
     except (ValueError, TypeError):
         limit = 20
 
-    histories = AIGenerationHistory.objects.filter(user_profile=profile).order_by(
-        "-created_at"
-    )[:limit]
+    histories = AIGenerationHistory.objects.filter(user_profile=profile)
+    status_filter = request.query_params.get("status")
+    start_date = request.query_params.get("start_date")
+    end_date = request.query_params.get("end_date")
+    if status_filter:
+        histories = histories.filter(status=status_filter)
+    if start_date:
+        histories = histories.filter(created_at__gte=start_date)
+    if end_date:
+        histories = histories.filter(created_at__lte=end_date)
+    histories = histories.order_by("-created_at")[:limit]
 
     return Response(
         {
@@ -785,6 +795,9 @@ def get_ai_history(request):
                         "prompt": h.prompt,
                         "status": h.status,
                         "token_used": h.token_used,
+                        "quota_used": h.quota_used,
+                        "model_name": h.model_name or "",
+                        "error_message": h.error_message or "",
                         "created_at": h.created_at.isoformat()
                         if h.created_at
                         else None,

@@ -35,6 +35,8 @@ class EntitlementSnapshot:
     custom_obstacle_limit: Optional[int]
     custom_obstacle_unlimited: bool
     ai_remaining_quota: int
+    ai_monthly_quota: int
+    template_publish_limit: int
     can_collaborate: bool
     pending_plan: Optional[PlanSummary]
 
@@ -51,6 +53,8 @@ class EntitlementSnapshot:
             "custom_obstacle_limit": self.custom_obstacle_limit,
             "custom_obstacle_unlimited": self.custom_obstacle_unlimited,
             "ai_remaining_quota": self.ai_remaining_quota,
+            "ai_monthly_quota": self.ai_monthly_quota,
+            "template_publish_limit": self.template_publish_limit,
             "can_collaborate": self.can_collaborate,
             "pending_plan": None if self.pending_plan is None else self.pending_plan.__dict__,
         }
@@ -99,7 +103,7 @@ def get_entitlements(user: User) -> EntitlementSnapshot:
         custom_limit = plan.custom_obstacle_limit
 
     quota, _ = AIGenerationQuota.objects.get_or_create(user_profile=profile)
-    can_collaborate = is_active and plan_code == "premium"
+    can_collaborate = bool(is_active and (getattr(plan, "can_collaborate", False) or plan_code == "premium"))
 
     return EntitlementSnapshot(
         user_id=user.id,
@@ -112,6 +116,8 @@ def get_entitlements(user: User) -> EntitlementSnapshot:
         custom_obstacle_limit=custom_limit,
         custom_obstacle_unlimited=custom_unlimited,
         ai_remaining_quota=quota.remaining_quota,
+        ai_monthly_quota=getattr(plan, "ai_monthly_quota", 0) if plan else 0,
+        template_publish_limit=getattr(plan, "template_publish_limit", 3) if plan else 3,
         can_collaborate=can_collaborate,
         pending_plan=_plan_summary(profile.pending_membership_plan),
     )

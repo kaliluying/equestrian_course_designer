@@ -19,10 +19,12 @@ from ..models import (
     MembershipOrder,
     UserProfile,
     AIGenerationQuota,
+    MembershipInvoice,
 )
 from ..serializers import (
     MembershipOrderSerializer,
     CreateMembershipOrderSerializer,
+    MembershipInvoiceSerializer,
 )
 from ..utils import (
     create_alipay_order,
@@ -195,6 +197,58 @@ def get_user_orders(request):
 
     # 返回分页响应
     return paginator.get_paginated_response(serializer.data)
+
+
+@extend_schema(responses=OpenApiTypes.OBJECT, summary="获取订单详情")
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_order_detail(request, order_id):
+    """获取当前用户订单详情。"""
+    try:
+        order = MembershipOrder.objects.get(order_id=order_id, user=request.user)
+    except MembershipOrder.DoesNotExist:
+        return error_response("订单不存在", status.HTTP_404_NOT_FOUND)
+    return success_response("查询成功", {"order": MembershipOrderSerializer(order).data})
+
+
+@extend_schema(request=OpenApiTypes.OBJECT, responses=OpenApiTypes.OBJECT, summary="提交订单发票")
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def submit_order_invoice(request, order_id):
+    """用户提交订单发票信息。"""
+    try:
+        order = MembershipOrder.objects.get(order_id=order_id, user=request.user)
+    except MembershipOrder.DoesNotExist:
+        return error_response("订单不存在", status.HTTP_404_NOT_FOUND)
+
+    invoice, _ = MembershipInvoice.objects.update_or_create(
+        order=order,
+        defaults={
+            "title": request.data.get("title", ""),
+            "tax_number": request.data.get("tax_number"),
+            "email": request.data.get("email", request.user.email or ""),
+            "status": "submitted",
+        },
+    )
+    return Response(MembershipInvoiceSerializer(invoice).data, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(request=OpenApiTypes.OBJECT, responses=OpenApiTypes.OBJECT, summary="标记发票已开具")
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def mark_invoice_issued(request, order_id):
+    """后台标记发票已开具。"""
+    if not request.user.is_staff:
+        return error_response("无权限", status.HTTP_403_FORBIDDEN)
+    try:
+        order = MembershipOrder.objects.get(order_id=order_id)
+        invoice = order.invoice
+    except (MembershipOrder.DoesNotExist, MembershipInvoice.DoesNotExist):
+        return error_response("发票不存在", status.HTTP_404_NOT_FOUND)
+    invoice.status = "issued"
+    invoice.invoice_number = request.data.get("invoice_number") or invoice.invoice_number
+    invoice.save(update_fields=["status", "invoice_number", "updated_at"])
+    return Response(MembershipInvoiceSerializer(invoice).data)
 
 
 @extend_schema(

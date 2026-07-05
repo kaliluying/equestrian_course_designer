@@ -18,6 +18,7 @@ from user.models import (
     UserProfile,
     AIGenerationQuota,
     AIGenerationHistory,
+    CourseTemplate,
     Design,
     MembershipPlan,
     MembershipOrder,
@@ -1573,6 +1574,158 @@ class ProfessionalExportAndSharePermissionTest(TestCase):
         self.assertTrue(valid)
         self.assertIsNone(code)
         self.assertIsNone(reason)
+
+
+class CommercialOperationsAPITest(TestCase):
+    """商业化后台、订单发票、AI 明细和运营看板测试"""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="commerce_user",
+            email="commerce@example.com",
+            password="Password123",
+        )
+        self.staff = User.objects.create_user(
+            username="commerce_staff",
+            email="commerce_staff@example.com",
+            password="Password123",
+            is_staff=True,
+        )
+        self.profile, _ = UserProfile.objects.get_or_create(user=self.user)
+        self.plan = MembershipPlan.objects.create(
+            name="运营会员",
+            code="commerce",
+            monthly_price=19,
+            yearly_price=190,
+            storage_limit=25,
+            custom_obstacle_limit=12,
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_membership_plan_entitlement_config_is_returned_in_profile(self):
+        """会员权益配置应进入统一权益快照"""
+        self.plan.can_collaborate = True
+        self.plan.ai_monthly_quota = 20
+        self.plan.template_publish_limit = 7
+        self.plan.save()
+        self.profile.is_premium = True
+        self.profile.membership_plan = self.plan
+        self.profile.premium_expire_date = timezone.now() + timezone.timedelta(days=30)
+        self.profile.storage_limit = self.plan.storage_limit
+        self.profile.save()
+
+        response = self.client.get("/user/users/my_profile/")
+
+        self.assertEqual(response.status_code, 200)
+        entitlements = response.json()["entitlements"]
+        self.assertTrue(entitlements["can_collaborate"])
+        self.assertEqual(entitlements["ai_monthly_quota"], 20)
+        self.assertEqual(entitlements["template_publish_limit"], 7)
+
+    def test_invoice_can_be_submitted_and_marked_issued(self):
+        """用户可提交发票信息，后台可标记已开具"""
+        order = MembershipOrder.objects.create(
+            user=self.user,
+            membership_plan=self.plan,
+            amount=19,
+            status="paid",
+            billing_cycle="month",
+            trade_no="TRADE123",
+            payment_time=timezone.now(),
+        )
+
+        response = self.client.post(
+            f"/user/api/payment/orders/{order.order_id}/invoice/",
+            data={"title": "马术俱乐部", "tax_number": "TAX123", "email": "invoice@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["title"], "马术俱乐部")
+        self.client.force_authenticate(user=self.staff)
+        issue_response = self.client.post(
+            f"/user/api/payment/orders/{order.order_id}/invoice/mark-issued/",
+            data={"invoice_number": "INV-001"},
+            format="json",
+        )
+        self.assertEqual(issue_response.status_code, 200)
+        self.assertEqual(issue_response.json()["status"], "issued")
+
+    def test_order_detail_includes_refund_and_invoice_fields(self):
+        """订单详情应展示退款状态和发票信息"""
+        order = MembershipOrder.objects.create(
+            user=self.user,
+            membership_plan=self.plan,
+            amount=19,
+            status="paid",
+            refund_status="requested",
+            billing_cycle="month",
+            trade_no="TRADE456",
+            payment_time=timezone.now(),
+        )
+
+        response = self.client.get(f"/user/api/payment/orders/{order.order_id}/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()["order"]
+        self.assertEqual(data["refund_status"], "requested")
+        self.assertEqual(data["trade_no"], "TRADE456")
+        self.assertEqual(data["billing_cycle"], "month")
+
+    def test_ai_history_filters_and_includes_details(self):
+        """AI 历史应支持状态筛选并返回消耗、失败原因和模型"""
+        AIGenerationHistory.objects.create(
+            user_profile=self.profile,
+            prompt="成功生成",
+            status="success",
+            token_used=321,
+            model_name="test-model",
+            quota_used=1,
+        )
+        AIGenerationHistory.objects.create(
+            user_profile=self.profile,
+            prompt="失败生成",
+            status="failed",
+            error_message="模型不可用",
+            model_name="fallback",
+            quota_used=0,
+        )
+
+        response = self.client.get("/user/ai/history/?status=failed")
+
+        self.assertEqual(response.status_code, 200)
+        histories = response.json()["data"]["histories"]
+        self.assertEqual(len(histories), 1)
+        self.assertEqual(histories[0]["status"], "failed")
+        self.assertEqual(histories[0]["error_message"], "模型不可用")
+        self.assertEqual(histories[0]["model_name"], "fallback")
+        self.assertEqual(histories[0]["quota_used"], 0)
+
+    def test_admin_analytics_dashboard_returns_core_metrics(self):
+        """运营看板应返回用户、设计、导出、AI、会员和模板指标"""
+        Design.objects.create(title="运营设计", author=self.user, downloads_count=3)
+        CourseTemplate.objects.create(
+            title="运营模板",
+            author=self.user,
+            difficulty="medium",
+            obstacle_count=8,
+            course_data={"obstacles": []},
+            copy_count=2,
+        )
+        AIGenerationHistory.objects.create(user_profile=self.profile, prompt="统计", status="success", quota_used=1)
+        self.client.force_authenticate(user=self.staff)
+
+        response = self.client.get("/user/admin/analytics/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertGreaterEqual(data["users"], 2)
+        self.assertEqual(data["designs"], 1)
+        self.assertEqual(data["exports"], 3)
+        self.assertEqual(data["ai_usage"], 1)
+        self.assertIn("membership_conversion_rate", data)
+        self.assertEqual(data["template_copies"], 2)
 
 
 class MembershipPlanCommandTest(TestCase):

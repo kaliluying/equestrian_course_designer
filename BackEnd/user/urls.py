@@ -9,10 +9,14 @@ from .views import (
     ResetPasswordView,
     CSRFTokenView,
     UserViewSet,
+    admin_analytics,
     CustomObstacleViewSet,
     create_membership_order,
     get_user_orders,
     get_order_status,
+    get_order_detail,
+    submit_order_invoice,
+    mark_invoice_issued,
     alipay_notify,
     PaymentSuccessView,
     LogoutView,
@@ -48,6 +52,7 @@ urlpatterns = [
         name="share_link",
     ),
     path("", include(router.urls)),  # 包含自动生成的路由
+    path("admin/analytics/", admin_analytics, name="admin_analytics"),
     # 支付相关路由
     path(
         "api/payment/create-order/",
@@ -55,6 +60,13 @@ urlpatterns = [
         name="create_membership_order",
     ),
     path("api/payment/orders/", get_user_orders, name="get_user_orders"),
+    path("api/payment/orders/<str:order_id>/", get_order_detail, name="get_order_detail"),
+    path("api/payment/orders/<str:order_id>/invoice/", submit_order_invoice, name="submit_order_invoice"),
+    path(
+        "api/payment/orders/<str:order_id>/invoice/mark-issued/",
+        mark_invoice_issued,
+        name="mark_invoice_issued",
+    ),
     path(
         "api/payment/order-status/<str:order_id>/",
         get_order_status,
