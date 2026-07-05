@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
-from .models import Design, DesignLike, UserProfile, MembershipPlan, CustomObstacle, MembershipOrder
+from .models import Design, DesignLike, DesignVersion, UserProfile, MembershipPlan, CustomObstacle, MembershipOrder
 from .utils import get_absolute_media_url
 
 
@@ -201,6 +201,24 @@ class DesignSerializer(serializers.ModelSerializer):
         ret['image'] = self.get_image_url(instance)
         ret['download'] = self.get_download_url(instance)
         return ret
+
+
+class DesignVersionSerializer(serializers.ModelSerializer):
+    """设计版本序列化器"""
+
+    class Meta:
+        model = DesignVersion
+        fields = (
+            'id',
+            'design',
+            'version_number',
+            'source',
+            'title',
+            'description',
+            'course_data',
+            'created_at',
+        )
+        read_only_fields = fields
 
 
 class DesignListSerializer(serializers.ModelSerializer):

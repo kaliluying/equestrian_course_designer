@@ -118,6 +118,50 @@ class Design(models.Model):
         ordering = ['-create_time']  # 按创建时间倒序排列
 
 
+class DesignVersion(models.Model):
+    """设计版本快照模型"""
+
+    VERSION_SOURCE_CHOICES = (
+        ('manual', '手动保存'),
+        ('autosave', '自动保存'),
+        ('ai', 'AI生成'),
+        ('restore', '版本恢复'),
+    )
+
+    design = models.ForeignKey(
+        Design,
+        on_delete=models.CASCADE,
+        related_name='versions',
+        verbose_name='设计',
+    )
+    author = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='design_versions',
+        verbose_name='作者',
+    )
+    version_number = models.PositiveIntegerField(verbose_name='版本号')
+    source = models.CharField(
+        max_length=20,
+        choices=VERSION_SOURCE_CHOICES,
+        default='manual',
+        verbose_name='版本来源',
+    )
+    title = models.CharField(max_length=100, verbose_name='设计标题')
+    description = models.TextField(blank=True, null=True, verbose_name='设计描述')
+    course_data = models.JSONField(default=dict, verbose_name='路线数据')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+
+    def __str__(self):
+        return f"{self.design.title} v{self.version_number}"
+
+    class Meta:
+        verbose_name = '设计版本'
+        verbose_name_plural = '设计版本'
+        ordering = ['-version_number']
+        unique_together = ('design', 'version_number')
+
+
 # 添加点赞记录模型
 class DesignLike(models.Model):
     """设计点赞记录模型"""

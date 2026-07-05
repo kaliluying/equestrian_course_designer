@@ -939,6 +939,112 @@ class RouteValidationPanelAPITest(TestCase):
         self.assertIn("HEIGHT_RANGE", codes)
 
 
+class DesignVersionHistoryAPITest(TestCase):
+    """设计版本历史接口测试"""
+
+    def setUp(self):
+        self.media_root = tempfile.mkdtemp()
+        self.override = override_settings(MEDIA_ROOT=self.media_root)
+        self.override.enable()
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="version_user",
+            email="version@example.com",
+            password="Password123",
+        )
+        UserProfile.objects.get_or_create(user=self.user)
+        self.client.force_authenticate(user=self.user)
+
+    def tearDown(self):
+        self.override.disable()
+        shutil.rmtree(self.media_root, ignore_errors=True)
+
+    def _png_file(self, name="design.png"):
+        image = Image.new("RGB", (160, 120), "white")
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        return ContentFile(buffer.getvalue(), name=name)
+
+    def _json_file(self, payload=None, name="design.json"):
+        payload = payload or {"obstacles": [{"id": "obs-1"}]}
+        return ContentFile(json.dumps(payload).encode("utf-8"), name=name)
+
+    def _create_design(self, title="版本测试设计", payload=None):
+        design = Design(title=title, author=self.user, description="初始描述")
+        design.image.save("design.png", self._png_file(), save=False)
+        design.download.save("design.json", self._json_file(payload), save=False)
+        design.save()
+        return design
+
+    def test_design_create_api_creates_initial_version(self):
+        """创建设计接口应创建初始版本快照"""
+        response = self.client.post(
+            "/user/designs/",
+            data={
+                "title": "API版本设计",
+                "description": "首次保存",
+                "image": self._png_file(),
+                "download": self._json_file({"obstacles": []}),
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        design_id = response.json()["id"]
+        versions_response = self.client.get(f"/user/designs/{design_id}/versions/")
+        self.assertEqual(versions_response.status_code, 200)
+        versions = versions_response.json()
+        self.assertEqual(len(versions), 1)
+        self.assertEqual(versions[0]["version_number"], 1)
+        self.assertEqual(versions[0]["source"], "manual")
+
+    def test_restore_version_updates_design_and_creates_restore_version(self):
+        """恢复版本应更新当前设计并新增 restore 版本"""
+        design = self._create_design(title="当前标题", payload={"obstacles": [{"id": "old"}]})
+        from user.models import DesignVersion
+
+        version = DesignVersion.objects.create(
+            design=design,
+            author=self.user,
+            version_number=1,
+            source="manual",
+            title="历史标题",
+            description="历史描述",
+            course_data={"obstacles": [{"id": "history"}]},
+        )
+
+        response = self.client.post(f"/user/designs/{design.id}/versions/{version.id}/restore/")
+
+        self.assertEqual(response.status_code, 200)
+        design.refresh_from_db()
+        self.assertEqual(design.title, "历史标题")
+        self.assertEqual(design.description, "历史描述")
+        self.assertEqual(DesignVersion.objects.filter(design=design).count(), 2)
+        self.assertTrue(DesignVersion.objects.filter(design=design, source="restore").exists())
+
+    def test_copy_version_creates_new_design(self):
+        """复制版本应创建新设计且不影响原设计"""
+        design = self._create_design(title="原设计")
+        from user.models import DesignVersion
+
+        version = DesignVersion.objects.create(
+            design=design,
+            author=self.user,
+            version_number=1,
+            source="manual",
+            title="历史副本",
+            description="历史描述",
+            course_data={"obstacles": [{"id": "copy"}]},
+        )
+
+        response = self.client.post(f"/user/designs/{design.id}/versions/{version.id}/copy/")
+
+        self.assertEqual(response.status_code, 201)
+        new_design_id = response.json()["id"]
+        self.assertNotEqual(new_design_id, design.id)
+        self.assertTrue(Design.objects.filter(id=new_design_id, title__contains="历史副本").exists())
+
+
 class MembershipPlanCommandTest(TestCase):
     """会员计划初始化命令测试"""
 

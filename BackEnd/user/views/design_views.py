@@ -16,16 +16,23 @@ from PIL import Image
 from ..models import (
     Design,
     DesignLike,
+    DesignVersion,
     UserProfile,
 )
 from ..serializers import (
     DesignSerializer,
     DesignListSerializer,
+    DesignVersionSerializer,
 )
 from ..utils import get_absolute_media_url, success_response, error_response
 from ..route_validator import RouteValidator
 from .user_views import check_and_update_membership
 from ..services.membership_access import MembershipAccessError, assert_design_capacity
+from ..services.design_version import (
+    copy_design_version,
+    create_design_version,
+    restore_design_version,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -94,8 +101,9 @@ class DesignViewSet(viewsets.ModelViewSet):
         return Design.objects.filter(author=self.request.user).select_related('author')
 
     def perform_create(self, serializer):
-        """保存时自动设置作者为当前用户"""
-        serializer.save(author=self.request.user)
+        """保存时自动设置作者为当前用户并创建版本快照"""
+        design = serializer.save(author=self.request.user)
+        create_design_version(design, source="manual")
 
     def perform_update(self, serializer):
         """更新设计时保留原作者"""
@@ -110,7 +118,8 @@ class DesignViewSet(viewsets.ModelViewSet):
 
         # 确保更新时保留原作者
         try:
-            serializer.save(author=instance.author)
+            design = serializer.save(author=instance.author)
+            create_design_version(design, source="manual")
             logger.info("设计更新成功: ID=%s", instance.id)
         except Exception as e:
             logger.exception("设计更新失败: ID=%s", instance.id)
@@ -149,6 +158,47 @@ class DesignViewSet(viewsets.ModelViewSet):
             return self.get_paginated_response(serializer.data)
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+
+
+    @action(detail=True, methods=["get"], url_path="versions")
+    def list_versions(self, request, pk=None):
+        """获取设计版本列表。"""
+        design = self.get_object()
+        versions = DesignVersion.objects.filter(design=design, author=request.user)
+        serializer = DesignVersionSerializer(versions, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["get"], url_path=r"versions/(?P<version_id>[^/.]+)")
+    def retrieve_version(self, request, pk=None, version_id=None):
+        """获取设计版本详情。"""
+        design = self.get_object()
+        try:
+            version = DesignVersion.objects.get(id=version_id, design=design, author=request.user)
+        except DesignVersion.DoesNotExist:
+            return error_response("版本不存在", status.HTTP_404_NOT_FOUND)
+        return Response(DesignVersionSerializer(version).data)
+
+    @action(detail=True, methods=["post"], url_path=r"versions/(?P<version_id>[^/.]+)/restore")
+    def restore_version(self, request, pk=None, version_id=None):
+        """恢复设计版本。"""
+        design = self.get_object()
+        try:
+            version = DesignVersion.objects.get(id=version_id, design=design, author=request.user)
+        except DesignVersion.DoesNotExist:
+            return error_response("版本不存在", status.HTTP_404_NOT_FOUND)
+        restore_design_version(design, version)
+        return success_response("版本已恢复", DesignSerializer(design, context={"request": request}).data)
+
+    @action(detail=True, methods=["post"], url_path=r"versions/(?P<version_id>[^/.]+)/copy")
+    def copy_version(self, request, pk=None, version_id=None):
+        """复制设计版本为新设计。"""
+        design = self.get_object()
+        try:
+            version = DesignVersion.objects.get(id=version_id, design=design, author=request.user)
+        except DesignVersion.DoesNotExist:
+            return error_response("版本不存在", status.HTTP_404_NOT_FOUND)
+        new_design = copy_design_version(version)
+        return Response(DesignSerializer(new_design, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"], url_path="like")
     def like_design(self, request, pk=None):
