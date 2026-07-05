@@ -122,10 +122,38 @@ class RouteValidator:
         )
 
 
+    def _structured_issue(
+        self,
+        code: str,
+        severity: str,
+        message: str,
+        obstacle_ids: List[str],
+        suggested_action: str,
+        auto_fixable: bool = False,
+    ) -> Dict[str, Any]:
+        """构造前端规则检查面板使用的结构化问题。"""
+        return {
+            'code': code,
+            'severity': severity,
+            'message': message,
+            'obstacle_ids': obstacle_ids,
+            'suggested_action': suggested_action,
+            'auto_fixable': auto_fixable,
+        }
+
+    def _obstacle_id(self, obstacle: Dict[str, Any], index: int) -> str:
+        """获取稳定的障碍物标识。"""
+        return str(obstacle.get('id') or obstacle.get('number') or index + 1)
+
+    def _obstacle_number(self, obstacle: Dict[str, Any], index: int) -> str:
+        """获取用户可见的障碍编号。"""
+        return str(obstacle.get('number') or index + 1)
+
     def validate_course_structure(
         self,
         obstacles: List[Dict[str, Any]],
-        difficulty: str = 'medium'
+        difficulty: str = 'medium',
+        path: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """返回供前端规则检查面板使用的结构化校验结果。"""
         issues: List[Dict[str, Any]] = []
@@ -133,14 +161,14 @@ class RouteValidator:
         auto_fixed: List[str] = []
 
         if not obstacles:
-            issues.append({
-                'code': 'EMPTY_ROUTE',
-                'severity': 'error',
-                'message': '路线中没有障碍物，请至少添加一道障碍。',
-                'obstacle_ids': [],
-                'suggested_action': '添加障碍物后重新检查。',
-                'auto_fixable': False,
-            })
+            issues.append(self._structured_issue(
+                'EMPTY_ROUTE',
+                'error',
+                '路线中没有障碍物，请至少添加一道障碍。',
+                [],
+                '添加障碍物后重新检查。',
+                False,
+            ))
             return {
                 'score': 0,
                 'is_valid': False,
@@ -155,8 +183,8 @@ class RouteValidator:
         boundary_margin = FEI_RULES['min_boundary_distance']
 
         for index, obstacle in enumerate(obstacles):
-            obstacle_id = str(obstacle.get('id') or obstacle.get('number') or index + 1)
-            number = obstacle.get('number') or str(index + 1)
+            obstacle_id = self._obstacle_id(obstacle, index)
+            number = self._obstacle_number(obstacle, index)
             position = obstacle.get('position') or {}
             x = float(position.get('x', 0))
             y = float(position.get('y', 0))
@@ -167,27 +195,64 @@ class RouteValidator:
                 or x > self.field_width - boundary_margin
                 or y > self.field_height - boundary_margin
             ):
-                warnings.append({
-                    'code': 'BOUNDARY_DISTANCE',
-                    'severity': 'warning',
-                    'message': f'障碍物{number}距离场地边界不足{boundary_margin}米。',
-                    'obstacle_ids': [obstacle_id],
-                    'suggested_action': '将障碍物向场地内部移动，保留安全边距。',
-                    'auto_fixable': True,
-                })
+                warnings.append(self._structured_issue(
+                    'BOUNDARY_DISTANCE',
+                    'warning',
+                    f'障碍物{number}距离场地边界不足{boundary_margin}米。',
+                    [obstacle_id],
+                    '将障碍物向场地内部移动，保留安全边距。',
+                    True,
+                ))
 
             for pole_index, pole in enumerate(obstacle.get('poles') or []):
                 height = float(pole.get('height', 0))
                 if height < config.min_height or height > config.max_height:
-                    warnings.append({
-                        'code': 'HEIGHT_RANGE',
-                        'severity': 'warning',
-                        'message': f'障碍物{number}第{pole_index + 1}根横杆高度{height:.2f}m超出{difficulty}难度范围。',
-                        'obstacle_ids': [obstacle_id],
-                        'suggested_action': f'将高度调整到{config.min_height:.2f}m-{config.max_height:.2f}m之间。',
-                        'auto_fixable': True,
-                    })
+                    warnings.append(self._structured_issue(
+                        'HEIGHT_RANGE',
+                        'warning',
+                        f'障碍物{number}第{pole_index + 1}根横杆高度{height:.2f}m超出{difficulty}难度范围。',
+                        [obstacle_id],
+                        f'将高度调整到{config.min_height:.2f}m-{config.max_height:.2f}m之间。',
+                        True,
+                    ))
 
+            obs_type = obstacle.get('type')
+            if obs_type in FEI_RULES['combination_spacing']:
+                min_spacing, max_spacing = FEI_RULES['combination_spacing'][obs_type]
+                for pole_index, pole in enumerate((obstacle.get('poles') or [])[:-1]):
+                    spacing = pole.get('spacing')
+                    if spacing is None:
+                        continue
+                    spacing_value = float(spacing)
+                    if spacing_value < min_spacing or spacing_value > max_spacing:
+                        warnings.append(self._structured_issue(
+                            'COMBINATION_SPACING',
+                            'warning',
+                            f'障碍物{number}组合间距{spacing_value:.1f}m不在{min_spacing:.1f}-{max_spacing:.1f}m范围内。',
+                            [obstacle_id],
+                            '调整组合障碍内横杆间距，保持节奏稳定。',
+                            True,
+                        ))
+
+        parsed_numbers: List[int] = []
+        for obstacle in obstacles:
+            try:
+                parsed_numbers.append(int(str(obstacle.get('number', '')).strip()))
+            except ValueError:
+                parsed_numbers.append(-1)
+        expected_numbers = list(range(1, len(obstacles) + 1))
+        if parsed_numbers != expected_numbers:
+            warnings.append(self._structured_issue(
+                'OBSTACLE_SEQUENCE',
+                'warning',
+                '障碍编号顺序与当前路线顺序不一致。',
+                [self._obstacle_id(obstacle, index) for index, obstacle in enumerate(obstacles)],
+                '按骑乘顺序重新编号障碍物。',
+                True,
+            ))
+
+        turn_angles: List[float] = []
+        total_distance = 0.0
         for index in range(len(obstacles) - 1):
             current = obstacles[index]
             nxt = obstacles[index + 1]
@@ -196,19 +261,95 @@ class RouteValidator:
             dx = float(next_pos.get('x', 0)) - float(current_pos.get('x', 0))
             dy = float(next_pos.get('y', 0)) - float(current_pos.get('y', 0))
             distance = math.sqrt(dx * dx + dy * dy)
+            total_distance += distance
             if distance < min_distance:
-                current_id = str(current.get('id') or current.get('number') or index + 1)
-                next_id = str(nxt.get('id') or nxt.get('number') or index + 2)
-                issues.append({
-                    'code': 'MIN_DISTANCE',
-                    'severity': 'error',
-                    'message': f'障碍物{current.get("number", index + 1)}与{nxt.get("number", index + 2)}间距{distance:.1f}米，小于最小要求{min_distance}米。',
-                    'obstacle_ids': [current_id, next_id],
-                    'suggested_action': '拉开相邻障碍物距离，保持安全骑乘节奏。',
-                    'auto_fixable': True,
-                })
+                issues.append(self._structured_issue(
+                    'MIN_DISTANCE',
+                    'error',
+                    f'障碍物{self._obstacle_number(current, index)}与{self._obstacle_number(nxt, index + 1)}间距{distance:.1f}米，小于最小要求{min_distance}米。',
+                    [self._obstacle_id(current, index), self._obstacle_id(nxt, index + 1)],
+                    '拉开相邻障碍物距离，保持安全骑乘节奏。',
+                    True,
+                ))
+
+        for index in range(1, len(obstacles) - 1):
+            prev_pos = obstacles[index - 1].get('position') or {}
+            current_pos = obstacles[index].get('position') or {}
+            next_pos = obstacles[index + 1].get('position') or {}
+            v1 = (
+                float(current_pos.get('x', 0)) - float(prev_pos.get('x', 0)),
+                float(current_pos.get('y', 0)) - float(prev_pos.get('y', 0)),
+            )
+            v2 = (
+                float(next_pos.get('x', 0)) - float(current_pos.get('x', 0)),
+                float(next_pos.get('y', 0)) - float(current_pos.get('y', 0)),
+            )
+            len1 = math.sqrt(v1[0] ** 2 + v1[1] ** 2)
+            len2 = math.sqrt(v2[0] ** 2 + v2[1] ** 2)
+            if len1 < 1e-6 or len2 < 1e-6:
+                continue
+            dot = max(-1.0, min(1.0, (v1[0] * v2[0] + v1[1] * v2[1]) / (len1 * len2)))
+            angle = math.degrees(math.acos(dot))
+            turn_angles.append(angle)
+            if angle > 85:
+                warnings.append(self._structured_issue(
+                    'TURN_RADIUS',
+                    'warning',
+                    f'障碍物{self._obstacle_number(obstacles[index], index)}附近转弯角度约{angle:.0f}°，转弯半径可能不足。',
+                    [self._obstacle_id(obstacles[index], index)],
+                    '增加转弯空间或调整前后障碍位置。',
+                    False,
+                ))
+
+        if len(turn_angles) >= 2 and sum(1 for angle in turn_angles if angle > 70) >= 2:
+            warnings.append(self._structured_issue(
+                'ROUTE_FLOW',
+                'warning',
+                '路线中连续急转弯较多，整体流畅度偏低。',
+                [self._obstacle_id(obstacle, index) for index, obstacle in enumerate(obstacles)],
+                '减少连续急转弯，增加直线推进段。',
+                False,
+            ))
+
+        if path:
+            start_point = path.get('startPoint') or path.get('start_point') or {}
+            end_point = path.get('endPoint') or path.get('end_point') or {}
+            start_rotation = float(start_point.get('rotation', 270))
+            end_rotation = float(end_point.get('rotation', 270))
+            first_pos = obstacles[0].get('position') or {}
+            last_pos = obstacles[-1].get('position') or {}
+            if start_point:
+                approach_angle = math.degrees(math.atan2(
+                    float(first_pos.get('y', 0)) - float(start_point.get('y', 0)),
+                    float(first_pos.get('x', 0)) - float(start_point.get('x', 0)),
+                )) % 360
+                if abs(((approach_angle - start_rotation + 180) % 360) - 180) > 90:
+                    warnings.append(self._structured_issue(
+                        'START_END_DIRECTION',
+                        'warning',
+                        '起点方向与第一道障碍的骑乘方向不一致。',
+                        [self._obstacle_id(obstacles[0], 0)],
+                        '调整起点箭头方向或起点位置。',
+                        False,
+                    ))
+            if end_point:
+                exit_angle = math.degrees(math.atan2(
+                    float(end_point.get('y', 0)) - float(last_pos.get('y', 0)),
+                    float(end_point.get('x', 0)) - float(last_pos.get('x', 0)),
+                )) % 360
+                if abs(((exit_angle - end_rotation + 180) % 360) - 180) > 90:
+                    warnings.append(self._structured_issue(
+                        'START_END_DIRECTION',
+                        'warning',
+                        '终点方向与最后一道障碍后的骑乘方向不一致。',
+                        [self._obstacle_id(obstacles[-1], len(obstacles) - 1)],
+                        '调整终点箭头方向或终点位置。',
+                        False,
+                    ))
 
         penalty = len(issues) * 2.5 + len(warnings) * 0.75
+        if total_distance > 0 and len(obstacles) > 1 and total_distance / (len(obstacles) - 1) < min_distance * 1.2:
+            penalty += 0.5
         score = max(0, round(10 - penalty, 1))
         is_valid = len(issues) == 0
         summary = f'发现{len(issues)}个严重问题、{len(warnings)}个提醒。' if issues or warnings else '未发现需要处理的问题。'
@@ -220,6 +361,102 @@ class RouteValidator:
             'warnings': warnings,
             'auto_fixed': auto_fixed,
             'summary': summary,
+        }
+
+    def fix_course_structure(
+        self,
+        obstacles: List[Dict[str, Any]],
+        difficulty: str = 'medium',
+        path: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """对常见可自动修复问题生成修复后的路线。"""
+        import copy
+
+        config = DIFFICULTY_CONFIGS.get(difficulty, DIFFICULTY_CONFIGS['medium'])
+        margin = FEI_RULES['min_boundary_distance']
+        min_distance = FEI_RULES['min_obstacle_distance']
+        updated = copy.deepcopy(obstacles)
+        patches: List[Dict[str, Any]] = []
+
+        for index, obstacle in enumerate(updated):
+            obstacle_id = self._obstacle_id(obstacle, index)
+            position = obstacle.setdefault('position', {})
+            old_x = float(position.get('x', 0))
+            old_y = float(position.get('y', 0))
+            new_x = max(margin, min(self.field_width - margin, old_x))
+            new_y = max(margin, min(self.field_height - margin, old_y))
+            if abs(new_x - old_x) > 1e-6 or abs(new_y - old_y) > 1e-6:
+                position['x'] = round(new_x, 2)
+                position['y'] = round(new_y, 2)
+                patches.append({
+                    'code': 'BOUNDARY_DISTANCE',
+                    'obstacle_ids': [obstacle_id],
+                    'message': f'已将障碍物{self._obstacle_number(obstacle, index)}移回安全边界内。',
+                })
+
+            for pole_index, pole in enumerate(obstacle.get('poles') or []):
+                old_height = float(pole.get('height', config.min_height))
+                new_height = max(config.min_height, min(config.max_height, old_height))
+                if abs(new_height - old_height) > 1e-6:
+                    pole['height'] = round(new_height, 2)
+                    patches.append({
+                        'code': 'HEIGHT_RANGE',
+                        'obstacle_ids': [obstacle_id],
+                        'message': f'已将障碍物{self._obstacle_number(obstacle, index)}第{pole_index + 1}根横杆高度调整至{new_height:.2f}m。',
+                    })
+
+            obs_type = obstacle.get('type')
+            if obs_type in FEI_RULES['combination_spacing']:
+                min_spacing, max_spacing = FEI_RULES['combination_spacing'][obs_type]
+                target_spacing = round((min_spacing + max_spacing) / 2, 2)
+                for pole in (obstacle.get('poles') or [])[:-1]:
+                    spacing = pole.get('spacing')
+                    if spacing is None:
+                        continue
+                    spacing_value = float(spacing)
+                    if spacing_value < min_spacing or spacing_value > max_spacing:
+                        pole['spacing'] = target_spacing
+                        patches.append({
+                            'code': 'COMBINATION_SPACING',
+                            'obstacle_ids': [obstacle_id],
+                            'message': f'已将障碍物{self._obstacle_number(obstacle, index)}组合间距调整为{target_spacing:.2f}m。',
+                        })
+
+        for index in range(len(updated) - 1):
+            current = updated[index]
+            nxt = updated[index + 1]
+            current_pos = current.setdefault('position', {})
+            next_pos = nxt.setdefault('position', {})
+            x1, y1 = float(current_pos.get('x', 0)), float(current_pos.get('y', 0))
+            x2, y2 = float(next_pos.get('x', 0)), float(next_pos.get('y', 0))
+            dx = x2 - x1
+            dy = y2 - y1
+            distance = math.sqrt(dx * dx + dy * dy)
+            if distance < min_distance:
+                if distance < 1e-6:
+                    ux, uy = 1.0, 0.0
+                else:
+                    ux, uy = dx / distance, dy / distance
+                x2 = x1 + ux * min_distance
+                y2 = y1 + uy * min_distance
+                x2 = max(margin, min(self.field_width - margin, x2))
+                y2 = max(margin, min(self.field_height - margin, y2))
+                next_pos['x'] = round(x2, 2)
+                next_pos['y'] = round(y2, 2)
+                patches.append({
+                    'code': 'MIN_DISTANCE',
+                    'obstacle_ids': [self._obstacle_id(current, index), self._obstacle_id(nxt, index + 1)],
+                    'message': f'已拉开障碍物{self._obstacle_number(current, index)}与{self._obstacle_number(nxt, index + 1)}的距离。',
+                })
+
+        validation = self.validate_course_structure(updated, difficulty=difficulty, path=path)
+        validation['auto_fixed'] = [patch['message'] for patch in patches]
+        return {
+            'patches': patches,
+            'updated_obstacles': updated,
+            'updated_path': path,
+            'validation': validation,
+            'explanation': f'已应用{len(patches)}项自动修复。',
         }
 
     def _reorder_obstacles_to_reduce_turns(

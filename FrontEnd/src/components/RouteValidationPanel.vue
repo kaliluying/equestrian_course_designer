@@ -5,9 +5,14 @@
         <h3>规则检查</h3>
         <p>{{ validationSummary }}</p>
       </div>
-      <el-button size="small" type="primary" :loading="isChecking" @click="runValidation">
-        重新检查
-      </el-button>
+      <div class="panel-actions">
+        <el-button size="small" :disabled="!hasFixableIssues" :loading="isFixing" @click="applyAutoFix">
+          一键修复
+        </el-button>
+        <el-button size="small" type="primary" :loading="isChecking" @click="runValidation">
+          重新检查
+        </el-button>
+      </div>
     </div>
 
     <div v-if="result" class="score-card" :class="scoreClass">
@@ -18,18 +23,27 @@
       </el-tag>
     </div>
 
+    <div v-if="result" class="filters">
+      <el-radio-group v-model="activeFilter" size="small">
+        <el-radio-button label="all">全部</el-radio-button>
+        <el-radio-button label="error">严重</el-radio-button>
+        <el-radio-button label="warning">提醒</el-radio-button>
+        <el-radio-button label="selected">当前障碍</el-radio-button>
+      </el-radio-group>
+    </div>
+
     <div v-if="result" class="issue-groups">
-      <section v-if="result.issues.length" class="issue-section">
-        <h4>严重问题 {{ result.issues.length }}</h4>
-        <button v-for="issue in result.issues" :key="issue.code + issue.message" class="issue-card issue-error" @click="focusIssue(issue)">
+      <section v-if="visibleIssues.length" class="issue-section">
+        <h4>严重问题 {{ visibleIssues.length }}</h4>
+        <button v-for="issue in visibleIssues" :key="issue.code + issue.message" class="issue-card issue-error" @click="focusIssue(issue)">
           <strong>{{ issue.message }}</strong>
           <span>{{ issue.suggested_action }}</span>
         </button>
       </section>
 
-      <section v-if="result.warnings.length" class="issue-section">
-        <h4>提醒 {{ result.warnings.length }}</h4>
-        <button v-for="issue in result.warnings" :key="issue.code + issue.message" class="issue-card issue-warning" @click="focusIssue(issue)">
+      <section v-if="visibleWarnings.length" class="issue-section">
+        <h4>提醒 {{ visibleWarnings.length }}</h4>
+        <button v-for="issue in visibleWarnings" :key="issue.code + issue.message" class="issue-card issue-warning" @click="focusIssue(issue)">
           <strong>{{ issue.message }}</strong>
           <span>{{ issue.suggested_action }}</span>
         </button>
@@ -42,7 +56,7 @@
         </ul>
       </section>
 
-      <el-empty v-if="!result.issues.length && !result.warnings.length" description="未发现需要处理的问题" />
+      <el-empty v-if="!visibleIssues.length && !visibleWarnings.length" description="未发现需要处理的问题" />
     </div>
 
     <el-empty v-else description="点击重新检查，获取路线专业建议" />
@@ -51,15 +65,36 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { validateCourse, type RouteValidationIssue } from '@/api/design'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { fixCourse, validateCourse, type RouteValidationIssue } from '@/api/design'
 import { useCourseStore } from '@/stores/course'
 
 const courseStore = useCourseStore()
 const isChecking = ref(false)
+const isFixing = ref(false)
+const activeFilter = ref<'all' | 'error' | 'warning' | 'selected'>('all')
 const result = computed(() => courseStore.routeValidationResult)
 
 const validationSummary = computed(() => result.value?.summary || '检查间距、边界和高度规则')
+const allIssues = computed(() => result.value ? [...result.value.issues, ...result.value.warnings] : [])
+const hasFixableIssues = computed(() => allIssues.value.some(issue => issue.auto_fixable))
+const selectedObstacleId = computed(() => courseStore.selectedObstacle?.id || '')
+
+const filterBySelection = (issue: RouteValidationIssue) => {
+  if (activeFilter.value !== 'selected') return true
+  return Boolean(selectedObstacleId.value && issue.obstacle_ids.includes(selectedObstacleId.value))
+}
+
+const visibleIssues = computed(() => {
+  if (!result.value || activeFilter.value === 'warning') return []
+  return result.value.issues.filter(filterBySelection)
+})
+
+const visibleWarnings = computed(() => {
+  if (!result.value || activeFilter.value === 'error') return []
+  return result.value.warnings.filter(filterBySelection)
+})
+
 const scoreClass = computed(() => {
   if (!result.value) return ''
   if (result.value.score >= 8) return 'score-good'
@@ -67,15 +102,23 @@ const scoreClass = computed(() => {
   return 'score-danger'
 })
 
+const currentValidationPayload = () => ({
+  obstacles: courseStore.currentCourse.obstacles,
+  field_width: courseStore.currentCourse.fieldWidth,
+  field_height: courseStore.currentCourse.fieldHeight,
+  difficulty: 'medium' as const,
+  path: {
+    visible: courseStore.coursePath.visible,
+    points: courseStore.coursePath.points,
+    startPoint: courseStore.startPoint,
+    endPoint: courseStore.endPoint,
+  },
+})
+
 const runValidation = async () => {
   isChecking.value = true
   try {
-    const validation = await validateCourse({
-      obstacles: courseStore.currentCourse.obstacles,
-      field_width: courseStore.currentCourse.fieldWidth,
-      field_height: courseStore.currentCourse.fieldHeight,
-      difficulty: 'medium',
-    })
+    const validation = await validateCourse(currentValidationPayload())
     courseStore.setValidationResult(validation)
     ElMessage.success('路线规则检查完成')
   } catch (error) {
@@ -83,6 +126,32 @@ const runValidation = async () => {
     ElMessage.error('路线规则检查失败，请稍后重试')
   } finally {
     isChecking.value = false
+  }
+}
+
+const applyAutoFix = async () => {
+  if (!hasFixableIssues.value) return
+  try {
+    await ElMessageBox.confirm('将自动调整可修复的障碍位置、高度或组合间距。是否继续？', '应用自动修复', {
+      confirmButtonText: '应用修复',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+
+  isFixing.value = true
+  try {
+    const fixed = await fixCourse(currentValidationPayload())
+    courseStore.applyRouteFix(fixed.updated_obstacles, fixed.updated_path)
+    courseStore.setValidationResult(fixed.validation)
+    ElMessage.success(fixed.explanation || '自动修复完成')
+  } catch (error) {
+    console.error('自动修复失败:', error)
+    ElMessage.error('自动修复失败，请稍后重试')
+  } finally {
+    isFixing.value = false
   }
 }
 
@@ -97,7 +166,7 @@ const focusIssue = (issue: RouteValidationIssue) => {
   right: 24px;
   bottom: 24px;
   z-index: 20;
-  width: 360px;
+  width: 380px;
   max-height: 55vh;
   overflow: auto;
   padding: 16px;
@@ -111,6 +180,12 @@ const focusIssue = (issue: RouteValidationIssue) => {
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
+}
+.panel-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 .panel-header h3 {
   margin: 0 0 4px;
@@ -131,6 +206,9 @@ const focusIssue = (issue: RouteValidationIssue) => {
 }
 .score-card strong {
   font-size: 22px;
+}
+.filters {
+  margin-bottom: 10px;
 }
 .score-good strong { color: var(--el-color-success); }
 .score-warning strong { color: var(--el-color-warning); }

@@ -939,6 +939,91 @@ class RouteValidationPanelAPITest(TestCase):
         self.assertIn("HEIGHT_RANGE", codes)
 
 
+    def test_validate_course_reports_turn_radius_route_flow_and_sequence(self):
+        """急转弯、路线流畅度和编号顺序异常应进入结构化反馈"""
+        response = self.client.post(
+            "/user/designs/validate-course/",
+            data={
+                "field_width": 90,
+                "field_height": 60,
+                "difficulty": "medium",
+                "path": {
+                    "startPoint": {"x": 10, "y": 10, "rotation": 180},
+                    "endPoint": {"x": 16, "y": 16, "rotation": 0},
+                },
+                "obstacles": [
+                    {"id": "obs-1", "number": "2", "type": "SINGLE", "position": {"x": 10, "y": 10}, "poles": [{"height": 1.1, "width": 3.5}]},
+                    {"id": "obs-2", "number": "1", "type": "SINGLE", "position": {"x": 16, "y": 10}, "poles": [{"height": 1.1, "width": 3.5}]},
+                    {"id": "obs-3", "number": "3", "type": "SINGLE", "position": {"x": 16, "y": 16}, "poles": [{"height": 1.1, "width": 3.5}]},
+                    {"id": "obs-4", "number": "4", "type": "SINGLE", "position": {"x": 22, "y": 16}, "poles": [{"height": 1.1, "width": 3.5}]},
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        codes = {item["code"] for item in response.json()["issues"] + response.json()["warnings"]}
+        self.assertIn("TURN_RADIUS", codes)
+        self.assertIn("ROUTE_FLOW", codes)
+        self.assertIn("OBSTACLE_SEQUENCE", codes)
+        self.assertIn("START_END_DIRECTION", codes)
+
+    def test_validate_course_reports_combination_spacing(self):
+        """组合障碍间距异常应进入结构化反馈"""
+        response = self.client.post(
+            "/user/designs/validate-course/",
+            data={
+                "field_width": 90,
+                "field_height": 60,
+                "difficulty": "medium",
+                "obstacles": [
+                    {
+                        "id": "combo-1",
+                        "number": "1",
+                        "type": "COMBINATION",
+                        "position": {"x": 20, "y": 20},
+                        "poles": [
+                            {"height": 1.1, "width": 3.5, "spacing": 1.4},
+                            {"height": 1.1, "width": 3.5, "spacing": 0.2},
+                            {"height": 1.1, "width": 3.5},
+                        ],
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        codes = {item["code"] for item in response.json()["issues"] + response.json()["warnings"]}
+        self.assertIn("COMBINATION_SPACING", codes)
+
+    def test_fix_course_returns_patches_and_updated_obstacles(self):
+        """一键修复应返回补丁说明、更新后的障碍物和重新评分"""
+        response = self.client.post(
+            "/user/designs/fix-course/",
+            data={
+                "field_width": 90,
+                "field_height": 60,
+                "difficulty": "easy",
+                "obstacles": [
+                    {"id": "obs-1", "number": "1", "type": "SINGLE", "position": {"x": 1, "y": 2}, "poles": [{"height": 1.5, "width": 3.5}]},
+                    {"id": "obs-2", "number": "2", "type": "SINGLE", "position": {"x": 2, "y": 2}, "poles": [{"height": 1.5, "width": 3.5}]},
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("patches", data)
+        self.assertIn("updated_obstacles", data)
+        self.assertIn("validation", data)
+        self.assertGreater(len(data["patches"]), 0)
+        first = data["updated_obstacles"][0]
+        self.assertGreaterEqual(first["position"]["x"], 3)
+        self.assertLessEqual(first["poles"][0]["height"], 1.0)
+
+
 class DesignVersionHistoryAPITest(TestCase):
     """设计版本历史接口测试"""
 

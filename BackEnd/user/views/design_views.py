@@ -133,9 +133,23 @@ class DesignViewSet(viewsets.ModelViewSet):
         field_width = float(request.data.get("field_width") or request.data.get("fieldWidth") or 90)
         field_height = float(request.data.get("field_height") or request.data.get("fieldHeight") or 60)
         difficulty = request.data.get("difficulty") or "medium"
+        path = request.data.get("path") or {}
 
         validator = RouteValidator(field_width=field_width, field_height=field_height)
-        return Response(validator.validate_course_structure(obstacles, difficulty))
+        return Response(validator.validate_course_structure(obstacles, difficulty, path=path))
+
+
+    @action(detail=False, methods=["post"], url_path="fix-course")
+    def fix_course(self, request):
+        """自动修复当前路线中的可修复规则问题。"""
+        obstacles = request.data.get("obstacles") or []
+        field_width = float(request.data.get("field_width") or request.data.get("fieldWidth") or 90)
+        field_height = float(request.data.get("field_height") or request.data.get("fieldHeight") or 60)
+        difficulty = request.data.get("difficulty") or "medium"
+        path = request.data.get("path") or {}
+
+        validator = RouteValidator(field_width=field_width, field_height=field_height)
+        return Response(validator.fix_course_structure(obstacles, difficulty, path=path))
 
     @action(detail=False, methods=["get"], url_path="shared")
     def shared_designs(self, request):

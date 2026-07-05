@@ -84,6 +84,36 @@ export const useCourseStore = defineStore('course', () => {
     highlightedValidationIssue.value = null
   }
 
+
+  function applyRouteFix(updatedObstacles: unknown[], updatedPath?: Record<string, unknown> | null) {
+    commitHistory()
+    currentCourse.value.obstacles = JSON.parse(JSON.stringify(updatedObstacles)) as Obstacle[]
+
+    if (updatedPath && typeof updatedPath === 'object') {
+      const pathValue = updatedPath as {
+        visible?: boolean
+        points?: PathPoint[]
+        startPoint?: { x: number; y: number; rotation: number }
+        endPoint?: { x: number; y: number; rotation: number }
+      }
+      coursePath.value = {
+        visible: pathValue.visible ?? coursePath.value.visible,
+        points: pathValue.points ?? coursePath.value.points,
+      }
+      if (pathValue.startPoint) {
+        startPoint.value = pathValue.startPoint
+      }
+      if (pathValue.endPoint) {
+        endPoint.value = pathValue.endPoint
+      }
+    }
+
+    selectedObstacle.value = null
+    highlightedValidationIssue.value = null
+    updateCourse()
+    commitHistory()
+  }
+
   /**
    * 初始化存储
    * @description 检查localStorage中是否存在自动保存的数据
@@ -2307,6 +2337,7 @@ export const useCourseStore = defineStore('course', () => {
     setValidationResult,
     highlightValidationIssue,
     clearValidationHighlight,
+    applyRouteFix,
     updateCourse,
     saveToLocalStorage,
     readAutosaveDraft,

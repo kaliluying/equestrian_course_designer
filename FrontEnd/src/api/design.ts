@@ -175,6 +175,21 @@ export interface RouteValidationRequest {
   field_width: number
   field_height: number
   difficulty?: 'easy' | 'medium' | 'hard'
+  path?: Record<string, unknown>
+}
+
+export interface RouteFixPatch {
+  code: string
+  obstacle_ids: string[]
+  message: string
+}
+
+export interface RouteFixResult {
+  patches: RouteFixPatch[]
+  updated_obstacles: unknown[]
+  updated_path: Record<string, unknown> | null
+  validation: RouteValidationResult
+  explanation: string
 }
 
 export const validateCourse = async (
@@ -220,4 +235,11 @@ export const copyDesignVersion = async (
 ): Promise<DesignResponse> => {
   invalidateCache()
   return request.post<DesignResponse>(`/user/designs/${designId}/versions/${versionId}/copy/`)
+}
+
+
+export const fixCourse = async (
+  data: RouteValidationRequest,
+): Promise<RouteFixResult> => {
+  return request.post<RouteFixResult>('/user/designs/fix-course/', data)
 }
