@@ -96,6 +96,7 @@
           :style="{ width: `${rightPanelWidth}px` }" 
         />
         <RouteValidationPanel />
+        <DesignVersionHistory />
       </template>
 
       <!-- 路由视图，用于显示其他页面 -->
@@ -223,6 +224,7 @@ import { useUserStore } from '@/stores/user'
 import { useThemeStore } from '@/stores/theme'
 import CollaborationPanel from '@/components/CollaborationPanel.vue'
 import CourseCanvasV2 from '@/components/CourseCanvasV2.vue'
+import DesignVersionHistory from '@/components/DesignVersionHistory.vue'
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
 import AutoSaveIndicator from '@/components/AutoSaveIndicator.vue'
 import LoginForm from '@/components/LoginForm.vue'

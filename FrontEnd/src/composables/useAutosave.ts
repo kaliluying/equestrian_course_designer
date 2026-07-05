@@ -55,8 +55,7 @@ export function useAutosave() {
 
   // 检查是否有自动保存的路线设计
   const checkAutosave = () => {
-    const timestamp = localStorage.getItem('autosaved_timestamp')
-    const savedCourse = localStorage.getItem('autosaved_course')
+    const { savedCourse, savedTimestamp: timestamp } = courseStore.readAutosaveDraft()
 
     if (!timestamp || !savedCourse) return
 
@@ -121,8 +120,7 @@ export function useAutosave() {
 
         // 4. 如果还是没有显示，尝试直接设置
         if (!showRestoreDialog.value) {
-          const timestamp = localStorage.getItem('autosaved_timestamp')
-          const savedCourse = localStorage.getItem('autosaved_course')
+          const { savedCourse, savedTimestamp: timestamp } = courseStore.readAutosaveDraft()
 
           if (timestamp && savedCourse) {
             try {

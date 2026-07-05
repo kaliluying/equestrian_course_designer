@@ -101,6 +101,10 @@ export const useCourseStore = defineStore('course', () => {
         }
       } catch (error) {
         console.error('自动保存数据无效:', error)
+        const keys = getAutosaveKeys()
+        localStorage.removeItem(keys.courseKey)
+        localStorage.removeItem(keys.timestampKey)
+        localStorage.removeItem(keys.metaKey)
         localStorage.removeItem('autosaved_course')
         localStorage.removeItem('autosaved_timestamp')
       }
@@ -1444,6 +1448,47 @@ export const useCourseStore = defineStore('course', () => {
 
   let autosaveTimeout: ReturnType<typeof setTimeout> | null = null
   const AUTOSAVE_DELAY = 1000
+  const AUTOSAVE_SCHEMA_VERSION = 2
+
+  function getCurrentAutosaveIdentity() {
+    const rawUser = localStorage.getItem('user')
+    let userId = 'anonymous'
+    try {
+      const parsed = rawUser ? JSON.parse(rawUser) : null
+      userId = parsed?.id ? String(parsed.id) : 'anonymous'
+    } catch {
+      userId = 'anonymous'
+    }
+
+    const persistedDesignId = localStorage.getItem('design_id_to_update')
+    const designId = persistedDesignId || currentCourse.value.id || 'draft'
+    return { userId, designId: String(designId) }
+  }
+
+  function getAutosaveKeys() {
+    const { userId, designId } = getCurrentAutosaveIdentity()
+    const prefix = `autosaved_course:${userId}:${designId}`
+    return {
+      courseKey: `${prefix}:course`,
+      timestampKey: `${prefix}:timestamp`,
+      metaKey: `${prefix}:meta`,
+    }
+  }
+
+  function readAutosaveDraft() {
+    const keys = getAutosaveKeys()
+    const bucketCourse = localStorage.getItem(keys.courseKey)
+    const bucketTimestamp = localStorage.getItem(keys.timestampKey)
+    if (bucketCourse && bucketTimestamp) {
+      return { savedCourse: bucketCourse, savedTimestamp: bucketTimestamp, keys }
+    }
+
+    return {
+      savedCourse: localStorage.getItem('autosaved_course'),
+      savedTimestamp: localStorage.getItem('autosaved_timestamp'),
+      keys,
+    }
+  }
 
   function saveToLocalStorage() {
     if (autosaveTimeout) {
@@ -1469,8 +1514,22 @@ export const useCourseStore = defineStore('course', () => {
           },
         }
 
-        localStorage.setItem('autosaved_course', JSON.stringify(courseDataToSave))
-        localStorage.setItem('autosaved_timestamp', new Date().toISOString())
+        const keys = getAutosaveKeys()
+        const savedAt = new Date().toISOString()
+        const payload = JSON.stringify(courseDataToSave)
+        localStorage.setItem(keys.courseKey, payload)
+        localStorage.setItem(keys.timestampKey, savedAt)
+        localStorage.setItem(keys.metaKey, JSON.stringify({
+          user_id: getCurrentAutosaveIdentity().userId,
+          design_id: getCurrentAutosaveIdentity().designId,
+          course_id: currentCourse.value.id,
+          saved_at: savedAt,
+          dirty: true,
+          schema_version: AUTOSAVE_SCHEMA_VERSION,
+        }))
+        // 保留旧 key 兼容已有恢复流程和旧版本用户
+        localStorage.setItem('autosaved_course', payload)
+        localStorage.setItem('autosaved_timestamp', savedAt)
       } catch (error) {
         console.error('自动保存到localStorage失败:', error)
       }
@@ -1503,8 +1562,7 @@ export const useCourseStore = defineStore('course', () => {
         }
       }
 
-      const savedCourse = localStorage.getItem('autosaved_course')
-      const savedTimestamp = localStorage.getItem('autosaved_timestamp')
+      const { savedCourse, savedTimestamp } = readAutosaveDraft()
 
       if (!savedCourse || !savedTimestamp) {
         return false
@@ -1583,6 +1641,10 @@ export const useCourseStore = defineStore('course', () => {
         return true
       } catch (error) {
         console.error('解析本地存储的JSON数据失败:', error)
+        const keys = getAutosaveKeys()
+        localStorage.removeItem(keys.courseKey)
+        localStorage.removeItem(keys.timestampKey)
+        localStorage.removeItem(keys.metaKey)
         localStorage.removeItem('autosaved_course')
         localStorage.removeItem('autosaved_timestamp')
         return false
@@ -1598,6 +1660,10 @@ export const useCourseStore = defineStore('course', () => {
    * @description 删除本地存储中的自动保存数据
    */
   function clearAutosave() {
+    const keys = getAutosaveKeys()
+    localStorage.removeItem(keys.courseKey)
+    localStorage.removeItem(keys.timestampKey)
+    localStorage.removeItem(keys.metaKey)
     localStorage.removeItem('autosaved_course')
     localStorage.removeItem('autosaved_timestamp')
   }
@@ -2243,6 +2309,7 @@ export const useCourseStore = defineStore('course', () => {
     clearValidationHighlight,
     updateCourse,
     saveToLocalStorage,
+    readAutosaveDraft,
     restoreFromLocalStorage,
     clearAutosave,
     saveCourse,

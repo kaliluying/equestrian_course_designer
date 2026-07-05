@@ -182,3 +182,42 @@ export const validateCourse = async (
 ): Promise<RouteValidationResult> => {
   return request.post<RouteValidationResult>('/user/designs/validate-course/', data)
 }
+
+
+export interface DesignVersion {
+  id: number
+  design: number
+  version_number: number
+  source: 'manual' | 'autosave' | 'ai' | 'restore'
+  title: string
+  description: string | null
+  course_data: Record<string, unknown>
+  created_at: string
+}
+
+export const getDesignVersions = async (designId: number): Promise<DesignVersion[]> => {
+  return request.get<DesignVersion[]>(`/user/designs/${designId}/versions/`)
+}
+
+export const getDesignVersion = async (
+  designId: number,
+  versionId: number,
+): Promise<DesignVersion> => {
+  return request.get<DesignVersion>(`/user/designs/${designId}/versions/${versionId}/`)
+}
+
+export const restoreDesignVersion = async (
+  designId: number,
+  versionId: number,
+): Promise<DesignResponse> => {
+  invalidateCache()
+  return request.post<DesignResponse>(`/user/designs/${designId}/versions/${versionId}/restore/`)
+}
+
+export const copyDesignVersion = async (
+  designId: number,
+  versionId: number,
+): Promise<DesignResponse> => {
+  invalidateCache()
+  return request.post<DesignResponse>(`/user/designs/${designId}/versions/${versionId}/copy/`)
+}
