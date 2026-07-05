@@ -443,6 +443,27 @@ class MembershipAccessServiceTest(TestCase):
         self.assertIsNone(snapshot.custom_obstacle_limit)
 
 
+    def test_my_profile_includes_entitlement_snapshot(self):
+        """个人中心应返回统一权益快照"""
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+        self.profile.is_premium = True
+        self.profile.membership_plan = self.standard_plan
+        self.profile.premium_expire_date = timezone.now() + timezone.timedelta(days=30)
+        self.profile.storage_limit = self.standard_plan.storage_limit
+        self.profile.save()
+
+        response = client.get("/user/users/my_profile/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("entitlements", data)
+        self.assertEqual(data["entitlements"]["plan_code"], "standard")
+        self.assertEqual(data["entitlements"]["design_limit"], 100)
+        self.assertEqual(data["entitlements"]["custom_obstacle_limit"], 50)
+        self.assertFalse(data["entitlements"]["can_collaborate"])
+
+
 class MembershipDowngradeActivationTest(TestCase):
     """会员降级到期生效回归测试"""
 

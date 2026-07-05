@@ -39,17 +39,15 @@ CLOSE_CODE_DESIGN_NOT_FOUND = 4008
 
 @database_sync_to_async
 def get_user_profile_info(user):
-    """异步获取用户资料信息"""
+    """异步获取用户协作权限。"""
     if not user or not user.is_authenticated:
         return False
     try:
-        profile = user.profile
-        return (
-            profile.membership_plan is not None
-            and profile.membership_plan.name == "高级会员"
-        )
+        from .services.membership_access import can_collaborate
+
+        return can_collaborate(user)
     except Exception as e:
-        logger.error(f"获取用户资料失败: {str(e)}")
+        logger.error(f"获取用户协作权限失败: {str(e)}")
         return False
 
 

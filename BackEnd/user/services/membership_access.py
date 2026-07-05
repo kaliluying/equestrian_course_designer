@@ -157,3 +157,9 @@ def assert_custom_obstacle_capacity(user: User) -> EntitlementSnapshot:
             },
         )
     return snapshot
+
+
+
+def can_collaborate(user: User) -> bool:
+    """判断用户是否具备直接创建协作会话的权限。"""
+    return get_entitlements(user).can_collaborate

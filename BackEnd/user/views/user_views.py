@@ -239,6 +239,10 @@ class UserViewSet(viewsets.ModelViewSet):
         # 获取用户设计数量
         design_count = Design.objects.filter(author=user).count()
 
+        from ..services.membership_access import get_entitlements
+
+        entitlements = get_entitlements(user)
+
         # 获取可用的会员计划
         plans = MembershipPlan.objects.filter(is_active=True)
 
@@ -251,6 +255,7 @@ class UserViewSet(viewsets.ModelViewSet):
             "is_premium_active": profile.is_premium_active(),
             "design_count": design_count,
             "design_storage_limit": profile.storage_limit,
+            "entitlements": entitlements.to_dict(),
             "available_plans": [],
         }
 
