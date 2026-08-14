@@ -1,17 +1,17 @@
-Django==5.1.3
-djangorestframework==3.14.0
-djangorestframework-simplejwt==5.3.1
-drf-spectacular>=0.29.0
-django-cors-headers==4.3.1
-django-simpleui==2025.1.13
-mysqlclient==2.2.4
-Pillow==10.2.0  # 用于图片处理
-python-dotenv==1.0.1 
-channels==3.0.5
-channels-redis==4.1.0  # 用于生产环境中的Channel Layer
-daphne==3.0.2  # ASGI服务器，用于生产环境 
-python-alipay-sdk==3.3.0  # 支付宝SDK
-pycryptodome==3.19.1  # 加密库，支付宝SDK依赖
-whitenoise>=6.11.0  # 静态文件服务中间件，settings.py 已启用
-openai>=2.24.0  # AI 路线生成 LLM Provider
-anthropic>=0.84.0  # AI 路线生成 LLM Provider
+anthropic==0.122.0  # AI 路线生成 LLM Provider
+channels==4.3.2
+channels-redis==4.3.0  # 用于生产环境中的Channel Layer
+daphne==4.2.3  # ASGI服务器，用于生产环境
+Django==5.2.17
+django-cors-headers==4.9.0
+django-simpleui==2026.1.13
+djangorestframework==3.18.0
+djangorestframework-simplejwt==5.5.1
+drf-spectacular==0.30.0
+mysqlclient==2.2.8
+Pillow==12.3.0  # 用于图片处理
+pycryptodome==3.23.0  # 加密库，支付宝SDK依赖
+python-alipay-sdk==3.4.0  # 支付宝SDK
+python-dotenv==1.2.2
+openai==3.0.0  # AI 路线生成 LLM Provider
+whitenoise==6.12.0  # 静态文件服务中间件，settings.py 已启用

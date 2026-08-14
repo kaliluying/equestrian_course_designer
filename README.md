@@ -14,7 +14,7 @@
 
 ### 后端
 - Python 3.12+
-- Django 5.1.3
+- Django 5.2.17
 - Django REST framework
 - SimpleUI (Django Admin 美化)
 - MySQL 8.0+
