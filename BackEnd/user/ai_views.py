@@ -11,6 +11,7 @@ import json
 import re
 import random
 import time
+import uuid
 import os
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -18,6 +19,7 @@ from .models import AIGenerationQuota, AIGenerationHistory, MembershipOrder
 from .llm_providers import get_llm_provider
 from .route_generator import RouteGenerator, RouteConfig
 from .route_validator import RouteValidator
+from .utils import ExternalServiceConfigError, create_alipay_order
 
 logger = logging.getLogger(__name__)
 
@@ -700,26 +702,31 @@ def get_ai_quota(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def purchase_ai_quota(request):
-    """购买 AI 配额"""
+    """购买 AI 配额：创建一次性订单并返回支付宝支付链接。"""
     quota_amount = request.data.get("quota", 10)
 
-    # 验证配额数量
     try:
         quota_amount = int(quota_amount)
         if quota_amount <= 0 or quota_amount > 1000:
             raise ValueError("Invalid quota amount")
     except (ValueError, TypeError):
         return Response(
-            {"code": status.HTTP_400_BAD_REQUEST, "message": "购买数量无效"}
+            {"code": status.HTTP_400_BAD_REQUEST, "message": "购买数量无效"},
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
-    price = AI_QUOTA_PRICES.get(quota_amount, quota_amount * 1.0)
+    raw_price = AI_QUOTA_PRICES.get(quota_amount, quota_amount * 1.0)
+    price = Decimal(str(raw_price)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    order_id = f"AI{uuid.uuid4().hex}"
+    subject = f"AI 路线生成次数包-{quota_amount}次"
 
     try:
-        from .utils import validate_alipay_config
-
-        validate_alipay_config()
-    except Exception as exc:
+        payment_url = create_alipay_order(
+            order_id=order_id,
+            subject=subject,
+            total_amount=float(price),
+        )
+    except ExternalServiceConfigError as exc:
         logger.warning("AI配额购买不可用: %s", str(exc))
         return Response(
             {
@@ -728,20 +735,27 @@ def purchase_ai_quota(request):
             },
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
+    except Exception as exc:
+        logger.error("创建 AI 配额支付宝订单失败: %s", str(exc), exc_info=True)
+        return Response(
+            {
+                "code": status.HTTP_503_SERVICE_UNAVAILABLE,
+                "message": f"支付功能暂不可用：{str(exc)}",
+            },
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
 
-    # 创建订单
-    # 说明：
-    # 1. MembershipOrder 当前模型不包含 note 字段；
-    # 2. billing_cycle 当前仅允许 month/year。
-    # 为保证接口可用，AI 配额订单复用 month 作为一次性订单的占位周期。
+    # MembershipOrder 当前模型不包含订单类型字段，AI 配额订单用 membership_plan=None 区分；
+    # billing_cycle 复用 month 作为一次性订单占位值。
     order = MembershipOrder.objects.create(
         user=request.user,
-        order_id=f"AI{int(time.time())}{random.randint(1000, 9999)}",
+        order_id=order_id,
         membership_plan=None,
         amount=price,
         payment_channel="alipay",
         status="pending",
         billing_cycle="month",
+        payment_url=payment_url,
     )
 
     return Response(
@@ -752,6 +766,7 @@ def purchase_ai_quota(request):
                 "order_id": order.order_id,
                 "amount": str(price),
                 "quota_count": quota_amount,
+                "payment_url": payment_url,
             },
         }
     )

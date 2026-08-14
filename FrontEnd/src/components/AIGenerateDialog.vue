@@ -11,10 +11,29 @@
       <el-tag :type="quotaInfo.remaining_quota > 0 ? 'success' : 'danger'">
         剩余次数: {{ quotaInfo.remaining_quota }}
       </el-tag>
-      <el-button size="small" text type="primary" @click="handlePurchase">
-        购买次数
-      </el-button>
+      <div class="quota-purchase">
+        <el-select v-model="selectedQuota" size="small" :disabled="isPurchasing || isPollingPayment" class="quota-select">
+          <el-option
+            v-for="option in quotaPackages"
+            :key="option.quota"
+            :label="`${option.quota}次 / ¥${option.amount}`"
+            :value="option.quota"
+          />
+        </el-select>
+        <el-button size="small" text type="primary" :loading="isPurchasing" @click="handlePurchase">
+          购买次数
+        </el-button>
+      </div>
     </div>
+
+    <el-alert
+      v-if="paymentStatusText"
+      :title="paymentStatusText"
+      type="info"
+      show-icon
+      :closable="false"
+      class="payment-status-alert"
+    />
 
     <!-- 输入区域 -->
     <el-form :model="form" label-position="top" class="ai-form">
@@ -135,8 +154,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref, reactive, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Odometer, Tools, TrendCharts, Timer, Warning } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
@@ -148,7 +166,6 @@ import {
   type AIGenerateResponse
 } from '@/api/ai'
 
-const router = useRouter()
 const userStore = useUserStore()
 const courseStore = useCourseStore()
 
@@ -157,6 +174,20 @@ const isGenerating = ref(false)
 const isEditMode = ref(false)
 const result = ref<AIGenerateResponse | null>(null)
 const editSummary = ref<string[]>([])
+const isPurchasing = ref(false)
+const isPollingPayment = ref(false)
+const paymentStatusText = ref('')
+const pendingOrderId = ref('')
+const paymentPollTimer = ref<number | null>(null)
+const paymentPollAttempts = ref(0)
+const selectedQuota = ref(10)
+const MAX_PAYMENT_POLL_ATTEMPTS = 60
+
+const quotaPackages = [
+  { quota: 10, amount: '9.90' },
+  { quota: 30, amount: '24.90' },
+  { quota: 100, amount: '69.90' },
+]
 
 const quotaInfo = reactive<AIQuotaInfo>({
   free_quota: 0,
@@ -317,10 +348,82 @@ const applyResult = async () => {
   ElMessage.success(isEditMode.value ? '已应用修改到画布' : '已应用到画布')
 }
 
-const handlePurchase = () => {
-  dialogVisible.value = false
-  router.push('/profile')
+const clearPaymentPolling = () => {
+  if (paymentPollTimer.value !== null) {
+    window.clearInterval(paymentPollTimer.value)
+    paymentPollTimer.value = null
+  }
+  isPollingPayment.value = false
+  paymentPollAttempts.value = 0
 }
+
+const pollPaymentResult = async () => {
+  if (!pendingOrderId.value) return
+
+  paymentPollAttempts.value += 1
+  if (paymentPollAttempts.value > MAX_PAYMENT_POLL_ATTEMPTS) {
+    clearPaymentPolling()
+    paymentStatusText.value = '暂未确认支付结果，请稍后点击购买次数重新查询或重新下单'
+    return
+  }
+
+  try {
+    const response = await aiApi.getQuotaOrderStatus(pendingOrderId.value)
+    const order = response.order
+    if (order?.status === 'paid') {
+      clearPaymentPolling()
+      paymentStatusText.value = '支付成功，正在刷新剩余次数'
+      await fetchQuota()
+      ElMessage.success(`支付成功，当前剩余次数: ${quotaInfo.remaining_quota}`)
+      paymentStatusText.value = ''
+      pendingOrderId.value = ''
+    } else if (order?.status === 'failed' || order?.status === 'canceled') {
+      clearPaymentPolling()
+      paymentStatusText.value = '订单未完成，请重新下单或稍后再试'
+    }
+  } catch (error) {
+    clearPaymentPolling()
+    ElMessage.warning(getAIGenerateErrorMessage(error))
+  }
+}
+
+const startPaymentPolling = () => {
+  clearPaymentPolling()
+  paymentPollAttempts.value = 0
+  isPollingPayment.value = true
+  paymentStatusText.value = '正在等待支付结果，支付完成后将自动刷新剩余次数'
+  paymentPollTimer.value = window.setInterval(() => {
+    void pollPaymentResult()
+  }, 3000)
+}
+
+const handlePurchase = async () => {
+  if (isPurchasing.value) return
+
+  isPurchasing.value = true
+  paymentStatusText.value = ''
+
+  try {
+    const response = await aiApi.purchase({ quota: selectedQuota.value })
+    const data = response.data
+    if (!data?.payment_url) {
+      ElMessage.warning('支付链接创建失败，请稍后重试')
+      return
+    }
+
+    pendingOrderId.value = data.order_id
+    window.open(data.payment_url, '_blank')
+    startPaymentPolling()
+  } catch (error) {
+    ElMessage.warning(getAIGenerateErrorMessage(error))
+  } finally {
+    isPurchasing.value = false
+  }
+}
+
+onBeforeUnmount(() => {
+  clearPaymentPolling()
+})
 
 const open = (mode: 'generate' | 'edit' = 'generate') => {
   dialogVisible.value = true
@@ -331,7 +434,7 @@ const open = (mode: 'generate' | 'edit' = 'generate') => {
   fetchQuota()
 }
 
-defineExpose({ open })
+defineExpose({ open, handlePurchase, selectedQuota })
 </script>
 
 <style scoped lang="scss">
@@ -345,8 +448,19 @@ defineExpose({ open })
   border-radius: 8px;
 }
 
-.edit-mode-alert {
+.edit-mode-alert,
+.payment-status-alert {
   margin-bottom: 16px;
+}
+
+.quota-purchase {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quota-select {
+  width: 130px;
 }
 
 .ai-form {

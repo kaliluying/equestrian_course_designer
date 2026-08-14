@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import AIGenerateDialog from '@/components/AIGenerateDialog.vue'
@@ -11,12 +11,17 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   success: vi.fn(),
   error: vi.fn(),
+  warning: vi.fn(),
+  purchase: vi.fn(),
+  getQuotaOrderStatus: vi.fn(),
 }))
 
 vi.mock('@/api/ai', () => ({
   aiApi: {
     generate: mocks.generate,
     getQuota: mocks.getQuota,
+    purchase: mocks.purchase,
+    getQuotaOrderStatus: mocks.getQuotaOrderStatus,
   },
   getAIGenerateErrorMessage: (error: unknown) => {
     const data = (error as { response?: { data?: { message?: string } } }).response?.data
@@ -38,8 +43,8 @@ vi.mock('vue-router', async () => {
       push: mocks.push,
     }),
   }
-})
 
+})
 vi.mock('element-plus', async () => {
   const actual = await vi.importActual<typeof import('element-plus')>('element-plus')
   return {
@@ -47,11 +52,13 @@ vi.mock('element-plus', async () => {
     ElMessage: {
       success: mocks.success,
       error: mocks.error,
+      warning: mocks.warning,
     },
   }
 })
 
 const passthroughStubs = {
+  'el-alert': { template: '<div>{{ title }}<slot /></div>', props: ['title'] },
   'el-button': { template: '<button @click="$emit(\'click\')"><slot /></button>' },
   'el-card': { template: '<section><slot /></section>' },
   'el-col': { template: '<div><slot /></div>' },
@@ -83,6 +90,10 @@ describe('AIGenerateDialog', () => {
         remaining_quota: 2,
       },
     })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('生成后展示校验警告和自动修正反馈', async () => {
@@ -139,5 +150,169 @@ describe('AIGenerateDialog', () => {
     expect(wrapper.text()).toContain('建议增加左转弯')
     expect(wrapper.text()).toContain('已自动修正')
     expect(wrapper.text()).toContain('障碍物1位置从(-20.0, 10.0)修正为(5.0, 10.0)')
+  })
+
+  it('配额不足时可直接购买次数并打开支付链接', async () => {
+    const userStore = useUserStore()
+    userStore.isAuthenticated = true
+    mocks.getQuota.mockResolvedValueOnce({
+      data: {
+        free_quota: 3,
+        purchased_quota: 0,
+        used_quota: 3,
+        remaining_quota: 0,
+      },
+    })
+    mocks.purchase.mockResolvedValueOnce({
+      code: 200,
+      data: {
+        order_id: 'AI123',
+        amount: '9.90',
+        quota_count: 10,
+        payment_url: 'https://pay.example.com/order',
+      },
+    })
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null)
+
+    const wrapper = mount(AIGenerateDialog, {
+      global: { stubs: passthroughStubs },
+    })
+    wrapper.vm.open()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const vm = wrapper.vm as unknown as {
+      selectedQuota: number
+      handlePurchase: () => Promise<void>
+    }
+    vm.selectedQuota = 10
+    await vm.handlePurchase()
+
+    expect(mocks.purchase).toHaveBeenCalledWith({ quota: 10 })
+    expect(openSpy).toHaveBeenCalledWith('https://pay.example.com/order', '_blank')
+    expect(wrapper.text()).toContain('正在等待支付结果')
+    openSpy.mockRestore()
+  })
+
+
+  it('支付成功后轮询订单状态并刷新剩余配额', async () => {
+    vi.useFakeTimers()
+    const userStore = useUserStore()
+    userStore.isAuthenticated = true
+    mocks.getQuota
+      .mockResolvedValueOnce({
+        data: {
+          free_quota: 3,
+          purchased_quota: 0,
+          used_quota: 3,
+          remaining_quota: 0,
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          free_quota: 3,
+          purchased_quota: 10,
+          used_quota: 3,
+          remaining_quota: 10,
+        },
+      })
+    mocks.purchase.mockResolvedValueOnce({
+      code: 200,
+      data: {
+        order_id: 'AI123',
+        amount: '9.90',
+        quota_count: 10,
+        payment_url: 'https://pay.example.com/order',
+      },
+    })
+    mocks.getQuotaOrderStatus.mockResolvedValueOnce({
+      success: true,
+      message: '支付成功',
+      order: { order_id: 'AI123', status: 'paid' },
+    })
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null)
+
+    const wrapper = mount(AIGenerateDialog, {
+      global: { stubs: passthroughStubs },
+    })
+    wrapper.vm.open()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const vm = wrapper.vm as unknown as { handlePurchase: () => Promise<void> }
+    await vm.handlePurchase()
+    await vi.advanceTimersByTimeAsync(3000)
+    await Promise.resolve()
+
+    expect(mocks.getQuotaOrderStatus).toHaveBeenCalledWith('AI123')
+    expect(mocks.getQuota).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('剩余次数: 10')
+    openSpy.mockRestore()
+  })
+
+
+  it('支付长期未完成时停止轮询并提示用户', async () => {
+    vi.useFakeTimers()
+    const userStore = useUserStore()
+    userStore.isAuthenticated = true
+    mocks.getQuota.mockResolvedValueOnce({
+      data: {
+        free_quota: 3,
+        purchased_quota: 0,
+        used_quota: 3,
+        remaining_quota: 0,
+      },
+    })
+    mocks.purchase.mockResolvedValueOnce({
+      code: 200,
+      data: {
+        order_id: 'AI-timeout',
+        amount: '9.90',
+        quota_count: 10,
+        payment_url: 'https://pay.example.com/order',
+      },
+    })
+    mocks.getQuotaOrderStatus.mockResolvedValue({
+      success: true,
+      message: '订单未支付或支付处理中',
+      order: { order_id: 'AI-timeout', status: 'pending' },
+      alipay_status: 'WAIT_BUYER_PAY',
+    })
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null)
+
+    const wrapper = mount(AIGenerateDialog, {
+      global: { stubs: passthroughStubs },
+    })
+    wrapper.vm.open()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const vm = wrapper.vm as unknown as { handlePurchase: () => Promise<void> }
+    await vm.handlePurchase()
+    await vi.advanceTimersByTimeAsync(183000)
+    await Promise.resolve()
+
+    expect(mocks.getQuotaOrderStatus).toHaveBeenCalledTimes(60)
+    expect(wrapper.text()).toContain('暂未确认支付结果')
+    openSpy.mockRestore()
+  })
+
+  it('支付宝未配置时展示降级提示', async () => {
+    const userStore = useUserStore()
+    userStore.isAuthenticated = true
+    mocks.purchase.mockRejectedValueOnce({
+      response: { data: { message: '支付功能暂不可用：支付宝参数未配置' } },
+    })
+
+    const wrapper = mount(AIGenerateDialog, {
+      global: { stubs: passthroughStubs },
+    })
+    wrapper.vm.open()
+    await Promise.resolve()
+
+    const vm = wrapper.vm as unknown as { handlePurchase: () => Promise<void> }
+    await vm.handlePurchase()
+
+    expect(mocks.warning).toHaveBeenCalledWith('支付功能暂不可用：支付宝参数未配置')
   })
 })

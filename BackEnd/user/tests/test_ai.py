@@ -14,6 +14,8 @@ from django.contrib.auth.models import User
 from rest_framework.test import APIClient
 from PIL import Image
 
+from user.utils import ExternalServiceConfigError
+
 from user.models import (
     UserProfile,
     AIGenerationQuota,
@@ -290,3 +292,50 @@ class AICourseEditingAPITest(TestCase):
         self.assertIn("coach_commands", data)
         self.assertIn("risk_focus", data)
         self.assertGreater(len(data["training_goals"]), 0)
+
+class AIQuotaPurchaseAPITest(TestCase):
+    """AI 配额购买链路测试"""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="ai_buyer",
+            email="buyer@example.com",
+            password="Password123",
+        )
+        self.profile, _ = UserProfile.objects.get_or_create(user=self.user)
+        self.client.force_authenticate(user=self.user)
+
+    @patch("user.ai_views.create_alipay_order", return_value="https://pay.example.com/order")
+    def test_purchase_ai_quota_creates_order_with_payment_url(self, create_order):
+        """购买 AI 次数应创建订单并返回支付跳转链接"""
+        response = self.client.post(
+            "/user/ai/purchase/",
+            data={"quota": 30},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()["data"]
+        self.assertEqual(payload["quota_count"], 30)
+        self.assertEqual(payload["amount"], "24.90")
+        self.assertEqual(payload["payment_url"], "https://pay.example.com/order")
+        order = MembershipOrder.objects.get(order_id=payload["order_id"])
+        self.assertEqual(order.membership_plan, None)
+        self.assertEqual(order.payment_url, "https://pay.example.com/order")
+        create_order.assert_called_once()
+
+    @patch("user.ai_views.create_alipay_order", side_effect=ExternalServiceConfigError("支付宝参数未配置"))
+    def test_purchase_ai_quota_returns_degraded_message_when_alipay_unavailable(self, _):
+        """支付宝不可用时应返回可展示的降级提示且不留下待支付订单"""
+        response = self.client.post(
+            "/user/ai/purchase/",
+            data={"quota": 10},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 503)
+        body = response.json()
+        self.assertEqual(body["code"], 503)
+        self.assertIn("支付功能暂不可用", body["message"])
+        self.assertEqual(MembershipOrder.objects.filter(user=self.user).count(), 0)

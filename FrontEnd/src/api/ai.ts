@@ -1,7 +1,7 @@
 import { request } from '@/utils/request'
 import { AI_API } from '@/config/api'
 import { getApiErrorMessage } from '@/utils/apiErrorMessage'
-import type { ApiCodeResponse } from '@/types/api'
+import type { ApiCodeResponse, ApiResponse } from '@/types/api'
 import type {
   LiverpoolProperties,
   ObstacleType,
@@ -140,6 +140,16 @@ export interface PurchaseResponse {
   order_id: string
   amount: string
   quota_count: number
+  payment_url: string
+}
+
+export interface AIQuotaOrderStatusResponse {
+  order: {
+    order_id: string
+    status: 'pending' | 'paid' | 'failed' | 'canceled' | 'refunded'
+    payment_url?: string | null
+  }
+  alipay_status?: string
 }
 
 export const aiApi = {
@@ -172,6 +182,12 @@ export const aiApi = {
     return request.post<ApiCodeResponse<PurchaseResponse>>(
       AI_API.purchase,
       data
+    )
+  },
+
+  getQuotaOrderStatus(orderId: string) {
+    return request.get<ApiResponse<never> & AIQuotaOrderStatusResponse>(
+      `/user/api/payment/order-status/${orderId}/`
     )
   },
 
