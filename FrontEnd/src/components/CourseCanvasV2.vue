@@ -1216,10 +1216,10 @@ const pasteObstacles = () => {
   }
 }
 
-const startCollaboration = async (viaLink = false) => {
+const startCollaboration = async (viaLink = false, shareToken: string | null = null) => {
   const designId = courseStore.currentCourse.id
   if (!designId) return false
-  webSocketStore.connect(designId, viaLink)
+  webSocketStore.connect(designId, viaLink, false, shareToken)
   return true
 }
 
@@ -1236,7 +1236,7 @@ const isCreator = () => {
   return Boolean(isOwner || !viaLink)
 }
 
-const sendFullCanvasState = (_targetUserId?: string) => {
+const sendFullCanvasState = () => {
   if (!isCollaborating.value) return
 
   const syncResponse = {
@@ -1252,28 +1252,12 @@ const sendFullCanvasState = (_targetUserId?: string) => {
       widthMeters: fieldWidth.value,
       heightMeters: fieldHeight.value
     },
-    timestamp: new Date().toISOString(),
-    targetUser: _targetUserId
+    timestamp: new Date().toISOString()
   }
 
   if (typeof webSocketStore.sendSyncResponse === 'function') {
     webSocketStore.sendSyncResponse(syncResponse)
-    return
   }
-
-  const socket = webSocketStore.socket
-  if (!socket || socket.readyState !== WebSocket.OPEN) return
-
-  socket.send(
-    JSON.stringify({
-      type: 'sync_response',
-      senderId: String(userStore.currentUser?.id || ''),
-      senderName: userStore.currentUser?.username || '未知用户',
-      sessionId: webSocketStore.session?.id || '',
-      timestamp: new Date().toISOString(),
-      payload: syncResponse
-    })
-  )
 }
 
 const getCanvasElement = () => canvasContainerRef.value

@@ -4,9 +4,10 @@ from dataclasses import dataclass
 from typing import Optional
 
 from django.contrib.auth.models import User
+from django.db import transaction
 from rest_framework import status
 
-from user.models import AIGenerationQuota, CustomObstacle, Design, UserProfile
+from user.models import AIGenerationQuota, CourseTemplate, CustomObstacle, Design, UserProfile
 from user.views.user_views import check_and_update_membership
 
 
@@ -126,7 +127,9 @@ def get_entitlements(user: User) -> EntitlementSnapshot:
 
 def assert_design_capacity(user: User) -> EntitlementSnapshot:
     """检查用户是否还能创建设计。"""
-    snapshot = get_entitlements(user)
+    with transaction.atomic():
+        locked_user = User.objects.select_for_update().get(pk=user.pk)
+        snapshot = get_entitlements(locked_user)
     if snapshot.design_count >= snapshot.design_limit:
         raise MembershipAccessError(
             f"您已达到存储限制（{snapshot.design_limit}个设计）。升级为会员可获得更多存储空间！",
@@ -144,7 +147,9 @@ def assert_design_capacity(user: User) -> EntitlementSnapshot:
 
 def assert_custom_obstacle_capacity(user: User) -> EntitlementSnapshot:
     """检查用户是否还能创建自定义障碍。"""
-    snapshot = get_entitlements(user)
+    with transaction.atomic():
+        locked_user = User.objects.select_for_update().get(pk=user.pk)
+        snapshot = get_entitlements(locked_user)
     if snapshot.custom_obstacle_unlimited:
         return snapshot
     if (
@@ -160,6 +165,28 @@ def assert_custom_obstacle_capacity(user: User) -> EntitlementSnapshot:
                 "limit": snapshot.custom_obstacle_limit,
                 "plan_code": snapshot.plan_code,
                 "is_premium_active": snapshot.is_premium_active,
+            },
+        )
+    return snapshot
+
+
+def assert_template_publish_capacity(user: User) -> EntitlementSnapshot:
+    """检查用户是否还能发布公开模板。"""
+    with transaction.atomic():
+        locked_user = User.objects.select_for_update().get(pk=user.pk)
+        snapshot = get_entitlements(locked_user)
+        published_count = CourseTemplate.objects.filter(
+            author=locked_user,
+            is_public=True,
+        ).count()
+    if published_count >= snapshot.template_publish_limit:
+        raise MembershipAccessError(
+            f"您已达到公开模板发布限制（{snapshot.template_publish_limit}个）。",
+            data={
+                "is_limit_reached": True,
+                "current_count": published_count,
+                "limit": snapshot.template_publish_limit,
+                "plan_code": snapshot.plan_code,
             },
         )
     return snapshot

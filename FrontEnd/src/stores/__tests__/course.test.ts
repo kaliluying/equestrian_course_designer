@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
 import { useCourseStore } from '@/stores/course'
@@ -7,6 +7,10 @@ describe('course store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('导入 AI 路径时，不会为缺失控制点的路径点补出多余手柄', () => {
@@ -81,5 +85,35 @@ describe('course store', () => {
     expect(courseStore.coursePath.points[4].controlPoint2).toBeUndefined()
     expect(courseStore.coursePath.points[5].controlPoint1).toBeUndefined()
     expect(courseStore.coursePath.points[5].controlPoint2).toBeDefined()
+  })
+
+  it('缺少服务器基准时间时不误判自动保存冲突', () => {
+    const courseStore = useCourseStore()
+    localStorage.setItem('design_id_to_update', 'server-1')
+    localStorage.setItem(
+      'autosaved_course:anonymous:server-1:course',
+      JSON.stringify({ id: 'server-1', obstacles: [{ id: 'obstacle-1' }] }),
+    )
+    localStorage.setItem('autosaved_course:anonymous:server-1:timestamp', '2030-01-01T00:00:00.000Z')
+
+    const state = courseStore.getAutosaveConflictState()
+
+    expect(state?.hasConflict).toBe(false)
+    expect(state?.serverUpdatedAt).toBeNull()
+  })
+
+  it('另存为新设计时清理旧设计自动保存分桶', () => {
+    vi.useFakeTimers()
+    const courseStore = useCourseStore()
+    localStorage.setItem('design_id_to_update', 'server-1')
+    localStorage.setItem(
+      'autosaved_course:anonymous:server-1:course',
+      JSON.stringify({ id: 'server-1', name: '旧设计', obstacles: [{ id: 'obstacle-1' }] }),
+    )
+    localStorage.setItem('autosaved_course:anonymous:server-1:timestamp', '2026-08-16T00:00:00.000Z')
+
+    expect(courseStore.saveAutosaveAsNewDesign()).toBe(true)
+    expect(localStorage.getItem('autosaved_course:anonymous:server-1:course')).toBeNull()
+    expect(localStorage.getItem('design_id_to_update')).toBeNull()
   })
 })

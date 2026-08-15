@@ -117,7 +117,7 @@
                   <img v-if="obstacle.decorationProperties.imageUrl" :src="obstacle.decorationProperties.imageUrl"
                     class="custom-image" alt="自定义装饰" />
                   <div v-else-if="obstacle.decorationProperties.svgData" class="custom-svg"
-                    v-html="obstacle.decorationProperties.svgData"></div>
+                    v-html="sanitizeSvg(obstacle.decorationProperties.svgData || null)"></div>
                   <div v-else class="custom-placeholder" :style="{
                     background: obstacle.decorationProperties.color || '#8B4513'
                   }"></div>
@@ -229,7 +229,7 @@
                   <img v-if="currentObstacle.decorationProperties.imageUrl"
                     :src="currentObstacle.decorationProperties.imageUrl" class="custom-image" alt="自定义装饰" />
                   <div v-else-if="currentObstacle.decorationProperties.svgData" class="custom-svg"
-                    v-html="currentObstacle.decorationProperties.svgData"></div>
+                    v-html="sanitizeSvg(currentObstacle.decorationProperties.svgData || null)"></div>
                   <div v-else class="custom-placeholder" :style="{
                     background: currentObstacle.decorationProperties.color || '#8B4513'
                   }"></div>
@@ -286,13 +286,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Refresh, Loading, Download, View, Search, User } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { sanitizeSvg } from '@/utils/sanitizeSvg'
 import { useObstacleStore } from '@/stores/obstacle'
 import { useUserStore } from '@/stores/user'
-import { ObstacleType, DecorationCategory } from '@/types/obstacle'
+import { DecorationCategory, ObstacleType } from '@/types/obstacle'
 import type { CustomObstacleTemplate } from '@/types/obstacle'
-import { ElMessage } from 'element-plus'
 
 const obstacleStore = useObstacleStore()
 const userStore = useUserStore()

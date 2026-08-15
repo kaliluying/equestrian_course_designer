@@ -138,14 +138,16 @@
         </p>
         <p>
           <span>会员期限：</span
-          ><span>{{ order.get_billing_cycle_display() }}</span>
+          ><span>{{ order.get_billing_cycle_display }}</span>
         </p>
       </div>
       {% endif %}
 
-      <p>
-        您现已成为我们的{{ order.membership_plan.name }}，可以享受更多优质服务。
-      </p>
+      {% if order and order.membership_plan %}
+      <p>您的会员权益已到账，可以享受更多优质服务。</p>
+      {% else %}
+      <p>支付结果正在同步，您可以返回应用查看最新状态。</p>
+      {% endif %}
       <a href="/" class="btn">返回首页</a>
     </div>
   </body>

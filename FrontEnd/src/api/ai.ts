@@ -1,7 +1,7 @@
 import { request } from '@/utils/request'
 import { AI_API } from '@/config/api'
 import { getApiErrorMessage } from '@/utils/apiErrorMessage'
-import type { ApiCodeResponse, ApiResponse } from '@/types/api'
+import type { ApiResponse } from '@/types/api'
 import type {
   LiverpoolProperties,
   ObstacleType,
@@ -147,53 +147,53 @@ export interface AIQuotaOrderStatusResponse {
   order: {
     order_id: string
     status: 'pending' | 'paid' | 'failed' | 'canceled' | 'refunded'
-    payment_url?: string | null
+    payment_url: string | null
   }
   alipay_status?: string
 }
 
 export const aiApi = {
   generate(data: AIGenerateRequest) {
-    return request.post<ApiCodeResponse<AIGenerateResponse>>(
+    return request.post<ApiResponse<AIGenerateResponse>>(
       AI_API.generate,
       data
     )
   },
 
   getQuota() {
-    return request.get<ApiCodeResponse<AIQuotaInfo>>(AI_API.quota)
+    return request.get<ApiResponse<AIQuotaInfo>>(AI_API.quota)
   },
 
   editCourse(data: AIEditCourseRequest) {
-    return request.post<ApiCodeResponse<AIEditCourseResponse>>(
+    return request.post<ApiResponse<AIEditCourseResponse>>(
       AI_API.editCourse,
       data
     )
   },
 
   coachNotes(data: CoachNotesRequest) {
-    return request.post<ApiCodeResponse<CoachNotesResponse>>(
+    return request.post<ApiResponse<CoachNotesResponse>>(
       AI_API.coachNotes,
       data
     )
   },
 
   purchase(data: PurchaseRequest) {
-    return request.post<ApiCodeResponse<PurchaseResponse>>(
+    return request.post<ApiResponse<PurchaseResponse>>(
       AI_API.purchase,
       data
     )
   },
 
   getQuotaOrderStatus(orderId: string) {
-    return request.get<ApiResponse<never> & AIQuotaOrderStatusResponse>(
+    return request.get<ApiResponse<AIQuotaOrderStatusResponse>>(
       `/user/api/payment/order-status/${orderId}/`
     )
   },
 
   getHistory(limit?: number) {
     const url = limit ? `${AI_API.history}?limit=${limit}` : AI_API.history
-    return request.get<ApiCodeResponse<{ histories: AIHistoryItem[] }>>(url)
+    return request.get<ApiResponse<{ histories: AIHistoryItem[] }>>(url)
   }
 }
 

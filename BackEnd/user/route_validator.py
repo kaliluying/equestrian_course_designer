@@ -7,7 +7,13 @@ from typing import List, Dict, Any, Tuple, Optional
 from dataclasses import dataclass
 import logging
 
+from .route_generator import ObstacleConfig, RouteConfig, RouteGenerator
+
 logger = logging.getLogger(__name__)
+
+
+class RouteValidationInputError(ValueError):
+    """路线输入包含无法安全解析的数值或结构。"""
 
 
 @dataclass
@@ -73,6 +79,7 @@ class RouteValidator:
         difficulty: str = 'medium'
     ) -> Tuple[List[Dict[str, Any]], ValidationResult]:
         """验证并优化路线"""
+        self._validate_numeric_inputs(obstacles)
         issues = []
         warnings = []
         auto_fixed = []
@@ -156,6 +163,7 @@ class RouteValidator:
         path: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """返回供前端规则检查面板使用的结构化校验结果。"""
+        self._validate_numeric_inputs(obstacles, path)
         issues: List[Dict[str, Any]] = []
         warnings: List[Dict[str, Any]] = []
         auto_fixed: List[str] = []
@@ -372,6 +380,7 @@ class RouteValidator:
         """对常见可自动修复问题生成修复后的路线。"""
         import copy
 
+        self._validate_numeric_inputs(obstacles, path)
         config = DIFFICULTY_CONFIGS.get(difficulty, DIFFICULTY_CONFIGS['medium'])
         margin = FEI_RULES['min_boundary_distance']
         min_distance = FEI_RULES['min_obstacle_distance']
@@ -449,15 +458,102 @@ class RouteValidator:
                     'message': f'已拉开障碍物{self._obstacle_number(current, index)}与{self._obstacle_number(nxt, index + 1)}的距离。',
                 })
 
-        validation = self.validate_course_structure(updated, difficulty=difficulty, path=path)
+        updated_path = self._generate_path_from_obstacles(updated)
+        if isinstance(path, dict) and path.get('visible') is False:
+            updated_path['visible'] = False
+
+        validation = self.validate_course_structure(
+            updated,
+            difficulty=difficulty,
+            path=updated_path,
+        )
         validation['auto_fixed'] = [patch['message'] for patch in patches]
         return {
             'patches': patches,
             'updated_obstacles': updated,
-            'updated_path': path,
+            'updated_path': updated_path,
             'validation': validation,
             'explanation': f'已应用{len(patches)}项自动修复。',
         }
+
+    def _generate_path_from_obstacles(self, obstacles: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """根据修复后的障碍物重新生成路径，避免返回过期坐标。"""
+        route_obstacles = []
+        for index, obstacle in enumerate(obstacles):
+            position = obstacle.get('position') or {}
+            try:
+                rotation = int(float(obstacle.get('rotation', 0))) % 360
+            except (TypeError, ValueError):
+                rotation = 0
+            route_obstacles.append(ObstacleConfig(
+                id=str(obstacle.get('id') or f'obs-{index + 1}'),
+                type=str(obstacle.get('type') or 'SINGLE'),
+                position={
+                    'x': float(position.get('x', 0)),
+                    'y': float(position.get('y', 0)),
+                },
+                rotation=rotation,
+                number=str(obstacle.get('number') or index + 1),
+                poles=obstacle.get('poles') or [
+                    {'height': 1.4, 'width': 3.5, 'color': '#8B4513'}
+                ],
+                wallProperties=obstacle.get('wallProperties'),
+                liverpoolProperties=obstacle.get('liverpoolProperties'),
+                waterProperties=obstacle.get('waterProperties'),
+            ))
+        return RouteGenerator()._generate_path(
+            route_obstacles,
+            RouteConfig(
+                field_width=self.field_width,
+                field_height=self.field_height,
+                obstacle_count=len(route_obstacles),
+            ),
+        )
+
+    def _validate_numeric_inputs(self, obstacles, path=None) -> None:
+        """预先校验所有会进入 float/math 运算的用户输入。"""
+        if not isinstance(obstacles, list) or len(obstacles) > 200:
+            raise RouteValidationInputError('障碍物数据必须是数组且数量不超过 200')
+
+        def finite_number(value, field):
+            try:
+                number = float(value)
+            except (TypeError, ValueError) as exc:
+                raise RouteValidationInputError(f'{field} 必须是数字') from exc
+            if not math.isfinite(number) or abs(number) > 100000:
+                raise RouteValidationInputError(f'{field} 数值超出允许范围')
+            return number
+
+        for index, obstacle in enumerate(obstacles):
+            if not isinstance(obstacle, dict):
+                raise RouteValidationInputError(f'第 {index + 1} 个障碍物格式无效')
+            position = obstacle.get('position') or {}
+            if not isinstance(position, dict):
+                raise RouteValidationInputError(f'第 {index + 1} 个障碍物位置格式无效')
+            finite_number(position.get('x', 0), f'障碍物 {index + 1} 的 x')
+            finite_number(position.get('y', 0), f'障碍物 {index + 1} 的 y')
+            poles = obstacle.get('poles') or []
+            if not isinstance(poles, list) or len(poles) > 50:
+                raise RouteValidationInputError(f'障碍物 {index + 1} 的横杆数据无效')
+            for pole_index, pole in enumerate(poles):
+                if not isinstance(pole, dict):
+                    raise RouteValidationInputError(f'障碍物 {index + 1} 的横杆格式无效')
+                finite_number(pole.get('height', 0), f'障碍物 {index + 1} 横杆 {pole_index + 1} 高度')
+                if pole.get('spacing') is not None:
+                    finite_number(pole['spacing'], f'障碍物 {index + 1} 横杆 {pole_index + 1} 间距')
+
+        if path:
+            if not isinstance(path, dict):
+                raise RouteValidationInputError('路径数据格式无效')
+            for point_name in ('startPoint', 'start_point', 'endPoint', 'end_point'):
+                point = path.get(point_name)
+                if point is None:
+                    continue
+                if not isinstance(point, dict):
+                    raise RouteValidationInputError(f'{point_name} 格式无效')
+                finite_number(point.get('x', 0), f'{point_name}.x')
+                finite_number(point.get('y', 0), f'{point_name}.y')
+                finite_number(point.get('rotation', 270), f'{point_name}.rotation')
 
     def _reorder_obstacles_to_reduce_turns(
         self,

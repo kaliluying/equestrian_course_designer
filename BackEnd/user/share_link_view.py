@@ -5,15 +5,13 @@ This module provides the ShareLinkView class for generating share tokens
 that allow anonymous users to join collaboration sessions via share links.
 """
 
-from datetime import timedelta
-import hashlib
 import logging
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.conf import settings
-from django.core import signing
 from django.http import Http404
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -21,7 +19,9 @@ from rest_framework.views import APIView
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 
-from .models import Design
+from .models import CollaborationShareLink, Design
+from .services.collaboration_share_links import create_share_link, revoke_share_link
+from .throttles import ShareLinkRateThrottle
 from .utils import error_response, success_response
 
 logger = logging.getLogger(__name__)
@@ -31,6 +31,7 @@ class ShareLinkView(APIView):
     """生成协作分享链接视图。"""
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ShareLinkRateThrottle]
 
     @extend_schema(request=None, responses=OpenApiTypes.OBJECT, summary="生成协作分享链接")
     def post(self, request, design_id):
@@ -45,35 +46,30 @@ class ShareLinkView(APIView):
 
             ttl_seconds = int(request.data.get("expires_in_seconds") or getattr(settings, "COLLAB_SHARE_TOKEN_TTL_SECONDS", 3600))
             role = request.data.get("role") or "editor"
-            if role not in {"editor", "viewer", "commenter"}:
-                role = "editor"
             password = request.data.get("password") or ""
-            password_hash = hashlib.sha256(password.encode("utf-8")).hexdigest() if password else ""
-            expires_at = timezone.now() + timedelta(seconds=ttl_seconds)
-            payload = {
-                "design_id": design_id,
-                "scope": "collaboration:join",
-                "role": role,
-                "password_hash": password_hash,
-                "exp": int(expires_at.timestamp()),
-            }
-            share_token = signing.dumps(payload, salt="collab-share")
-
-            design.is_shared = True
-            design.save(update_fields=["is_shared"])
+            share_link, share_token = create_share_link(
+                design=design,
+                created_by=request.user,
+                role=role,
+                expires_in_seconds=ttl_seconds,
+                password=password,
+            )
 
             host = request.get_host()
             ws_protocol = "wss" if request.is_secure() else "ws"
             share_url = f"{ws_protocol}://{host}/ws/collaboration/{design_id}/?share_token={share_token}"
 
             logger.info(
-                f"用户 {request.user.username} 生成了设计 {design_id} 的分享链接，过期时间: {expires_at.isoformat()}"
+                "用户 %s 生成设计 %s 的协作分享链接，share_link_id=%s",
+                request.user.id,
+                design_id,
+                share_link.id,
             )
 
             response_data = {
                 "shareUrl": share_url,
                 "shareToken": share_token,
-                "expiresAt": expires_at.isoformat(),
+                "expiresAt": share_link.expires_at.isoformat(),
                 "ttlSeconds": ttl_seconds,
                 "role": role,
                 "passwordProtected": bool(password),
@@ -88,9 +84,11 @@ class ShareLinkView(APIView):
             )
         except Http404:
             return error_response("设计不存在", status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            logger.error(f"生成分享链接时出错: {str(e)}")
-            return error_response(f"生成分享链接失败: {str(e)}", status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except (TypeError, ValueError):
+            return error_response("分享链接参数无效", status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception("生成协作分享链接失败")
+            return error_response("生成分享链接失败，请稍后重试", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
     @extend_schema(request=None, responses=OpenApiTypes.OBJECT, summary="撤销协作分享链接")
@@ -99,8 +97,34 @@ class ShareLinkView(APIView):
             design = get_object_or_404(Design, id=design_id)
             if design.author != request.user:
                 return error_response("只有设计作者才能撤销分享链接", status.HTTP_403_FORBIDDEN)
-            design.is_shared = False
-            design.save(update_fields=["is_shared"])
-            return success_response("分享链接已撤销", {"is_shared": False})
+            revoked_link_ids = list(
+                CollaborationShareLink.objects.filter(
+                    design=design,
+                    created_by=request.user,
+                    is_revoked=False,
+                ).values_list("id", flat=True)
+            )
+            revoked_count = revoke_share_link(design=design, created_by=request.user)
+            if revoked_link_ids:
+                try:
+                    channel_layer = get_channel_layer()
+                    if channel_layer is not None:
+                        async_to_sync(channel_layer.group_send)(
+                            f"collaboration_{design.id}",
+                            {
+                                "type": "share_link_revoked",
+                                "share_link_ids": revoked_link_ids,
+                            },
+                        )
+                except Exception:
+                    # 数据库撤销已经完成，通知失败时由 Consumer 的逐消息复核兜底。
+                    logger.exception(
+                        "广播分享链接撤销事件失败: design_id=%s",
+                        design.id,
+                    )
+            return success_response("分享链接已撤销", {"revoked_count": revoked_count})
         except Http404:
             return error_response("设计不存在", status.HTTP_404_NOT_FOUND)
+        except Exception:
+            logger.exception("撤销协作分享链接失败")
+            return error_response("撤销分享链接失败，请稍后重试", status.HTTP_500_INTERNAL_SERVER_ERROR)

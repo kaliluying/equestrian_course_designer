@@ -26,6 +26,7 @@ export type ApiPath =
   | "/user/designs/validate-course/"
   | "/user/designs/{design_id}/share-link/"
   | "/user/designs/{id}/"
+  | "/user/designs/{id}/asset/"
   | "/user/designs/{id}/collaboration-events/"
   | "/user/designs/{id}/comments/"
   | "/user/designs/{id}/comments/{comment_id}/resolve/"
@@ -65,5 +66,5 @@ export interface GeneratedApiSummary {
 }
 
 export const generatedApiSummary: GeneratedApiSummary = {
-  pathCount: 58,
+  pathCount: 59,
 }

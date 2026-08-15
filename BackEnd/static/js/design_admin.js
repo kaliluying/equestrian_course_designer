@@ -60,6 +60,30 @@ function downloadFile(url, filename) {
   }, 100);
 }
 
+document.addEventListener("click", function (event) {
+  const target = event.target instanceof Element
+    ? event.target.closest("[data-admin-action]")
+    : null;
+  if (!target) return;
+
+  const action = target.getAttribute("data-admin-action");
+  if (action === "preview") {
+    showImagePreview(
+      target.getAttribute("data-image-url") || "",
+      target.getAttribute("data-title") || "",
+    );
+    return;
+  }
+
+  if (action === "download") {
+    event.preventDefault();
+    downloadFile(
+      target.getAttribute("data-url") || "",
+      target.getAttribute("data-filename") || "",
+    );
+  }
+});
+
 // 图片预览功能
 function showImagePreview(imageUrl, title) {
   // 创建模态框容器

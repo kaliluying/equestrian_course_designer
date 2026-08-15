@@ -510,7 +510,8 @@ class CommercialOperationsAPITest(TestCase):
         )
 
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.json()["title"], "马术俱乐部")
+        self.assertTrue(response.json()["success"])
+        self.assertEqual(response.json()["invoice"]["title"], "马术俱乐部")
         self.client.force_authenticate(user=self.staff)
         issue_response = self.client.post(
             f"/user/api/payment/orders/{order.order_id}/invoice/mark-issued/",
@@ -518,7 +519,37 @@ class CommercialOperationsAPITest(TestCase):
             format="json",
         )
         self.assertEqual(issue_response.status_code, 200)
-        self.assertEqual(issue_response.json()["status"], "issued")
+        self.assertTrue(issue_response.json()["success"])
+        self.assertEqual(issue_response.json()["invoice"]["status"], "issued")
+
+    def test_invoice_requires_paid_order_and_valid_fields(self):
+        """未支付订单不能开票，发票字段必须经过序列化器校验。"""
+        order = MembershipOrder.objects.create(
+            user=self.user,
+            membership_plan=self.plan,
+            amount=19,
+            status="pending",
+            billing_cycle="month",
+        )
+
+        unpaid_response = self.client.post(
+            f"/user/api/payment/orders/{order.order_id}/invoice/",
+            data={"title": "俱乐部", "email": "invoice@example.com"},
+            format="json",
+        )
+        self.assertEqual(unpaid_response.status_code, 400)
+        self.assertIn("已支付", unpaid_response.json()["message"])
+
+        order.status = "paid"
+        order.save(update_fields=["status", "updated_at"])
+        invalid_response = self.client.post(
+            f"/user/api/payment/orders/{order.order_id}/invoice/",
+            data={"title": "", "email": "not-an-email"},
+            format="json",
+        )
+        self.assertEqual(invalid_response.status_code, 400)
+        self.assertIn("title", invalid_response.json()["message"])
+        self.assertIn("email", invalid_response.json()["message"])
 
     def test_order_detail_includes_refund_and_invoice_fields(self):
         """订单详情应展示退款状态和发票信息"""

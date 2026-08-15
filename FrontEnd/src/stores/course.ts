@@ -60,6 +60,7 @@ export const useCourseStore = defineStore('course', () => {
    */
   const startPoint = ref({ x: 0, y: 0, rotation: 270 }) // 起点状态
   const endPoint = ref({ x: 0, y: 0, rotation: 270 }) // 终点状态
+  let serverUpdatedAt: string | null = null
 
   // 只读渲染版本标记：v2 使用 SVG 世界坐标渲染
   const isV2Design = computed(() => currentCourse.value.renderVersion === 'v2')
@@ -1480,6 +1481,14 @@ export const useCourseStore = defineStore('course', () => {
   const AUTOSAVE_DELAY = 1000
   const AUTOSAVE_SCHEMA_VERSION = 2
 
+  /**
+   * 设置当前设计的服务器更新时间基准。
+   * @param value 服务端返回的更新时间；无效值会清空基准。
+   */
+  function setServerUpdatedAt(value: string | null) {
+    serverUpdatedAt = value && Number.isFinite(Date.parse(value)) ? value : null
+  }
+
   function getCurrentAutosaveIdentity() {
     const rawUser = localStorage.getItem('user')
     let userId = 'anonymous'
@@ -1560,7 +1569,7 @@ export const useCourseStore = defineStore('course', () => {
           course_id: currentCourse.value.id,
           saved_at: savedAt,
           dirty: true,
-          server_updated_at: currentCourse.value.updatedAt,
+          server_updated_at: serverUpdatedAt,
           schema_version: AUTOSAVE_SCHEMA_VERSION,
         }))
         // 保留旧 key 兼容已有恢复流程和旧版本用户
@@ -1716,11 +1725,22 @@ export const useCourseStore = defineStore('course', () => {
       const metaRaw = localStorage.getItem(keys.metaKey)
       const meta = metaRaw ? JSON.parse(metaRaw) : {}
       const draftTime = new Date(savedTimestamp).getTime()
-      const serverTime = new Date(meta.server_updated_at || currentCourse.value.updatedAt || 0).getTime()
+      const baseline = meta.server_updated_at || serverUpdatedAt
+      if (!baseline) {
+        return {
+          hasConflict: false,
+          savedTimestamp,
+          serverUpdatedAt: null,
+          draft,
+        }
+      }
+      const serverTime = new Date(baseline).getTime()
       return {
-        hasConflict: draftTime > serverTime,
+        hasConflict: Number.isFinite(draftTime) && Number.isFinite(serverTime)
+          ? draftTime > serverTime
+          : false,
         savedTimestamp,
-        serverUpdatedAt: meta.server_updated_at || currentCourse.value.updatedAt,
+        serverUpdatedAt: baseline,
         draft,
       }
     } catch {
@@ -1737,9 +1757,11 @@ export const useCourseStore = defineStore('course', () => {
   function saveAutosaveAsNewDesign() {
     const restored = restoreFromLocalStorage(false)
     if (restored) {
+      clearAutosave()
       localStorage.removeItem('design_id_to_update')
       currentCourse.value.id = uuidv4()
       currentCourse.value.name = `${currentCourse.value.name || '马术路线设计'} 副本`
+      setServerUpdatedAt(null)
       updateCourse()
     }
     return restored
@@ -1865,6 +1887,7 @@ export const useCourseStore = defineStore('course', () => {
           : undefined,
         viewportInfo: currentViewport,
       }
+      setServerUpdatedAt(null)
 
       selectedObstacle.value = null
 
@@ -2145,6 +2168,7 @@ export const useCourseStore = defineStore('course', () => {
         heightMeters: 60
       },
     }
+    setServerUpdatedAt(null)
 
     // 清除选中的障碍物
     selectedObstacle.value = null
@@ -2386,6 +2410,7 @@ export const useCourseStore = defineStore('course', () => {
     clearValidationHighlight,
     applyRouteFix,
     updateCourse,
+    setServerUpdatedAt,
     saveToLocalStorage,
     readAutosaveDraft,
     getAutosaveConflictState,

@@ -1,23 +1,27 @@
 """认证相关视图：注册、登录、登出、Token刷新、密码重置。"""
 
-import uuid
+import hashlib
 import logging
+import secrets
 from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.db import transaction
 from django.core.mail import send_mail
 from django.middleware.csrf import get_token
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.html import strip_tags
-from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
+from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.tokens import OutstandingToken, RefreshToken
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 
@@ -29,9 +33,18 @@ from ..serializers import (
     ResetPasswordSerializer,
 )
 from ..utils import success_response, error_response
+from ..throttles import LoginRateThrottle, PasswordResetRateThrottle, RegisterRateThrottle
 from .user_views import check_and_update_membership
 
 logger = logging.getLogger(__name__)
+
+
+def _revoke_refresh_tokens(user):
+    """撤销用户现有的 refresh token，终止旧登录会话。"""
+    if not user:
+        return
+    for outstanding in OutstandingToken.objects.filter(user=user):
+        BlacklistedToken.objects.get_or_create(token=outstanding)
 
 
 def _set_auth_cookies(response, access_token, refresh_token):
@@ -40,24 +53,27 @@ def _set_auth_cookies(response, access_token, refresh_token):
     注册与登录共用同一套 cookie 策略，避免前后端鉴权状态不一致。
     """
     is_production = not settings.DEBUG
+    access_max_age = int(settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds())
+    refresh_max_age = int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds())
+    cookie_samesite = getattr(settings, "AUTH_COOKIE_SAMESITE", "Lax")
 
     response.set_cookie(
         "access_token",
         access_token,
-        max_age=7 * 24 * 60 * 60,
+        max_age=access_max_age,
         httponly=True,
         secure=is_production,
-        samesite="None" if is_production else "Lax",
+        samesite=cookie_samesite,
         path="/",
     )
 
     response.set_cookie(
         "refresh_token",
         refresh_token,
-        max_age=30 * 24 * 60 * 60,
+        max_age=refresh_max_age,
         httponly=True,
         secure=is_production,
-        samesite="None" if is_production else "Lax",
+        samesite=cookie_samesite,
         path="/",
     )
 
@@ -79,11 +95,11 @@ class CSRFTokenView(APIView):
         return response
 
 
-@method_decorator(csrf_exempt, name="dispatch")
 class RegisterView(APIView):
     """普通用户注册视图，用户注册后没有后台访问权限"""
 
     permission_classes = [AllowAny]
+    throttle_classes = [RegisterRateThrottle]
 
     @extend_schema(
         request=UserRegisterSerializer,
@@ -117,7 +133,7 @@ class RegisterView(APIView):
                     str(refresh.access_token),
                     str(refresh),
                 )
-                logger.info(f"用户 {user.username} 注册成功，已设置 httpOnly cookies")
+                logger.info("用户注册成功，已设置 httpOnly cookies")
                 return response
         except serializers.ValidationError as e:
             # 处理验证错误
@@ -134,13 +150,13 @@ class RegisterView(APIView):
             return error_response(error_messages, status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             # 处理其他异常
+            logger.exception("用户注册失败")
             return error_response(
-                {"non_field_errors": ["服务器内部错误，请稍后重试"], "error": str(e)},
+                {"non_field_errors": ["服务器内部错误，请稍后重试"]},
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
-@method_decorator(csrf_exempt, name="dispatch")
 class LoginView(APIView):
     """
     用户登录视图
@@ -148,6 +164,7 @@ class LoginView(APIView):
     """
 
     permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
 
     @extend_schema(
         request=UserLoginSerializer,
@@ -180,18 +197,11 @@ class LoginView(APIView):
             )
             response = _set_auth_cookies(response, access_token, refresh_token)
 
-            logger.info(f"用户 {user.username} 登录成功，已设置 httpOnly cookies")
-
-            # Debug: Log cookie info
-            cookie_names = [morsel.key for morsel in response.cookies.values()]
-            logger.info(f"[LOGIN DEBUG] Response cookies: {cookie_names}")
-            logger.info(
-                f"[LOGIN DEBUG] access_token set: {'access_token' in cookie_names}"
-            )
+            logger.info("用户登录成功，已设置 httpOnly cookies")
 
             return response
 
-        logger.warning(f"登录失败: {serializer.errors}")
+        logger.warning("登录失败：凭据或输入格式无效")
         return error_response(serializer.errors, status.HTTP_400_BAD_REQUEST)
 
 
@@ -208,10 +218,6 @@ class CookieTokenRefreshView(APIView):
     @extend_schema(request=None, responses=OpenApiTypes.OBJECT, summary="刷新 Token")
     def post(self, request):
         """Refresh access token using refresh token from cookie."""
-        # Debug: log cookie info
-        logger.info(f"[TOKEN_REFRESH] Request cookies: {list(request.COOKIES.keys())}")
-        logger.info(f"[TOKEN_REFRESH] refresh_token present: {'refresh_token' in request.COOKIES}")
-
         # Get refresh token from cookie
         refresh_token = request.COOKIES.get("refresh_token")
 
@@ -223,43 +229,33 @@ class CookieTokenRefreshView(APIView):
             )
 
         try:
-            # Create new refresh token object
+            # 校验旧 refresh token，并执行轮换与黑名单撤销。
             token = RefreshToken(refresh_token)
-
-            # Generate new access token
-            access_token = str(token.access_token)
+            token.blacklist()
+            user = User.objects.get(id=token["user_id"], is_active=True)
+            new_refresh = RefreshToken.for_user(user)
+            access_token = str(new_refresh.access_token)
+            new_refresh_token = str(new_refresh)
 
             # Create response with new access token cookie
             response = success_response(
                 "Token刷新成功",
                 {
-                    "access_token": access_token,
+                    "user_id": user.id,
                 },
             )
 
-            # Set new access token cookie (same expiration as login)
-            is_production = not settings.DEBUG
-            response.set_cookie(
-                "access_token",
-                access_token,
-                max_age=7 * 24 * 60 * 60,  # 7 days
-                httponly=True,
-                secure=is_production,
-                samesite="None" if is_production else "Lax",
-                path="/",
-            )
-
-            logger.info("Token刷新成功，已设置新的access_token cookie")
+            _set_auth_cookies(response, access_token, new_refresh_token)
+            logger.info("Token刷新成功")
             return response
 
-        except Exception as e:
-            logger.error(f"Token刷新失败: {str(e)}")
+        except (TokenError, User.DoesNotExist, KeyError):
+            logger.warning("Token刷新失败：token 无效或用户不存在")
             return error_response(
                 {"detail": "Token刷新失败，请重新登录"}, status.HTTP_401_UNAUTHORIZED
             )
 
 
-@method_decorator(csrf_exempt, name="dispatch")
 class LogoutView(APIView):
     """
     用户登出视图
@@ -270,6 +266,13 @@ class LogoutView(APIView):
 
     @extend_schema(request=None, responses=OpenApiTypes.OBJECT, summary="用户登出")
     def post(self, request):
+        refresh_token = request.COOKIES.get("refresh_token")
+        if refresh_token:
+            try:
+                RefreshToken(refresh_token).blacklist()
+            except TokenError:
+                # 令牌已过期或已撤销时，清理浏览器 cookie 仍然是幂等成功。
+                pass
         response = success_response("登出成功")
         response.delete_cookie("access_token", path="/")
         response.delete_cookie("refresh_token", path="/")
@@ -280,6 +283,7 @@ class ForgotPasswordView(APIView):
     """忘记密码视图"""
 
     permission_classes = [AllowAny]
+    throttle_classes = [PasswordResetRateThrottle]
 
     @extend_schema(
         request=ForgotPasswordSerializer,
@@ -294,22 +298,22 @@ class ForgotPasswordView(APIView):
             email = serializer.validated_data["email"]
 
             try:
-                # 由于在序列化器中已经验证了用户名和邮箱的匹配，这里可以直接获取用户
                 user = User.objects.get(username=username, email=email)
 
                 # 创建或更新重置令牌
+                raw_token = secrets.token_urlsafe(32)
                 token, created = PasswordResetToken.objects.update_or_create(
                     user=user,
                     defaults={
-                        "token": str(uuid.uuid4()),
-                        "expires_at": timezone.now() + timedelta(hours=24),
+                        "token": hashlib.sha256(raw_token.encode("utf-8")).hexdigest(),
+                        "expires_at": timezone.now() + timedelta(hours=1),
                         "is_used": False,
                     },
                 )
 
                 # 构建重置链接
                 reset_url = (
-                    f"{settings.FRONTEND_URL}/reset-password?token={token.token}"
+                    f"{settings.FRONTEND_URL}/reset-password?token={raw_token}"
                 )
 
                 # 准备邮件内容
@@ -329,12 +333,14 @@ class ForgotPasswordView(APIView):
 
                 return success_response("密码重置邮件已发送，请检查您的邮箱")
             except User.DoesNotExist:
-                # 这种情况不应该发生，因为序列化器已经验证了用户存在
-                # 但为了安全起见，仍然返回成功消息
-                return success_response(
-                    "如果该用户名和邮箱匹配，我们将发送密码重置邮件"
-                )
+                pass
+            except Exception:
+                logger.exception("发送密码重置邮件失败")
 
+            # 无论账号是否存在、邮件是否发送成功，都返回相同响应，避免账号枚举。
+            return success_response("如果该用户名和邮箱匹配，我们将发送密码重置邮件")
+
+        # 输入格式错误可以正常返回；账号是否存在始终使用成功语义，避免枚举。
         return error_response(serializer.errors, status.HTTP_400_BAD_REQUEST)
 
 
@@ -356,19 +362,19 @@ class ResetPasswordView(APIView):
             password = serializer.validated_data["password"]
 
             try:
-                # 查找有效的令牌
-                token = PasswordResetToken.objects.get(
-                    token=token_str, expires_at__gt=timezone.now(), is_used=False
-                )
-
-                # 更新用户密码
-                user = token.user
-                user.set_password(password)
-                user.save()
-
-                # 标记令牌为已使用
-                token.is_used = True
-                token.save()
+                token_hash = hashlib.sha256(token_str.encode("utf-8")).hexdigest()
+                with transaction.atomic():
+                    token = PasswordResetToken.objects.select_for_update().select_related("user").get(
+                        token=token_hash,
+                        expires_at__gt=timezone.now(),
+                        is_used=False,
+                    )
+                    user = token.user
+                    user.set_password(password)
+                    user.save(update_fields=["password"])
+                    _revoke_refresh_tokens(user)
+                    token.is_used = True
+                    token.save(update_fields=["is_used"])
 
                 return success_response("密码已成功重置")
             except PasswordResetToken.DoesNotExist:

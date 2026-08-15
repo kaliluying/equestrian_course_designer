@@ -1,25 +1,33 @@
-from django.shortcuts import render
-from rest_framework import viewsets, permissions
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from .models import Feedback
-from .serializers import FeedbackSerializer
-from django.contrib.auth.models import User
-from user.models import MembershipOrder, UserProfile, MembershipPlan
-from user.utils import success_response
-from django.db.models import Sum, Count
-from datetime import timedelta, date
+from datetime import date
 import logging
+
+from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
+from django.db.models import Sum, Count
+from django.shortcuts import render
 from django.utils.decorators import method_decorator
-from rest_framework.authentication import SessionAuthentication, BasicAuthentication
+from django.utils import timezone
+from rest_framework import permissions, status, viewsets
+from rest_framework.authentication import BasicAuthentication, SessionAuthentication
+from rest_framework.views import APIView
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
+from user.models import MembershipOrder, UserProfile, MembershipPlan
+from user.throttles import FeedbackRateThrottle
+from user.utils import error_response, success_response
+
+from .models import Feedback
+from .serializers import FeedbackSerializer
 
 # Create your views here.
 
 logger = logging.getLogger(__name__)
+
+
+def _shift_month(month_start, offset):
+    """返回按月份偏移后的月初日期。"""
+    month_index = month_start.year * 12 + month_start.month - 1 + offset
+    return date(month_index // 12, month_index % 12 + 1, 1)
 
 
 class FeedbackViewSet(viewsets.ModelViewSet):
@@ -27,6 +35,7 @@ class FeedbackViewSet(viewsets.ModelViewSet):
 
     queryset = Feedback.objects.all()
     serializer_class = FeedbackSerializer
+    throttle_classes = [FeedbackRateThrottle]
 
     def get_permissions(self):
         """
@@ -64,21 +73,18 @@ class FeedbackIndexView(APIView):
     def get(self, request):
         # 验证用户是否是管理员
         if not request.user.is_staff:
-            return Response(
-                {"detail": "您没有权限访问此页面"}, status=status.HTTP_403_FORBIDDEN
-            )
+            return error_response("您没有权限访问此页面", status.HTTP_403_FORBIDDEN)
 
         try:
-            # 获取当前日期和时间（使用date对象避免时区问题）
-            today = date.today()
+            today = timezone.localdate()
             current_month_start = today.replace(day=1)
-            last_month_end = current_month_start - timedelta(days=1)
-            last_month_start = last_month_end.replace(day=1)
+            next_month_start = _shift_month(current_month_start, 1)
+            last_month_start = _shift_month(current_month_start, -1)
             # 获取当月收入
             current_month_orders = MembershipOrder.objects.filter(
                 status="paid",
                 payment_time__gte=current_month_start,
-                payment_time__lte=today,
+                payment_time__lt=next_month_start,
             )
             logger.info("当月订单数: %s", current_month_orders.count())
             monthly_income = (
@@ -89,7 +95,7 @@ class FeedbackIndexView(APIView):
             last_month_orders = MembershipOrder.objects.filter(
                 status="paid",
                 payment_time__gte=last_month_start,
-                payment_time__lte=last_month_end,
+                payment_time__lt=current_month_start,
             )
             last_month_income = (
                 last_month_orders.aggregate(Sum("amount"))["amount__sum"] or 0
@@ -103,14 +109,13 @@ class FeedbackIndexView(APIView):
             else:
                 income_trend = 100 if monthly_income > 0 else 0
 
-            # 获取当月新增用户数（使用date字段）
             new_users = User.objects.filter(
-                date_joined__gte=current_month_start, date_joined__lte=today
+                date_joined__gte=current_month_start, date_joined__lt=next_month_start
             ).count()
 
             # 获取上月新增用户数
             last_month_new_users = User.objects.filter(
-                date_joined__gte=last_month_start, date_joined__lte=last_month_end
+                date_joined__gte=last_month_start, date_joined__lt=current_month_start
             ).count()
 
             # 计算用户环比增长率
@@ -147,10 +152,6 @@ class FeedbackIndexView(APIView):
             # 获取总用户数
             total_users = User.objects.count()
 
-            # 获取最近6个月的数据
-            six_months_ago = today - timedelta(days=180)
-            six_months_ago = six_months_ago.replace(day=1)
-
             # 准备月份数据
             months = []
             income_data = []
@@ -158,10 +159,8 @@ class FeedbackIndexView(APIView):
             new_premium_data = []
 
             for i in range(6):
-                month_date = (today - timedelta(days=30 * i)).replace(day=1)
-                month_end = (month_date.replace(day=28) + timedelta(days=4)).replace(
-                    day=1
-                ) - timedelta(days=1)
+                month_date = _shift_month(current_month_start, -i)
+                month_end = _shift_month(month_date, 1)
                 month_name = month_date.strftime("%Y-%m")
                 months.append(month_name)
 
@@ -170,7 +169,7 @@ class FeedbackIndexView(APIView):
                     MembershipOrder.objects.filter(
                         status="paid",
                         payment_time__gte=month_date,
-                        payment_time__lte=month_end,
+                        payment_time__lt=month_end,
                     ).aggregate(Sum("amount"))["amount__sum"]
                     or 0
                 )
@@ -178,7 +177,7 @@ class FeedbackIndexView(APIView):
 
                 # 新增用户数据
                 month_users = User.objects.filter(
-                    date_joined__gte=month_date, date_joined__lte=month_end
+                    date_joined__gte=month_date, date_joined__lt=month_end
                 ).count()
                 new_users_data.append(month_users)
 
@@ -187,7 +186,7 @@ class FeedbackIndexView(APIView):
                     MembershipOrder.objects.filter(
                         status="paid",
                         payment_time__gte=month_date,
-                        payment_time__lte=month_end,
+                        payment_time__lt=month_end,
                     )
                     .values("user")
                     .distinct()
@@ -269,8 +268,8 @@ class FeedbackIndexView(APIView):
 
             return render(request, "admin/admin.html", data)
 
-        except Exception as e:
-            return Response(
-                {"detail": f"获取数据时出错: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        except Exception:
+            logger.exception("获取反馈管理数据失败")
+            return error_response(
+                "获取数据时出错，请稍后重试", status.HTTP_500_INTERNAL_SERVER_ERROR
             )

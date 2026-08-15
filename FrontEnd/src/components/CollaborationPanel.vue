@@ -439,6 +439,15 @@ const inviteLink = computed(() => {
   }
 })
 
+const buildCollaborationInviteLink = (shareToken: string) => {
+  const url = new URL(window.location.href)
+  url.searchParams.set('collaboration', 'true')
+  url.searchParams.set('designId', props.designId)
+  url.searchParams.set('role', inviteRole.value)
+  url.searchParams.set('share_token', shareToken)
+  return url.toString()
+}
+
 
 const roleLabel = (role?: string) => {
   const labels: Record<string, string> = {
@@ -513,7 +522,7 @@ const copyInviteLink = async () => {
       password: invitePassword.value || undefined,
       expires_in_seconds: inviteTtl.value,
     })
-    generatedInviteLink.value = response.data.shareUrl
+    generatedInviteLink.value = buildCollaborationInviteLink(response.data.shareToken)
 
     // 尝试使用 Clipboard API
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -633,8 +642,9 @@ onMounted(() => {
     // 检查URL中是否有collaboration参数，如果有则表示是通过链接加入
     const urlParams = new URLSearchParams(window.location.search)
     const isViaLink = urlParams.has('collaboration') && urlParams.has('designId')
+    const shareToken = urlParams.get('share_token')
     console.log('自动连接WebSocket，是否通过链接加入:', isViaLink)
-    connect(props.designId, isViaLink) // 连接到指定设计ID，并传递是否通过链接加入
+    connect(props.designId, isViaLink, false, shareToken) // 连接到指定设计ID，并传递分享 token
   }
   console.log('当前连接状态:', connectionStatus.value)
 
@@ -957,11 +967,11 @@ const reconnect = () => {
     // 检查URL中是否有collaboration参数，如果有则表示是通过链接加入
     const urlParams = new URLSearchParams(window.location.search)
     const isViaLink = urlParams.has('collaboration') && urlParams.has('designId')
+    const shareToken = urlParams.get('share_token')
 
     // 检查用户是否具备协作权限或通过链接加入
     const canCollaborateOrViaLink = Boolean(
       userStore.currentUser?.entitlements?.can_collaborate
-      || userStore.currentUser?.is_premium_active
       || isViaLink
     )
 
@@ -987,7 +997,7 @@ const reconnect = () => {
     }
 
     console.log('重新连接WebSocket，是否通过链接加入:', isViaLink)
-    connect(props.designId, isViaLink) // 调用WebSocketStore中的connect方法，并传递是否通过链接加入
+    connect(props.designId, isViaLink, false, shareToken) // 调用WebSocketStore中的connect方法，并传递分享 token
   }
 }
 

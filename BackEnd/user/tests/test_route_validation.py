@@ -211,3 +211,29 @@ class RouteValidationPanelAPITest(TestCase):
         first = data["updated_obstacles"][0]
         self.assertGreaterEqual(first["position"]["x"], 3)
         self.assertLessEqual(first["poles"][0]["height"], 1.0)
+
+    def test_fix_course_rebuilds_path_after_obstacle_movement(self):
+        """障碍物位置修复后，返回的路径点必须同步更新。"""
+        response = self.client.post(
+            "/user/designs/fix-course/",
+            data={
+                "field_width": 90,
+                "field_height": 60,
+                "difficulty": "medium",
+                "path": {
+                    "visible": True,
+                    "points": [{"x": 1, "y": 2}, {"x": 2, "y": 2}],
+                },
+                "obstacles": [
+                    {"id": "obs-1", "number": "1", "type": "SINGLE", "position": {"x": 1, "y": 2}, "rotation": 0, "poles": [{"height": 1.1}]},
+                    {"id": "obs-2", "number": "2", "type": "SINGLE", "position": {"x": 12, "y": 20}, "rotation": 90, "poles": [{"height": 1.1}]},
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        updated_path = response.json()["updated_path"]
+        self.assertTrue(updated_path["visible"])
+        self.assertNotEqual(updated_path["points"], [{"x": 1, "y": 2}, {"x": 2, "y": 2}])
+        self.assertEqual(updated_path["points"][3]["x"], 3.0)

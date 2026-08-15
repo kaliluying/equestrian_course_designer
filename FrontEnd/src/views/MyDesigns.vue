@@ -260,7 +260,7 @@ const openDesign = async (design: DesignResponse) => {
         renderVersion: designData.renderVersion || 'v1',
         obstacles: Array.isArray(designData.obstacles) ? designData.obstacles : [],
         createdAt: designData.createdAt || design.create_time || new Date().toISOString(),
-        updatedAt: designData.updatedAt || design.update_time || new Date().toISOString(),
+        updatedAt: design.update_time || designData.updatedAt || new Date().toISOString(),
         fieldWidth: designData.fieldWidth || 80,
         fieldHeight: designData.fieldHeight || 60,
         field: designData.renderVersion === 'v2'
@@ -277,6 +277,7 @@ const openDesign = async (design: DesignResponse) => {
 
       // 将处理后的数据加载到课程存储
       courseStore.currentCourse = courseData
+      courseStore.setServerUpdatedAt(design.update_time)
 
       // 加载路径数据(如果存在)
       if (designData.path) {

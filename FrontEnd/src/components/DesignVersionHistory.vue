@@ -102,8 +102,8 @@ const previewVersion = (version: DesignVersion) => {
     '路线数据预览：',
     JSON.stringify(version.course_data, null, 2),
   ].join('\n')
-  ElMessageBox.alert(`<pre class="version-preview-pre">${summary}</pre>`, `v${version.version_number} 预览`, {
-    dangerouslyUseHTMLString: true,
+  ElMessageBox.alert(summary, `v${version.version_number} 预览`, {
+    dangerouslyUseHTMLString: false,
     customClass: 'version-preview-dialog',
   })
 }

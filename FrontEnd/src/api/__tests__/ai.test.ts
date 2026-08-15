@@ -43,6 +43,7 @@ describe('ai api 类型与错误消息', () => {
   it('购买 AI 配额会请求下单接口并支持支付链接类型', async () => {
     const { request } = await import('@/utils/request')
     vi.mocked(request.post).mockResolvedValueOnce({
+      success: true,
       code: 200,
       message: '订单创建成功',
       data: {
@@ -64,7 +65,7 @@ describe('ai api 类型与错误消息', () => {
     vi.mocked(request.get).mockResolvedValueOnce({
       success: true,
       message: '支付成功',
-      order: { order_id: 'AI123', status: 'paid' },
+      data: { order: { order_id: 'AI123', status: 'paid' } },
     })
 
     await aiApi.getQuotaOrderStatus('AI123')

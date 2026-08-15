@@ -59,8 +59,9 @@ def get_absolute_media_url(path):
     # 构建协议
     protocol = 'https' if settings.USE_HTTPS else 'http'
 
-    # 构建基础URL
-    base_url = f"{protocol}://{settings.SITE_DOMAIN}"
+    # 构建基础URL。SITE_BASE_URL 统一处理是否已经包含协议，避免生成
+    # ``http://http://...`` 或缺少协议的媒体链接。
+    base_url = getattr(settings, "SITE_BASE_URL", f"{protocol}://{settings.SITE_DOMAIN}")
 
     # 确保路径以'/'开头
     if not path.startswith('/'):
@@ -189,7 +190,8 @@ def success_response(message='操作成功', data=None, status_code=status.HTTP_
     """
     response_data = {
         'success': True,
-        'message': message
+        'message': message,
+        'data': data or {},
     }
     if data:
         response_data.update(data)

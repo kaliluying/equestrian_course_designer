@@ -438,8 +438,6 @@ interface ApiResponse {
 interface PasswordResponse {
   success: boolean;
   message?: string;
-  refresh?: string;
-  access?: string;
 }
 
 // 定义邮箱修改响应类型
@@ -781,11 +779,6 @@ const submitChangePassword = async () => {
           ElMessage.success(response.message || '密码修改成功')
           changePasswordDialogVisible.value = false
 
-          // 更新token
-          if (response.access && response.refresh) {
-            localStorage.setItem('access_token', response.access)
-            localStorage.setItem('refresh_token', response.refresh)
-          }
         } else {
           ElMessage.error(response.message || '密码修改失败')
         }

@@ -100,6 +100,7 @@ describe('AIGenerateDialog', () => {
     const userStore = useUserStore()
     userStore.isAuthenticated = true
     mocks.generate.mockResolvedValue({
+      success: true,
       code: 200,
       message: '生成成功',
       data: {
@@ -164,6 +165,7 @@ describe('AIGenerateDialog', () => {
       },
     })
     mocks.purchase.mockResolvedValueOnce({
+      success: true,
       code: 200,
       data: {
         order_id: 'AI123',
@@ -217,6 +219,7 @@ describe('AIGenerateDialog', () => {
         },
       })
     mocks.purchase.mockResolvedValueOnce({
+      success: true,
       code: 200,
       data: {
         order_id: 'AI123',
@@ -228,7 +231,7 @@ describe('AIGenerateDialog', () => {
     mocks.getQuotaOrderStatus.mockResolvedValueOnce({
       success: true,
       message: '支付成功',
-      order: { order_id: 'AI123', status: 'paid' },
+      data: { order: { order_id: 'AI123', status: 'paid' } },
     })
     const openSpy = vi.spyOn(window, 'open').mockReturnValue(null)
 
@@ -250,6 +253,48 @@ describe('AIGenerateDialog', () => {
     openSpy.mockRestore()
   })
 
+  it('支付轮询请求未完成时不会并发发起下一次查询', async () => {
+    vi.useFakeTimers()
+    const userStore = useUserStore()
+    userStore.isAuthenticated = true
+    mocks.purchase.mockResolvedValueOnce({
+      success: true,
+      code: 200,
+      data: {
+        order_id: 'AI-slow',
+        amount: '9.90',
+        quota_count: 10,
+        payment_url: 'https://pay.example.com/order',
+      },
+    })
+    let resolveStatus!: (value: {
+      data: { order: { order_id: string; status: 'paid' } }
+    }) => void
+    mocks.getQuotaOrderStatus.mockReturnValueOnce(new Promise((resolve) => {
+      resolveStatus = resolve
+    }))
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null)
+
+    const wrapper = mount(AIGenerateDialog, {
+      global: { stubs: passthroughStubs },
+    })
+    wrapper.vm.open()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const vm = wrapper.vm as unknown as { handlePurchase: () => Promise<void> }
+    await vm.handlePurchase()
+    await vi.advanceTimersByTimeAsync(9000)
+
+    expect(mocks.getQuotaOrderStatus).toHaveBeenCalledTimes(1)
+
+    resolveStatus({ data: { order: { order_id: 'AI-slow', status: 'paid' } } })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(mocks.getQuotaOrderStatus).toHaveBeenCalledTimes(1)
+    openSpy.mockRestore()
+  })
+
 
   it('支付长期未完成时停止轮询并提示用户', async () => {
     vi.useFakeTimers()
@@ -264,6 +309,7 @@ describe('AIGenerateDialog', () => {
       },
     })
     mocks.purchase.mockResolvedValueOnce({
+      success: true,
       code: 200,
       data: {
         order_id: 'AI-timeout',
@@ -275,7 +321,7 @@ describe('AIGenerateDialog', () => {
     mocks.getQuotaOrderStatus.mockResolvedValue({
       success: true,
       message: '订单未支付或支付处理中',
-      order: { order_id: 'AI-timeout', status: 'pending' },
+      data: { order: { order_id: 'AI-timeout', status: 'pending' } },
       alipay_status: 'WAIT_BUYER_PAY',
     })
     const openSpy = vi.spyOn(window, 'open').mockReturnValue(null)

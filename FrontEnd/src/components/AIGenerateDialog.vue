@@ -179,6 +179,7 @@ const isPollingPayment = ref(false)
 const paymentStatusText = ref('')
 const pendingOrderId = ref('')
 const paymentPollTimer = ref<number | null>(null)
+const paymentPollInFlight = ref(false)
 const paymentPollAttempts = ref(0)
 const selectedQuota = ref(10)
 const MAX_PAYMENT_POLL_ATTEMPTS = 60
@@ -282,7 +283,7 @@ const handleGenerate = async () => {
         }
       })
 
-      if (response.code === 200 && response.data) {
+      if (response.success && response.data) {
         editSummary.value = response.data.change_summary
         result.value = {
           history_id: 0,
@@ -312,7 +313,7 @@ const handleGenerate = async () => {
       config: form.config
     })
 
-    if (response.code === 200 && response.data) {
+    if (response.success && response.data) {
       result.value = response.data
       quotaInfo.remaining_quota = response.data.remaining_quota
       ElMessage.success(`生成成功！剩余次数: ${response.data.remaining_quota}`)
@@ -358,7 +359,7 @@ const clearPaymentPolling = () => {
 }
 
 const pollPaymentResult = async () => {
-  if (!pendingOrderId.value) return
+  if (!pendingOrderId.value || paymentPollInFlight.value) return
 
   paymentPollAttempts.value += 1
   if (paymentPollAttempts.value > MAX_PAYMENT_POLL_ATTEMPTS) {
@@ -367,9 +368,11 @@ const pollPaymentResult = async () => {
     return
   }
 
+  paymentPollInFlight.value = true
+
   try {
     const response = await aiApi.getQuotaOrderStatus(pendingOrderId.value)
-    const order = response.order
+    const order = response.data?.order
     if (order?.status === 'paid') {
       clearPaymentPolling()
       paymentStatusText.value = '支付成功，正在刷新剩余次数'
@@ -384,6 +387,8 @@ const pollPaymentResult = async () => {
   } catch (error) {
     clearPaymentPolling()
     ElMessage.warning(getAIGenerateErrorMessage(error))
+  } finally {
+    paymentPollInFlight.value = false
   }
 }
 
@@ -398,7 +403,7 @@ const startPaymentPolling = () => {
 }
 
 const handlePurchase = async () => {
-  if (isPurchasing.value) return
+  if (isPurchasing.value || isPollingPayment.value) return
 
   isPurchasing.value = true
   paymentStatusText.value = ''

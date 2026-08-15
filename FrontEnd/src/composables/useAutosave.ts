@@ -14,6 +14,7 @@ export function useAutosave() {
   // 自动保存相关变量
   const showRestoreDialog = ref(false)
   const savedTimestamp = ref('')
+  const hasAutosaveConflict = ref(false)
   const showAutosaveNotification = ref(false)
   let autosaveNotificationTimer: number | null = null
 
@@ -55,6 +56,7 @@ export function useAutosave() {
 
   // 检查是否有自动保存的路线设计
   const checkAutosave = () => {
+    hasAutosaveConflict.value = false
     const { savedCourse, savedTimestamp: timestamp } = courseStore.readAutosaveDraft()
 
     if (!timestamp || !savedCourse) return
@@ -77,12 +79,14 @@ export function useAutosave() {
     if (hoursDiff <= 24) {
       savedTimestamp.value = timestamp
       const conflict = courseStore.getAutosaveConflictState()
-      if (conflict?.hasConflict) {
+      hasAutosaveConflict.value = Boolean(conflict?.hasConflict)
+      if (hasAutosaveConflict.value) {
         ElMessage.warning('检测到本地草稿比云端版本更新，请选择恢复方式')
       }
       showRestoreDialog.value = true
     } else {
       courseStore.clearAutosave()
+      hasAutosaveConflict.value = false
     }
   }
 
@@ -94,11 +98,13 @@ export function useAutosave() {
     } else {
       ElMessage.error('恢复失败，可能是数据已损坏')
     }
+    hasAutosaveConflict.value = false
     showRestoreDialog.value = false
   }
 
   const useServerAutosave = () => {
     courseStore.keepServerAutosaveVersion()
+    hasAutosaveConflict.value = false
     showRestoreDialog.value = false
     ElMessage.info('已使用云端版本')
   }
@@ -110,12 +116,14 @@ export function useAutosave() {
     } else {
       ElMessage.error('另存为新设计失败')
     }
+    hasAutosaveConflict.value = false
     showRestoreDialog.value = false
   }
 
   // 放弃自动保存的路线设计
   const discardAutosave = () => {
     courseStore.clearAutosave()
+    hasAutosaveConflict.value = false
     showRestoreDialog.value = false
     ElMessage.info('已放弃恢复')
   }
@@ -160,6 +168,7 @@ export function useAutosave() {
     // State
     showRestoreDialog,
     savedTimestamp,
+    hasAutosaveConflict,
     showAutosaveNotification,
     // Computed
     formatSavedTime,

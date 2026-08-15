@@ -1,25 +1,27 @@
-from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import extend_schema
-from django.db.models import F
-from django.db import transaction
-import logging
 import json
-import re
+import logging
+import math
+import os
 import random
+import re
 import time
 import uuid
-import os
 from decimal import Decimal, ROUND_HALF_UP
 
-from .models import AIGenerationQuota, AIGenerationHistory, MembershipOrder
+from django.db import transaction
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from .models import AIGenerationHistory, AIGenerationQuota, MembershipOrder, UserProfile
 from .llm_providers import get_llm_provider
 from .route_generator import RouteGenerator, RouteConfig
 from .route_validator import RouteValidator
 from .utils import ExternalServiceConfigError, create_alipay_order
+from .throttles import AIRateThrottle
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +31,21 @@ AI_QUOTA_PRICES = {10: 9.90, 30: 24.90, 100: 69.90}
 # 配置常量
 MAX_PROMPT_LENGTH = 500
 MAX_LIMIT = 100
+MAX_EDIT_OBSTACLES = 200
+MAX_EDIT_POLES = 20
+MAX_EDIT_FIELD_DIMENSION = 1000
 VALID_DIFFICULTIES = {"easy", "medium", "hard"}
 VALID_OBSTACLE_TYPES = {"SINGLE", "DOUBLE", "COMBINATION", "WALL", "LIVERPOOL", "WATER"}
+
+
+def _ai_response(code, message=None, data=None):
+    """创建 AI 接口统一响应信封。"""
+    payload = {"success": code < 400, "code": code}
+    if message is not None:
+        payload["message"] = message
+    if data is not None:
+        payload["data"] = data
+    return Response(payload, status=code)
 
 
 def _extract_json_from_llm_response(content: str) -> dict | None:
@@ -45,7 +60,8 @@ def _extract_json_from_llm_response(content: str) -> dict | None:
                 end = len(text)
             chunk = text[start:end].strip()
             try:
-                return json.loads(chunk)
+                value = json.loads(chunk)
+                return value if isinstance(value, dict) else None
             except json.JSONDecodeError:
                 pass
     depth = 0
@@ -59,7 +75,8 @@ def _extract_json_from_llm_response(content: str) -> dict | None:
             depth -= 1
             if depth == 0:
                 try:
-                    return json.loads(text[start_i : i + 1])
+                    value = json.loads(text[start_i : i + 1])
+                    return value if isinstance(value, dict) else None
                 except json.JSONDecodeError:
                     break
     return None
@@ -69,9 +86,21 @@ def _normalize_ai_result(ai_result: dict) -> dict:
     """验证和规范 AI 返回的路线设计"""
     import uuid
 
+    if not isinstance(ai_result, dict):
+        raise TypeError("AI 结果必须是对象")
     obstacles = ai_result.get("obstacles", [])
-    field_width = min(max(ai_result.get("field_width", 90), 30), 150)
-    field_height = min(max(ai_result.get("field_height", 60), 30), 150)
+
+    def _finite_number(value, name):
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{name}必须是数字") from exc
+        if not math.isfinite(number):
+            raise ValueError(f"{name}必须是有限数字")
+        return number
+
+    field_width = min(max(_finite_number(ai_result.get("field_width", 90), "场地宽度"), 30), 150)
+    field_height = min(max(_finite_number(ai_result.get("field_height", 60), "场地高度"), 30), 150)
     difficulty = ai_result.get("difficulty", "medium")
     if difficulty not in VALID_DIFFICULTIES:
         difficulty = "medium"
@@ -80,13 +109,15 @@ def _normalize_ai_result(ai_result: dict) -> dict:
 
     normalized_obstacles = []
     for i, obs in enumerate(obstacles):
+        if not isinstance(obs, dict):
+            raise ValueError("障碍物必须是对象")
         obs_type = obs.get("type", "SINGLE")
         if obs_type not in VALID_OBSTACLE_TYPES:
             obs_type = "SINGLE"
 
         pos = obs.get("position", {})
-        x = float(pos.get("x", 10))
-        y = float(pos.get("y", 10))
+        x = _finite_number(pos.get("x", 10), "障碍物横坐标")
+        y = _finite_number(pos.get("y", 10), "障碍物纵坐标")
 
         x = max(5, min(field_width - 5, x))
         y = max(5, min(field_height - 5, y))
@@ -305,7 +336,60 @@ def _generate_path_from_obstacles(
 
 def _clone_course_obstacles(course: dict) -> list:
     """复制当前路线障碍物，避免直接修改请求对象。"""
-    return json.loads(json.dumps(course.get("obstacles", []), ensure_ascii=False))
+    raw_obstacles = course.get("obstacles", [])
+    if not isinstance(raw_obstacles, list):
+        raise ValueError("障碍物必须是数组")
+    if len(raw_obstacles) > MAX_EDIT_OBSTACLES:
+        raise ValueError(f"障碍物数量不能超过{MAX_EDIT_OBSTACLES}个")
+
+    try:
+        obstacles = json.loads(json.dumps(raw_obstacles, ensure_ascii=False))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("障碍物数据不是有效 JSON") from exc
+
+    for index, obstacle in enumerate(obstacles):
+        if not isinstance(obstacle, dict):
+            raise ValueError(f"第{index + 1}个障碍物格式无效")
+
+        position = obstacle.get("position")
+        if not isinstance(position, dict) or "x" not in position or "y" not in position:
+            raise ValueError(f"第{index + 1}个障碍物缺少有效位置")
+        for coordinate in ("x", "y"):
+            try:
+                coordinate_value = float(position[coordinate])
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise ValueError(f"第{index + 1}个障碍物位置无效") from exc
+            if not math.isfinite(coordinate_value):
+                raise ValueError(f"第{index + 1}个障碍物位置无效")
+
+        poles = obstacle.get("poles") or []
+        if not isinstance(poles, list) or len(poles) > MAX_EDIT_POLES:
+            raise ValueError(f"第{index + 1}个障碍物横杆数据无效")
+        for pole_index, pole in enumerate(poles):
+            if not isinstance(pole, dict):
+                raise ValueError(f"第{index + 1}个障碍物第{pole_index + 1}根横杆无效")
+            for field in ("height", "width", "spacing"):
+                if field not in pole or pole[field] is None:
+                    continue
+                try:
+                    numeric_value = float(pole[field])
+                except (TypeError, ValueError, OverflowError) as exc:
+                    raise ValueError(f"横杆{field}必须是数字") from exc
+                if not math.isfinite(numeric_value):
+                    raise ValueError(f"横杆{field}必须是有限数字")
+
+    return obstacles
+
+
+def _parse_edit_field_dimension(value, default, field_name):
+    """解析二次编辑的场地尺寸并限制资源范围。"""
+    try:
+        dimension = float(value or default)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name}必须是数字") from exc
+    if not math.isfinite(dimension) or dimension <= 0 or dimension > MAX_EDIT_FIELD_DIMENSION:
+        raise ValueError(f"{field_name}必须大于0且不超过{MAX_EDIT_FIELD_DIMENSION}")
+    return int(dimension) if dimension.is_integer() else dimension
 
 
 def _renumber_obstacles(obstacles: list) -> list:
@@ -318,8 +402,16 @@ def _renumber_obstacles(obstacles: list) -> list:
 def _fallback_edit_course(course: dict, instruction: str) -> dict:
     """AI 不可用时的规则引擎二次编辑。"""
     obstacles = _clone_course_obstacles(course)
-    field_width = int(course.get("field_width") or course.get("fieldWidth") or 90)
-    field_height = int(course.get("field_height") or course.get("fieldHeight") or 60)
+    field_width = _parse_edit_field_dimension(
+        course.get("field_width") or course.get("fieldWidth"),
+        90,
+        "场地宽度",
+    )
+    field_height = _parse_edit_field_dimension(
+        course.get("field_height") or course.get("fieldHeight"),
+        60,
+        "场地高度",
+    )
     difficulty = course.get("difficulty") or "medium"
     change_summary = []
 
@@ -457,38 +549,20 @@ def _build_rule_based_coach_notes(course: dict, validation: dict | None = None) 
 )
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-@transaction.atomic
+@throttle_classes([AIRateThrottle])
 def generate_route(request):
     """AI 生成路线"""
-    # 1. 获取用户资料和配额（使用 select_for_update 锁定行）
-    profile = request.user.profile
-
-    try:
-        quota = AIGenerationQuota.objects.select_for_update().get(user_profile=profile)
-    except AIGenerationQuota.DoesNotExist:
-        quota = AIGenerationQuota.objects.create(user_profile=profile, free_quota=3)
-
-    # 2. 检查配额
-    if quota.remaining_quota <= 0:
-        return Response(
-            {"code": status.HTTP_403_FORBIDDEN, "message": "配额不足，请购买后再试"},
-            status=status.HTTP_403_FORBIDDEN,
-        )
-
-    # 3. 获取用户输入并验证
-    prompt = request.data.get("prompt", "")[:MAX_PROMPT_LENGTH]
+    # 1. 获取并验证输入，避免无效请求占用配额或外部服务资源。
+    raw_prompt = request.data.get("prompt", "")
+    if not isinstance(raw_prompt, str):
+        return _ai_response(status.HTTP_400_BAD_REQUEST, "设计需求描述格式无效")
+    prompt = raw_prompt[:MAX_PROMPT_LENGTH]
     config_data = request.data.get("config", {}) or {}
+    if not isinstance(config_data, dict):
+        return _ai_response(status.HTTP_400_BAD_REQUEST, "路线配置格式无效")
 
     if not prompt or not prompt.strip():
-        return Response(
-            {"code": status.HTTP_400_BAD_REQUEST, "message": "请输入设计需求描述"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-        # 4. 创建历史记录
-    history = AIGenerationHistory.objects.create(
-        user_profile=profile, prompt=prompt, status="pending"
-    )
+        return _ai_response(status.HTTP_400_BAD_REQUEST, "请输入设计需求描述")
 
     try:
         obstacle_count = min(max(int(config_data.get("obstacle_count", 12)), 8), 20)
@@ -497,7 +571,28 @@ def generate_route(request):
             difficulty = "medium"
         field_width = min(max(int(config_data.get("field_width", 90)), 30), 150)
         field_height = min(max(int(config_data.get("field_height", 60)), 30), 150)
+    except (TypeError, ValueError):
+        return _ai_response(status.HTTP_400_BAD_REQUEST, "路线配置格式无效")
 
+    # 2. 只在短事务内预占一次配额，然后释放数据库锁再调用 LLM。
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    history = None
+    quota = None
+    with transaction.atomic():
+        quota, _ = AIGenerationQuota.objects.get_or_create(user_profile=profile)
+        quota = AIGenerationQuota.objects.select_for_update().get(pk=quota.pk)
+        if quota.remaining_quota <= 0:
+            return _ai_response(status.HTTP_403_FORBIDDEN, "配额不足，请购买后再试")
+        quota.used_quota += 1
+        quota.save(update_fields=["used_quota", "updated_at"])
+        history = AIGenerationHistory.objects.create(
+            user_profile=profile,
+            prompt=prompt,
+            status="pending",
+            quota_used=1,
+        )
+
+    try:
         system_prompt = """你是一位资深的马术障碍赛路线设计师，拥有FEI（国际马联）认证资格。你需要根据用户需求设计专业、安全、有挑战性的障碍赛路线。
 
 ## 场地坐标系
@@ -580,16 +675,27 @@ def generate_route(request):
             )
             ai_result = _extract_json_from_llm_response(llm_response.content)
         except Exception as exc:
-            fallback_reason = str(exc)
-            logger.warning("LLM不可用，回退到规则引擎: %s", fallback_reason)
+            fallback_reason = "外部模型暂不可用"
+            logger.warning(
+                "LLM不可用，回退到规则引擎: reason=%s",
+                type(exc).__name__,
+            )
 
-        # 6. 如果LLM返回了完整设计，使用它；否则回退到规则引擎
-        if ai_result and ai_result.get("obstacles"):
-            # 验证和规范化AI返回的数据
-            result = _normalize_ai_result(ai_result)
-            result["validation"]["source"] = "llm"
-            result["validation"]["fallback_reason"] = ""
+        # 6. 如果LLM返回了完整设计，使用它；否则回退到规则引擎。
+        if isinstance(ai_result, dict) and ai_result.get("obstacles"):
+            try:
+                result = _normalize_ai_result(ai_result)
+            except Exception as exc:
+                fallback_reason = "LLM返回结果无法规范化"
+                logger.warning(
+                    "LLM结果校验失败，回退到规则引擎: reason=%s",
+                    type(exc).__name__,
+                )
+                result = None
         else:
+            result = None
+
+        if result is None:
             if not fallback_reason:
                 fallback_reason = "LLM未返回有效结果"
                 logger.warning("%s，回退到规则引擎", fallback_reason)
@@ -613,6 +719,9 @@ def generate_route(request):
             result["explanation"] = f"{result['explanation']}（规则引擎兜底：{fallback_reason}）"
             result["validation"]["source"] = "fallback"
             result["validation"]["fallback_reason"] = fallback_reason
+        else:
+            result["validation"]["source"] = "llm"
+            result["validation"]["fallback_reason"] = ""
 
         # 8. 更新历史记录
         history.result = result
@@ -630,44 +739,50 @@ def generate_route(request):
         history.status = "success"
         history.save()
 
-        # 9. 原子扣减配额
-        quota.used_quota = F("used_quota") + 1
-        quota.save()
         quota.refresh_from_db()
 
         # 10. 返回结果
-        return Response(
+        return _ai_response(
+            status.HTTP_200_OK,
+            "生成成功",
             {
-                "code": status.HTTP_200_OK,
-                "message": "生成成功",
-                "data": {
-                    "history_id": history.id,
-                    "obstacles": result["obstacles"],
-                    "path": result["path"],
-                    "difficulty_score": result["difficulty_score"],
-                    "estimated_time": result["estimated_time"],
-                    "explanation": result["explanation"],
-                    "teaching_notes": result["teaching_notes"],
-                    "validation": result["validation"],
-                    "metrics": result["metrics"],
-                    "remaining_quota": quota.remaining_quota,
-                },
-            }
+                "history_id": history.id,
+                "obstacles": result["obstacles"],
+                "path": result["path"],
+                "difficulty_score": result["difficulty_score"],
+                "estimated_time": result["estimated_time"],
+                "explanation": result["explanation"],
+                "teaching_notes": result["teaching_notes"],
+                "validation": result["validation"],
+                "metrics": result["metrics"],
+                "remaining_quota": quota.remaining_quota,
+            },
         )
 
     except Exception as e:
-        logger.error(f"AI生成失败: {str(e)}", exc_info=True)
-        history.status = "failed"
-        history.error_message = "生成失败，请稍后重试"
-        history.save()
+        logger.error("AI生成失败", exc_info=True)
+        if history is not None:
+            with transaction.atomic():
+                # 只处理当前这条仍处于 pending 的历史记录，避免并发请求
+                # 互相回滚对方已经占用的配额。
+                locked_history = AIGenerationHistory.objects.select_for_update().get(
+                    pk=history.pk
+                )
+                if locked_history.status == "pending":
+                    locked_quota = AIGenerationQuota.objects.select_for_update().get(
+                        pk=quota.pk
+                    )
+                    if locked_history.quota_used > 0 and locked_quota.used_quota > 0:
+                        locked_quota.used_quota -= locked_history.quota_used
+                        locked_quota.save(update_fields=["used_quota", "updated_at"])
+                    locked_history.status = "failed"
+                    locked_history.error_message = "生成失败，请稍后重试"
+                    locked_history.quota_used = 0
+                    locked_history.save(
+                        update_fields=["status", "error_message", "quota_used"]
+                    )
 
-        return Response(
-            {
-                "code": status.HTTP_500_INTERNAL_SERVER_ERROR,
-                "message": "生成失败，请稍后重试",
-            },
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
+        return _ai_response(status.HTTP_500_INTERNAL_SERVER_ERROR, "生成失败，请稍后重试")
 
 
 @extend_schema(
@@ -678,19 +793,17 @@ def generate_route(request):
 @permission_classes([IsAuthenticated])
 def get_ai_quota(request):
     """获取 AI 配额信息"""
-    profile = request.user.profile
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
     quota, _ = AIGenerationQuota.objects.get_or_create(user_profile=profile)
 
-    return Response(
-        {
-            "code": status.HTTP_200_OK,
-            "data": {
-                "free_quota": quota.free_quota,
-                "purchased_quota": quota.purchased_quota,
-                "used_quota": quota.used_quota,
-                "remaining_quota": quota.remaining_quota,
-            },
-        }
+    return _ai_response(
+        status.HTTP_200_OK,
+        data={
+            "free_quota": quota.free_quota,
+            "purchased_quota": quota.purchased_quota,
+            "used_quota": quota.used_quota,
+            "remaining_quota": quota.remaining_quota,
+        },
     )
 
 
@@ -710,43 +823,15 @@ def purchase_ai_quota(request):
         if quota_amount <= 0 or quota_amount > 1000:
             raise ValueError("Invalid quota amount")
     except (ValueError, TypeError):
-        return Response(
-            {"code": status.HTTP_400_BAD_REQUEST, "message": "购买数量无效"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        return _ai_response(status.HTTP_400_BAD_REQUEST, "购买数量无效")
 
     raw_price = AI_QUOTA_PRICES.get(quota_amount, quota_amount * 1.0)
     price = Decimal(str(raw_price)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     order_id = f"AI{uuid.uuid4().hex}"
     subject = f"AI 路线生成次数包-{quota_amount}次"
 
-    try:
-        payment_url = create_alipay_order(
-            order_id=order_id,
-            subject=subject,
-            total_amount=float(price),
-        )
-    except ExternalServiceConfigError as exc:
-        logger.warning("AI配额购买不可用: %s", str(exc))
-        return Response(
-            {
-                "code": status.HTTP_503_SERVICE_UNAVAILABLE,
-                "message": f"支付功能暂不可用：{str(exc)}",
-            },
-            status=status.HTTP_503_SERVICE_UNAVAILABLE,
-        )
-    except Exception as exc:
-        logger.error("创建 AI 配额支付宝订单失败: %s", str(exc), exc_info=True)
-        return Response(
-            {
-                "code": status.HTTP_503_SERVICE_UNAVAILABLE,
-                "message": f"支付功能暂不可用：{str(exc)}",
-            },
-            status=status.HTTP_503_SERVICE_UNAVAILABLE,
-        )
-
-    # MembershipOrder 当前模型不包含订单类型字段，AI 配额订单用 membership_plan=None 区分；
-    # billing_cycle 复用 month 作为一次性订单占位值。
+    # 先落本地待支付订单，再调用支付宝，避免支付宝通知先于本地订单创建
+    # 到达时找不到订单而丢失支付结果。
     order = MembershipOrder.objects.create(
         user=request.user,
         order_id=order_id,
@@ -755,20 +840,44 @@ def purchase_ai_quota(request):
         payment_channel="alipay",
         status="pending",
         billing_cycle="month",
-        payment_url=payment_url,
     )
 
-    return Response(
+    try:
+        payment_url = create_alipay_order(
+            order_id=order_id,
+            subject=subject,
+            total_amount=float(price),
+        )
+    except ExternalServiceConfigError as exc:
+        logger.warning("AI配额购买不可用: reason=%s", type(exc).__name__)
+        # 配置未就绪时没有真正提交第三方订单，不保留一条用户无法继续
+        # 支付的本地订单，避免订单列表出现不可操作的脏记录。
+        order.delete()
+        return _ai_response(status.HTTP_503_SERVICE_UNAVAILABLE, "支付功能暂不可用，请稍后重试")
+    except Exception:
+        logger.exception("创建 AI 配额支付宝订单失败")
+        return _ai_response(status.HTTP_503_SERVICE_UNAVAILABLE, "支付功能暂不可用，请稍后重试")
+
+    try:
+        order.payment_url = payment_url
+        order.save(update_fields=["payment_url", "updated_at"])
+    except Exception:
+        logger.exception("保存 AI 配额支付宝订单链接失败")
+        return _ai_response(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "支付订单已创建，但本地状态暂未保存，请稍后查询订单",
+            {"order_id": order_id},
+        )
+
+    return _ai_response(
+        status.HTTP_200_OK,
+        "订单创建成功",
         {
-            "code": status.HTTP_200_OK,
-            "message": "订单创建成功",
-            "data": {
-                "order_id": order.order_id,
-                "amount": str(price),
-                "quota_count": quota_amount,
-                "payment_url": payment_url,
-            },
-        }
+            "order_id": order.order_id,
+            "amount": str(price),
+            "quota_count": quota_amount,
+            "payment_url": payment_url,
+        },
     )
 
 
@@ -780,7 +889,7 @@ def purchase_ai_quota(request):
 @permission_classes([IsAuthenticated])
 def get_ai_history(request):
     """获取 AI 生成历史"""
-    profile = request.user.profile
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
     limit = request.query_params.get("limit", 20)
 
     try:
@@ -800,27 +909,25 @@ def get_ai_history(request):
         histories = histories.filter(created_at__lte=end_date)
     histories = histories.order_by("-created_at")[:limit]
 
-    return Response(
-        {
-            "code": status.HTTP_200_OK,
-            "data": {
-                "histories": [
-                    {
-                        "id": h.id,
-                        "prompt": h.prompt,
-                        "status": h.status,
-                        "token_used": h.token_used,
-                        "quota_used": h.quota_used,
-                        "model_name": h.model_name or "",
-                        "error_message": h.error_message or "",
-                        "created_at": h.created_at.isoformat()
-                        if h.created_at
-                        else None,
-                    }
-                    for h in histories
-                ]
-            },
-        }
+    return _ai_response(
+        status.HTTP_200_OK,
+        data={
+            "histories": [
+                {
+                    "id": h.id,
+                    "prompt": h.prompt,
+                    "status": h.status,
+                    "token_used": h.token_used,
+                    "quota_used": h.quota_used,
+                    "model_name": h.model_name or "",
+                    "error_message": h.error_message or "",
+                    "created_at": h.created_at.isoformat()
+                    if h.created_at
+                    else None,
+                }
+                for h in histories
+            ]
+        },
     )
 
 
@@ -831,24 +938,22 @@ def get_ai_history(request):
 )
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@throttle_classes([AIRateThrottle])
 def edit_course(request):
     """基于当前路线进行 AI/规则二次编辑。"""
     instruction = (request.data.get("instruction") or "").strip()[:MAX_PROMPT_LENGTH]
     course = request.data.get("course") or {}
     if not instruction:
-        return Response(
-            {"code": status.HTTP_400_BAD_REQUEST, "message": "请输入修改指令"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        return _ai_response(status.HTTP_400_BAD_REQUEST, "请输入修改指令")
     if not isinstance(course, dict):
-        return Response(
-            {"code": status.HTTP_400_BAD_REQUEST, "message": "路线数据无效"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        return _ai_response(status.HTTP_400_BAD_REQUEST, "路线数据无效")
 
     # 当前实现优先使用规则兜底，后续可接入 LLM JSON patch。
-    result = _fallback_edit_course(course, instruction)
-    return Response({"code": status.HTTP_200_OK, "message": "编辑成功", "data": result})
+    try:
+        result = _fallback_edit_course(course, instruction)
+    except (IndexError, KeyError, OverflowError, TypeError, ValueError) as exc:
+        return _ai_response(status.HTTP_400_BAD_REQUEST, str(exc) or "路线数据无效")
+    return _ai_response(status.HTTP_200_OK, "编辑成功", result)
 
 
 @extend_schema(
@@ -858,14 +963,12 @@ def edit_course(request):
 )
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@throttle_classes([AIRateThrottle])
 def coach_notes(request):
     """根据当前路线生成教练说明。"""
     course = request.data.get("course") or {}
     validation = request.data.get("validation") or {}
     if not isinstance(course, dict):
-        return Response(
-            {"code": status.HTTP_400_BAD_REQUEST, "message": "路线数据无效"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        return _ai_response(status.HTTP_400_BAD_REQUEST, "路线数据无效")
     notes = _build_rule_based_coach_notes(course, validation)
-    return Response({"code": status.HTTP_200_OK, "message": "生成成功", "data": notes})
+    return _ai_response(status.HTTP_200_OK, "生成成功", notes)

@@ -1,21 +1,30 @@
 """设计管理视图：设计的CRUD、点赞、分享、下载。"""
 
 import logging
+import math
+import os
 import zipfile
 from io import BytesIO
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-from django.db.models import F
+from django.db import transaction
+from django.db.models import F, Q
+from django.http import FileResponse
+from django.urls import reverse
 from django.utils.text import get_valid_filename
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from rest_framework.response import Response
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from PIL import Image
 
 from ..models import (
     CollaborationEvent,
+    CollaborationRole,
     Design,
     DesignComment,
     DesignLike,
@@ -29,8 +38,8 @@ from ..serializers import (
     DesignListSerializer,
     DesignVersionSerializer,
 )
-from ..utils import get_absolute_media_url, success_response, error_response
-from ..route_validator import RouteValidator
+from ..utils import success_response, error_response
+from ..route_validator import RouteValidationInputError, RouteValidator
 from .user_views import check_and_update_membership
 from ..services.membership_access import MembershipAccessError, assert_design_capacity
 from ..services.design_version import (
@@ -38,10 +47,28 @@ from ..services.design_version import (
     create_design_version,
     restore_design_version,
 )
+from ..throttles import ExportRateThrottle
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_DOWNLOAD_TYPES = ("json", "png", "pdf", "report", "zip")
+SUPPORTED_DOWNLOAD_TYPES = ("image", "json", "png", "pdf", "report", "zip")
+IMAGE_CONTENT_TYPES = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "webp": "image/webp",
+}
+
+
+def _parse_field_dimension(value) -> float:
+    """解析并限制场地尺寸，避免非法数值导致 500 或资源异常。"""
+    try:
+        dimension = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("场地尺寸必须是数字") from exc
+    if not math.isfinite(dimension) or dimension <= 0 or dimension > 1000:
+        raise ValueError("场地尺寸必须大于 0 且不超过 1000")
+    return dimension
 
 
 def _stored_file_exists(field_file):
@@ -55,6 +82,14 @@ def _build_download_filename(title, file_type):
     """生成浏览器下载文件名，避免标题中的路径字符污染文件名。"""
     filename = get_valid_filename(f"{title}.{file_type}")
     return filename or f"design.{file_type}"
+
+
+def _image_download_metadata(field_file):
+    """根据已验证的图片文件名返回扩展名和 MIME 类型。"""
+    extension = os.path.splitext(field_file.name or "")[1].lower().lstrip(".")
+    if extension not in IMAGE_CONTENT_TYPES:
+        extension = "png"
+    return extension, IMAGE_CONTENT_TYPES[extension]
 
 
 def _generate_design_pdf(design):
@@ -151,18 +186,83 @@ class DesignViewSet(viewsets.ModelViewSet):
         if self.action == "shared_designs":
             # 公开分享的设计，预加载作者避免 N+1
             return Design.objects.filter(is_shared=True).select_related('author')
-        # 默认只返回当前用户的设计
-        return Design.objects.filter(author=self.request.user).select_related('author')
+        user = getattr(self.request, "user", None)
+        if user is None or not user.is_authenticated:
+            return Design.objects.none()
+
+        # 列表仍然只展示本人设计；详情和标准 CRUD 则允许显式协作者
+        # 找到对象，后续由 perform_update/perform_destroy 再做写权限判断。
+        if self.action in {
+            "retrieve",
+            "update",
+            "partial_update",
+            "destroy",
+            "share_design",
+            "toggle_design_sharing",
+        }:
+            return (
+                Design.objects.filter(
+                    Q(author=user) | Q(collaboration_roles__user=user)
+                )
+                .select_related("author")
+                .distinct()
+            )
+        return Design.objects.filter(author=user).select_related("author")
+
+    def _get_authorized_design(self, pk, *, allow_public=False):
+        """按作者、显式协作角色或公开状态检查设计访问权限。"""
+        try:
+            design = Design.objects.select_related("author").get(pk=pk)
+        except Design.DoesNotExist:
+            return None
+
+        user = self.request.user
+        if user.is_authenticated and design.author_id == user.id:
+            return design
+        if allow_public and design.is_shared and user.is_authenticated:
+            return design
+        if user.is_authenticated and CollaborationRole.objects.filter(
+            design=design,
+            user=user,
+        ).exists():
+            return design
+        return None
+
+    def _get_collaboration_context(self, pk):
+        """返回设计及当前用户的显式协作角色。"""
+        design = self._get_authorized_design(pk)
+        if design is None:
+            return None, None
+        if design.author_id == self.request.user.id:
+            return design, "owner"
+        role = CollaborationRole.objects.filter(
+            design=design,
+            user=self.request.user,
+        ).values_list("role", flat=True).first()
+        return design, role
 
     def perform_create(self, serializer):
         """保存时自动设置作者为当前用户并创建版本快照"""
-        design = serializer.save(author=self.request.user)
-        create_design_version(design, source="manual")
+        with transaction.atomic():
+            # 先处理已到期的会员降级，再在同一事务内检查容量并创建设计。
+            check_and_update_membership(self.request.user)
+            assert_design_capacity(self.request.user)
+            design = serializer.save(author=self.request.user)
+            create_design_version(design, source="manual")
 
     def perform_update(self, serializer):
         """更新设计时保留原作者"""
         # 获取原设计对象
         instance = self.get_object()
+        if instance.author_id != self.request.user.id:
+            if "is_shared" in self.request.data:
+                raise PermissionDenied("只有设计作者可以修改分享状态")
+            role = CollaborationRole.objects.filter(
+                design=instance,
+                user=self.request.user,
+            ).values_list("role", flat=True).first()
+            if role != "editor":
+                raise PermissionDenied("当前协作角色无权编辑设计")
         logger.info(
             "更新设计: ID=%s, 标题=%s, 作者=%s",
             instance.id,
@@ -172,38 +272,125 @@ class DesignViewSet(viewsets.ModelViewSet):
 
         # 确保更新时保留原作者
         try:
-            design = serializer.save(author=instance.author)
-            create_design_version(design, source="manual")
+            with transaction.atomic():
+                design = serializer.save(author=instance.author)
+                create_design_version(design, source="manual")
             logger.info("设计更新成功: ID=%s", instance.id)
         except Exception as e:
             logger.exception("设计更新失败: ID=%s", instance.id)
             raise
+
+    def perform_destroy(self, instance):
+        """仅允许设计作者删除设计，协作者不能通过标准 DELETE 越权。"""
+        if instance.author_id != self.request.user.id:
+            raise PermissionDenied("只有设计作者可以删除设计")
+        instance.delete()
+
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="asset",
+        throttle_classes=[ExportRateThrottle],
+    )
+    def asset(self, request, pk=None):
+        """在完成对象级授权后返回设计文件，避免公开暴露 MEDIA_ROOT。"""
+        design = self._get_authorized_design(pk, allow_public=True)
+        if design is None:
+            return error_response("设计不存在或您无权访问", status.HTTP_404_NOT_FOUND)
+
+        file_type = request.query_params.get("type", "image").strip().lower()
+        if file_type not in SUPPORTED_DOWNLOAD_TYPES:
+            return error_response("不支持的文件类型", status.HTTP_400_BAD_REQUEST)
+
+        try:
+            if file_type == "json":
+                if not _stored_file_exists(design.download):
+                    return error_response("该设计没有可下载的JSON文件", status.HTTP_404_NOT_FOUND)
+                file_obj = design.download.open("rb")
+                filename = _build_download_filename(design.title, "json")
+                content_type = "application/json"
+                as_attachment = True
+            elif file_type in {"image", "png"}:
+                if not _stored_file_exists(design.image):
+                    return error_response("该设计没有可下载的图片", status.HTTP_404_NOT_FOUND)
+                file_obj = design.image.open("rb")
+                extension, content_type = _image_download_metadata(design.image)
+                filename = _build_download_filename(design.title, extension)
+                as_attachment = False
+            else:
+                if not _stored_file_exists(design.image):
+                    return error_response("该设计没有可用于导出的图片", status.HTTP_404_NOT_FOUND)
+                generator = {
+                    "pdf": _generate_design_pdf,
+                    "report": _generate_design_report_pdf,
+                    "zip": _generate_design_zip,
+                }[file_type]
+                relative_path = generator(design)
+                file_obj = default_storage.open(relative_path, "rb")
+                extension = "pdf" if file_type == "report" else file_type
+                filename = _build_download_filename(design.title, extension)
+                content_type = {
+                    "pdf": "application/pdf",
+                    "report": "application/pdf",
+                    "zip": "application/zip",
+                }[file_type]
+                as_attachment = True
+        except Exception:
+            logger.exception("读取设计资源失败: design_id=%s, type=%s", design.id, file_type)
+            return error_response("读取设计资源失败，请稍后重试", status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return FileResponse(
+            file_obj,
+            as_attachment=as_attachment,
+            filename=filename,
+            content_type=content_type,
+        )
 
 
     @action(detail=False, methods=["post"], url_path="validate-course")
     def validate_course(self, request):
         """校验当前路线并返回结构化规则检查结果。"""
         obstacles = request.data.get("obstacles") or []
-        field_width = float(request.data.get("field_width") or request.data.get("fieldWidth") or 90)
-        field_height = float(request.data.get("field_height") or request.data.get("fieldHeight") or 60)
+        try:
+            field_width = _parse_field_dimension(
+                request.data.get("field_width") or request.data.get("fieldWidth") or 90
+            )
+            field_height = _parse_field_dimension(
+                request.data.get("field_height") or request.data.get("fieldHeight") or 60
+            )
+        except ValueError as exc:
+            return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
         difficulty = request.data.get("difficulty") or "medium"
         path = request.data.get("path") or {}
 
         validator = RouteValidator(field_width=field_width, field_height=field_height)
-        return Response(validator.validate_course_structure(obstacles, difficulty, path=path))
+        try:
+            return Response(validator.validate_course_structure(obstacles, difficulty, path=path))
+        except RouteValidationInputError as exc:
+            return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
 
 
     @action(detail=False, methods=["post"], url_path="fix-course")
     def fix_course(self, request):
         """自动修复当前路线中的可修复规则问题。"""
         obstacles = request.data.get("obstacles") or []
-        field_width = float(request.data.get("field_width") or request.data.get("fieldWidth") or 90)
-        field_height = float(request.data.get("field_height") or request.data.get("fieldHeight") or 60)
+        try:
+            field_width = _parse_field_dimension(
+                request.data.get("field_width") or request.data.get("fieldWidth") or 90
+            )
+            field_height = _parse_field_dimension(
+                request.data.get("field_height") or request.data.get("fieldHeight") or 60
+            )
+        except ValueError as exc:
+            return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
         difficulty = request.data.get("difficulty") or "medium"
         path = request.data.get("path") or {}
 
         validator = RouteValidator(field_width=field_width, field_height=field_height)
-        return Response(validator.fix_course_structure(obstacles, difficulty, path=path))
+        try:
+            return Response(validator.fix_course_structure(obstacles, difficulty, path=path))
+        except RouteValidationInputError as exc:
+            return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=["get"], url_path="shared")
     def shared_designs(self, request):
@@ -232,10 +419,15 @@ class DesignViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get", "post"], url_path="comments")
     def list_comments(self, request, pk=None):
         """获取或创建设计评论。"""
-        design = self.get_object()
+        design, role = self._get_collaboration_context(pk)
+        if design is None:
+            return error_response("设计不存在或您无权访问", status.HTTP_404_NOT_FOUND)
         if request.method == "GET":
             serializer = DesignCommentSerializer(DesignComment.objects.filter(design=design), many=True)
             return Response(serializer.data)
+
+        if role not in {"owner", "editor", "commenter"}:
+            return error_response("当前协作角色无权发表评论", status.HTTP_403_FORBIDDEN)
 
         serializer = DesignCommentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -249,10 +441,24 @@ class DesignViewSet(viewsets.ModelViewSet):
         )
         return Response(DesignCommentSerializer(comment).data, status=status.HTTP_201_CREATED)
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="comment_id",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.PATH,
+            )
+        ],
+        operation_id="design_comment_resolve",
+    )
     @action(detail=True, methods=["post"], url_path=r"comments/(?P<comment_id>[^/.]+)/resolve")
     def resolve_comment(self, request, pk=None, comment_id=None):
         """解决或取消解决设计评论。"""
-        design = self.get_object()
+        design, role = self._get_collaboration_context(pk)
+        if design is None:
+            return error_response("设计不存在或您无权访问", status.HTTP_404_NOT_FOUND)
+        if role not in {"owner", "editor"}:
+            return error_response("当前协作角色无权处理评论", status.HTTP_403_FORBIDDEN)
         try:
             comment = DesignComment.objects.get(id=comment_id, design=design)
         except DesignComment.DoesNotExist:
@@ -271,27 +477,53 @@ class DesignViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"], url_path="collaboration-events")
     def collaboration_events(self, request, pk=None):
         """获取设计协作活动时间线。"""
-        design = self.get_object()
+        design, role = self._get_collaboration_context(pk)
+        if design is None:
+            return error_response("设计不存在或您无权访问", status.HTTP_404_NOT_FOUND)
         user_id = request.query_params.get("user")
         events = CollaborationEvent.objects.filter(design=design).select_related("user")
         if user_id:
             events = events.filter(user_id=user_id)
         return Response(CollaborationEventSerializer(events, many=True).data)
 
+    @extend_schema(operation_id="design_versions_list")
     @action(detail=True, methods=["get"], url_path="versions")
     def list_versions(self, request, pk=None):
         """获取设计版本列表。"""
-        design = self.get_object()
-        versions = DesignVersion.objects.filter(design=design, author=request.user)
+        design, role = self._get_collaboration_context(pk)
+        if design is None:
+            return error_response("设计不存在或您无权访问", status.HTTP_404_NOT_FOUND)
+        versions = DesignVersion.objects.filter(design=design)
         serializer = DesignVersionSerializer(versions, many=True)
         return Response(serializer.data)
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="version_id",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.PATH,
+            )
+        ],
+    )
+    @extend_schema(
+        methods=["GET"],
+        operation_id="design_version_retrieve",
+    )
+    @extend_schema(
+        methods=["PATCH"],
+        operation_id="design_version_update",
+    )
     @action(detail=True, methods=["get", "patch"], url_path=r"versions/(?P<version_id>[^/.]+)")
     def retrieve_version(self, request, pk=None, version_id=None):
         """获取或更新设计版本详情。"""
-        design = self.get_object()
+        design, role = self._get_collaboration_context(pk)
+        if design is None:
+            return error_response("设计不存在或您无权访问", status.HTTP_404_NOT_FOUND)
+        if request.method == "PATCH" and role not in {"owner", "editor"}:
+            return error_response("当前协作角色无权修改版本", status.HTTP_403_FORBIDDEN)
         try:
-            version = DesignVersion.objects.get(id=version_id, design=design, author=request.user)
+            version = DesignVersion.objects.get(id=version_id, design=design)
         except DesignVersion.DoesNotExist:
             return error_response("版本不存在", status.HTTP_404_NOT_FOUND)
 
@@ -304,63 +536,87 @@ class DesignViewSet(viewsets.ModelViewSet):
 
         return Response(DesignVersionSerializer(version).data)
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="version_id",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.PATH,
+            )
+        ],
+        operation_id="design_version_restore",
+    )
     @action(detail=True, methods=["post"], url_path=r"versions/(?P<version_id>[^/.]+)/restore")
     def restore_version(self, request, pk=None, version_id=None):
         """恢复设计版本。"""
-        design = self.get_object()
+        design, role = self._get_collaboration_context(pk)
+        if design is None:
+            return error_response("设计不存在或您无权访问", status.HTTP_404_NOT_FOUND)
+        if role not in {"owner", "editor"}:
+            return error_response("当前协作角色无权恢复版本", status.HTTP_403_FORBIDDEN)
         try:
-            version = DesignVersion.objects.get(id=version_id, design=design, author=request.user)
+            version = DesignVersion.objects.get(id=version_id, design=design)
         except DesignVersion.DoesNotExist:
             return error_response("版本不存在", status.HTTP_404_NOT_FOUND)
         restore_design_version(design, version)
+        design.refresh_from_db()
         return success_response("版本已恢复", DesignSerializer(design, context={"request": request}).data)
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="version_id",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.PATH,
+            )
+        ],
+        operation_id="design_version_copy",
+    )
     @action(detail=True, methods=["post"], url_path=r"versions/(?P<version_id>[^/.]+)/copy")
     def copy_version(self, request, pk=None, version_id=None):
         """复制设计版本为新设计。"""
-        design = self.get_object()
+        design, role = self._get_collaboration_context(pk)
+        if design is None:
+            return error_response("设计不存在或您无权访问", status.HTTP_404_NOT_FOUND)
+        if role not in {"owner", "editor"}:
+            return error_response("当前协作角色无权复制版本", status.HTTP_403_FORBIDDEN)
         try:
-            version = DesignVersion.objects.get(id=version_id, design=design, author=request.user)
+            version = DesignVersion.objects.get(id=version_id, design=design)
         except DesignVersion.DoesNotExist:
             return error_response("版本不存在", status.HTTP_404_NOT_FOUND)
-        new_design = copy_design_version(version)
+        try:
+            with transaction.atomic():
+                assert_design_capacity(request.user)
+                new_design = copy_design_version(version, author=request.user)
+        except MembershipAccessError as exc:
+            return error_response(exc.message, exc.status_code, exc.data)
         return Response(DesignSerializer(new_design, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"], url_path="like")
     def like_design(self, request, pk=None):
         """点赞设计"""
-        # 直接获取设计，不使用self.get_object()，允许点赞任何共享的设计
+        # 锁定设计行，确保“检查—创建/删除—计数”在并发请求下保持一致。
         try:
-            # 先尝试获取指定ID的设计，不考虑作者限制
-            design = Design.objects.get(pk=pk)
+            with transaction.atomic():
+                design = Design.objects.select_for_update().get(pk=pk)
+                if design.author != request.user and not design.is_shared:
+                    return error_response(
+                        "您无权点赞未共享的设计", status.HTTP_403_FORBIDDEN
+                    )
 
-            # 如果不是自己的设计，检查是否已共享
-            if design.author != request.user and not design.is_shared:
-                return error_response(
-                    "您无权点赞未共享的设计", status.HTTP_403_FORBIDDEN
-                )
+                like = DesignLike.objects.filter(design=design, user=request.user).first()
+                if like:
+                    like.delete()
+                    design.likes_count = max(0, design.likes_count - 1)
+                    design.save(update_fields=["likes_count", "update_time"])
+                    return success_response(
+                        "取消点赞成功",
+                        {"likes_count": design.likes_count, "is_liked": False},
+                    )
 
-            user = request.user
-
-            # 检查是否已点赞
-            like_exists = DesignLike.objects.filter(design=design, user=user).exists()
-
-            if like_exists:
-                # 如果已点赞，则取消点赞
-                DesignLike.objects.filter(design=design, user=user).delete()
-                # 减少点赞数
-                Design.objects.filter(pk=pk).update(likes_count=F("likes_count") - 1)
-                design.refresh_from_db()
-                return success_response(
-                    "取消点赞成功",
-                    {"likes_count": design.likes_count, "is_liked": False},
-                )
-            else:
-                # 如果未点赞，则添加点赞
-                DesignLike.objects.create(design=design, user=user)
-                # 增加点赞数
-                Design.objects.filter(pk=pk).update(likes_count=F("likes_count") + 1)
-                design.refresh_from_db()
+                DesignLike.objects.create(design=design, user=request.user)
+                design.likes_count += 1
+                design.save(update_fields=["likes_count", "update_time"])
                 return success_response(
                     "点赞成功", {"likes_count": design.likes_count, "is_liked": True}
                 )
@@ -371,6 +627,8 @@ class DesignViewSet(viewsets.ModelViewSet):
     def share_design(self, request, pk=None):
         """分享/取消分享设计"""
         design = self.get_object()
+        if design.author_id != request.user.id:
+            raise PermissionDenied("只有设计作者可以修改分享状态")
 
         # 切换分享状态
         design.is_shared = not design.is_shared
@@ -382,6 +640,8 @@ class DesignViewSet(viewsets.ModelViewSet):
     def toggle_design_sharing(self, request, pk=None):
         """切换设计的分享状态"""
         design = self.get_object()
+        if design.author_id != request.user.id:
+            raise PermissionDenied("只有设计作者可以修改分享状态")
 
         # 切换分享状态
         design.is_shared = not design.is_shared
@@ -392,7 +652,12 @@ class DesignViewSet(viewsets.ModelViewSet):
             {"is_shared": design.is_shared},
         )
 
-    @action(detail=True, methods=["get"], url_path="download")
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="download",
+        throttle_classes=[ExportRateThrottle],
+    )
     def download_design(self, request, pk=None):
         """下载设计并增加下载计数"""
         try:
@@ -400,17 +665,14 @@ class DesignViewSet(viewsets.ModelViewSet):
             file_type = request.query_params.get("type", "json").strip().lower()
             if file_type not in SUPPORTED_DOWNLOAD_TYPES:
                 return error_response(
-                    "不支持的文件类型，支持的类型有：json, png, pdf, report, zip",
+                    "不支持的文件类型，支持的类型有：image, json, png, pdf, report, zip",
                     status.HTTP_400_BAD_REQUEST,
                 )
 
-            # 直接获取设计，不使用self.get_object()，允许下载任何共享的设计
-            design = Design.objects.get(pk=pk)
-
-            # 如果不是自己的设计，检查是否已共享
-            if design.author != request.user and not design.is_shared:
+            design = self._get_authorized_design(pk, allow_public=True)
+            if design is None:
                 return error_response(
-                    "您无权下载未共享的设计", status.HTTP_403_FORBIDDEN
+                    "设计不存在或您无权下载", status.HTTP_404_NOT_FOUND
                 )
 
             # 根据文件类型返回不同的下载URL
@@ -419,13 +681,15 @@ class DesignViewSet(viewsets.ModelViewSet):
                     return error_response(
                         "该设计没有可下载的JSON文件", status.HTTP_404_NOT_FOUND
                     )
-                download_url = get_absolute_media_url(design.download.url)
-            elif file_type == "png":
+                download_url = request.build_absolute_uri(
+                    f"{reverse('design-asset', kwargs={'pk': design.pk})}?type=json"
+                )
+            elif file_type in {"image", "png"}:
                 if not _stored_file_exists(design.image):
-                    return error_response(
-                        "该设计没有可下载的PNG图片", status.HTTP_404_NOT_FOUND
-                    )
-                download_url = get_absolute_media_url(design.image.url)
+                    return error_response("该设计没有可下载的图片", status.HTTP_404_NOT_FOUND)
+                download_url = request.build_absolute_uri(
+                    f"{reverse('design-asset', kwargs={'pk': design.pk})}?type={file_type}"
+                )
             elif file_type == "pdf":
                 if not _stored_file_exists(design.image):
                     return error_response(
@@ -442,8 +706,8 @@ class DesignViewSet(viewsets.ModelViewSet):
                         status.HTTP_500_INTERNAL_SERVER_ERROR,
                     )
 
-                download_url = get_absolute_media_url(
-                    default_storage.url(relative_pdf_path)
+                download_url = request.build_absolute_uri(
+                    f"{reverse('design-asset', kwargs={'pk': design.pk})}?type=pdf"
                 )
             elif file_type == "report":
                 if not _stored_file_exists(design.image):
@@ -459,7 +723,9 @@ class DesignViewSet(viewsets.ModelViewSet):
                         "报告生成失败，请稍后重试",
                         status.HTTP_500_INTERNAL_SERVER_ERROR,
                     )
-                download_url = get_absolute_media_url(default_storage.url(relative_report_path))
+                download_url = request.build_absolute_uri(
+                    f"{reverse('design-asset', kwargs={'pk': design.pk})}?type=report"
+                )
             elif file_type == "zip":
                 if not _stored_file_exists(design.image):
                     return error_response(
@@ -474,8 +740,14 @@ class DesignViewSet(viewsets.ModelViewSet):
                         "批量导出失败，请稍后重试",
                         status.HTTP_500_INTERNAL_SERVER_ERROR,
                     )
-                download_url = get_absolute_media_url(default_storage.url(relative_zip_path))
-            filename = _build_download_filename(design.title, "pdf" if file_type == "report" else file_type)
+                download_url = request.build_absolute_uri(
+                    f"{reverse('design-asset', kwargs={'pk': design.pk})}?type=zip"
+                )
+            if file_type in {"image", "png"}:
+                extension, _ = _image_download_metadata(design.image)
+            else:
+                extension = "pdf" if file_type == "report" else file_type
+            filename = _build_download_filename(design.title, extension)
 
             # 文件准备成功后再增加下载计数
             Design.objects.filter(pk=pk).update(
@@ -502,9 +774,9 @@ class DesignViewSet(viewsets.ModelViewSet):
         user = request.user
 
         try:
-            assert_design_capacity(user)
+            with transaction.atomic():
+                UserProfile.objects.select_for_update().get_or_create(user=user)
+                assert_design_capacity(user)
+                return super().create(request, *args, **kwargs)
         except MembershipAccessError as exc:
             return error_response(exc.message, exc.status_code, exc.data)
-
-        # 继续正常的创建流程
-        return super().create(request, *args, **kwargs)

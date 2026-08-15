@@ -12,15 +12,20 @@ import type { CollaborationSession } from '@/stores/websocket'
 
 // Canvas 组件暴露的方法类型
 export interface CanvasComponentExposed {
-  startCollaboration: (viaLink?: boolean) => Promise<boolean> | boolean
+  startCollaboration: (viaLink?: boolean, shareToken?: string | null) => Promise<boolean> | boolean
   stopCollaboration: () => Promise<boolean> | boolean
   isCreator?: () => boolean
-  sendFullCanvasState?: (targetUserId?: string) => void
+  sendFullCanvasState?: () => void
+}
+
+export interface PendingCollaborationInvitation {
+  designId: string
+  shareToken: string | null
+  timestamp: string
 }
 
 export function useCollaborationEvents(
   canvasRef: { value: CanvasComponentExposed | null },
-  loginDialogVisible: { value: boolean },
 ) {
   const courseStore = useCourseStore()
   const router = useRouter()
@@ -28,11 +33,54 @@ export function useCollaborationEvents(
   // 协作状态
   const isCollaborating = ref(false)
   const collaborationSession = ref<CollaborationSession | null>(null)
+  // 分享令牌只在当前页面内短暂保存，登录后消费，避免持久化到 localStorage。
+  const pendingInvitation = ref<PendingCollaborationInvitation | null>(null)
   let isTogglingCollaboration = false
 
   // 防抖变量，避免短时间内多次触发弹窗
   let premiumPromptDebounceTimer: number | null = null
   let premiumPromptShowing = false
+  let sharePasswordPromptShowing = false
+
+  const promptForSharePassword = async (message: string | null = null) => {
+    if (sharePasswordPromptShowing) return
+    sharePasswordPromptShowing = true
+    try {
+      const result = await ElMessageBox.prompt(message || '请输入协作链接密码', '协作链接验证', {
+        confirmButtonText: '加入协作',
+        cancelButtonText: '取消',
+        inputType: 'password',
+        inputPlaceholder: '请输入访问密码',
+        inputValidator: (value: string) => value.trim().length > 0 || '密码不能为空',
+      })
+      useWebSocketStore().authenticateSharePassword(result.value)
+    } catch {
+      useWebSocketStore().disconnect()
+    } finally {
+      sharePasswordPromptShowing = false
+    }
+  }
+
+  const handleSharePasswordRequired = (event: CustomEvent) => {
+    const attempts = event.detail?.attempts_remaining
+    void promptForSharePassword(
+      attempts ? `请输入协作链接密码（还可尝试 ${attempts} 次）` : null,
+    )
+  }
+
+  const handleSharePasswordFailed = (event: CustomEvent) => {
+    const code = event.detail?.code
+    if (code && code !== 'invalid_share_password') {
+      ElMessage.error(event.detail?.message || '分享链接已失效，请重新生成')
+      return
+    }
+    const attempts = event.detail?.attempts_remaining ?? 0
+    if (attempts <= 0) {
+      ElMessage.error('协作链接密码错误次数过多，请重新打开邀请链接')
+      return
+    }
+    void promptForSharePassword(`密码错误，还可尝试 ${attempts} 次`)
+  }
 
   // 监听协作连接成功事件
   const handleCollaborationConnected = (event: CustomEvent) => {
@@ -204,7 +252,7 @@ export function useCollaborationEvents(
         if (isCreator) {
           // 使用Canvas组件的sendFullCanvasState方法发送完整画布状态
           if (typeof canvasRef.value.sendFullCanvasState === 'function') {
-            canvasRef.value.sendFullCanvasState(event.detail.collaborator.id)
+            canvasRef.value.sendFullCanvasState()
           } else {
             console.warn('Canvas组件没有sendFullCanvasState方法')
           }
@@ -226,29 +274,14 @@ export function useCollaborationEvents(
               startPoint: courseStore.startPoint ? JSON.parse(JSON.stringify(courseStore.startPoint)) : null,
               endPoint: courseStore.endPoint ? JSON.parse(JSON.stringify(courseStore.endPoint)) : null
             },
-            timestamp: new Date().toISOString(),
-            targetUser: event.detail.collaborator.id
+            timestamp: new Date().toISOString()
           }
 
-          // 尝试直接发送
+          // 通过统一发送入口广播，服务端负责校验角色和定向请求。
           try {
-            const socket = webSocketStore.socket
-            const currentUserId = userStore.currentUser?.id
-
-            if (socket && socket.readyState === WebSocket.OPEN) {
-              const directMessage = {
-                type: 'sync_response',
-                senderId: String(currentUserId),
-                senderName: userStore.currentUser?.username || '未知用户',
-                sessionId: webSocketStore.session?.id || '',
-                timestamp: new Date().toISOString(),
-                payload: syncResponse
-              }
-
-              socket.send(JSON.stringify(directMessage))
-            }
+            webSocketStore.sendSyncResponse(syncResponse)
           } catch (error) {
-            console.error('直接发送同步响应失败:', error)
+            console.error('发送同步响应失败:', error)
           }
         } else {
           console.warn('canvasRef 不存在，无法发送完整画布状态')
@@ -316,7 +349,7 @@ export function useCollaborationEvents(
         const { checkPremiumStatus } = await import('@/api/user')
         const premiumCheck = await checkPremiumStatus()
 
-        if (!premiumCheck.is_premium_active) {
+        if (!premiumCheck.can_collaborate) {
           ElMessageBox.confirm(
             '协作功能是会员专属功能，请升级到会员以使用此功能。',
             '会员专属功能',
@@ -353,6 +386,7 @@ export function useCollaborationEvents(
     const urlParams = new URLSearchParams(window.location.search)
     const isCollaboration = urlParams.get('collaboration') === 'true'
     const designId = urlParams.get('designId')
+    const shareToken = urlParams.get('share_token')
 
     if (isCollaboration && designId) {
       try {
@@ -368,22 +402,8 @@ export function useCollaborationEvents(
             }
           )
 
-          const userStore = useUserStore()
-
-          // 用户点击确认后，检查登录状态
-          if (!userStore.isAuthenticated) {
-            // 保存邀请信息到本地存储，以便登录后继续处理
-            localStorage.setItem('pendingInvitation', JSON.stringify({
-              designId,
-              timestamp: new Date().toISOString()
-            }))
-
-            loginDialogVisible.value = true
-            return
-          }
-
-          // 如果已登录，直接处理协作邀请
-          await processCollaborationInvite(designId)
+          // 有效分享链接支持匿名访客直接加入；登录状态只影响成员展示名。
+          await processCollaborationInvite(designId, shareToken)
         } catch (confirmError) {
           // 如果用户点击取消按钮或关闭对话框
           if (confirmError === 'cancel') {
@@ -402,13 +422,15 @@ export function useCollaborationEvents(
         const url = new URL(window.location.href)
         url.searchParams.delete('collaboration')
         url.searchParams.delete('designId')
+        url.searchParams.delete('share_token')
+        url.searchParams.delete('role')
         window.history.replaceState({}, document.title, url.toString())
       }
     }
   }
 
   // 处理协作邀请的共用函数
-  const processCollaborationInvite = async (designId: string) => {
+  const processCollaborationInvite = async (designId: string, shareToken: string | null = null) => {
     try {
       // 加载设计
       courseStore.setCurrentCourseId(designId)
@@ -418,7 +440,7 @@ export function useCollaborationEvents(
 
       // 启动协作模式
       if (canvasRef.value) {
-        await canvasRef.value.startCollaboration(true)
+        await canvasRef.value.startCollaboration(true, shareToken)
       } else {
         throw new Error('Canvas组件未加载')
       }
@@ -429,6 +451,12 @@ export function useCollaborationEvents(
     }
   }
 
+  const takePendingInvitation = (): PendingCollaborationInvitation | null => {
+    const invitation = pendingInvitation.value
+    pendingInvitation.value = null
+    return invitation
+  }
+
   /**
    * 注册所有协作相关的事件监听器（在 onMounted 中调用）
    */
@@ -437,6 +465,8 @@ export function useCollaborationEvents(
     document.addEventListener('collaboration-failed', handleCollaborationFailed as EventListener)
     document.addEventListener('collaboration-disconnected', handleCollaborationDisconnected as EventListener)
     document.addEventListener('collaboration-premium-required', handleCollaborationPremiumRequired as EventListener)
+    document.addEventListener('collaboration-password-required', handleSharePasswordRequired as EventListener)
+    document.addEventListener('collaboration-password-failed', handleSharePasswordFailed as EventListener)
     document.addEventListener('sync-canvas-state', handleCollaborationSync as EventListener)
     document.addEventListener('route-generated', handleRouteGenerated as EventListener)
     document.addEventListener('collaborator-joined', handleCollaboratorJoined as EventListener)
@@ -450,6 +480,8 @@ export function useCollaborationEvents(
     document.removeEventListener('collaboration-failed', handleCollaborationFailed as EventListener)
     document.removeEventListener('collaboration-disconnected', handleCollaborationDisconnected as EventListener)
     document.removeEventListener('collaboration-premium-required', handleCollaborationPremiumRequired as EventListener)
+    document.removeEventListener('collaboration-password-required', handleSharePasswordRequired as EventListener)
+    document.removeEventListener('collaboration-password-failed', handleSharePasswordFailed as EventListener)
     document.removeEventListener('sync-canvas-state', handleCollaborationSync as EventListener)
     document.removeEventListener('route-generated', handleRouteGenerated as EventListener)
     document.removeEventListener('collaborator-joined', handleCollaboratorJoined as EventListener)
@@ -463,6 +495,7 @@ export function useCollaborationEvents(
     toggleCollaboration,
     checkCollaborationInvite,
     processCollaborationInvite,
+    takePendingInvitation,
     registerEventListeners,
     unregisterEventListeners,
   }

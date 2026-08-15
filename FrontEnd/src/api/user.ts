@@ -133,6 +133,7 @@ export const getUserProfile = async () => {
 // 检查用户会员状态（轻量级接口）
 export const checkPremiumStatus = async (): Promise<{
   is_premium_active: boolean
+  can_collaborate: boolean
   membership_plan?: {
     id: number
     name: string
@@ -142,6 +143,7 @@ export const checkPremiumStatus = async (): Promise<{
   try {
     const response = await request.get<{
       is_premium_active: boolean
+      can_collaborate: boolean
       membership_plan?: {
         id: number
         name: string

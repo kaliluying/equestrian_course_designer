@@ -23,6 +23,10 @@
 """
 
 import logging
+import threading
+from contextlib import contextmanager
+from copy import deepcopy
+
 from django.core.cache import cache
 
 logger = logging.getLogger("django.channels")
@@ -31,6 +35,8 @@ logger = logging.getLogger("django.channels")
 _KEY_PREFIX = "collab_session:"
 # 会话过期时间（秒），24 小时未活动自动清理
 _SESSION_TTL = 24 * 60 * 60
+_LOCAL_LOCKS = {}
+_LOCAL_LOCKS_GUARD = threading.Lock()
 
 
 def _make_key(design_id):
@@ -133,6 +139,26 @@ class RedisSessionStore:
     自动保存代理，覆盖 collaborators append、字段赋值等现有消费者用法。
     """
 
+    @contextmanager
+    def _lock(self, design_id):
+        """使用 Redis 分布式锁保护一次完整的会话读改写。"""
+        key = _make_key(design_id)
+        backend = getattr(cache, "_cache", None)
+        if backend is not None and hasattr(backend, "get_client"):
+            client = backend.get_client(key, write=True)
+            lock = client.lock(f"{key}:lock", timeout=15, blocking_timeout=5)
+        else:
+            with _LOCAL_LOCKS_GUARD:
+                lock = _LOCAL_LOCKS.setdefault(key, threading.RLock())
+
+        acquired = lock.acquire()
+        if not acquired:
+            raise RuntimeError("无法获取协作会话锁")
+        try:
+            yield
+        finally:
+            lock.release()
+
     def __getitem__(self, design_id):
         key = _make_key(design_id)
         data = cache.get(key)
@@ -142,11 +168,13 @@ class RedisSessionStore:
 
     def __setitem__(self, design_id, value):
         key = _make_key(design_id)
-        cache.set(key, _to_plain_data(value), timeout=_SESSION_TTL)
+        with self._lock(design_id):
+            cache.set(key, _to_plain_data(value), timeout=_SESSION_TTL)
 
     def __delitem__(self, design_id):
         key = _make_key(design_id)
-        cache.delete(key)
+        with self._lock(design_id):
+            cache.delete(key)
 
     def __contains__(self, design_id):
         key = _make_key(design_id)
@@ -157,6 +185,45 @@ class RedisSessionStore:
             return self[design_id]
         except KeyError:
             return default
+
+    def create_if_absent(self, design_id, value):
+        """在锁内创建会话，避免多个 worker 同时覆盖会话元数据。"""
+        key = _make_key(design_id)
+        with self._lock(design_id):
+            current = cache.get(key)
+            if current is None:
+                current = _to_plain_data(value)
+                cache.set(key, current, timeout=_SESSION_TTL)
+            return deepcopy(current)
+
+    def mutate(self, design_id, mutator):
+        """原子读取、修改并写回会话，返回 mutator 的结果。"""
+        key = _make_key(design_id)
+        with self._lock(design_id):
+            current = cache.get(key)
+            if current is None:
+                return None
+            mutable = deepcopy(current)
+            result = mutator(mutable)
+            cache.set(key, _to_plain_data(mutable), timeout=_SESSION_TTL)
+            return result
+
+    def remove_collaborator(self, design_id, member_id):
+        """原子移除协作者，并在会话为空时一并删除。"""
+        key = _make_key(design_id)
+        with self._lock(design_id):
+            current = cache.get(key)
+            if current is None:
+                return None
+            session = deepcopy(current)
+            session["collaborators"] = [
+                item for item in session.get("collaborators", []) if item.get("id") != member_id
+            ]
+            if not session["collaborators"]:
+                cache.delete(key)
+                return None
+            cache.set(key, session, timeout=_SESSION_TTL)
+            return session
 
 
 # 全局单例 —— 直接替换原有的 active_sessions = {}

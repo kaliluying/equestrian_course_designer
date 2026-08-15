@@ -186,6 +186,38 @@ class AIGenerationFallbackAPITest(TestCase):
         self.assertEqual(data["validation"]["source"], "llm")
         self.assertEqual(data["validation"]["fallback_reason"], "")
 
+    def test_malformed_llm_route_falls_back_instead_of_returning_500(self):
+        """顶层数组或非对象障碍物不能让 AI 接口返回 500。"""
+        from user.llm_providers import LLMResponse
+
+        provider = Mock()
+        for content in (
+            "[]",
+            json.dumps({"obstacles": [1], "field_width": 90, "field_height": 60}),
+            json.dumps({
+                "obstacles": [{"position": {"x": "not-a-number", "y": 10}}],
+                "field_width": 90,
+                "field_height": 60,
+            }),
+        ):
+            provider.generate.return_value = LLMResponse(
+                content=content,
+                token_used=1,
+                model="test-model",
+            )
+            with patch("user.ai_views.get_llm_provider", return_value=provider):
+                response = self.client.post(
+                    "/user/ai/generate/",
+                    data={
+                        "prompt": "生成一条兜底路线",
+                        "config": {"obstacle_count": 8, "difficulty": "medium"},
+                    },
+                    format="json",
+                )
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["data"]["validation"]["source"], "fallback")
+
     @patch.dict(os.environ, {"API_KEY": "", "MODEL": "", "BASE_URL": ""})
     def test_generate_route_returns_validation_feedback_for_rule_fallback(self):
         """LLM 不可用时，规则兜底原因应进入结构化校验反馈"""

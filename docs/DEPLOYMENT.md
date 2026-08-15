@@ -109,9 +109,10 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # 上传文件不作为公共目录暴露。图片、JSON 和导出文件统一通过
+    # /user/designs/<id>/asset/ 由 Django 完成 Cookie 鉴权和对象授权。
     location /media/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
+        return 404;
     }
 
     location /static/ {
@@ -161,5 +162,5 @@ npm run build
 - `ALLOWED_HOSTS`、CORS、CSRF 只包含可信域名
 - 支付宝回调 URL 可从公网访问
 - WebSocket `/ws/` 可升级连接
-- `media/` 和 `staticfiles/` 目录权限正确
+- `media/` 目录不对公网提供静态映射，只有后端资源接口可读取；`staticfiles/` 目录权限正确
 - 日志目录可写

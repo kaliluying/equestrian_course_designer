@@ -96,6 +96,9 @@ export enum MessageType {
   CHAT = 'chat',
   ERROR = 'error',
   SESSION_UPDATE = 'session_update',
+  CONNECTION_ESTABLISHED = 'connection_established',
+  SHARE_AUTH_REQUIRED = 'share_auth_required',
+  SHARE_AUTH_FAILED = 'share_auth_failed',
 }
 
 /**
@@ -110,12 +113,45 @@ export interface WebSocketMessage {
   payload: Record<string, unknown>
 }
 
+/** 将后端协作错误码转换为用户可理解的提示。 */
+export const mapCollaborationErrorReason = (reason: string): string => {
+  switch (reason) {
+    case 'revoked_share_token':
+      return '分享链接已撤销'
+    case 'expired_share_token':
+      return '分享链接已过期'
+    case 'invalid_share_password':
+      return '访问密码错误'
+    case 'collaboration_access_denied':
+      return '您没有权限加入此协作'
+    case 'via_link_deprecated':
+      return '分享链接无效，请重新生成'
+    case 'invalid_share_token':
+      return '分享链接无效'
+    case 'share_link_not_found':
+      return '分享链接不存在'
+    case 'share_design_mismatch':
+      return '分享链接与设计不匹配'
+    case 'share_scope_mismatch':
+      return '分享链接用途无效'
+    case 'design_not_found':
+      return '设计不存在'
+    case 'rate_limited':
+      return '连接过于频繁，请稍后重试'
+    default:
+      return '协作连接失败，请稍后重试'
+  }
+}
+
+const TERMINAL_CLOSE_CODES = new Set([4000, 4001, 4002, 4003, 4004, 4005, 4006, 4007, 4008, 4009])
+
 /**
  * 创建WebSocket连接
  */
 const createWebSocketConnection = (
   designId: string,
   viaLink: boolean = false,
+  shareToken: string | null = null,
 ): WebSocket | null => {
   console.log('创建WebSocket连接，设计ID:', designId, '通过链接加入:', viaLink)
 
@@ -125,9 +161,8 @@ const createWebSocketConnection = (
     return null
   }
 
-  // 确保用户已登录
   const userStore = useUserStore()
-  if (!userStore.currentUser) {
+  if (!userStore.currentUser && !viaLink) {
     console.error('用户未登录，无法创建WebSocket连接')
     return null
   }
@@ -138,15 +173,18 @@ const createWebSocketConnection = (
     // 鉴权已迁移到 httpOnly cookie，由后端中间件读取 cookie 中 access_token。
     // 不再从 localStorage 拼接 token，避免旧 token 覆盖 cookie 鉴权路径。
 
-    // 如果是通过链接加入，添加via_link参数
+    const query = new URLSearchParams()
     if (viaLink) {
-      wsUrl += (wsUrl.includes('?') ? '&' : '?') + 'via_link=true'
-      console.log('添加via_link参数，最终URL:', wsUrl)
-    } else {
-      console.log('非通过链接加入，不添加via_link参数')
+      query.set('via_link', 'true')
+    }
+    if (shareToken) {
+      query.set('share_token', shareToken)
+    }
+    if (query.toString()) {
+      wsUrl += `?${query.toString()}`
     }
 
-    console.log('WebSocket连接URL:', wsUrl)
+    console.log('WebSocket连接已准备，via_link:', viaLink, 'share_token:', Boolean(shareToken))
 
     // 创建WebSocket实例
     const ws = new WebSocket(wsUrl)
@@ -176,8 +214,11 @@ export const useWebSocketStore = defineStore('websocket', () => {
   const reconnectAttempts = ref(0)
   const session = ref<CollaborationSession | null>(null)
   const viaLink = ref(false)
+  const currentShareToken = ref<string | null>(null)
+  const shareAuthPending = ref(false)
   const isCollaborating = ref(false)
   const currentDesignId = ref<string>('')
+  const currentMemberId = ref<string | null>(null)
 
   // 消息队列
   const messageQueue = ref<
@@ -196,7 +237,11 @@ export const useWebSocketStore = defineStore('websocket', () => {
       console.log('WebSocket未连接，消息已加入队列')
 
       // 如果是同步请求或加入消息，不加入队列
-      if (type !== MessageType.SYNC_REQUEST && type !== MessageType.JOIN) {
+      if (
+        type !== MessageType.SYNC_REQUEST
+        && type !== MessageType.JOIN
+        && type !== MessageType.SYNC_RESPONSE
+      ) {
         messageQueue.value.push({
           type:
             type === MessageType.UPDATE_OBSTACLE || type === MessageType.UPDATE_PATH
@@ -213,7 +258,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     }
 
     const userStore = useUserStore()
-    if (!userStore.currentUser) {
+    if (!userStore.currentUser && !viaLink.value) {
       console.error('用户未登录，无法发送消息')
       return false
     }
@@ -221,8 +266,8 @@ export const useWebSocketStore = defineStore('websocket', () => {
     // 构建消息
     const message: WebSocketMessage = {
       type,
-      senderId: String(userStore.currentUser.id), // 确保ID为字符串
-      senderName: userStore.currentUser.username || '未知用户',
+      senderId: userStore.currentUser ? String(userStore.currentUser.id) : 'anonymous',
+      senderName: userStore.currentUser?.username || '分享访客',
       sessionId: session.value?.id || '',
       timestamp: new Date().toISOString(),
       payload,
@@ -278,6 +323,15 @@ export const useWebSocketStore = defineStore('websocket', () => {
           break
         case MessageType.ERROR:
           handleErrorMessage(message)
+          break
+        case MessageType.CONNECTION_ESTABLISHED:
+          handleConnectionEstablished(message)
+          break
+        case MessageType.SHARE_AUTH_REQUIRED:
+          handleShareAuthRequired(message)
+          break
+        case MessageType.SHARE_AUTH_FAILED:
+          handleShareAuthFailed(message)
           break
         default:
           console.warn('收到未知类型的消息:', message.type)
@@ -982,6 +1036,8 @@ export const useWebSocketStore = defineStore('websocket', () => {
         }
         session?: SyncSessionPayload // 会话信息
         collaboratorsOnly?: boolean // 标记是否只包含协作者列表
+        targetUserId?: string
+        targetUser?: string
       }
 
       console.log('接收到同步响应消息，payload类型:', typeof payload)
@@ -989,6 +1045,15 @@ export const useWebSocketStore = defineStore('websocket', () => {
       // 检查payload是否为空
       if (!payload) {
         console.error('同步响应消息的payload为空')
+        return
+      }
+
+      const targetUserId = payload.targetUserId ?? payload.targetUser
+      if (
+        targetUserId
+        && currentMemberId.value
+        && String(targetUserId) !== String(currentMemberId.value)
+      ) {
         return
       }
 
@@ -1038,11 +1103,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
             }
           }
         } else {
-          console.log('同步响应只包含会话信息，但需要画布数据，尝试再次发送同步请求')
-          // 延迟1秒后再次发送同步请求
-          setTimeout(() => {
-            sendSyncRequest()
-          }, 1000)
+          console.warn('收到不含画布数据的同步响应，等待定向的画布同步响应')
         }
         return
       }
@@ -1171,19 +1232,69 @@ export const useWebSocketStore = defineStore('websocket', () => {
   const handleErrorMessage = (message: WebSocketMessage) => {
     console.error('收到错误消息:', message)
 
-    const { code, message: errorMessage } = message.payload as {
-      code: string
-      message: string
-    }
+    const payload = (
+      message.payload && typeof message.payload === 'object' ? message.payload : {}
+    ) as { code?: string; message?: string; reason?: string }
+    const reason = payload.reason || payload.code || ''
+    const errorMessage = payload.message
+      || (message as WebSocketMessage & { message?: string }).message
+      || mapCollaborationErrorReason(reason)
+    connectionError.value = errorMessage
+    console.error(`协作错误 (${reason || 'unknown'}): ${errorMessage}`)
+    document.dispatchEvent(new CustomEvent('collaboration-failed', {
+      bubbles: true,
+      detail: { reason, message: errorMessage },
+    }))
+  }
 
-    // 不显示错误提示，只记录到控制台
-    console.error(`协作错误 (${code}): ${errorMessage}`)
+  const handleConnectionEstablished = (message: WebSocketMessage) => {
+    const established = message as WebSocketMessage & { member_id?: string }
+    currentMemberId.value = established.member_id || (
+      userStore.currentUser ? String(userStore.currentUser.id) : null
+    )
+    shareAuthPending.value = false
+    connectionStatus.value = ConnectionStatus.CONNECTED
+    connectionError.value = null
+    isCollaborating.value = true
+    processMessageQueue()
+    sendJoinMessage()
+
+    document.dispatchEvent(new CustomEvent('collaboration-connected', {
+      bubbles: true,
+      detail: {
+        timestamp: new Date().toISOString(),
+        session: (message as WebSocketMessage & { session?: unknown }).session,
+        delayed: false,
+      },
+    }))
+  }
+
+  const handleShareAuthRequired = (message: WebSocketMessage) => {
+    shareAuthPending.value = true
+    connectionError.value = null
+    document.dispatchEvent(new CustomEvent('collaboration-password-required', {
+      bubbles: true,
+      detail: message.payload,
+    }))
+  }
+
+  const handleShareAuthFailed = (message: WebSocketMessage) => {
+    const payload = message.payload as { attempts_remaining?: number; code?: string }
+    document.dispatchEvent(new CustomEvent('collaboration-password-failed', {
+      bubbles: true,
+      detail: payload,
+    }))
   }
 
   /**
    * 连接WebSocket
    */
-  const connect = (designId: string, isViaLink: boolean = false, silentMode: boolean = false) => {
+  const connect = (
+    designId: string,
+    isViaLink: boolean = false,
+    silentMode: boolean = false,
+    shareToken: string | null = null,
+  ) => {
     console.log(
       '尝试连接WebSocket，设计ID:',
       designId,
@@ -1205,6 +1316,11 @@ export const useWebSocketStore = defineStore('websocket', () => {
     // 设置通过链接加入的状态
     console.log('设置通过链接加入的状态，原值:', viaLink.value, '新值:', isViaLink)
     viaLink.value = isViaLink
+    if (!silentMode) {
+      currentShareToken.value = shareToken
+    } else if (shareToken) {
+      currentShareToken.value = shareToken
+    }
 
     // 断开现有连接
     if (!silentMode) {
@@ -1225,7 +1341,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
     try {
       // 创建WebSocket实例
-      const ws = createWebSocketConnection(designId, isViaLink)
+      const ws = createWebSocketConnection(designId, isViaLink, currentShareToken.value)
       if (!ws) {
         throw new Error('创建WebSocket连接失败')
       }
@@ -1318,31 +1434,8 @@ export const useWebSocketStore = defineStore('websocket', () => {
       // 重置重连尝试次数
       reconnectAttempts.value = 0
 
-      // 更新连接状态
-      connectionStatus.value = ConnectionStatus.CONNECTED
-      connectionError.value = null
-      isCollaborating.value = true
-
-      // 处理消息队列
-      processMessageQueue()
-
-      // 发送加入消息
-      sendJoinMessage()
-
-      // 触发连接成功事件
-      try {
-        const event = new CustomEvent('collaboration-connected', {
-          bubbles: true,
-          detail: {
-            timestamp: new Date().toISOString(),
-            delayed: false,
-          },
-        })
-        console.log('WebSocket连接成功，触发collaboration-connected事件')
-        document.dispatchEvent(event)
-      } catch (error) {
-        console.error('触发collaboration-connected事件失败:', error)
-      }
+      // 只有收到服务端的 connection_established 后才认为已经完成授权；
+      // 受密码保护的分享链接会先停留在 CONNECTING 状态。
     }
 
     // 接收消息事件处理
@@ -1365,6 +1458,22 @@ export const useWebSocketStore = defineStore('websocket', () => {
     ws.onclose = (closeEvent: CloseEvent) => {
       console.log('WebSocket连接已关闭:', closeEvent.code, closeEvent.reason)
 
+      const closeReason = closeEvent.reason || (
+        closeEvent.code === 4006
+          ? mapCollaborationErrorReason('invalid_share_token')
+          : closeEvent.code === 4007
+            ? mapCollaborationErrorReason('via_link_deprecated')
+            : closeEvent.code === 4008
+              ? mapCollaborationErrorReason('design_not_found')
+              : closeEvent.code === 4009
+                ? mapCollaborationErrorReason('rate_limited')
+        : '连接已关闭'
+      )
+      const terminalClose = TERMINAL_CLOSE_CODES.has(closeEvent.code)
+      if (closeEvent.code !== 1000 && !connectionError.value) {
+        connectionError.value = closeReason
+      }
+
       // 更新连接状态
       if (connectionStatus.value !== ConnectionStatus.DISCONNECTING) {
         connectionStatus.value = ConnectionStatus.DISCONNECTED
@@ -1378,7 +1487,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
               detail: {
                 timestamp: new Date().toISOString(),
                 error: closeEvent.code !== 1000, // 1000是正常关闭的代码
-                reason: closeEvent.reason || '连接已关闭',
+                reason: closeReason,
               },
             })
             document.dispatchEvent(customEvent)
@@ -1388,12 +1497,13 @@ export const useWebSocketStore = defineStore('websocket', () => {
         }
 
         // 检查用户是否为高级会员或通过链接加入
-        const isPremiumOrViaLink = userStore.currentUser?.is_premium_active || viaLink.value
+        const isPremiumOrViaLink = userStore.currentUser?.entitlements?.can_collaborate || viaLink.value
 
         // 只有在非正常关闭且用户仍在协作模式下才尝试重连
         if (
           closeEvent.code !== 1000 && // 非正常关闭
           closeEvent.code !== 1001 && // 非主动关闭
+          !terminalClose &&
           isCollaborating.value &&
           reconnectAttempts.value < 3 && // 限制重连次数为3次
           isPremiumOrViaLink // 只有高级会员或通过链接加入的用户才能重连
@@ -1403,7 +1513,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
           // 使用固定的重连延迟，确保快速重连
           setTimeout(() => {
-            connect(currentDesignId.value, viaLink.value, silentMode)
+            connect(currentDesignId.value, viaLink.value, silentMode, currentShareToken.value)
           }, 1000) // 固定1秒重连延迟
         } else if (reconnectAttempts.value >= 3) {
           connectionStatus.value = ConnectionStatus.ERROR
@@ -1495,6 +1605,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
       // 更新状态
       connectionStatus.value = ConnectionStatus.DISCONNECTED
       isCollaborating.value = false
+      shareAuthPending.value = false
 
       // 清空状态
       collaborators.value = []
@@ -1507,9 +1618,21 @@ export const useWebSocketStore = defineStore('websocket', () => {
       // 确保状态被重置
       connectionStatus.value = ConnectionStatus.DISCONNECTED
       isCollaborating.value = false
+      shareAuthPending.value = false
       collaborators.value = []
       socket.value = null
     }
+  }
+
+  const authenticateSharePassword = (password: string) => {
+    if (!socket.value || socket.value.readyState !== WebSocket.OPEN || !shareAuthPending.value) {
+      return false
+    }
+    socket.value.send(JSON.stringify({
+      type: 'share_auth',
+      payload: { password },
+    }))
+    return true
   }
 
   /**
@@ -1517,7 +1640,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
    */
   const sendJoinMessage = () => {
     const userStore = useUserStore()
-    if (!userStore.currentUser) return
+    if (!userStore.currentUser && !viaLink.value) return
 
     // 生成随机颜色
     const colors = [
@@ -1538,8 +1661,8 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
     // 如果是通过链接加入，在加入消息中请求画布状态
     const joinPayload = {
-      userId: userStore.currentUser.id,
-      username: userStore.currentUser.username || '未知用户',
+      userId: userStore.currentUser?.id || null,
+      username: userStore.currentUser?.username || '分享访客',
       color: randomColor,
       viaLink: viaLink.value,
     }
@@ -1647,7 +1770,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
       // 如果WebSocket未连接，尝试重新连接
       if (currentDesignId.value) {
         console.log('尝试重新连接WebSocket')
-        connect(currentDesignId.value, viaLink.value)
+        connect(currentDesignId.value, viaLink.value, false, currentShareToken.value)
 
         // 延迟2秒后再次尝试发送同步请求
         setTimeout(() => {
@@ -1718,7 +1841,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
       const currentUserId = userStore.currentUser?.id
 
       // 如果是自己发送的消息，忽略它
-      if (message.senderId === String(currentUserId)) {
+      if (currentMemberId.value && message.senderId === String(currentMemberId.value)) {
         console.log('忽略自己发送的同步请求消息')
         return
       }
@@ -1730,6 +1853,8 @@ export const useWebSocketStore = defineStore('websocket', () => {
         includePaths?: boolean
         refreshOnly?: boolean
         skipCanvasSync?: boolean
+        requestId?: string
+        requesterId?: string
         timestamp?: string
         clientInfo?: {
           browser: string
@@ -1762,6 +1887,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
           },
           // 添加标记，表明这是一个只包含会话信息的响应
           collaboratorsOnly: true,
+          requestId: payload.requestId ?? null,
         }
 
         // 发送同步响应
@@ -1785,6 +1911,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
           endPoint: courseStore.endPoint,
         },
         timestamp: new Date().toISOString(),
+        requestId: payload.requestId ?? null,
         sender: {
           id: String(currentUserId),
           username: userStore.currentUser?.username || '未知用户',
@@ -1902,6 +2029,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     viaLink,
     isCollaborating,
     currentDesignId,
+    shareAuthPending,
 
     // 方法
     connect,
@@ -1916,5 +2044,6 @@ export const useWebSocketStore = defineStore('websocket', () => {
     sendSyncResponse,
     checkConnection,
     reconnect,
+    authenticateSharePassword,
   }
 })

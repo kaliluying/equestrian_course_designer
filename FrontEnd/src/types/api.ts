@@ -5,10 +5,8 @@ export interface ApiResponse<T = unknown> {
   data?: T
 }
 
-export interface ApiCodeResponse<T = unknown> {
+export interface ApiCodeResponse<T = unknown> extends ApiResponse<T> {
   code: number
-  message?: string
-  data?: T
 }
 
 export interface PaginatedResponse<T> {

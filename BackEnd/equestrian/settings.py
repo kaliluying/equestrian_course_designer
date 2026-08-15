@@ -22,11 +22,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 # Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
+# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# Security fix: DEBUG must be False in production
-DEBUG = os.environ.get("DJANGO_DEBUG", "True").lower() == "true"
+# 默认关闭调试；本地开发请在 .env 中显式设置 DJANGO_DEBUG=true。
+DEBUG = os.environ.get("DJANGO_DEBUG", "False").strip().lower() == "true"
 
 # SECURITY WARNING: keep the secret key used in production secret!
 # Security fix: SECRET_KEY must be non-empty in production
@@ -40,7 +40,7 @@ if not SECRET_KEY:
 
 # Security fix: ALLOWED_HOSTS must not be wildcard in production
 allowed_hosts_env = os.environ.get("DJANGO_ALLOWED_HOSTS", "")
-ALLOWED_HOSTS = allowed_hosts_env.split(",") if allowed_hosts_env else []
+ALLOWED_HOSTS = [item.strip() for item in allowed_hosts_env.split(",") if item.strip()]
 if not ALLOWED_HOSTS or (len(ALLOWED_HOSTS) == 1 and ALLOWED_HOSTS[0] == ""):
     if DEBUG:
         # Development: allow localhost and common local networks
@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "rest_framework_simplejwt.token_blacklist",
     "rest_framework",
     "drf_spectacular",
     "corsheaders",
@@ -76,6 +77,7 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    "user.middleware.EnforceCSRFMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "user.middleware.TokenAuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -159,10 +161,18 @@ STATICFILES_DIRS = [
 # Media files
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 MEDIA_URL = "/media/"
+# 上传和解析资源上限：设计图片 10MB、路线 JSON 2MB，预留表单字段空间。
+DATA_UPLOAD_MAX_MEMORY_SIZE = 16 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 12 * 1024 * 1024
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000
 
 # 站点域名配置，用于媒体文件URL生成
-SITE_DOMAIN = os.environ.get("SITE_DOMAIN", "192.168.1.3:8000")
 USE_HTTPS = os.environ.get("USE_HTTPS", "False").lower() == "true"
+SITE_DOMAIN = os.environ.get("SITE_DOMAIN", "localhost:8000").strip().rstrip("/")
+if SITE_DOMAIN.startswith(("http://", "https://")):
+    SITE_BASE_URL = SITE_DOMAIN
+else:
+    SITE_BASE_URL = f"{'https' if USE_HTTPS else 'http'}://{SITE_DOMAIN}"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
@@ -190,6 +200,16 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 9,  # 每页显示9条记录
+    "DEFAULT_THROTTLE_RATES": {
+        "login": "5/minute",
+        "register": "5/hour",
+        "password_reset": "3/hour",
+        "ai": "10/minute",
+        "payment_query": "30/minute",
+        "feedback": "5/hour",
+        "share_link": "20/hour",
+        "export": "10/minute",
+    },
 }
 
 SPECTACULAR_SETTINGS = {
@@ -208,8 +228,8 @@ AUTHENTICATION_BACKENDS = [
 
 # JWT配置
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(days=7),  # 访问令牌过期时间改为7天
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),  # 刷新令牌过期时间改为30天
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=14),
     "ROTATE_REFRESH_TOKENS": True,  # 开启刷新令牌自动更新
     "BLACKLIST_AFTER_ROTATION": True,
     "UPDATE_LAST_LOGIN": True,
@@ -228,8 +248,9 @@ SIMPLE_JWT = {
 CSRF_COOKIE_SECURE = False if DEBUG else True  # 生产环境必须为True
 CSRF_COOKIE_HTTPONLY = True  # 防止JavaScript访问CSRF cookie
 CSRF_COOKIE_SAMESITE = "Lax"  # 允许跨站请求携带cookie
+csrf_origins_env = os.environ.get("CSRF_TRUSTED_ORIGINS", "")
 CSRF_TRUSTED_ORIGINS = (
-    os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
+    [item.strip() for item in csrf_origins_env.split(",") if item.strip()]
     if not DEBUG
     else [
         # Development trusted origins
@@ -253,8 +274,9 @@ if not CSRF_TRUSTED_ORIGINS or (
 
 # CORS配置 - Security fix: use allowlist instead of allow-all
 CORS_ORIGIN_ALLOW_ALL = False  # 禁止所有来源，改用白名单
+cors_origins_env = os.environ.get("CORS_ALLOWED_ORIGINS", "")
 CORS_ALLOWED_ORIGINS = (
-    os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
+    [item.strip() for item in cors_origins_env.split(",") if item.strip()]
     if not DEBUG
     else [
         # Development CORS origins (localhost + local network)
@@ -278,6 +300,24 @@ if not CORS_ALLOWED_ORIGINS or (
 
 # 允许跨域请求携带cookie
 CORS_ALLOW_CREDENTIALS = True
+
+# 支付宝服务器回调不携带浏览器 CSRF token，安全性由支付宝签名、订单和金额
+# 校验负责；除此之外的所有修改型请求都必须通过 CSRF 校验。
+CSRF_EXEMPT_PATHS = ("/user/api/payment/alipay/notify/",)
+
+SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+SECURE_REFERRER_POLICY = "same-origin"
+SECURE_SSL_REDIRECT = os.environ.get(
+    "DJANGO_SECURE_SSL_REDIRECT", str(not DEBUG)
+).strip().lower() == "true"
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
 
 # 允许的HTTP方法
 CORS_ALLOW_METHODS = [
@@ -345,6 +385,7 @@ LOGS_DIR = os.path.join(BASE_DIR, "logs")
 os.makedirs(LOGS_DIR, exist_ok=True)
 
 # 日志配置
+LOG_LEVEL = "DEBUG" if DEBUG else "INFO"
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -356,12 +397,12 @@ LOGGING = {
     },
     "handlers": {
         "console": {
-            "level": "DEBUG",
+            "level": LOG_LEVEL,
             "class": "logging.StreamHandler",
             "formatter": "verbose",
         },
         "file": {
-            "level": "DEBUG",
+            "level": LOG_LEVEL,
             "class": "logging.FileHandler",
             "filename": os.path.join(LOGS_DIR, "django-channels.log"),
             "formatter": "verbose",
@@ -375,7 +416,7 @@ LOGGING = {
         },
         "django.channels": {
             "handlers": ["console", "file"],  # 同时输出到控制台和文件
-            "level": "DEBUG",
+            "level": "DEBUG" if DEBUG else "WARNING",
             "propagate": False,
         },
     },
@@ -389,8 +430,6 @@ ALIPAY_APP_PRIVATE_KEY_PATH = os.path.join(
 ALIPAY_ALIPAY_PUBLIC_KEY_PATH = os.path.join(
     BASE_DIR, "equestrian/keys/alipay_public_key.pem"
 )
-ALIPAY_NOTIFY_URL = f"{SITE_DOMAIN}/api/payment/alipay/notify/"
-ALIPAY_RETURN_URL = f"{SITE_DOMAIN}/payment/success/"
-ALIPAY_DEBUG = (
-    os.environ.get("ALIPAY_DEBUG", "True").lower() == "true"
-)  # 开发环境使用沙箱模式
+ALIPAY_NOTIFY_URL = f"{SITE_BASE_URL}/user/api/payment/alipay/notify/"
+ALIPAY_RETURN_URL = f"{SITE_BASE_URL}/user/payment/success/"
+ALIPAY_DEBUG = os.environ.get("ALIPAY_DEBUG", str(DEBUG)).strip().lower() == "true"

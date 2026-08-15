@@ -1,12 +1,89 @@
-from rest_framework import serializers
+import json
+import re
+
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
+from django.core.files.base import ContentFile
+from django.urls import reverse
+from PIL import Image, UnidentifiedImageError
+from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from .models import CollaborationEvent, CollaborationRole, CourseTemplate, CourseTemplateFavorite, Design, DesignComment, DesignLike, DesignVersion, MembershipInvoice, UserProfile, MembershipPlan, CustomObstacle, MembershipOrder
-from .utils import get_absolute_media_url
+
+MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_ROUTE_UPLOAD_BYTES = 2 * 1024 * 1024
+MAX_ROUTE_DATA_BYTES = 512 * 1024
+MAX_CUSTOM_OBSTACLE_DATA_BYTES = 256 * 1024
+MAX_JSON_DEPTH = 12
+
+
+def _json_depth(value, depth=0):
+    """计算 JSON 嵌套深度，避免异常深度数据消耗解析资源。"""
+    if depth > MAX_JSON_DEPTH:
+        return depth
+    if isinstance(value, dict):
+        return max((_json_depth(item, depth + 1) for item in value.values()), default=depth)
+    if isinstance(value, list):
+        return max((_json_depth(item, depth + 1) for item in value), default=depth)
+    return depth
+
+
+def _validate_json_data(value, maximum_bytes, label):
+    """限制 JSON 数据体积和嵌套深度。"""
+    try:
+        serialized = json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise serializers.ValidationError(f"{label}必须是可序列化的 JSON 数据") from exc
+    if len(serialized) > maximum_bytes:
+        raise serializers.ValidationError(f"{label}大小不能超过 {maximum_bytes // 1024}KB")
+    if _json_depth(value) > MAX_JSON_DEPTH:
+        raise serializers.ValidationError(f"{label}嵌套层级过深")
+
+
+def _validate_image_upload(value, label):
+    """校验图片大小、格式和像素总量。"""
+    if value.size > MAX_IMAGE_UPLOAD_BYTES:
+        raise serializers.ValidationError(f"{label}大小不能超过 10MB")
+    try:
+        value.seek(0)
+        with Image.open(value) as image:
+            image.verify()
+            image_format = image.format
+            width, height = image.size
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise serializers.ValidationError(f"{label}不是有效图片") from exc
+    finally:
+        value.seek(0)
+    if image_format not in {"PNG", "JPEG", "WEBP"}:
+        raise serializers.ValidationError(f"{label}只支持 PNG、JPEG 或 WEBP 格式")
+    if width * height > 25_000_000:
+        raise serializers.ValidationError(f"{label}像素总量过大")
+
+
+def _validate_route_file(value):
+    """校验设计路线文件，拒绝超大或非对象 JSON。"""
+    if value.size > MAX_ROUTE_UPLOAD_BYTES:
+        raise serializers.ValidationError("路线文件大小不能超过 2MB")
+    try:
+        value.seek(0)
+        raw_data = value.read(MAX_ROUTE_UPLOAD_BYTES + 1)
+        if len(raw_data) > MAX_ROUTE_UPLOAD_BYTES:
+            raise serializers.ValidationError("路线文件大小不能超过 2MB")
+        parsed = json.loads(raw_data.decode("utf-8"))
+    except UnicodeDecodeError as exc:
+        raise serializers.ValidationError("路线文件必须使用 UTF-8 编码") from exc
+    except json.JSONDecodeError as exc:
+        raise serializers.ValidationError("路线文件必须是有效 JSON") from exc
+    finally:
+        value.seek(0)
+    if not isinstance(parsed, dict):
+        raise serializers.ValidationError("路线文件必须是 JSON 对象")
+    _validate_json_data(parsed, MAX_ROUTE_DATA_BYTES, "路线数据")
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):
     """用户注册序列化器"""
+    is_staff = serializers.BooleanField(read_only=True, default=False)
     password = serializers.CharField(
         write_only=True,
         required=True,
@@ -18,16 +95,11 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         required=True,
         style={'input_type': 'password'}
     )
-    is_staff = serializers.BooleanField(
-        default=False,
-        required=False,
-        help_text='是否可以访问后台'
-    )
-
     class Meta:
         model = User
         fields = ('username', 'password',
                   'confirmPassword', 'email', 'is_staff')
+        read_only_fields = ('is_staff',)
         extra_kwargs = {
             'email': {
                 'required': True,
@@ -81,15 +153,8 @@ class UserRegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """创建用户"""
         validated_data.pop('confirmPassword')  # 删除confirmPassword字段
-        is_staff = validated_data.pop('is_staff', False)  # 获取并移除is_staff字段
-
         # 创建用户
         user = User.objects.create_user(**validated_data)
-
-        # 设置后台访问权限
-        if is_staff:
-            user.is_staff = True
-            user.save()
 
         # 获取免费会员计划
         try:
@@ -113,6 +178,37 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         )
 
         return user
+
+
+class UserAdminSerializer(serializers.ModelSerializer):
+    """管理员用户管理序列化器。
+
+    普通注册和后台用户管理使用不同的序列化器，避免公开 create 路径接收
+    ``is_staff``、``is_superuser`` 等权限字段。
+    """
+
+    class Meta:
+        model = User
+        fields = (
+            "id",
+            "username",
+            "email",
+            "is_active",
+            "is_staff",
+            "is_superuser",
+            "date_joined",
+            "last_login",
+        )
+        # 权限字段只能通过 Django Admin 的超级管理员流程维护，不能由普通
+        # staff 通过这个 API 将自己或他人提升为后台/超级管理员。
+        read_only_fields = (
+            "id",
+            "date_joined",
+            "last_login",
+            "is_active",
+            "is_staff",
+            "is_superuser",
+        )
 
 
 class UserLoginSerializer(serializers.Serializer):
@@ -145,7 +241,7 @@ class UserLoginSerializer(serializers.Serializer):
 
         if username and password:
             try:
-                user = User.objects.get(username=username)
+                user = User.objects.get(username=username, is_active=True)
                 if not user.check_password(password):
                     raise serializers.ValidationError('用户名或密码错误')
             except User.DoesNotExist:
@@ -160,6 +256,8 @@ class UserLoginSerializer(serializers.Serializer):
 
 class DesignSerializer(serializers.ModelSerializer):
     """设计序列化器"""
+    image = serializers.ImageField(required=False, allow_null=True)
+    course_data = serializers.JSONField(required=False, write_only=True)
     author_username = serializers.SerializerMethodField()
     is_liked = serializers.SerializerMethodField()
     image_url = serializers.SerializerMethodField()
@@ -168,8 +266,57 @@ class DesignSerializer(serializers.ModelSerializer):
     class Meta:
         model = Design
         fields = '__all__'
-        read_only_fields = ('author', 'create_time',
-                            'update_time', 'likes_count', 'downloads_count')
+        read_only_fields = ('author', 'create_time', 'update_time',
+                            'likes_count', 'downloads_count', 'is_shared')
+
+    def validate_course_data(self, value):
+        """校验 JSON 路线数据，并限制其体积和嵌套深度。"""
+        if not isinstance(value, dict):
+            raise serializers.ValidationError('路线数据必须是对象')
+        _validate_json_data(value, MAX_ROUTE_DATA_BYTES, '路线数据')
+        obstacles = value.get('obstacles')
+        if obstacles is not None and (not isinstance(obstacles, list) or len(obstacles) > 200):
+            raise serializers.ValidationError('路线障碍物数量不能超过 200')
+        return value
+
+    def create(self, validated_data):
+        """创建设计，并将内联路线数据写入受保护的 JSON 文件。"""
+        course_data = validated_data.pop('course_data', None)
+        instance = super().create(validated_data)
+        try:
+            if course_data is not None:
+                instance.download.save(
+                    'design.json',
+                    ContentFile(json.dumps(course_data, ensure_ascii=False).encode('utf-8')),
+                    save=True,
+                )
+        except Exception:
+            if instance.image:
+                instance.image.delete(save=False)
+            if instance.download:
+                instance.download.delete(save=False)
+            instance.delete()
+            raise
+        return instance
+
+    def update(self, instance, validated_data):
+        """更新设计，并在请求包含路线数据时同步更新 JSON 文件。"""
+        course_data = validated_data.pop('course_data', None)
+        old_download_name = instance.download.name if instance.download else None
+        instance = super().update(instance, validated_data)
+        if course_data is not None:
+            instance.download.save(
+                'design.json',
+                ContentFile(json.dumps(course_data, ensure_ascii=False).encode('utf-8')),
+                save=True,
+            )
+            if (
+                old_download_name
+                and old_download_name != instance.download.name
+                and instance.download.storage.exists(old_download_name)
+            ):
+                instance.download.storage.delete(old_download_name)
+        return instance
 
     def get_author_username(self, obj) -> str | None:
         """获取作者用户名"""
@@ -183,16 +330,22 @@ class DesignSerializer(serializers.ModelSerializer):
         return False
 
     def get_image_url(self, obj) -> str | None:
-        """获取正确的图片URL"""
+        """返回受权限保护的图片接口地址。"""
         if obj.image:
-            return get_absolute_media_url(obj.image.url)
+            return self._asset_url(obj, "image")
         return None
 
     def get_download_url(self, obj) -> str | None:
-        """获取正确的下载URL"""
+        """返回受权限保护的路线文件接口地址。"""
         if obj.download:
-            return get_absolute_media_url(obj.download.url)
+            return self._asset_url(obj, "json")
         return None
+
+    def _asset_url(self, obj, asset_type: str) -> str:
+        """构建设计资源接口地址，避免直接暴露 MEDIA_ROOT 文件。"""
+        path = f"{reverse('design-asset', kwargs={'pk': obj.pk})}?type={asset_type}"
+        request = self.context.get("request")
+        return request.build_absolute_uri(path) if request else path
 
     def to_representation(self, instance):
         """重写序列化方法，确保使用正确的URL"""
@@ -202,10 +355,22 @@ class DesignSerializer(serializers.ModelSerializer):
         ret['download'] = self.get_download_url(instance)
         return ret
 
+    def validate_image(self, value):
+        """校验设计图片，避免恶意文件和超大像素图进入图片处理链路。"""
+        _validate_image_upload(value, "设计图片")
+        return value
+
+    def validate_download(self, value):
+        """校验设计路线 JSON 文件。"""
+        if value:
+            _validate_route_file(value)
+        return value
+
 
 class DesignCommentSerializer(serializers.ModelSerializer):
     """设计评论序列化器。"""
     user_username = serializers.SerializerMethodField()
+    content = serializers.CharField(max_length=2000)
 
     class Meta:
         model = DesignComment
@@ -284,9 +449,11 @@ class DesignListSerializer(serializers.ModelSerializer):
         return False
 
     def get_image_url(self, obj) -> str | None:
-        """获取正确的图片URL"""
+        """返回受权限保护的图片接口地址。"""
         if obj.image:
-            return get_absolute_media_url(obj.image.url)
+            path = f"{reverse('design-asset', kwargs={'pk': obj.pk})}?type=image"
+            request = self.context.get("request")
+            return request.build_absolute_uri(path) if request else path
         return None
 
     def to_representation(self, instance):
@@ -315,21 +482,7 @@ class ForgotPasswordSerializer(serializers.Serializer):
     )
 
     def validate(self, attrs):
-        """验证用户名和邮箱是否匹配"""
-        username = attrs.get('username')
-        email = attrs.get('email')
-
-        # 检查用户是否存在
-        try:
-            user = User.objects.get(username=username)
-            # 检查邮箱是否匹配
-            if user.email != email:
-                # 为了安全，不透露具体错误原因
-                raise serializers.ValidationError('用户名或邮箱不正确')
-        except User.DoesNotExist:
-            # 为了安全，不透露具体错误原因
-            raise serializers.ValidationError('用户名或邮箱不正确')
-
+        """只校验输入格式，账号匹配由视图统一处理。"""
         return attrs
 
 
@@ -393,11 +546,28 @@ class CustomObstacleSerializer(serializers.ModelSerializer):
 
     def validate_obstacle_data(self, value):
         """验证障碍物数据"""
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("障碍物数据必须是对象")
+        _validate_json_data(value, MAX_CUSTOM_OBSTACLE_DATA_BYTES, "障碍物数据")
         # 确保必要的字段存在
         required_fields = ['type', 'poles', 'width', 'height']
         for field in required_fields:
             if field not in value:
                 raise serializers.ValidationError(f"障碍物数据缺少必要字段: {field}")
+
+        decoration_properties = value.get("decorationProperties") or {}
+        if not isinstance(decoration_properties, dict):
+            raise serializers.ValidationError("装饰属性格式无效")
+        svg_data = decoration_properties.get("svgData")
+        if svg_data is not None:
+            if not isinstance(svg_data, str) or len(svg_data) > 200_000:
+                raise serializers.ValidationError("SVG 数据格式或大小无效")
+            if re.search(
+                r"<\s*(script|foreignObject|iframe)|on[a-z]+\s*=|javascript:|data:",
+                svg_data,
+                re.IGNORECASE,
+            ):
+                raise serializers.ValidationError("SVG 包含不允许的脚本或外部资源")
 
         return value
 
@@ -426,7 +596,9 @@ class CourseTemplateSerializer(serializers.ModelSerializer):
             'author', 'author_username', 'copy_count', 'favorite_count', 'is_favorited',
             'created_at', 'updated_at'
         )
-        read_only_fields = ('author', 'copy_count', 'favorite_count', 'created_at', 'updated_at')
+        read_only_fields = (
+            'author', 'copy_count', 'favorite_count', 'created_at', 'updated_at', 'is_official'
+        )
 
     def get_author_username(self, obj) -> str | None:
         return obj.author.username if obj.author else None
@@ -440,16 +612,41 @@ class CourseTemplateSerializer(serializers.ModelSerializer):
     def validate_course_data(self, value):
         if not isinstance(value, dict):
             raise serializers.ValidationError('路线数据必须是对象')
+        _validate_json_data(value, MAX_ROUTE_DATA_BYTES, '路线数据')
+        obstacles = value.get('obstacles')
+        if obstacles is not None and (not isinstance(obstacles, list) or len(obstacles) > 200):
+            raise serializers.ValidationError('路线障碍物数量不能超过 200')
+        return value
+
+    def validate_cover_image(self, value):
+        """校验模板封面图片。"""
+        if value:
+            _validate_image_upload(value, '模板封面图片')
         return value
 
 
 class MembershipInvoiceSerializer(serializers.ModelSerializer):
     """会员订单发票序列化器。"""
 
+    title = serializers.CharField(max_length=100, required=True, allow_blank=False)
+    tax_number = serializers.CharField(
+        max_length=50,
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+    email = serializers.EmailField(max_length=254, required=True)
+
     class Meta:
         model = MembershipInvoice
         fields = ('id', 'order', 'title', 'tax_number', 'email', 'status', 'invoice_number', 'created_at', 'updated_at')
         read_only_fields = ('order', 'status', 'invoice_number', 'created_at', 'updated_at')
+
+
+class InvoiceIssueSerializer(serializers.Serializer):
+    """后台开票结果请求。"""
+
+    invoice_number = serializers.CharField(max_length=50, required=False, allow_blank=False)
 
 
 # 会员订单序列化器
@@ -473,6 +670,7 @@ class MembershipOrderSerializer(serializers.ModelSerializer):
                             'payment_time', 'created_at', 'updated_at']
 
 
+    @extend_schema_field(MembershipInvoiceSerializer)
     def get_invoice(self, obj):
         invoice = getattr(obj, 'invoice', None)
         return MembershipInvoiceSerializer(invoice).data if invoice else None

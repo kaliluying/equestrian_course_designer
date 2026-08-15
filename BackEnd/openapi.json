@@ -15,7 +15,7 @@
                         "name": "page",
                         "required": false,
                         "in": "query",
-                        "description": "A page number within the paginated result set.",
+                        "description": "分页结果集中的页码。",
                         "schema": {
                             "type": "integer"
                         }
@@ -105,7 +105,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 用户反馈.",
+                        "description": "标识此 用户反馈 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -143,7 +143,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 用户反馈.",
+                        "description": "标识此 用户反馈 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -201,7 +201,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 用户反馈.",
+                        "description": "标识此 用户反馈 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -258,7 +258,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 用户反馈.",
+                        "description": "标识此 用户反馈 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -313,7 +313,7 @@
         },
         "/user/admin/analytics/": {
             "get": {
-                "operationId": "user_admin_analytics_retrieve",
+                "operationId": "admin_analytics",
                 "description": "运营数据看板核心指标。",
                 "tags": [
                     "user"
@@ -328,7 +328,15 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "No response body"
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -526,7 +534,7 @@
         "/user/ai/purchase/": {
             "post": {
                 "operationId": "user_ai_purchase_create",
-                "description": "购买 AI 配额",
+                "description": "购买 AI 配额：创建一次性订单并返回支付宝支付链接。",
                 "summary": "购买 AI 配额",
                 "tags": [
                     "user"
@@ -994,7 +1002,7 @@
                         "name": "page",
                         "required": false,
                         "in": "query",
-                        "description": "A page number within the paginated result set.",
+                        "description": "分页结果集中的页码。",
                         "schema": {
                             "type": "integer"
                         }
@@ -1155,7 +1163,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 设计图.",
+                        "description": "标识此 设计图 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -1193,7 +1201,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 设计图.",
+                        "description": "标识此 设计图 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -1251,7 +1259,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 设计图.",
+                        "description": "标识此 设计图 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -1308,7 +1316,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 设计图.",
+                        "description": "标识此 设计图 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -1330,6 +1338,46 @@
                 }
             }
         },
+        "/user/designs/{id}/asset/": {
+            "get": {
+                "operationId": "user_designs_asset_retrieve",
+                "description": "在完成对象级授权后返回设计文件，避免公开暴露 MEDIA_ROOT。",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "标识此 设计图 的 唯一整数值。",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "user"
+                ],
+                "security": [
+                    {
+                        "CookieJWTAuth": []
+                    },
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Design"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/user/designs/{id}/collaboration-events/": {
             "get": {
                 "operationId": "user_designs_collaboration_events_retrieve",
@@ -1341,7 +1389,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 设计图.",
+                        "description": "标识此 设计图 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -1381,7 +1429,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 设计图.",
+                        "description": "标识此 设计图 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -1419,7 +1467,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 设计图.",
+                        "description": "标识此 设计图 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -1470,14 +1518,14 @@
         },
         "/user/designs/{id}/comments/{comment_id}/resolve/": {
             "post": {
-                "operationId": "user_designs_comments_resolve_create",
+                "operationId": "design_comment_resolve",
                 "description": "解决或取消解决设计评论。",
                 "parameters": [
                     {
                         "in": "path",
                         "name": "comment_id",
                         "schema": {
-                            "type": "string"
+                            "type": "integer"
                         },
                         "required": true
                     },
@@ -1487,7 +1535,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 设计图.",
+                        "description": "标识此 设计图 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -1547,7 +1595,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 设计图.",
+                        "description": "标识此 设计图 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -1587,7 +1635,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 设计图.",
+                        "description": "标识此 设计图 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -1647,7 +1695,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 设计图.",
+                        "description": "标识此 设计图 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -1707,7 +1755,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 设计图.",
+                        "description": "标识此 设计图 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -1758,7 +1806,7 @@
         },
         "/user/designs/{id}/versions/": {
             "get": {
-                "operationId": "user_designs_versions_retrieve",
+                "operationId": "design_versions_list",
                 "description": "获取设计版本列表。",
                 "parameters": [
                     {
@@ -1767,7 +1815,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 设计图.",
+                        "description": "标识此 设计图 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -1798,7 +1846,7 @@
         },
         "/user/designs/{id}/versions/{version_id}/": {
             "get": {
-                "operationId": "user_designs_versions_retrieve_2",
+                "operationId": "design_version_retrieve",
                 "description": "获取或更新设计版本详情。",
                 "parameters": [
                     {
@@ -1807,14 +1855,14 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 设计图.",
+                        "description": "标识此 设计图 的 唯一整数值。",
                         "required": true
                     },
                     {
                         "in": "path",
                         "name": "version_id",
                         "schema": {
-                            "type": "string"
+                            "type": "integer"
                         },
                         "required": true
                     }
@@ -1844,7 +1892,7 @@
                 }
             },
             "patch": {
-                "operationId": "user_designs_versions_partial_update",
+                "operationId": "design_version_update",
                 "description": "获取或更新设计版本详情。",
                 "parameters": [
                     {
@@ -1853,14 +1901,14 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 设计图.",
+                        "description": "标识此 设计图 的 唯一整数值。",
                         "required": true
                     },
                     {
                         "in": "path",
                         "name": "version_id",
                         "schema": {
-                            "type": "string"
+                            "type": "integer"
                         },
                         "required": true
                     }
@@ -1911,7 +1959,7 @@
         },
         "/user/designs/{id}/versions/{version_id}/copy/": {
             "post": {
-                "operationId": "user_designs_versions_copy_create",
+                "operationId": "design_version_copy",
                 "description": "复制设计版本为新设计。",
                 "parameters": [
                     {
@@ -1920,14 +1968,14 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 设计图.",
+                        "description": "标识此 设计图 的 唯一整数值。",
                         "required": true
                     },
                     {
                         "in": "path",
                         "name": "version_id",
                         "schema": {
-                            "type": "string"
+                            "type": "integer"
                         },
                         "required": true
                     }
@@ -1979,7 +2027,7 @@
         },
         "/user/designs/{id}/versions/{version_id}/restore/": {
             "post": {
-                "operationId": "user_designs_versions_restore_create",
+                "operationId": "design_version_restore",
                 "description": "恢复设计版本。",
                 "parameters": [
                     {
@@ -1988,14 +2036,14 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 设计图.",
+                        "description": "标识此 设计图 的 唯一整数值。",
                         "required": true
                     },
                     {
                         "in": "path",
                         "name": "version_id",
                         "schema": {
-                            "type": "string"
+                            "type": "integer"
                         },
                         "required": true
                     }
@@ -2346,7 +2394,7 @@
                         "name": "page",
                         "required": false,
                         "in": "query",
-                        "description": "A page number within the paginated result set.",
+                        "description": "分页结果集中的页码。",
                         "schema": {
                             "type": "integer"
                         }
@@ -2355,7 +2403,7 @@
                         "name": "page_size",
                         "required": false,
                         "in": "query",
-                        "description": "Number of results to return per page.",
+                        "description": "每页返回的结果数量。",
                         "schema": {
                             "type": "integer"
                         }
@@ -2444,7 +2492,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 自定义障碍物.",
+                        "description": "标识此 自定义障碍物 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -2482,7 +2530,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 自定义障碍物.",
+                        "description": "标识此 自定义障碍物 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -2540,7 +2588,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 自定义障碍物.",
+                        "description": "标识此 自定义障碍物 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -2597,7 +2645,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 自定义障碍物.",
+                        "description": "标识此 自定义障碍物 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -2630,7 +2678,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 自定义障碍物.",
+                        "description": "标识此 自定义障碍物 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -2850,7 +2898,7 @@
                         "name": "page",
                         "required": false,
                         "in": "query",
-                        "description": "A page number within the paginated result set.",
+                        "description": "分页结果集中的页码。",
                         "schema": {
                             "type": "integer"
                         }
@@ -2937,8 +2985,9 @@
                         "in": "path",
                         "name": "id",
                         "schema": {
-                            "type": "string"
+                            "type": "integer"
                         },
+                        "description": "标识此 路线模板 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -2974,8 +3023,9 @@
                         "in": "path",
                         "name": "id",
                         "schema": {
-                            "type": "string"
+                            "type": "integer"
                         },
+                        "description": "标识此 路线模板 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -3031,8 +3081,9 @@
                         "in": "path",
                         "name": "id",
                         "schema": {
-                            "type": "string"
+                            "type": "integer"
                         },
+                        "description": "标识此 路线模板 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -3087,8 +3138,9 @@
                         "in": "path",
                         "name": "id",
                         "schema": {
-                            "type": "string"
+                            "type": "integer"
                         },
+                        "description": "标识此 路线模板 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -3119,8 +3171,9 @@
                         "in": "path",
                         "name": "id",
                         "schema": {
-                            "type": "string"
+                            "type": "integer"
                         },
+                        "description": "标识此 路线模板 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -3178,8 +3231,9 @@
                         "in": "path",
                         "name": "id",
                         "schema": {
-                            "type": "string"
+                            "type": "integer"
                         },
+                        "description": "标识此 路线模板 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -3269,7 +3323,7 @@
                         "name": "page",
                         "required": false,
                         "in": "query",
-                        "description": "A page number within the paginated result set.",
+                        "description": "分页结果集中的页码。",
                         "schema": {
                             "type": "integer"
                         }
@@ -3291,7 +3345,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/PaginatedUserRegisterList"
+                                    "$ref": "#/components/schemas/PaginatedUserAdminList"
                                 }
                             }
                         },
@@ -3359,7 +3413,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 用户.",
+                        "description": "标识此 用户 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -3379,7 +3433,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/UserRegister"
+                                    "$ref": "#/components/schemas/UserAdmin"
                                 }
                             }
                         },
@@ -3397,7 +3451,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 用户.",
+                        "description": "标识此 用户 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -3408,17 +3462,17 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/UserRegisterRequest"
+                                "$ref": "#/components/schemas/UserAdminRequest"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/UserRegisterRequest"
+                                "$ref": "#/components/schemas/UserAdminRequest"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/UserRegisterRequest"
+                                "$ref": "#/components/schemas/UserAdminRequest"
                             }
                         }
                     },
@@ -3437,7 +3491,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/UserRegister"
+                                    "$ref": "#/components/schemas/UserAdmin"
                                 }
                             }
                         },
@@ -3455,7 +3509,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 用户.",
+                        "description": "标识此 用户 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -3466,17 +3520,17 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/PatchedUserRegisterRequest"
+                                "$ref": "#/components/schemas/PatchedUserAdminRequest"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/PatchedUserRegisterRequest"
+                                "$ref": "#/components/schemas/PatchedUserAdminRequest"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/PatchedUserRegisterRequest"
+                                "$ref": "#/components/schemas/PatchedUserAdminRequest"
                             }
                         }
                     }
@@ -3494,7 +3548,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/UserRegister"
+                                    "$ref": "#/components/schemas/UserAdmin"
                                 }
                             }
                         },
@@ -3512,7 +3566,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 用户.",
+                        "description": "标识此 用户 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -3545,7 +3599,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "A unique integer value identifying this 用户.",
+                        "description": "标识此 用户 的 唯一整数值。",
                         "required": true
                     }
                 ],
@@ -3556,17 +3610,17 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/UserRegisterRequest"
+                                "$ref": "#/components/schemas/UserAdminRequest"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/UserRegisterRequest"
+                                "$ref": "#/components/schemas/UserAdminRequest"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/UserRegisterRequest"
+                                "$ref": "#/components/schemas/UserAdminRequest"
                             }
                         }
                     },
@@ -3585,7 +3639,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/UserRegister"
+                                    "$ref": "#/components/schemas/UserAdmin"
                                 }
                             }
                         },
@@ -3605,17 +3659,17 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/UserRegisterRequest"
+                                "$ref": "#/components/schemas/UserAdminRequest"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/UserRegisterRequest"
+                                "$ref": "#/components/schemas/UserAdminRequest"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/UserRegisterRequest"
+                                "$ref": "#/components/schemas/UserAdminRequest"
                             }
                         }
                     },
@@ -3634,7 +3688,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/UserRegister"
+                                    "$ref": "#/components/schemas/UserAdmin"
                                 }
                             }
                         },
@@ -3654,17 +3708,17 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/UserRegisterRequest"
+                                "$ref": "#/components/schemas/UserAdminRequest"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/UserRegisterRequest"
+                                "$ref": "#/components/schemas/UserAdminRequest"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/UserRegisterRequest"
+                                "$ref": "#/components/schemas/UserAdminRequest"
                             }
                         }
                     },
@@ -3683,7 +3737,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/UserRegister"
+                                    "$ref": "#/components/schemas/UserAdmin"
                                 }
                             }
                         },
@@ -3712,7 +3766,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/UserRegister"
+                                    "$ref": "#/components/schemas/UserAdmin"
                                 }
                             }
                         },
@@ -3741,7 +3795,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/UserRegister"
+                                    "$ref": "#/components/schemas/UserAdmin"
                                 }
                             }
                         },
@@ -3815,6 +3869,7 @@
                     },
                     "is_official": {
                         "type": "boolean",
+                        "readOnly": true,
                         "title": "是否官方"
                     },
                     "author": {
@@ -3862,6 +3917,7 @@
                     "favorite_count",
                     "id",
                     "is_favorited",
+                    "is_official",
                     "title",
                     "updated_at"
                 ]
@@ -3922,10 +3978,6 @@
                     "is_public": {
                         "type": "boolean",
                         "title": "是否公开"
-                    },
-                    "is_official": {
-                        "type": "boolean",
-                        "title": "是否官方"
                     }
                 },
                 "required": [
@@ -4039,6 +4091,11 @@
                         "type": "integer",
                         "readOnly": true
                     },
+                    "image": {
+                        "type": "string",
+                        "format": "uri",
+                        "nullable": true
+                    },
                     "author_username": {
                         "type": "string",
                         "nullable": true,
@@ -4053,24 +4110,19 @@
                     "image_url": {
                         "type": "string",
                         "nullable": true,
-                        "description": "获取正确的图片URL",
+                        "description": "返回受权限保护的图片接口地址。",
                         "readOnly": true
                     },
                     "download_url": {
                         "type": "string",
                         "nullable": true,
-                        "description": "获取正确的下载URL",
+                        "description": "返回受权限保护的路线文件接口地址。",
                         "readOnly": true
                     },
                     "title": {
                         "type": "string",
                         "title": "设计图标题",
                         "maxLength": 100
-                    },
-                    "image": {
-                        "type": "string",
-                        "format": "uri",
-                        "title": "设计图图片"
                     },
                     "create_time": {
                         "type": "string",
@@ -4122,7 +4174,6 @@
                     "download_url",
                     "downloads_count",
                     "id",
-                    "image",
                     "image_url",
                     "is_liked",
                     "likes_count",
@@ -4146,13 +4197,14 @@
                     "image": {
                         "type": "string",
                         "format": "uri",
+                        "nullable": true,
                         "readOnly": true,
                         "title": "设计图图片"
                     },
                     "image_url": {
                         "type": "string",
                         "nullable": true,
-                        "description": "获取正确的图片URL",
+                        "description": "返回受权限保护的图片接口地址。",
                         "readOnly": true
                     },
                     "create_time": {
@@ -4225,16 +4277,19 @@
                 "type": "object",
                 "description": "设计序列化器",
                 "properties": {
+                    "image": {
+                        "type": "string",
+                        "format": "binary",
+                        "nullable": true
+                    },
+                    "course_data": {
+                        "writeOnly": true
+                    },
                     "title": {
                         "type": "string",
                         "minLength": 1,
                         "title": "设计图标题",
                         "maxLength": 100
-                    },
-                    "image": {
-                        "type": "string",
-                        "format": "binary",
-                        "title": "设计图图片"
                     },
                     "download": {
                         "type": "string",
@@ -4253,7 +4308,6 @@
                     }
                 },
                 "required": [
-                    "image",
                     "title"
                 ]
             },
@@ -4367,6 +4421,80 @@
                     "username"
                 ]
             },
+            "MembershipInvoice": {
+                "type": "object",
+                "description": "会员订单发票序列化器。",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "order": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "title": "订单"
+                    },
+                    "title": {
+                        "type": "string",
+                        "maxLength": 100
+                    },
+                    "tax_number": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 50
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "maxLength": 254
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/MembershipInvoiceStatusEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "title": "状态"
+                    },
+                    "invoice_number": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true,
+                        "title": "发票号码"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "title": "创建时间"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "title": "更新时间"
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "email",
+                    "id",
+                    "invoice_number",
+                    "order",
+                    "status",
+                    "title",
+                    "updated_at"
+                ]
+            },
+            "MembershipInvoiceStatusEnum": {
+                "enum": [
+                    "submitted",
+                    "issued"
+                ],
+                "type": "string",
+                "description": "* `submitted` - 已提交\n* `issued` - 已开具"
+            },
             "MembershipOrder": {
                 "type": "object",
                 "properties": {
@@ -4417,7 +4545,7 @@
                     "status": {
                         "allOf": [
                             {
-                                "$ref": "#/components/schemas/StatusEnum"
+                                "$ref": "#/components/schemas/MembershipOrderStatusEnum"
                             }
                         ],
                         "title": "订单状态"
@@ -4465,7 +4593,11 @@
                         "title": "支付时间"
                     },
                     "invoice": {
-                        "type": "string",
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/MembershipInvoice"
+                            }
+                        ],
                         "readOnly": true
                     },
                     "created_at": {
@@ -4506,8 +4638,23 @@
                 "type": "string",
                 "description": "* `month` - 月度\n* `year` - 年度"
             },
+            "MembershipOrderStatusEnum": {
+                "enum": [
+                    "pending",
+                    "paid",
+                    "canceled",
+                    "refunded",
+                    "failed"
+                ],
+                "type": "string",
+                "description": "* `pending` - 待支付\n* `paid` - 已支付\n* `canceled` - 已取消\n* `refunded` - 已退款\n* `failed` - 支付失败"
+            },
             "PaginatedCourseTemplateList": {
                 "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
                 "properties": {
                     "count": {
                         "type": "integer",
@@ -4535,6 +4682,10 @@
             },
             "PaginatedCustomObstacleList": {
                 "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
                 "properties": {
                     "count": {
                         "type": "integer",
@@ -4562,6 +4713,10 @@
             },
             "PaginatedDesignList": {
                 "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
                 "properties": {
                     "count": {
                         "type": "integer",
@@ -4589,6 +4744,10 @@
             },
             "PaginatedFeedbackList": {
                 "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
                 "properties": {
                     "count": {
                         "type": "integer",
@@ -4614,8 +4773,12 @@
                     }
                 }
             },
-            "PaginatedUserRegisterList": {
+            "PaginatedUserAdminList": {
                 "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
                 "properties": {
                     "count": {
                         "type": "integer",
@@ -4636,7 +4799,7 @@
                     "results": {
                         "type": "array",
                         "items": {
-                            "$ref": "#/components/schemas/UserRegister"
+                            "$ref": "#/components/schemas/UserAdmin"
                         }
                     }
                 }
@@ -4697,10 +4860,6 @@
                     "is_public": {
                         "type": "boolean",
                         "title": "是否公开"
-                    },
-                    "is_official": {
-                        "type": "boolean",
-                        "title": "是否官方"
                     }
                 }
             },
@@ -4727,16 +4886,19 @@
                 "type": "object",
                 "description": "设计序列化器",
                 "properties": {
+                    "image": {
+                        "type": "string",
+                        "format": "binary",
+                        "nullable": true
+                    },
+                    "course_data": {
+                        "writeOnly": true
+                    },
                     "title": {
                         "type": "string",
                         "minLength": 1,
                         "title": "设计图标题",
                         "maxLength": 100
-                    },
-                    "image": {
-                        "type": "string",
-                        "format": "binary",
-                        "title": "设计图图片"
                     },
                     "download": {
                         "type": "string",
@@ -4786,38 +4948,31 @@
                     }
                 }
             },
-            "PatchedUserRegisterRequest": {
+            "PatchedUserAdminRequest": {
                 "type": "object",
-                "description": "用户注册序列化器",
+                "description": "管理员用户管理序列化器。\n\n普通注册和后台用户管理使用不同的序列化器，避免公开 create 路径接收\n``is_staff``、``is_superuser`` 等权限字段。",
                 "properties": {
                     "username": {
                         "type": "string",
                         "minLength": 1,
                         "title": "用户名",
-                        "description": "用户名",
+                        "description": "必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。",
                         "pattern": "^[\\w.@+-]+$",
                         "maxLength": 150
                     },
-                    "password": {
-                        "type": "string",
-                        "writeOnly": true,
-                        "minLength": 1
-                    },
-                    "confirmPassword": {
-                        "type": "string",
-                        "writeOnly": true,
-                        "minLength": 1
-                    },
                     "email": {
-                        "type": "string",
-                        "format": "email",
                         "title": "电子邮件地址",
-                        "maxLength": 254
-                    },
-                    "is_staff": {
-                        "type": "boolean",
-                        "default": false,
-                        "description": "是否可以访问后台"
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email",
+                                "maxLength": 254
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
                     }
                 }
             },
@@ -4867,17 +5022,6 @@
                     "token"
                 ]
             },
-            "StatusEnum": {
-                "enum": [
-                    "pending",
-                    "paid",
-                    "canceled",
-                    "refunded",
-                    "failed"
-                ],
-                "type": "string",
-                "description": "* `pending` - 待支付\n* `paid` - 已支付\n* `canceled` - 已取消\n* `refunded` - 已退款\n* `failed` - 支付失败"
-            },
             "TypeEnum": {
                 "enum": [
                     "feature",
@@ -4887,6 +5031,108 @@
                 ],
                 "type": "string",
                 "description": "* `feature` - 功能建议\n* `bug` - 问题报告\n* `ux` - 用户体验\n* `other` - 其他"
+            },
+            "UserAdmin": {
+                "type": "object",
+                "description": "管理员用户管理序列化器。\n\n普通注册和后台用户管理使用不同的序列化器，避免公开 create 路径接收\n``is_staff``、``is_superuser`` 等权限字段。",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "username": {
+                        "type": "string",
+                        "title": "用户名",
+                        "description": "必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。",
+                        "pattern": "^[\\w.@+-]+$",
+                        "maxLength": 150
+                    },
+                    "email": {
+                        "title": "电子邮件地址",
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email",
+                                "maxLength": 254
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
+                    },
+                    "is_active": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "title": "有效",
+                        "description": "指明用户是否被认为是活跃的。以反选代替删除帐号。"
+                    },
+                    "is_staff": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "title": "工作人员状态",
+                        "description": "指明用户是否可以登录到这个管理站点。"
+                    },
+                    "is_superuser": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "title": "超级用户状态",
+                        "description": "指明该用户缺省拥有所有权限。"
+                    },
+                    "date_joined": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "title": "加入日期"
+                    },
+                    "last_login": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "title": "上次登录"
+                    }
+                },
+                "required": [
+                    "date_joined",
+                    "id",
+                    "is_active",
+                    "is_staff",
+                    "is_superuser",
+                    "last_login",
+                    "username"
+                ]
+            },
+            "UserAdminRequest": {
+                "type": "object",
+                "description": "管理员用户管理序列化器。\n\n普通注册和后台用户管理使用不同的序列化器，避免公开 create 路径接收\n``is_staff``、``is_superuser`` 等权限字段。",
+                "properties": {
+                    "username": {
+                        "type": "string",
+                        "minLength": 1,
+                        "title": "用户名",
+                        "description": "必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。",
+                        "pattern": "^[\\w.@+-]+$",
+                        "maxLength": 150
+                    },
+                    "email": {
+                        "title": "电子邮件地址",
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email",
+                                "maxLength": 254
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
+                    }
+                },
+                "required": [
+                    "username"
+                ]
             },
             "UserLoginRequest": {
                 "type": "object",
@@ -4923,19 +5169,28 @@
                         "maxLength": 150
                     },
                     "email": {
-                        "type": "string",
-                        "format": "email",
                         "title": "电子邮件地址",
-                        "maxLength": 254
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email",
+                                "maxLength": 254
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
                     },
                     "is_staff": {
                         "type": "boolean",
-                        "default": false,
-                        "description": "是否可以访问后台"
+                        "readOnly": true,
+                        "default": false
                     }
                 },
                 "required": [
                     "email",
+                    "is_staff",
                     "username"
                 ]
             },
@@ -4962,15 +5217,18 @@
                         "minLength": 1
                     },
                     "email": {
-                        "type": "string",
-                        "format": "email",
                         "title": "电子邮件地址",
-                        "maxLength": 254
-                    },
-                    "is_staff": {
-                        "type": "boolean",
-                        "default": false,
-                        "description": "是否可以访问后台"
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email",
+                                "maxLength": 254
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
                     }
                 },
                 "required": [

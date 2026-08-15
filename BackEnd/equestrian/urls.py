@@ -19,7 +19,6 @@ from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic import TemplateView
-from django.views.static import serve
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from user.views import ForgotPasswordView, ResetPasswordView
 
@@ -38,9 +37,7 @@ urlpatterns = [
             TemplateView.as_view(template_name='index.html')),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
-# 添加媒体文件的URL配置
+# 仅在开发环境提供 Django 的静态媒体回退。生产环境的上传文件必须通过
+# 设计资源接口做认证和对象级授权，不能把整个 MEDIA_ROOT 暴露为公共目录。
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL,
-                          document_root=settings.MEDIA_ROOT)
-    urlpatterns += static(settings.STATIC_URL,
-                          document_root=settings.STATIC_ROOT)
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

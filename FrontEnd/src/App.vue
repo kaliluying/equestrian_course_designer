@@ -107,12 +107,20 @@
         :show-close="false" :append-to-body="true" :destroy-on-close="false" :modal="true">
         <div class="restore-dialog-content">
           <p>检测到您有一个未完成的路线设计，是否恢复？</p>
+          <p v-if="hasAutosaveConflict" class="restore-time">云端版本已有更新，请选择保留哪一份设计。</p>
           <p class="restore-time">保存时间: {{ formatSavedTime }}</p>
         </div>
         <template #footer>
           <span class="dialog-footer">
-            <el-button @click="discardAutosave">放弃</el-button>
-            <el-button type="primary" @click="restoreAutosave">恢复</el-button>
+            <template v-if="hasAutosaveConflict">
+              <el-button @click="useServerAutosave">使用云端版本</el-button>
+              <el-button @click="saveAutosaveAsNewDesign">另存为新设计</el-button>
+              <el-button type="primary" @click="restoreAutosave">恢复本地草稿</el-button>
+            </template>
+            <template v-else>
+              <el-button @click="discardAutosave">放弃</el-button>
+              <el-button type="primary" @click="restoreAutosave">恢复</el-button>
+            </template>
           </span>
         </template>
       </el-dialog>
@@ -262,20 +270,24 @@ const {
   toggleCollaboration,
   checkCollaborationInvite,
   processCollaborationInvite,
+  takePendingInvitation,
   registerEventListeners: registerCollabEventListeners,
   unregisterEventListeners: unregisterCollabEventListeners,
-} = useCollaborationEvents(canvasRef, loginDialogVisible)
+} = useCollaborationEvents(canvasRef)
 
 // 自动保存逻辑（从 composable 引入）
 const {
   showRestoreDialog,
   savedTimestamp,
+  hasAutosaveConflict,
   showAutosaveNotification,
   formatSavedTime,
   showAutosaveNotificationHandler,
   checkAutosave,
   restoreAutosave,
   discardAutosave,
+  useServerAutosave,
+  saveAutosaveAsNewDesign,
   initAutosaveCheck,
 } = useAutosave()
 
@@ -381,102 +393,50 @@ const switchToRegister = () => {
   registerDialogVisible.value = true
 }
 
+const handlePendingCollaborationInvite = async () => {
+  const pendingInvitation = takePendingInvitation()
+  if (!pendingInvitation) return
+
+  const inviteTime = new Date(pendingInvitation.timestamp)
+  if (
+    Number.isNaN(inviteTime.getTime())
+    || Date.now() - inviteTime.getTime() >= 30 * 60 * 1000
+  ) {
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      '检测到您有一个未处理的协作邀请，是否立即加入？',
+      '继续协作邀请',
+      {
+        confirmButtonText: '加入',
+        cancelButtonText: '忽略',
+        type: 'info',
+        distinguishCancelAndClose: true,
+      },
+    )
+    await processCollaborationInvite(
+      pendingInvitation.designId,
+      pendingInvitation.shareToken,
+    )
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('处理登录后的协作邀请时出错:', error)
+    }
+  }
+}
+
 const handleAuthSuccess = async () => {
   loginDialogVisible.value = false
   ElMessage.success('登录成功')
-
-  // 检查是否有待处理的协作邀请
-  const pendingInvitation = localStorage.getItem('pendingInvitation')
-  if (pendingInvitation) {
-    try {
-      const { designId, timestamp } = JSON.parse(pendingInvitation)
-      const inviteTime = new Date(timestamp)
-      const now = new Date()
-
-      // 检查邀请是否在有效期内（30分钟）
-      if (now.getTime() - inviteTime.getTime() < 30 * 60 * 1000) {
-
-        // 显示确认对话框
-        try {
-          await ElMessageBox.confirm(
-            '检测到您有一个未处理的协作邀请，是否立即加入？',
-            '继续协作邀请',
-            {
-              confirmButtonText: '加入',
-              cancelButtonText: '忽略',
-              type: 'info',
-              distinguishCancelAndClose: true
-            }
-          )
-
-          // 如果用户点击确认按钮，代码会继续执行到这里
-          // 处理协作邀请
-          await processCollaborationInvite(designId)
-        } catch (error) {
-          // 如果用户点击取消按钮或关闭对话框，会抛出异常并进入这里
-          if (error === 'cancel') {
-          } else {
-            console.error('处理协作邀请确认对话框时出错:', error)
-          }
-        }
-      } else {
-      }
-    } catch (error) {
-      console.error('处理登录后的协作邀请时出错:', error)
-    } finally {
-      // 无论处理成功与否，都清除待处理的邀请信息
-      localStorage.removeItem('pendingInvitation')
-    }
-  }
+  await handlePendingCollaborationInvite()
 }
 
 const handleRegisterSuccess = async () => {
   registerDialogVisible.value = false
   ElMessage.success('注册成功，已自动登录')
-
-  // 与 handleAuthSuccess 相同的逻辑，处理待处理的协作邀请
-  const pendingInvitation = localStorage.getItem('pendingInvitation')
-  if (pendingInvitation) {
-    try {
-      const { designId, timestamp } = JSON.parse(pendingInvitation)
-      const inviteTime = new Date(timestamp)
-      const now = new Date()
-
-      // 检查邀请是否在有效期内（30分钟）
-      if (now.getTime() - inviteTime.getTime() < 30 * 60 * 1000) {
-
-        // 显示确认对话框
-        try {
-          await ElMessageBox.confirm(
-            '检测到您有一个未处理的协作邀请，是否立即加入？',
-            '继续协作邀请',
-            {
-              confirmButtonText: '加入',
-              cancelButtonText: '忽略',
-              type: 'info',
-              distinguishCancelAndClose: true
-            }
-          )
-
-          // 如果用户点击确认按钮，代码会继续执行到这里
-          // 处理协作邀请
-          await processCollaborationInvite(designId)
-        } catch (error) {
-          // 如果用户点击取消按钮或关闭对话框，会抛出异常并进入这里
-          if (error === 'cancel') {
-          } else {
-            console.error('处理协作邀请确认对话框时出错:', error)
-          }
-        }
-      } else {
-      }
-    } catch (error) {
-      console.error('处理注册后的协作邀请时出错:', error)
-    } finally {
-      // 无论处理成功与否，都清除待处理的邀请信息
-      localStorage.removeItem('pendingInvitation')
-    }
-  }
+  await handlePendingCollaborationInvite()
 }
 
 const handleLogout = () => {
@@ -491,7 +451,7 @@ const handleLogout = () => {
 declare global {
   interface Window {
     debugCanvas?: {
-      startCollaboration: (viaLink?: boolean) => void;
+      startCollaboration: (viaLink?: boolean, shareToken?: string | null) => void;
       stopCollaboration: () => void;
     };
   }

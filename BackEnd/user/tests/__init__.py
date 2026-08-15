@@ -8,4 +8,5 @@ from .test_auth import *  # noqa: F401,F403
 from .test_collaboration import *  # noqa: F401,F403
 from .test_design import *  # noqa: F401,F403
 from .test_membership import *  # noqa: F401,F403
+from .test_payments import *  # noqa: F401,F403
 from .test_route_validation import *  # noqa: F401,F403

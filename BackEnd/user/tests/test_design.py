@@ -80,7 +80,8 @@ class DesignDownloadAPITest(TestCase):
         self.assertTrue(data["success"])
         self.assertEqual(data["file_type"], "json")
         self.assertEqual(data["filename"], "JSON测试设计.json")
-        self.assertIn("/media/", data["download_url"])
+        self.assertIn(f"/user/designs/{design.id}/asset/", data["download_url"])
+        self.assertIn("type=json", data["download_url"])
         self.assertEqual(data["downloads_count"], 1)
 
     def test_download_png_returns_saved_image_url(self):
@@ -94,8 +95,38 @@ class DesignDownloadAPITest(TestCase):
         self.assertTrue(data["success"])
         self.assertEqual(data["file_type"], "png")
         self.assertEqual(data["filename"], "PNG测试设计.png")
-        self.assertIn("/media/", data["download_url"])
+        self.assertIn(f"/user/designs/{design.id}/asset/", data["download_url"])
+        self.assertIn("type=png", data["download_url"])
         self.assertEqual(data["downloads_count"], 1)
+
+    def test_asset_image_type_returns_authorized_image(self):
+        """序列化器返回的 image 资源地址应能被授权后直接读取"""
+        design = self._create_design(title="图片资源设计")
+
+        response = self.client.get(f"/user/designs/{design.id}/asset/?type=image")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "image/png")
+        self.assertTrue(b"".join(response.streaming_content).startswith(b"\x89PNG"))
+
+    def test_asset_private_design_is_not_readable_by_other_user(self):
+        """未共享设计的资源接口不能被其他用户读取"""
+        owner = self.user
+        other_user = User.objects.create_user(
+            username="asset_other_user",
+            email="asset_other@example.com",
+            password="Password123",
+        )
+        design = self._create_design(
+            title="私有图片资源",
+            author=owner,
+            is_shared=False,
+        )
+        self.client.force_authenticate(user=other_user)
+
+        response = self.client.get(f"/user/designs/{design.id}/asset/?type=image")
+
+        self.assertEqual(response.status_code, 404)
 
     def test_download_pdf_generates_file(self):
         """PDF 下载应基于设计图片生成 PDF 文件"""
@@ -108,7 +139,8 @@ class DesignDownloadAPITest(TestCase):
         self.assertTrue(data["success"])
         self.assertEqual(data["file_type"], "pdf")
         self.assertEqual(data["filename"], "PDF测试设计.pdf")
-        self.assertIn("/media/", data["download_url"])
+        self.assertIn(f"/user/designs/{design.id}/asset/", data["download_url"])
+        self.assertIn("type=pdf", data["download_url"])
         self.assertEqual(data["downloads_count"], 1)
 
         expected_pdf = os.path.join(
@@ -137,6 +169,7 @@ class DesignDownloadAPITest(TestCase):
         design.refresh_from_db()
         self.assertEqual(design.downloads_count, 0)
 
+
     def test_download_private_design_owned_by_other_user_is_forbidden(self):
         """非作者不能下载未共享设计"""
         other_user = User.objects.create_user(
@@ -152,10 +185,80 @@ class DesignDownloadAPITest(TestCase):
 
         response = self.client.get(f"/user/designs/{design.id}/download/?type=png")
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
         self.assertFalse(response.json()["success"])
         design.refresh_from_db()
         self.assertEqual(design.downloads_count, 0)
+
+
+class DesignCollaborationCRUDAPITest(TestCase):
+    """标准设计 CRUD 必须遵守显式协作角色。"""
+
+    def setUp(self):
+        from user.models import CollaborationRole
+
+        self.client = APIClient()
+        self.owner = User.objects.create_user("crud_owner", password="Password123")
+        self.editor = User.objects.create_user("crud_editor", password="Password123")
+        self.viewer = User.objects.create_user("crud_viewer", password="Password123")
+        for user in (self.owner, self.editor, self.viewer):
+            UserProfile.objects.get_or_create(user=user)
+        self.design = Design.objects.create(
+            title="协作 CRUD 设计",
+            author=self.owner,
+            description="初始描述",
+            is_shared=False,
+        )
+        CollaborationRole.objects.create(design=self.design, user=self.editor, role="editor")
+        CollaborationRole.objects.create(design=self.design, user=self.viewer, role="viewer")
+
+    def test_editor_can_use_standard_retrieve_and_update(self):
+        self.client.force_authenticate(user=self.editor)
+
+        retrieve_response = self.client.get(f"/user/designs/{self.design.id}/")
+        self.assertEqual(retrieve_response.status_code, 200)
+
+        update_response = self.client.patch(
+            f"/user/designs/{self.design.id}/",
+            data={"title": "编辑者更新标题"},
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, 200)
+        self.design.refresh_from_db()
+        self.assertEqual(self.design.title, "编辑者更新标题")
+
+    def test_editor_cannot_change_or_toggle_sharing(self):
+        self.client.force_authenticate(user=self.editor)
+
+        update_response = self.client.patch(
+            f"/user/designs/{self.design.id}/",
+            data={"is_shared": True},
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, 403)
+
+        share_response = self.client.post(f"/user/designs/{self.design.id}/share/")
+        toggle_response = self.client.post(
+            f"/user/designs/{self.design.id}/toggle-share/"
+        )
+        self.assertEqual(share_response.status_code, 403)
+        self.assertEqual(toggle_response.status_code, 403)
+        self.design.refresh_from_db()
+        self.assertFalse(self.design.is_shared)
+
+    def test_viewer_cannot_update_or_delete_via_standard_crud(self):
+        self.client.force_authenticate(user=self.viewer)
+
+        update_response = self.client.patch(
+            f"/user/designs/{self.design.id}/",
+            data={"title": "越权标题"},
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, 403)
+
+        delete_response = self.client.delete(f"/user/designs/{self.design.id}/")
+        self.assertEqual(delete_response.status_code, 403)
+        self.assertTrue(Design.objects.filter(pk=self.design.id).exists())
 
 class DesignVersionHistoryAPITest(TestCase):
     """设计版本历史接口测试"""
@@ -240,6 +343,28 @@ class DesignVersionHistoryAPITest(TestCase):
         self.assertEqual(DesignVersion.objects.filter(design=design).count(), 2)
         self.assertTrue(DesignVersion.objects.filter(design=design, source="restore").exists())
 
+    def test_restore_version_restores_image_snapshot(self):
+        """恢复版本时应同时恢复版本保存的图片快照。"""
+        from user.models import DesignVersion
+        from user.services.design_version import create_design_version
+
+        design = self._create_design(title="图片版本设计")
+        initial_version = create_design_version(design, source="manual")
+        with design.image.open("rb") as image_file:
+            initial_image = image_file.read()
+
+        design.image.save("changed.png", self._png_file(), save=True)
+        self.client.post(
+            f"/user/designs/{design.id}/versions/{initial_version.id}/restore/"
+        )
+
+        design.refresh_from_db()
+        with design.image.open("rb") as image_file:
+            self.assertEqual(image_file.read(), initial_image)
+        self.assertTrue(
+            DesignVersion.objects.filter(design=design, source="restore").exists()
+        )
+
     def test_copy_version_creates_new_design(self):
         """复制版本应创建新设计且不影响原设计"""
         design = self._create_design(title="原设计")
@@ -261,6 +386,38 @@ class DesignVersionHistoryAPITest(TestCase):
         new_design_id = response.json()["id"]
         self.assertNotEqual(new_design_id, design.id)
         self.assertTrue(Design.objects.filter(id=new_design_id, title__contains="历史副本").exists())
+
+    def test_copy_version_uses_request_user_and_copies_image_content(self):
+        """复制版本的作者应是发起者，图片也必须是独立副本。"""
+        from user.models import CollaborationRole, DesignVersion
+
+        design = self._create_design(title="跨用户复制")
+        version = DesignVersion.objects.create(
+            design=design,
+            author=self.user,
+            version_number=1,
+            source="manual",
+            title="跨用户版本",
+            description="历史描述",
+            course_data={"obstacles": [{"id": "copy-image"}]},
+        )
+        other_user = User.objects.create_user(
+            "version_copy_user", "version_copy@example.com", "Password123"
+        )
+        UserProfile.objects.get_or_create(user=other_user)
+        CollaborationRole.objects.create(design=design, user=other_user, role="editor")
+        self.client.force_authenticate(user=other_user)
+
+        response = self.client.post(
+            f"/user/designs/{design.id}/versions/{version.id}/copy/"
+        )
+
+        self.assertEqual(response.status_code, 201)
+        copied = Design.objects.get(pk=response.json()["id"])
+        self.assertEqual(copied.author_id, other_user.id)
+        self.assertNotEqual(copied.image.name, design.image.name)
+        with design.image.open("rb") as source_file, copied.image.open("rb") as copied_file:
+            self.assertEqual(source_file.read(), copied_file.read())
 
 
     def test_update_version_remark_and_title(self):
@@ -332,6 +489,21 @@ class DesignVersionHistoryAPITest(TestCase):
         self.assertEqual(versions.count(), 50)
         self.assertEqual(versions.first().version_number, 7)
         self.assertEqual(versions.last().version_number, 56)
+
+    def test_version_snapshot_is_removed_when_database_step_fails(self):
+        """版本数据库步骤失败时不能遗留新写入的图片文件。"""
+        from user.services.design_version import create_design_version
+
+        design = self._create_design(title="快照回滚设计")
+        snapshot_dir = os.path.join(self.media_root, "design_versions", str(design.id))
+
+        with patch(
+            "user.services.design_version._prune_old_versions",
+            side_effect=RuntimeError("database step failed"),
+        ), self.assertRaises(RuntimeError):
+            create_design_version(design, source="manual")
+
+        self.assertFalse(os.path.isdir(snapshot_dir) and os.listdir(snapshot_dir))
 
 class CourseTemplateMarketAPITest(TestCase):
     """路线模板库与公开模板市场测试"""
@@ -411,6 +583,8 @@ class CourseTemplateMarketAPITest(TestCase):
         self.assertEqual(copy_response.status_code, 201)
         self.assertIn("复制模板", copy_response.json()["title"])
         self.assertEqual(copy_response.json()["template_id"], template_id)
+        copied_design = Design.objects.get(pk=copy_response.json()["id"])
+        self.assertEqual(copied_design.versions.count(), 1)
 
     def test_template_favorite_and_copy_count(self):
         """模板支持收藏并统计复制次数"""
@@ -500,7 +674,8 @@ class ProfessionalExportAndSharePermissionTest(TestCase):
         self.assertTrue(data["success"])
         self.assertEqual(data["file_type"], "report")
         self.assertTrue(data["filename"].endswith(".pdf"))
-        self.assertIn("/media/", data["download_url"])
+        self.assertIn(f"/user/designs/{design.id}/asset/", data["download_url"])
+        self.assertIn("type=report", data["download_url"])
 
     def test_download_zip_returns_batch_package(self):
         """zip 下载应生成包含多格式资产的批量导出包"""
@@ -518,36 +693,36 @@ class ProfessionalExportAndSharePermissionTest(TestCase):
 
     def test_share_link_can_be_revoked(self):
         """分享链接应支持撤销"""
+        from user.models import CollaborationShareLink
+
         design = self._create_design()
+        self.client.post(f"/user/designs/{design.id}/share-link/")
 
         response = self.client.delete(f"/user/designs/{design.id}/share-link/")
 
         self.assertEqual(response.status_code, 200)
-        design.refresh_from_db()
-        self.assertFalse(design.is_shared)
+        self.assertFalse(CollaborationShareLink.objects.filter(
+            design=design, is_revoked=False
+        ).exists())
 
     def test_password_protected_share_token_requires_matching_password(self):
         """带密码分享令牌应校验访问密码"""
         from user.consumers import validate_share_token, CLOSE_CODE_INVALID_SHARE_TOKEN
-        from django.core import signing
-        import hashlib
+        from user.services.collaboration_share_links import create_share_link
 
-        token = signing.dumps(
-            {
-                "design_id": 99,
-                "scope": "collaboration:join",
-                "role": "viewer",
-                "password_hash": hashlib.sha256("secret".encode("utf-8")).hexdigest(),
-                "exp": int((timezone.now() + timezone.timedelta(hours=1)).timestamp()),
-            },
-            salt="collab-share",
+        share_link, token = create_share_link(
+            design=self._create_design(),
+            created_by=self.user,
+            role="viewer",
+            expires_in_seconds=3600,
+            password="secret",
         )
 
-        invalid, code, _ = validate_share_token(token, 99, password="wrong")
+        invalid, code, _ = validate_share_token(token, share_link.design_id, password="wrong")
         self.assertFalse(invalid)
         self.assertEqual(code, CLOSE_CODE_INVALID_SHARE_TOKEN)
 
-        valid, code, reason = validate_share_token(token, 99, password="secret")
+        valid, code, reason = validate_share_token(token, share_link.design_id, password="secret")
         self.assertTrue(valid)
         self.assertIsNone(code)
         self.assertIsNone(reason)

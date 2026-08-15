@@ -4,13 +4,19 @@ import logging
 from datetime import timedelta
 
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import OutstandingToken, RefreshToken
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
 
 from ..models import (
     AIGenerationHistory,
@@ -19,7 +25,7 @@ from ..models import (
     UserProfile,
     MembershipPlan,
 )
-from ..serializers import UserRegisterSerializer
+from ..serializers import UserAdminSerializer, UserRegisterSerializer
 from ..utils import success_response, error_response
 
 logger = logging.getLogger(__name__)
@@ -73,60 +79,65 @@ def _activate_pending_membership(profile):
 def check_and_update_membership(user):
     """检查并更新用户的会员状态。"""
     try:
-        profile, _ = UserProfile.objects.get_or_create(user=user)
-        now = timezone.now()
+        with transaction.atomic():
+            # 过期检查和支付结算都修改同一行，必须使用同一把行锁避免旧快照覆盖新权益。
+            UserProfile.objects.get_or_create(user=user)
+            profile = UserProfile.objects.select_for_update().select_related(
+                "membership_plan", "pending_membership_plan"
+            ).get(user=user)
+            now = timezone.now()
 
-        if not (
-            profile.is_premium
-            and profile.premium_expire_date
-            and profile.premium_expire_date <= now
-        ):
-            return True
-
-        logger.info(f"用户 {user.username} 的会员已过期，检查是否有待生效的会员计划")
-
-        if profile.pending_membership_plan:
-            if (
-                profile.pending_membership_expire_date
-                and profile.pending_membership_expire_date > now
+            if not (
+                profile.is_premium
+                and profile.premium_expire_date
+                and profile.premium_expire_date <= now
             ):
-                logger.info(f"用户 {user.username} 有待生效的会员计划，将其激活")
-                _activate_pending_membership(profile)
-                profile.save(
-                    update_fields=[
-                        "is_premium",
-                        "membership_plan",
-                        "premium_expire_date",
-                        "storage_limit",
-                        "pending_membership_plan",
-                        "pending_membership_start_date",
-                        "pending_membership_expire_date",
-                    ]
-                )
-                logger.info(
-                    f"用户 {user.username} 的待生效会员计划已激活，新会员类型：{profile.membership_plan.name}"
-                )
-                _clear_user_profile_cache(user)
                 return True
 
-            logger.info(f"用户 {user.username} 的待生效会员计划也已失效，重置为免费用户")
-        else:
-            logger.info(f"用户 {user.username} 的会员已过期，没有待生效的会员计划，重置为免费用户")
+            logger.info(f"用户 {user.username} 的会员已过期，检查是否有待生效的会员计划")
 
-        _reset_to_free_membership(profile)
-        profile.save(
-            update_fields=[
-                "is_premium",
-                "membership_plan",
-                "premium_expire_date",
-                "storage_limit",
-                "pending_membership_plan",
-                "pending_membership_start_date",
-                "pending_membership_expire_date",
-            ]
-        )
-        logger.info(f"用户 {user.username} 的会员状态已重置为免费用户")
-        _clear_user_profile_cache(user)
+            if profile.pending_membership_plan:
+                if (
+                    profile.pending_membership_expire_date
+                    and profile.pending_membership_expire_date > now
+                ):
+                    logger.info(f"用户 {user.username} 有待生效的会员计划，将其激活")
+                    _activate_pending_membership(profile)
+                    profile.save(
+                        update_fields=[
+                            "is_premium",
+                            "membership_plan",
+                            "premium_expire_date",
+                            "storage_limit",
+                            "pending_membership_plan",
+                            "pending_membership_start_date",
+                            "pending_membership_expire_date",
+                        ]
+                    )
+                    logger.info(
+                        f"用户 {user.username} 的待生效会员计划已激活，新会员类型：{profile.membership_plan.name}"
+                    )
+                    _clear_user_profile_cache(user)
+                    return True
+
+                logger.info(f"用户 {user.username} 的待生效会员计划也已失效，重置为免费用户")
+            else:
+                logger.info(f"用户 {user.username} 的会员已过期，没有待生效的会员计划，重置为免费用户")
+
+            _reset_to_free_membership(profile)
+            profile.save(
+                update_fields=[
+                    "is_premium",
+                    "membership_plan",
+                    "premium_expire_date",
+                    "storage_limit",
+                    "pending_membership_plan",
+                    "pending_membership_start_date",
+                    "pending_membership_expire_date",
+                ]
+            )
+            logger.info(f"用户 {user.username} 的会员状态已重置为免费用户")
+            _clear_user_profile_cache(user)
         return True
     except Exception as e:
         logger.error(f"检查用户会员状态时出错: {str(e)}")
@@ -154,6 +165,10 @@ class UserViewSet(viewsets.ModelViewSet):
         ]:
             return [IsAdminUser()]
         return [IsAuthenticated()]
+
+    def get_serializer_class(self):
+        """公开创建使用注册序列化器，其余操作只允许管理员字段。"""
+        return UserRegisterSerializer if self.action == "create" else UserAdminSerializer
 
     @action(detail=True, methods=["post"], permission_classes=[IsAdminUser])
     def set_premium(self, request, pk=None):
@@ -211,9 +226,10 @@ class UserViewSet(viewsets.ModelViewSet):
             )
         except User.DoesNotExist:
             return error_response("用户不存在", status.HTTP_404_NOT_FOUND)
-        except Exception as e:
+        except Exception:
+            logger.exception("设置会员状态失败")
             return error_response(
-                f"设置会员状态失败: {str(e)}", status.HTTP_400_BAD_REQUEST
+                "设置会员状态失败，请稍后重试", status.HTTP_400_BAD_REQUEST
             )
 
     @action(detail=False, methods=["get"])
@@ -221,12 +237,23 @@ class UserViewSet(viewsets.ModelViewSet):
         """检查用户会员状态（轻量级接口）"""
         user = request.user
 
-        check_and_update_membership(user)
+        from ..services.membership_access import get_entitlements
 
-        profile, created = UserProfile.objects.get_or_create(user=user)
+        entitlements = get_entitlements(user)
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        plan = profile.membership_plan
 
         return success_response(
-            "查询成功", {"is_premium_active": profile.is_premium_active()}
+            "查询成功",
+            {
+                "is_premium_active": entitlements.is_premium_active,
+                "can_collaborate": entitlements.can_collaborate,
+                "membership_plan": (
+                    {"id": plan.id, "name": plan.name, "code": plan.code}
+                    if plan
+                    else None
+                ),
+            },
         )
 
     @action(detail=False, methods=["get"])
@@ -321,21 +348,30 @@ class UserViewSet(viewsets.ModelViewSet):
         if new_password != confirm_password:
             return error_response("两次输入的新密码不一致", status.HTTP_400_BAD_REQUEST)
 
+        try:
+            validate_password(new_password, user)
+        except DjangoValidationError as exc:
+            return error_response(
+                {"new_password": exc.messages},
+                status.HTTP_400_BAD_REQUEST,
+            )
+
         # 验证旧密码
         if not user.check_password(old_password):
             return error_response("旧密码不正确", status.HTTP_400_BAD_REQUEST)
 
-        # 设置新密码
-        user.set_password(new_password)
-        user.save()
+        with transaction.atomic():
+            user.set_password(new_password)
+            user.save(update_fields=["password"])
+            # 密码修改后撤销该用户现有 refresh token，避免旧会话继续刷新。
+            for outstanding in OutstandingToken.objects.filter(user=user):
+                BlacklistedToken.objects.get_or_create(token=outstanding)
 
-        # 更新令牌
-        refresh = RefreshToken.for_user(user)
+            refresh = RefreshToken.for_user(user)
+            response = success_response("密码修改成功")
+            from ..views.auth_views import _set_auth_cookies
 
-        return success_response(
-            "密码修改成功",
-            {"refresh": str(refresh), "access": str(refresh.access_token)},
-        )
+            return _set_auth_cookies(response, str(refresh.access_token), str(refresh))
 
     @action(detail=False, methods=["post"])
     def change_email(self, request):
@@ -366,6 +402,7 @@ class UserViewSet(viewsets.ModelViewSet):
         return success_response("邮箱修改成功", {"email": new_email})
 
 
+@extend_schema(responses=OpenApiTypes.OBJECT, operation_id="admin_analytics")
 @api_view(["GET"])
 @permission_classes([IsAdminUser])
 def admin_analytics(request):

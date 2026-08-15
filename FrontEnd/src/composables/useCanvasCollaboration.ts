@@ -50,7 +50,7 @@ export function useCanvasCollaboration() {
   }, { deep: true })
 
   // 添加协作控制方法
-  const startCollaboration = async (viaLink = false) => {
+  const startCollaboration = async (viaLink = false, shareToken: string | null = null) => {
     const designId = courseStore.currentCourse.id
 
     // 验证设计ID
@@ -85,7 +85,7 @@ export function useCanvasCollaboration() {
 
     // 连接WebSocket，传递通过链接加入的标志
     courseStore.setCurrentCourseId(designId)
-    connect(designId, viaLink)
+    connect(designId, viaLink, false, shareToken)
 
     // 等待一段时间，确保WebSocket有足够时间连接
     await new Promise(resolve => setTimeout(resolve, 1000))
@@ -108,7 +108,7 @@ export function useCanvasCollaboration() {
       setTimeout(() => {
         // 创建一个特殊的JOIN消息，包含请求画布状态的标志
         const userStore = useUserStore()
-        if (!userStore.currentUser) {
+        if (!userStore.currentUser && !viaLink) {
           console.error('用户未登录，无法发送请求')
           return
         }
@@ -123,13 +123,13 @@ export function useCanvasCollaboration() {
         // 构建JOIN消息
         const joinMessage = {
           type: 'join',
-          senderId: String(userStore.currentUser.id),
-          senderName: userStore.currentUser.username || '未知用户',
+          senderId: userStore.currentUser ? String(userStore.currentUser.id) : 'anonymous',
+          senderName: userStore.currentUser?.username || '分享访客',
           sessionId: '',
           timestamp: new Date().toISOString(),
           payload: {
-            userId: userStore.currentUser.id,
-            username: userStore.currentUser.username || '未知用户',
+            userId: userStore.currentUser?.id || null,
+            username: userStore.currentUser?.username || '分享访客',
             color: randomColor,
             viaLink: true,
             requestCanvasState: true, // 请求画布状态的标志
@@ -232,25 +232,9 @@ export function useCanvasCollaboration() {
   }
 
   /**
-   * 发送完整画布状态给指定用户
-   * @param targetUserId 目标用户ID，如果不指定则发送给所有协作者
+   * 通过统一 WebSocket 入口广播当前画布状态。
    */
-  const sendFullCanvasState = (targetUserId?: string) => {
-    // 防抖处理：检查是否在短时间内已经发送过画布状态给该用户
-    if (targetUserId) {
-      const responseKey = `canvas_state_sent_${targetUserId}`
-      const lastResponseTime = parseInt(localStorage.getItem(responseKey) || '0')
-      const now = Date.now()
-      const debounceTime = 10000 // 10秒内不重复发送
-
-      if (now - lastResponseTime < debounceTime) {
-        return
-      }
-
-      // 记录本次发送时间
-      localStorage.setItem(responseKey, now.toString())
-    }
-
+  const sendFullCanvasState = () => {
     if (!isCollaborating.value) {
       console.warn('当前不在协作状态，无法发送画布状态')
       return
@@ -258,10 +242,6 @@ export function useCanvasCollaboration() {
 
     // 获取WebSocket store
     const webSocketStore = useWebSocketStore()
-
-    // 获取当前用户信息
-    const userStore = useUserStore()
-    const currentUserId = userStore.currentUser?.id
 
     // 构建同步响应消息
     const syncResponse = {
@@ -272,50 +252,14 @@ export function useCanvasCollaboration() {
         startPoint: courseStore.startPoint ? JSON.parse(JSON.stringify(courseStore.startPoint)) : null,
         endPoint: courseStore.endPoint ? JSON.parse(JSON.stringify(courseStore.endPoint)) : null
       },
-      timestamp: new Date().toISOString(),
-      targetUser: targetUserId // 指定目标用户
+      timestamp: new Date().toISOString()
     }
 
-    // 尝试使用WebSocket store的方法发送
+    // 只通过统一发送入口发送，目标用户由服务端 requestId 决定。
     try {
-      // 使用类型断言，但提供更具体的类型
-      interface WebSocketStoreWithSendMessage {
-        sendMessage: (type: string, payload: Record<string, unknown>) => boolean;
-      }
-
-      // 检查是否有sendMessage方法
-      if (typeof (webSocketStore as unknown as WebSocketStoreWithSendMessage).sendMessage === 'function') {
-        (webSocketStore as unknown as WebSocketStoreWithSendMessage).sendMessage('sync_response', syncResponse)
-      } else {
-        console.warn('webSocketStore中没有sendMessage方法，尝试直接发送')
-      }
+      webSocketStore.sendSyncResponse(syncResponse)
     } catch (error) {
-      console.error('使用sendMessage方法发送同步响应失败:', error)
-    }
-
-    // 为确保消息能够正确发送，再次尝试直接发送
-    try {
-      interface WebSocketStoreWithState {
-        $state: { socket: WebSocket | null };
-        session?: { id: string };
-      }
-
-      const socket = (webSocketStore as unknown as WebSocketStoreWithState).$state?.socket
-
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        const directMessage = {
-          type: 'sync_response',
-          senderId: String(currentUserId),
-          senderName: userStore.currentUser?.username || '未知用户',
-          sessionId: (webSocketStore as unknown as WebSocketStoreWithState).session?.id || '',
-          timestamp: new Date().toISOString(),
-          payload: syncResponse
-        }
-
-        socket.send(JSON.stringify(directMessage))
-      }
-    } catch (error) {
-      console.error('直接发送同步响应失败:', error)
+      console.error('发送同步响应失败:', error)
     }
   }
 

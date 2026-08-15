@@ -2,15 +2,13 @@
 
 import logging
 from datetime import timedelta
-from decimal import Decimal
-
 from django.utils import timezone
+from django.http import HttpResponse
 from django.views.generic import TemplateView
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from django.db.models import F
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 
@@ -18,13 +16,13 @@ from ..models import (
     MembershipPlan,
     MembershipOrder,
     UserProfile,
-    AIGenerationQuota,
     MembershipInvoice,
 )
 from ..serializers import (
     MembershipOrderSerializer,
     CreateMembershipOrderSerializer,
     MembershipInvoiceSerializer,
+    InvoiceIssueSerializer,
 )
 from ..utils import (
     create_alipay_order,
@@ -34,11 +32,18 @@ from ..utils import (
     error_response,
     ExternalServiceConfigError,
 )
+from ..services.payment_settlement import (
+    PaymentSettlementError,
+    resolve_ai_quota_amount,
+    settle_paid_order,
+    validate_alipay_business_payload,
+)
+from ..throttles import PaymentQueryRateThrottle
 from .obstacle_views import StandardResultsSetPagination
 
 logger = logging.getLogger(__name__)
 
-# AI 配额金额映射（与 ai_views.py 中的价格保持一致）
+# AI 配额金额解析兼容入口
 def _clear_pending_membership(profile):
     """清理待生效会员计划字段。"""
     profile.pending_membership_plan = None
@@ -46,51 +51,30 @@ def _clear_pending_membership(profile):
     profile.pending_membership_expire_date = None
 
 
-AI_QUOTA_AMOUNT_MAP = {
-    Decimal("9.90"): 10,
-    Decimal("24.90"): 30,
-    Decimal("69.90"): 100,
-}
-
-
 def _resolve_ai_quota_amount(order_amount):
-    """
-    根据订单金额推断 AI 配额数量。
-    规则：
-    1. 命中标准套餐价时返回对应套餐次数；
-    2. 否则按 1 元=1 次向下取整，至少 1 次。
-    """
-    if order_amount is None:
-        return 1
-
-    normalized = Decimal(order_amount).quantize(Decimal("0.01"))
-    if normalized in AI_QUOTA_AMOUNT_MAP:
-        return AI_QUOTA_AMOUNT_MAP[normalized]
-
-    return max(1, int(normalized))
+    """兼容旧调用方，统一委托给支付结算服务。"""
+    return resolve_ai_quota_amount(order_amount)
 
 
-def settle_paid_order(order):
-    """
-    订单支付成功后的统一落账入口：
-    - 会员订单：更新会员状态
-    - AI 配额订单（membership_plan=None）：增加 AI 可用次数
-    """
-    if order.membership_plan is None:
-        quota_amount = _resolve_ai_quota_amount(order.amount)
-        profile = order.user.profile
-        quota, _ = AIGenerationQuota.objects.get_or_create(user_profile=profile)
-        quota.purchased_quota = F("purchased_quota") + quota_amount
-        quota.save(update_fields=["purchased_quota"])
-        logger.info(
-            "AI 配额订单落账成功: order_id=%s, user=%s, quota=+%s",
-            order.order_id,
-            order.user.username,
-            quota_amount,
-        )
-        return
+def _scalarize_payment_payload(raw_data):
+    """把支付宝表单 QueryDict 的列表值还原为签名使用的标量值。"""
+    if hasattr(raw_data, "lists"):
+        return {
+            str(key): values[-1]
+            for key, values in raw_data.lists()
+            if values
+        }
 
-    update_user_membership(order.user, order)
+    data = dict(raw_data or {})
+    return {
+        str(key): value[-1] if isinstance(value, (list, tuple)) and value else value
+        for key, value in data.items()
+    }
+
+
+def _alipay_notify_response(success: bool) -> HttpResponse:
+    """返回支付宝要求的纯文本回执，避免 JSON 回执被判定为失败。"""
+    return HttpResponse("success" if success else "fail", content_type="text/plain")
 
 
 @extend_schema(
@@ -129,35 +113,42 @@ def create_membership_order(request):
                 subject=subject,
                 total_amount=float(order.amount),
             )
-            # 保存支付链接
-            order.payment_url = pay_url
-            order.save()
-
-            # 返回订单信息和支付链接
-            return success_response(
-                "订单创建成功",
-                {
-                    "order": MembershipOrderSerializer(order).data,
-                    "payment_url": pay_url,
-                },
-            )
         except ExternalServiceConfigError as e:
-            logger.warning("支付宝配置不可用: %s", str(e))
+            logger.warning("支付宝配置不可用: reason=%s", type(e).__name__)
             order.status = "failed"
-            order.save()
+            order.save(update_fields=["status", "updated_at"])
             return error_response(
-                str(e),
+                "支付功能暂不可用，请稍后重试",
                 status.HTTP_503_SERVICE_UNAVAILABLE,
                 {"order": MembershipOrderSerializer(order).data},
             )
-        except Exception as e:
-            # 记录错误并返回
-            logger.error(f"创建支付宝订单失败: {str(e)}")
-            order.status = "failed"
-            order.save()
+        except Exception:
+            logger.exception("创建支付宝订单失败")
             return error_response(
-                f"创建支付订单失败: {str(e)}", status.HTTP_500_INTERNAL_SERVER_ERROR
+                "创建支付订单失败，请稍后重试",
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                {"order": MembershipOrderSerializer(order).data},
             )
+
+        try:
+            # 保存支付链接；第三方订单可能已经存在，失败时必须保留 pending。
+            order.payment_url = pay_url
+            order.save(update_fields=["payment_url", "updated_at"])
+        except Exception:
+            logger.exception("保存支付宝订单链接失败")
+            return error_response(
+                "支付订单已创建，但本地状态暂未保存，请稍后查询订单",
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                {"order": MembershipOrderSerializer(order).data},
+            )
+
+        return success_response(
+            "订单创建成功",
+            {
+                "order": MembershipOrderSerializer(order).data,
+                "payment_url": pay_url,
+            },
+        )
     else:
         return error_response(serializer.errors, status.HTTP_400_BAD_REQUEST)
 
@@ -221,16 +212,34 @@ def submit_order_invoice(request, order_id):
     except MembershipOrder.DoesNotExist:
         return error_response("订单不存在", status.HTTP_404_NOT_FOUND)
 
+    if order.status != "paid":
+        return error_response(
+            "只有已支付订单可以申请发票",
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    existing_invoice = MembershipInvoice.objects.filter(order=order).first()
+    if existing_invoice and existing_invoice.status == "issued":
+        return error_response(
+            "发票已开具，不能重复修改",
+            status.HTTP_409_CONFLICT,
+        )
+
+    request_data = request.data.copy()
+    request_data.setdefault("email", request.user.email or "")
+    serializer = MembershipInvoiceSerializer(data=request_data)
+    if not serializer.is_valid():
+        return error_response(serializer.errors, status.HTTP_400_BAD_REQUEST)
+
     invoice, _ = MembershipInvoice.objects.update_or_create(
         order=order,
-        defaults={
-            "title": request.data.get("title", ""),
-            "tax_number": request.data.get("tax_number"),
-            "email": request.data.get("email", request.user.email or ""),
-            "status": "submitted",
-        },
+        defaults={**serializer.validated_data, "status": "submitted"},
     )
-    return Response(MembershipInvoiceSerializer(invoice).data, status=status.HTTP_201_CREATED)
+    return success_response(
+        "发票信息提交成功",
+        {"invoice": MembershipInvoiceSerializer(invoice).data},
+        status.HTTP_201_CREATED,
+    )
 
 
 @extend_schema(request=OpenApiTypes.OBJECT, responses=OpenApiTypes.OBJECT, summary="标记发票已开具")
@@ -245,10 +254,19 @@ def mark_invoice_issued(request, order_id):
         invoice = order.invoice
     except (MembershipOrder.DoesNotExist, MembershipInvoice.DoesNotExist):
         return error_response("发票不存在", status.HTTP_404_NOT_FOUND)
+
+    serializer = InvoiceIssueSerializer(data=request.data)
+    if not serializer.is_valid():
+        return error_response(serializer.errors, status.HTTP_400_BAD_REQUEST)
     invoice.status = "issued"
-    invoice.invoice_number = request.data.get("invoice_number") or invoice.invoice_number
+    invoice.invoice_number = (
+        serializer.validated_data.get("invoice_number") or invoice.invoice_number
+    )
     invoice.save(update_fields=["status", "invoice_number", "updated_at"])
-    return Response(MembershipInvoiceSerializer(invoice).data)
+    return success_response(
+        "发票已标记为已开具",
+        {"invoice": MembershipInvoiceSerializer(invoice).data},
+    )
 
 
 @extend_schema(
@@ -257,6 +275,7 @@ def mark_invoice_issued(request, order_id):
 )
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
+@throttle_classes([PaymentQueryRateThrottle])
 def get_order_status(request, order_id):
     """查询订单状态"""
     try:
@@ -273,18 +292,23 @@ def get_order_status(request, order_id):
     # 如果未支付，查询支付宝订单状态
     try:
         query_result = query_alipay_order(order.order_id)
-        logger.info(f"支付宝查询结果: {query_result}")
+        logger.info(
+            "支付宝订单查询: order_id=%s, status=%s",
+            order.order_id,
+            query_result.get("trade_status"),
+        )
 
         # 处理查询结果
-        if query_result.get("trade_status") == "TRADE_SUCCESS":
-            # 更新订单状态
-            order.status = "paid"
-            order.trade_no = query_result.get("trade_no")
-            order.payment_time = timezone.now()
-            order.save()
-
-            # 统一订单落账（会员/AI 配额）
-            settle_paid_order(order)
+        if query_result.get("trade_status") in {"TRADE_SUCCESS", "TRADE_FINISHED"}:
+            validate_alipay_business_payload(query_result, order)
+            order, _ = settle_paid_order(
+                order_id=order.order_id,
+                trade_no=query_result["trade_no"],
+                total_amount=query_result["total_amount"],
+                source="query",
+                payment_time=query_result.get("send_pay_date")
+                or query_result.get("gmt_payment"),
+            )
 
             return success_response(
                 "支付成功", {"order": MembershipOrderSerializer(order).data}
@@ -297,18 +321,18 @@ def get_order_status(request, order_id):
                     "alipay_status": query_result.get("trade_status"),
                 },
             )
-    except ExternalServiceConfigError as e:
-        logger.warning("支付宝配置不可用: %s", str(e))
+    except (ExternalServiceConfigError, PaymentSettlementError) as e:
+        logger.warning("支付宝订单查询未完成: reason=%s", type(e).__name__)
         return error_response(
-            str(e),
+            "支付状态暂时无法确认，请稍后重试",
             status.HTTP_503_SERVICE_UNAVAILABLE,
             {"order": MembershipOrderSerializer(order).data},
         )
-    except Exception as e:
-        logger.error(f"查询支付宝订单状态失败: {str(e)}")
+    except Exception:
+        logger.exception("查询支付宝订单状态失败")
         return error_response(
-            f"查询订单状态失败: {str(e)}",
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "查询订单状态失败，请稍后重试",
+            status.HTTP_503_SERVICE_UNAVAILABLE,
             {"order": MembershipOrderSerializer(order).data},
         )
 
@@ -322,62 +346,63 @@ def get_order_status(request, order_id):
 @permission_classes([AllowAny])
 def alipay_notify(request):
     """支付宝异步通知处理"""
-    # 获取所有参数
-    data = request.data.dict() if hasattr(request.data, "dict") else request.data
+    # 支付宝以 application/x-www-form-urlencoded 发送 QueryDict；直接调用
+    # dict(QueryDict) 会把每个标量变成列表，导致签名和业务校验全部失败。
+    data = _scalarize_payment_payload(request.data)
     signature = data.pop("sign", None)
 
     try:
         # 验证签名
         if not signature or not verify_alipay_callback(data, signature):
-            logger.warning(f"支付宝回调签名验证失败: {data}")
-            return Response({"message": "FAIL", "detail": "签名验证失败"})
+            logger.warning("支付宝回调签名验证失败")
+            return _alipay_notify_response(False)
 
         # 验证接收的信息
         out_trade_no = data.get("out_trade_no")
         trade_status = data.get("trade_status")
 
         if not out_trade_no or not trade_status:
-            return Response({"message": "FAIL", "detail": "参数不完整"})
+            return _alipay_notify_response(False)
 
         # 查找订单
         try:
             order = MembershipOrder.objects.get(order_id=out_trade_no)
         except MembershipOrder.DoesNotExist:
-            logger.warning(f"支付宝回调：找不到订单 {out_trade_no}")
-            return Response({"message": "FAIL", "detail": "订单不存在"})
+            logger.warning("支付宝回调找不到订单: order_id=%s", out_trade_no)
+            return _alipay_notify_response(False)
 
         # 处理不同的交易状态
         if trade_status == "TRADE_SUCCESS" or trade_status == "TRADE_FINISHED":
-            # 如果订单已处理，防止重复更新
-            if order.status == "paid":
-                return Response({"message": "SUCCESS", "detail": "订单已处理"})
+            validate_alipay_business_payload(data, order, require_app_id=True)
+            _, settled_now = settle_paid_order(
+                order_id=order.order_id,
+                trade_no=data["trade_no"],
+                total_amount=data["total_amount"],
+                source="notify",
+                payment_time=data.get("gmt_payment") or data.get("notify_time"),
+            )
 
-            # 更新订单状态
-            order.status = "paid"
-            order.trade_no = data.get("trade_no")
-            order.payment_time = timezone.now()
-            order.save()
-
-            # 统一订单落账（会员/AI 配额）
-            settle_paid_order(order)
-
-            logger.info(f"订单 {out_trade_no} 支付成功，交易号: {data.get('trade_no')}")
-            return Response({"message": "SUCCESS"})
+            logger.info(
+                "订单支付回调处理完成: order_id=%s, newly_settled=%s",
+                out_trade_no,
+                settled_now,
+            )
+            return _alipay_notify_response(True)
         else:
             # 其他状态不处理
-            return Response({"message": "SUCCESS", "detail": "等待交易完成"})
-    except ExternalServiceConfigError as e:
-        logger.warning("支付宝回调处理时配置不可用: %s", str(e))
-        return Response({"message": "FAIL", "detail": str(e)})
-    except Exception as e:
-        logger.error(f"处理支付宝回调时出错: {str(e)}")
-        return Response({"message": "FAIL", "detail": str(e)})
+            return _alipay_notify_response(True)
+    except (ExternalServiceConfigError, PaymentSettlementError) as e:
+        logger.warning("支付宝回调处理失败: reason=%s", type(e).__name__)
+        return _alipay_notify_response(False)
+    except Exception:
+        logger.exception("处理支付宝回调时出错")
+        return _alipay_notify_response(False)
 
 
-def update_user_membership(user, order):
+def update_user_membership(user, order, profile=None):
     """更新用户会员状态"""
     # 获取用户资料
-    profile = user.profile
+    profile = profile or UserProfile.objects.get_or_create(user=user)[0]
 
     # 获取当前时间
     now = timezone.now()
@@ -486,9 +511,13 @@ class PaymentSuccessView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         order_id = self.request.GET.get("out_trade_no")
-        if order_id:
+        if order_id and self.request.user.is_authenticated:
             try:
-                order = MembershipOrder.objects.get(order_id=order_id)
+                order = MembershipOrder.objects.select_related("membership_plan").get(
+                    order_id=order_id,
+                    user=self.request.user,
+                    status="paid",
+                )
                 context["order"] = order
             except MembershipOrder.DoesNotExist:
                 pass

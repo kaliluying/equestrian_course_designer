@@ -91,13 +91,9 @@ axiosInstance.interceptors.response.use(
       originalRequest._retry = true
 
       try {
-        await axios.post(
+        await axiosInstance.post(
           apiConfig.endpoints.user.refreshToken,
           {},
-          {
-            baseURL: apiConfig.apiBaseUrl,
-            withCredentials: true,
-          },
         )
 
         return axiosInstance(originalRequest)
@@ -131,20 +127,20 @@ axiosInstance.interceptors.response.use(
 
 // 创建一个包装的请求对象，处理泛型类型
 const request = {
-  get: <T>(url: string, config: AxiosRequestConfig = {}) => {
-    return axiosInstance.get<T, T>(url, config)
+  get: <T>(url: string, config: AxiosRequestConfig = {}): Promise<T> => {
+    return axiosInstance.get<T, T>(url, config) as Promise<T>
   },
-  post: <T>(url: string, data?: unknown, config: AxiosRequestConfig = {}) => {
-    return axiosInstance.post<T, T>(url, data, config)
+  post: <T>(url: string, data?: unknown, config: AxiosRequestConfig = {}): Promise<T> => {
+    return axiosInstance.post<T, T>(url, data, config) as Promise<T>
   },
-  put: <T>(url: string, data?: unknown, config: AxiosRequestConfig = {}) => {
-    return axiosInstance.put<T, T>(url, data, config)
+  put: <T>(url: string, data?: unknown, config: AxiosRequestConfig = {}): Promise<T> => {
+    return axiosInstance.put<T, T>(url, data, config) as Promise<T>
   },
-  patch: <T>(url: string, data?: unknown, config: AxiosRequestConfig = {}) => {
-    return axiosInstance.patch<T, T>(url, data, config)
+  patch: <T>(url: string, data?: unknown, config: AxiosRequestConfig = {}): Promise<T> => {
+    return axiosInstance.patch<T, T>(url, data, config) as Promise<T>
   },
-  delete: <T>(url: string, config: AxiosRequestConfig = {}) => {
-    return axiosInstance.delete<T, T>(url, config)
+  delete: <T>(url: string, config: AxiosRequestConfig = {}): Promise<T> => {
+    return axiosInstance.delete<T, T>(url, config) as Promise<T>
   },
 }
 

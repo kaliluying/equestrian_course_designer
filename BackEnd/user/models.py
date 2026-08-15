@@ -62,6 +62,12 @@ def user_design_file_path(instance, filename):
         return get_file_path(instance, filename, f'user_{instance.author.id}/designs/files')
 
 
+def design_version_image_path(instance, filename):
+    """为版本图片快照生成不可预测且按设计隔离的存储路径。"""
+    extension = os.path.splitext(filename)[1].lower() or '.bin'
+    return f'design_versions/{instance.design_id}/{uuid.uuid4().hex}{extension}'
+
+
 class Design(models.Model):
     title = models.CharField(max_length=100, verbose_name='设计图标题')
     image = models.ImageField(
@@ -151,6 +157,12 @@ class DesignVersion(models.Model):
     description = models.TextField(blank=True, null=True, verbose_name='设计描述')
     remark = models.TextField(blank=True, null=True, verbose_name='版本备注')
     course_data = models.JSONField(default=dict, verbose_name='路线数据')
+    image_snapshot = models.FileField(
+        upload_to=design_version_image_path,
+        blank=True,
+        null=True,
+        verbose_name='设计图片快照',
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
 
     def __str__(self):
@@ -402,6 +414,43 @@ class CollaborationRole(models.Model):
         verbose_name = '协作角色'
         verbose_name_plural = '协作角色'
         unique_together = ('design', 'user')
+
+
+class CollaborationShareLink(models.Model):
+    """服务端可撤销的协作分享链接。"""
+
+    ROLE_CHOICES = (
+        ('editor', '编辑者'),
+        ('viewer', '查看者'),
+        ('commenter', '评论者'),
+    )
+
+    design = models.ForeignKey(
+        Design,
+        on_delete=models.CASCADE,
+        related_name='share_links',
+        verbose_name='设计',
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='created_collaboration_share_links',
+        verbose_name='创建者',
+    )
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='editor', verbose_name='角色')
+    expires_at = models.DateTimeField(verbose_name='过期时间')
+    password_hash = models.CharField(max_length=255, blank=True, default='', verbose_name='密码哈希')
+    is_revoked = models.BooleanField(default=False, verbose_name='是否已撤销')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='创建时间')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='更新时间')
+
+    class Meta:
+        verbose_name = '协作分享链接'
+        verbose_name_plural = '协作分享链接'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['design', 'is_revoked', 'expires_at']),
+        ]
 
 
 class CollaborationEvent(models.Model):
