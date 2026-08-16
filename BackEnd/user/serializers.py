@@ -366,9 +366,12 @@ class SetPremiumSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         """启用会员时必须绑定一个当前有效的会员计划。"""
-        if attrs.get("is_premium") and not attrs.get("membership_plan_id"):
+        plan = attrs.get("membership_plan_id")
+        if attrs.get("is_premium") and (
+            not plan or plan.code == "free"
+        ):
             raise serializers.ValidationError(
-                {"membership_plan_id": ["开启会员必须指定有效的会员计划"]}
+                {"membership_plan_id": ["开启会员必须指定非免费会员计划"]}
             )
         return attrs
 

@@ -430,3 +430,16 @@ class AIQuotaPurchaseAPITest(TestCase):
 
         create_order.assert_not_called()
         self.assertEqual(MembershipOrder.objects.filter(user=self.user).count(), 0)
+
+    @patch("user.ai_views.create_alipay_order")
+    def test_purchase_ai_quota_rejects_non_package_amount(self, create_order):
+        """购买次数只能选择已配置的固定套餐。"""
+        response = self.client.post(
+            "/user/ai/purchase/",
+            data={"quota": 11},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        create_order.assert_not_called()
+        self.assertEqual(MembershipOrder.objects.filter(user=self.user).count(), 0)

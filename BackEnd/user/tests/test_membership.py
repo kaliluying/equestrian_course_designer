@@ -120,6 +120,27 @@ class MembershipAccessServiceTest(TestCase):
         self.profile.refresh_from_db()
         self.assertIsNone(self.profile.pending_membership_plan)
 
+    def test_inconsistent_premium_without_expiry_resets_to_free_entitlements(self):
+        """没有到期时间的异常会员状态不能继续暴露非免费权益。"""
+        from user.services.membership_access import get_entitlements
+
+        self.profile.is_premium = True
+        self.profile.membership_plan = self.standard_plan
+        self.profile.premium_expire_date = None
+        self.profile.storage_limit = self.standard_plan.storage_limit
+        self.profile.save()
+
+        snapshot = get_entitlements(self.user)
+
+        self.assertFalse(snapshot.is_premium_active)
+        self.assertEqual(snapshot.plan_code, "free")
+        self.assertEqual(snapshot.custom_obstacle_limit, 10)
+        self.assertEqual(snapshot.ai_monthly_quota, 0)
+        self.assertEqual(snapshot.template_publish_limit, 3)
+        self.profile.refresh_from_db()
+        self.assertFalse(self.profile.is_premium)
+        self.assertEqual(self.profile.membership_plan, self.free_plan)
+
 
     def test_assert_design_capacity_raises_unified_error_when_limit_reached(self):
         """设计数量达到额度时应抛出统一容量错误"""
@@ -297,6 +318,21 @@ class SetPremiumAdminAPITest(TestCase):
 
         self.assertEqual(missing_plan.status_code, 400)
         self.assertEqual(invalid_duration.status_code, 400)
+        self.profile.refresh_from_db()
+        self.assertFalse(self.profile.is_premium)
+
+    def test_enabling_free_plan_cannot_mark_user_premium(self):
+        """免费计划不能与有效会员状态同时存在。"""
+        response = self.client.post(
+            f"/user/users/{self.user.id}/set_premium/",
+            data={
+                "is_premium": True,
+                "membership_plan_id": self.free_plan.id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
         self.profile.refresh_from_db()
         self.assertFalse(self.profile.is_premium)
 
@@ -516,6 +552,35 @@ class MembershipDowngradeActivationTest(TestCase):
             self.profile.pending_membership_expire_date,
             future_expire_at + timezone.timedelta(days=30),
         )
+
+    def test_settlement_activates_pending_plan_before_new_membership_order(self):
+        """新支付结算不能覆盖已付且待生效的会员权益。"""
+        from user.services.payment_settlement import settle_paid_order
+
+        pending_expire_at = self._prepare_expired_premium_with_pending_standard()
+        order = MembershipOrder.objects.create(
+            user=self.user,
+            membership_plan=self.premium_plan,
+            amount=self.premium_plan.monthly_price,
+            billing_cycle="month",
+            status="pending",
+        )
+
+        _, settled_now = settle_paid_order(
+            order_id=order.order_id,
+            trade_no="TRADE-PENDING-MEMBERSHIP",
+            total_amount=order.amount,
+            source="notify",
+        )
+
+        self.assertTrue(settled_now)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.membership_plan, self.premium_plan)
+        self.assertEqual(
+            self.profile.premium_expire_date,
+            pending_expire_at + timezone.timedelta(days=30),
+        )
+        self.assertIsNone(self.profile.pending_membership_plan)
 
     def test_repeated_downgrade_orders_extend_pending_period(self):
         """连续购买同一降级计划不能覆盖之前已支付的待生效期限。"""

@@ -31,10 +31,13 @@ def _normalize_payment_time(value):
     return value
 
 
+AI_QUOTA_PRICES = {
+    10: Decimal("9.90"),
+    30: Decimal("24.90"),
+    100: Decimal("69.90"),
+}
 AI_QUOTA_AMOUNT_MAP = {
-    Decimal("9.90"): 10,
-    Decimal("24.90"): 30,
-    Decimal("69.90"): 100,
+    price: amount for amount, price in AI_QUOTA_PRICES.items()
 }
 
 
@@ -100,9 +103,10 @@ def validate_alipay_business_payload(
 def resolve_ai_quota_amount(order_amount) -> int:
     """根据已支付订单金额解析 AI 配额数量。"""
     normalized = _normalize_amount(order_amount)
-    if normalized in AI_QUOTA_AMOUNT_MAP:
+    try:
         return AI_QUOTA_AMOUNT_MAP[normalized]
-    return max(1, int(normalized))
+    except KeyError as exc:
+        raise PaymentSettlementError("AI 配额订单金额无效") from exc
 
 
 @transaction.atomic
@@ -162,8 +166,11 @@ def settle_paid_order(
         quota.purchased_quota += resolve_ai_quota_amount(order.amount)
         quota.save(update_fields=["purchased_quota", "updated_at"])
     else:
+        from user.views.user_views import check_and_update_membership
         from user.views.payment_views import update_user_membership
 
+        if not check_and_update_membership(order.user):
+            raise PaymentSettlementError("会员状态检查失败")
         update_user_membership(order.user, order, profile=profile)
 
     logger.info(

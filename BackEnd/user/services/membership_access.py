@@ -91,7 +91,7 @@ def get_entitlements(user: User) -> EntitlementSnapshot:
     ).get_or_create(user=user)
 
     is_active = profile.is_premium_active()
-    plan = profile.membership_plan
+    plan = profile.membership_plan if is_active else None
     plan_code = plan.code if plan else "free"
     plan_name = plan.name if plan else "免费用户"
     design_limit = profile.get_storage_limit()

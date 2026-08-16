@@ -20,13 +20,11 @@ from .models import AIGenerationHistory, AIGenerationQuota, MembershipOrder, Use
 from .llm_providers import get_llm_provider
 from .route_generator import RouteGenerator, RouteConfig
 from .route_validator import RouteValidator
+from .services.payment_settlement import AI_QUOTA_PRICES
 from .utils import ExternalServiceConfigError, create_alipay_order, parse_query_datetime
 from .throttles import AIRateThrottle
 
 logger = logging.getLogger(__name__)
-
-# 价格配置
-AI_QUOTA_PRICES = {10: 9.90, 30: 24.90, 100: 69.90}
 
 # 配置常量
 MAX_PROMPT_LENGTH = 500
@@ -861,12 +859,19 @@ def purchase_ai_quota(request):
     quota_amount = request.data.get("quota", 10)
 
     try:
-        quota_amount = _parse_integer(quota_amount, "购买数量", minimum=1, maximum=1000)
+        quota_amount = _parse_integer(
+            quota_amount,
+            "购买数量",
+            minimum=1,
+            maximum=max(AI_QUOTA_PRICES),
+        )
     except ValueError:
         return _ai_response(status.HTTP_400_BAD_REQUEST, "购买数量无效")
 
-    raw_price = AI_QUOTA_PRICES.get(quota_amount, quota_amount * 1.0)
-    price = Decimal(str(raw_price)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    if quota_amount not in AI_QUOTA_PRICES:
+        return _ai_response(status.HTTP_400_BAD_REQUEST, "购买数量必须是 10、30 或 100")
+
+    price = AI_QUOTA_PRICES[quota_amount]
     order_id = f"AI{uuid.uuid4().hex}"
     subject = f"AI 路线生成次数包-{quota_amount}次"
 

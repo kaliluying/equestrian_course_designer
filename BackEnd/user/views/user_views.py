@@ -95,16 +95,33 @@ def check_and_update_membership(user):
             ).get(user=user)
             now = timezone.now()
 
-            if not (
+            is_active_membership = (
+                profile.is_premium
+                and profile.membership_plan
+                and profile.membership_plan.code != "free"
+                and profile.premium_expire_date
+                and profile.premium_expire_date > now
+            )
+            is_consistent_free_state = (
+                not profile.is_premium
+                and (
+                    profile.membership_plan is None
+                    or profile.membership_plan.code == "free"
+                )
+                and profile.premium_expire_date is None
+                and profile.pending_membership_plan is None
+            )
+            if is_active_membership or is_consistent_free_state:
+                return True
+
+            membership_expired = bool(
                 profile.is_premium
                 and profile.premium_expire_date
                 and profile.premium_expire_date <= now
-            ):
-                return True
+            )
+            logger.info(f"用户 {user.username} 的会员状态已过期或不一致，检查是否有待生效的会员计划")
 
-            logger.info(f"用户 {user.username} 的会员已过期，检查是否有待生效的会员计划")
-
-            if profile.pending_membership_plan:
+            if membership_expired and profile.pending_membership_plan:
                 if (
                     profile.pending_membership_expire_date
                     and profile.pending_membership_expire_date > now

@@ -60,6 +60,28 @@ class PaymentSettlementTests(TestCase):
         self.assertEqual(repeated.trade_no, "TRADE-ONCE")
         self.assertEqual(quota.purchased_quota, 30)
 
+    def test_unknown_ai_order_amount_is_rejected(self):
+        order = MembershipOrder.objects.create(
+            user=self.user,
+            membership_plan=None,
+            amount=Decimal("11.00"),
+            billing_cycle="month",
+            status="pending",
+        )
+
+        with self.assertRaises(PaymentSettlementError):
+            settle_paid_order(
+                order_id=order.order_id,
+                trade_no="TRADE-UNKNOWN-QUOTA",
+                total_amount="11.00",
+                source="notify",
+            )
+
+        order.refresh_from_db()
+        self.assertEqual(order.status, "pending")
+        quota = AIGenerationQuota.objects.get(user_profile=self.profile)
+        self.assertEqual(quota.purchased_quota, 0)
+
     def test_amount_mismatch_does_not_change_order_or_quota(self):
         order = MembershipOrder.objects.create(
             user=self.user,
