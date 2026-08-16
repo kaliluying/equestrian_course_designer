@@ -16,6 +16,7 @@ MAX_ROUTE_UPLOAD_BYTES = 2 * 1024 * 1024
 MAX_ROUTE_DATA_BYTES = 512 * 1024
 MAX_CUSTOM_OBSTACLE_DATA_BYTES = 256 * 1024
 MAX_JSON_DEPTH = 12
+MAX_DESCRIPTION_LENGTH = 2_000
 
 
 def _json_depth(value, depth=0):
@@ -423,6 +424,12 @@ class DesignSerializer(serializers.ModelSerializer):
     """设计序列化器"""
     image = serializers.ImageField(required=False, allow_null=True)
     course_data = serializers.JSONField(required=False, write_only=True)
+    description = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        max_length=MAX_DESCRIPTION_LENGTH,
+    )
     author_username = serializers.SerializerMethodField()
     is_liked = serializers.SerializerMethodField()
     image_url = serializers.SerializerMethodField()
@@ -626,7 +633,12 @@ class DesignVersionUpdateSerializer(serializers.Serializer):
     """设计版本可编辑字段。"""
 
     title = serializers.CharField(required=False, max_length=100, allow_blank=False)
-    remark = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    remark = serializers.CharField(
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        max_length=MAX_DESCRIPTION_LENGTH,
+    )
 
 
 class DesignListSerializer(serializers.ModelSerializer):
@@ -790,6 +802,12 @@ class CustomObstacleSerializer(serializers.ModelSerializer):
 
 class CourseTemplateSerializer(serializers.ModelSerializer):
     """路线模板序列化器。"""
+    description = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        max_length=MAX_DESCRIPTION_LENGTH,
+    )
     author_username = serializers.SerializerMethodField()
     is_favorited = serializers.SerializerMethodField()
 

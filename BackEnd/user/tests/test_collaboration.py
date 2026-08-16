@@ -134,6 +134,34 @@ class CollaborationEnhancementAPITest(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("user", response.json()["message"])
 
+    def test_collaboration_context_lists_are_bounded(self):
+        """评论和协作事件接口只返回最新的固定数量，避免历史数据撑爆响应。"""
+        from user.models import CollaborationEvent, DesignComment
+
+        for index in range(201):
+            DesignComment.objects.create(
+                design=self.design,
+                user=self.owner,
+                content=f"评论 {index}",
+            )
+            CollaborationEvent.objects.create(
+                design=self.design,
+                user=self.owner,
+                event_type="move_obstacle",
+                object_id=str(index),
+                payload={"index": index},
+            )
+
+        comments_response = self.client.get(f"/user/designs/{self.design.id}/comments/")
+        events_response = self.client.get(
+            f"/user/designs/{self.design.id}/collaboration-events/"
+        )
+
+        self.assertEqual(comments_response.status_code, 200)
+        self.assertEqual(events_response.status_code, 200)
+        self.assertEqual(len(comments_response.json()), 200)
+        self.assertEqual(len(events_response.json()), 200)
+
     def test_viewer_role_cannot_edit_but_commenter_can_comment(self):
         """协作角色应区分查看、评论和编辑权限"""
         from user.models import CollaborationRole

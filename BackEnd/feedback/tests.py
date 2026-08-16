@@ -4,8 +4,24 @@ from unittest.mock import patch
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.utils import timezone
+from rest_framework.test import APIClient
 
 from user.models import MembershipOrder
+
+
+class FeedbackInputValidationTests(TestCase):
+    def test_content_length_is_bounded(self):
+        response = APIClient().post(
+            "/api/feedback/",
+            {
+                "type": "bug",
+                "title": "输入校验",
+                "content": "x" * 10_001,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
 
 
 class FeedbackDashboardTests(TestCase):

@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from datetime import timedelta
 from pathlib import Path
 import os
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -166,13 +167,27 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 16 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 12 * 1024 * 1024
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000
 
-# 站点域名配置，用于媒体文件URL生成
-USE_HTTPS = os.environ.get("USE_HTTPS", "False").lower() == "true"
+# 站点域名配置，用于媒体文件 URL 和支付回调 URL 生成。
+USE_HTTPS = os.environ.get("USE_HTTPS", "False").strip().lower() == "true"
 SITE_DOMAIN = os.environ.get("SITE_DOMAIN", "localhost:8000").strip().rstrip("/")
 if SITE_DOMAIN.startswith(("http://", "https://")):
     SITE_BASE_URL = SITE_DOMAIN
 else:
     SITE_BASE_URL = f"{'https' if USE_HTTPS else 'http'}://{SITE_DOMAIN}"
+if not DEBUG and not USE_HTTPS:
+    raise ValueError("USE_HTTPS must be true in production")
+parsed_site_url = urlparse(SITE_BASE_URL)
+if (
+    parsed_site_url.scheme not in {"http", "https"}
+    or not parsed_site_url.hostname
+    or parsed_site_url.path
+    or parsed_site_url.params
+    or parsed_site_url.query
+    or parsed_site_url.fragment
+):
+    raise ValueError("SITE_DOMAIN must be a valid host in production")
+if not DEBUG and parsed_site_url.scheme != "https":
+    raise ValueError("SITE_DOMAIN must use HTTPS in production")
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
@@ -342,9 +357,18 @@ CORS_ALLOW_HEADERS = [
     "x-requested-with",
 ]
 
-# 前端URL配置
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://192.168.1.2:5173")  # 开发环境
-# FRONTEND_URL = 'https://equestrian.top'  # 生产环境
+# 前端 URL 配置；生产环境必须显式使用 HTTPS，避免密码重置链接指向本地或明文地址。
+FRONTEND_URL = os.environ.get(
+    "FRONTEND_URL",
+    "http://localhost:5173" if DEBUG else "",
+).strip().rstrip("/")
+if not FRONTEND_URL:
+    raise ValueError("FRONTEND_URL must be set in production")
+parsed_frontend_url = urlparse(FRONTEND_URL)
+if parsed_frontend_url.scheme not in {"http", "https"} or not parsed_frontend_url.netloc:
+    raise ValueError("FRONTEND_URL must be a valid HTTP(S) URL")
+if not DEBUG and parsed_frontend_url.scheme != "https":
+    raise ValueError("FRONTEND_URL must use HTTPS in production")
 
 
 # 邮件配置

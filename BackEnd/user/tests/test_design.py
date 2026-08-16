@@ -243,6 +243,17 @@ class DesignCollaborationCRUDAPITest(TestCase):
         self.design.refresh_from_db()
         self.assertEqual(self.design.title, "编辑者更新标题")
 
+    def test_design_description_length_is_bounded(self):
+        self.client.force_authenticate(user=self.editor)
+
+        response = self.client.patch(
+            f"/user/designs/{self.design.id}/",
+            data={"description": "x" * 2_001},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
     def test_editor_cannot_change_or_toggle_sharing(self):
         self.client.force_authenticate(user=self.editor)
 
@@ -516,6 +527,13 @@ class DesignVersionHistoryAPITest(TestCase):
         self.assertEqual(version.remark, "赛前调整版本")
         self.assertEqual(response.json()["remark"], "赛前调整版本")
 
+        too_long_response = self.client.patch(
+            f"/user/designs/{design.id}/versions/{version.id}/",
+            data={"remark": "x" * 2_001},
+            format="json",
+        )
+        self.assertEqual(too_long_response.status_code, 400)
+
     def test_restore_and_copy_reject_version_without_image_snapshot(self):
         """缺失图片快照时不得把历史路线与当前图片混合。"""
         from user.models import DesignVersion
@@ -649,6 +667,15 @@ class CourseTemplateMarketAPITest(TestCase):
 
     def test_template_numeric_filters_reject_invalid_values(self):
         response = self.client.get("/user/templates/?obstacle_count=not-a-number")
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_template_description_length_is_bounded(self):
+        response = self.client.post(
+            "/user/templates/",
+            data={**self._template_payload(), "description": "x" * 2_001},
+            format="json",
+        )
 
         self.assertEqual(response.status_code, 400)
 

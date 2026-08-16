@@ -4,6 +4,7 @@ from .models import Feedback
 
 class FeedbackSerializer(serializers.ModelSerializer):
     """反馈序列化器"""
+    content = serializers.CharField(max_length=10_000)
 
     class Meta:
         model = Feedback

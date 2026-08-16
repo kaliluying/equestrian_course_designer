@@ -29,6 +29,7 @@
    - `DB_*`
    - `REDIS_URL`
    - `CACHE_REDIS_URL`
+   - `FRONTEND_URL`（密码重置链接使用的 HTTPS 前端地址）
    - `SITE_DOMAIN`
    - `USE_HTTPS=true`
 

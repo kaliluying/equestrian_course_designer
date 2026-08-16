@@ -3871,7 +3871,7 @@
                     "description": {
                         "type": "string",
                         "nullable": true,
-                        "title": "模板描述"
+                        "maxLength": 2000
                     },
                     "difficulty": {
                         "allOf": [
@@ -3992,7 +3992,7 @@
                     "description": {
                         "type": "string",
                         "nullable": true,
-                        "title": "模板描述"
+                        "maxLength": 2000
                     },
                     "difficulty": {
                         "allOf": [
@@ -4153,6 +4153,11 @@
                         "format": "uri",
                         "nullable": true
                     },
+                    "description": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 2000
+                    },
                     "author_username": {
                         "type": "string",
                         "nullable": true,
@@ -4203,11 +4208,6 @@
                         "type": "boolean",
                         "readOnly": true,
                         "title": "是否分享"
-                    },
-                    "description": {
-                        "type": "string",
-                        "nullable": true,
-                        "title": "设计描述"
                     },
                     "likes_count": {
                         "type": "integer",
@@ -4344,6 +4344,11 @@
                     "course_data": {
                         "writeOnly": true
                     },
+                    "description": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 2000
+                    },
                     "title": {
                         "type": "string",
                         "minLength": 1,
@@ -4355,11 +4360,6 @@
                         "format": "binary",
                         "nullable": true,
                         "title": "设计图文件"
-                    },
-                    "description": {
-                        "type": "string",
-                        "nullable": true,
-                        "title": "设计描述"
                     }
                 },
                 "required": [
@@ -4476,7 +4476,7 @@
                     },
                     "content": {
                         "type": "string",
-                        "title": "详细描述"
+                        "maxLength": 10000
                     },
                     "contact": {
                         "type": "string",
@@ -4520,7 +4520,7 @@
                     "content": {
                         "type": "string",
                         "minLength": 1,
-                        "title": "详细描述"
+                        "maxLength": 10000
                     },
                     "contact": {
                         "type": "string",
@@ -4950,7 +4950,7 @@
                     "description": {
                         "type": "string",
                         "nullable": true,
-                        "title": "模板描述"
+                        "maxLength": 2000
                     },
                     "difficulty": {
                         "allOf": [
@@ -5027,6 +5027,11 @@
                     "course_data": {
                         "writeOnly": true
                     },
+                    "description": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 2000
+                    },
                     "title": {
                         "type": "string",
                         "minLength": 1,
@@ -5038,11 +5043,6 @@
                         "format": "binary",
                         "nullable": true,
                         "title": "设计图文件"
-                    },
-                    "description": {
-                        "type": "string",
-                        "nullable": true,
-                        "title": "设计描述"
                     }
                 }
             },
@@ -5057,7 +5057,8 @@
                     },
                     "remark": {
                         "type": "string",
-                        "nullable": true
+                        "nullable": true,
+                        "maxLength": 2000
                     }
                 }
             },
@@ -5082,7 +5083,7 @@
                     "content": {
                         "type": "string",
                         "minLength": 1,
-                        "title": "详细描述"
+                        "maxLength": 10000
                     },
                     "contact": {
                         "type": "string",

@@ -57,6 +57,7 @@ from ..throttles import ExportRateThrottle
 logger = logging.getLogger(__name__)
 
 SUPPORTED_DOWNLOAD_TYPES = ("image", "json", "png", "pdf", "report", "zip")
+MAX_COLLABORATION_CONTEXT_ITEMS = 200
 IMAGE_CONTENT_TYPES = {
     "png": "image/png",
     "jpg": "image/jpeg",
@@ -508,7 +509,10 @@ class DesignViewSet(viewsets.ModelViewSet):
         if design is None:
             return error_response("设计不存在或您无权访问", status.HTTP_404_NOT_FOUND)
         if request.method == "GET":
-            serializer = DesignCommentSerializer(DesignComment.objects.filter(design=design), many=True)
+            comments = DesignComment.objects.filter(design=design).order_by(
+                "-created_at", "-id"
+            )[:MAX_COLLABORATION_CONTEXT_ITEMS]
+            serializer = DesignCommentSerializer(comments, many=True)
             return Response(serializer.data)
 
         if role not in {"owner", "editor", "commenter"}:
@@ -581,6 +585,7 @@ class DesignViewSet(viewsets.ModelViewSet):
                     status.HTTP_400_BAD_REQUEST,
                 )
             events = events.filter(user_id=user_id)
+        events = events.order_by("-created_at", "-id")[:MAX_COLLABORATION_CONTEXT_ITEMS]
         return Response(CollaborationEventSerializer(events, many=True).data)
 
     @extend_schema(
@@ -594,7 +599,9 @@ class DesignViewSet(viewsets.ModelViewSet):
         design, role = self._get_collaboration_context(pk)
         if design is None:
             return error_response("设计不存在或您无权访问", status.HTTP_404_NOT_FOUND)
-        versions = DesignVersion.objects.filter(design=design)
+        versions = DesignVersion.objects.filter(design=design).order_by(
+            "-version_number"
+        )[:MAX_COLLABORATION_CONTEXT_ITEMS]
         serializer = DesignVersionSerializer(versions, many=True)
         return Response(serializer.data)
 
