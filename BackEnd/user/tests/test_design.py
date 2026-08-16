@@ -362,6 +362,29 @@ class DesignVersionHistoryAPITest(TestCase):
             [os.path.basename(old_image_path)],
         )
 
+    def test_metadata_update_failure_keeps_existing_storage_files(self):
+        """仅更新元数据失败时不能删除仍被数据库引用的旧文件。"""
+        design = self._create_design(title="元数据回滚设计")
+        old_image_path = os.path.join(self.media_root, design.image.name)
+        old_download_path = os.path.join(self.media_root, design.download.name)
+
+        self.client.raise_request_exception = False
+        with patch(
+            "user.views.design_views.create_design_version",
+            side_effect=RuntimeError("version creation failed"),
+        ):
+            response = self.client.patch(
+                f"/user/designs/{design.id}/",
+                data={"title": "不会保存的新标题"},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 500)
+        design.refresh_from_db()
+        self.assertEqual(design.title, "元数据回滚设计")
+        self.assertTrue(os.path.exists(old_image_path))
+        self.assertTrue(os.path.exists(old_download_path))
+
     def test_restore_version_updates_design_and_creates_restore_version(self):
         """恢复版本应更新当前设计并新增 restore 版本"""
         design = self._create_design(title="当前标题", payload={"obstacles": [{"id": "old"}]})

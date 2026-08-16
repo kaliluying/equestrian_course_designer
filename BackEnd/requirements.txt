@@ -13,5 +13,5 @@ Pillow==12.3.0  # 用于图片处理
 pycryptodome==3.23.0  # 加密库，支付宝SDK依赖
 python-alipay-sdk==3.4.0  # 支付宝SDK
 python-dotenv==1.2.2
-openai==3.0.0  # AI 路线生成 LLM Provider
+openai==3.1.0  # AI 路线生成 LLM Provider
 whitenoise==6.12.0  # 静态文件服务中间件，settings.py 已启用

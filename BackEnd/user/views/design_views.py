@@ -288,6 +288,7 @@ class DesignViewSet(viewsets.ModelViewSet):
         """更新设计时保留原作者"""
         # 获取原设计对象
         instance = self.get_object()
+        previous_files = _capture_design_files(instance)
         if instance.author_id != self.request.user.id:
             if "is_shared" in self.request.data:
                 raise PermissionDenied("只有设计作者可以修改分享状态")
@@ -313,7 +314,14 @@ class DesignViewSet(viewsets.ModelViewSet):
             logger.info("设计更新成功: ID=%s", instance.id)
         except Exception:
             if design is not None:
-                _delete_design_files(_capture_design_files(design))
+                current_files = _capture_design_files(design)
+                new_files = {
+                    field_name: file_info
+                    for field_name, file_info in current_files.items()
+                    if field_name not in previous_files
+                    or file_info[1] != previous_files[field_name][1]
+                }
+                _delete_design_files(new_files)
             logger.exception("设计更新失败: ID=%s", instance.id)
             raise
 

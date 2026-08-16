@@ -72,11 +72,19 @@ export default defineConfig({
           }
           return `${ext}/[name].[ext]`
         },
-        manualChunks: {
-          'vue-core': ['vue', 'pinia', 'vue-router'],
-          'element-ui': ['element-plus'],
-          'export-engine': ['html2canvas', 'jspdf'],
-          'utils': ['axios', 'uuid'],
+        manualChunks(id) {
+          if (
+            id.includes('/node_modules/vue/')
+            || id.includes('/node_modules/pinia/')
+            || id.includes('/node_modules/vue-router/')
+          ) return 'vue-core'
+          if (id.includes('/node_modules/element-plus/')) return 'element-ui'
+          if (id.includes('/node_modules/html2canvas/') || id.includes('/node_modules/jspdf/')) {
+            return 'export-engine'
+          }
+          if (id.includes('/node_modules/axios/') || id.includes('/node_modules/uuid/')) {
+            return 'utils'
+          }
         },
       },
     },

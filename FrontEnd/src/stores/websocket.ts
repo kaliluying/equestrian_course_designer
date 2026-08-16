@@ -80,6 +80,13 @@ interface SyncSessionPayload {
   owner?: string
 }
 
+interface EstablishedSession {
+  id?: string
+  collaborators?: RawCollaboratorInfo[]
+  owner?: string | null
+  created_at?: string
+}
+
 /**
  * 消息类型枚举
  */
@@ -1248,10 +1255,37 @@ export const useWebSocketStore = defineStore('websocket', () => {
   }
 
   const handleConnectionEstablished = (message: WebSocketMessage) => {
-    const established = message as WebSocketMessage & { member_id?: string }
+    const established = message as WebSocketMessage & {
+      member_id?: string
+      session?: EstablishedSession
+    }
+    const serverSession = established.session
+    const mappedCollaborators = Array.isArray(serverSession?.collaborators)
+      ? serverSession.collaborators.map((collaborator) => ({
+          id: collaborator.id,
+          username: collaborator.username,
+          color: collaborator.color,
+          lastActive: collaborator.last_active ? new Date(collaborator.last_active) : new Date(),
+          role: collaborator.role || 'collaborator',
+        }))
+      : []
+
+    collaborators.value = mappedCollaborators
+    session.value = serverSession?.id
+      ? {
+          id: serverSession.id,
+          designId: currentDesignId.value,
+          collaborators: mappedCollaborators,
+          owner: serverSession.owner || '',
+          createdAt: serverSession.created_at ? new Date(serverSession.created_at) : new Date(),
+        }
+      : null
+
+    const currentUserId = userStore.currentUser ? String(userStore.currentUser.id) : null
     currentMemberId.value = established.member_id || (
-      userStore.currentUser ? String(userStore.currentUser.id) : null
+      currentUserId
     )
+    isOwner.value = Boolean(currentUserId && session.value?.owner === currentUserId)
     shareAuthPending.value = false
     connectionStatus.value = ConnectionStatus.CONNECTED
     connectionError.value = null
@@ -1263,7 +1297,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
       bubbles: true,
       detail: {
         timestamp: new Date().toISOString(),
-        session: (message as WebSocketMessage & { session?: unknown }).session,
+        session: session.value,
         delayed: false,
       },
     }))
@@ -1577,45 +1611,34 @@ export const useWebSocketStore = defineStore('websocket', () => {
   const disconnect = () => {
     console.log('断开WebSocket连接')
 
-    if (!socket.value) {
-      console.log('WebSocket实例不存在，无需断开连接')
-      connectionStatus.value = ConnectionStatus.DISCONNECTED
-      return
-    }
-
     try {
-      // 如果连接已打开或正在连接中，则关闭连接
-      if (
-        socket.value.readyState === WebSocket.OPEN ||
-        socket.value.readyState === WebSocket.CONNECTING
-      ) {
-        // 更新状态为断开连接中
-        connectionStatus.value = ConnectionStatus.DISCONNECTING
-
-        // 关闭连接
-        socket.value.close(1000, '用户主动断开连接')
+      if (socket.value) {
+        // 如果连接已打开或正在连接中，则关闭连接
+        if (
+          socket.value.readyState === WebSocket.OPEN ||
+          socket.value.readyState === WebSocket.CONNECTING
+        ) {
+          connectionStatus.value = ConnectionStatus.DISCONNECTING
+          socket.value.close(1000, '用户主动断开连接')
+        }
       }
-
-      // 更新状态
-      connectionStatus.value = ConnectionStatus.DISCONNECTED
-      isCollaborating.value = false
-      shareAuthPending.value = false
-
-      // 清空状态
-      collaborators.value = []
-      socket.value = null
-
-      console.log('WebSocket连接已断开')
     } catch (error) {
       console.error('断开WebSocket连接时出错:', error)
-
-      // 确保状态被重置
+    } finally {
+      // 断开连接后丢弃会话级状态，避免切换设计时复用旧数据。
       connectionStatus.value = ConnectionStatus.DISCONNECTED
       isCollaborating.value = false
       shareAuthPending.value = false
       collaborators.value = []
+      chatMessages.value = []
+      isOwner.value = false
+      session.value = null
+      currentMemberId.value = null
+      messageQueue.value = []
       socket.value = null
     }
+
+    console.log('WebSocket连接已断开')
   }
 
   const reset = () => {

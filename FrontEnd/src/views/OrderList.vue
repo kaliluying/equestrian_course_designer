@@ -138,9 +138,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, defineProps, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import dayjs from 'dayjs'
 import { formatDateTimeWithSeconds } from '@/utils/datetime'
 import { orderApi } from '@/api/order'
 import type { Order } from '@/types/order'

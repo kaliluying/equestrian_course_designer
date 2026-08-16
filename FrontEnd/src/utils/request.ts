@@ -10,6 +10,7 @@ import { getApiErrorMessage } from '@/utils/apiErrorMessage'
 // Security fix: Use httpOnly cookies for JWT tokens instead of localStorage
 // CSRF token stored in memory (not cookie) since cookie is httpOnly
 let csrfTokenInMemory: string | null = null
+let refreshPromise: Promise<void> | null = null
 
 // 创建 axios 实例
 const axiosInstance = axios.create({
@@ -37,6 +38,18 @@ const getCsrfToken = async (): Promise<string | null> => {
     console.error('request.ts: 获取CSRF令牌失败:', error)
     return null
   }
+}
+
+const refreshAccessToken = (): Promise<void> => {
+  if (!refreshPromise) {
+    refreshPromise = axiosInstance
+      .post(apiConfig.endpoints.user.refreshToken, {})
+      .then(() => undefined)
+      .finally(() => {
+        refreshPromise = null
+      })
+  }
+  return refreshPromise
 }
 
 // 请求拦截器
@@ -91,10 +104,7 @@ axiosInstance.interceptors.response.use(
       originalRequest._retry = true
 
       try {
-        await axiosInstance.post(
-          apiConfig.endpoints.user.refreshToken,
-          {},
-        )
+        await refreshAccessToken()
 
         return axiosInstance(originalRequest)
       } catch (refreshError) {
