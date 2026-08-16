@@ -51,6 +51,8 @@ if not ALLOWED_HOSTS or (len(ALLOWED_HOSTS) == 1 and ALLOWED_HOSTS[0] == ""):
         raise ValueError(
             "ALLOWED_HOSTS must be set in production (DJANGO_ALLOWED_HOSTS env var)"
         )
+if not DEBUG and "*" in ALLOWED_HOSTS:
+    raise ValueError("DJANGO_ALLOWED_HOSTS must not contain '*' in production")
 
 # Application definition
 
@@ -168,6 +170,30 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 12 * 1024 * 1024
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000
 
 # 站点域名配置，用于媒体文件 URL 和支付回调 URL 生成。
+def _parse_http_url(value, setting_name, *, allow_path):
+    """校验外部 URL，拒绝用户信息、查询串、片段和非法端口。"""
+    parsed = urlparse(value)
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError(f"{setting_name} must use a valid port") from exc
+
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or any(char.isspace() for char in parsed.netloc)
+        or parsed.params
+        or parsed.query
+        or parsed.fragment
+        or (not allow_path and parsed.path)
+        or (port is not None and not 1 <= port <= 65535)
+    ):
+        raise ValueError(f"{setting_name} must be a valid HTTP(S) URL")
+    return parsed
+
+
 USE_HTTPS = os.environ.get("USE_HTTPS", "False").strip().lower() == "true"
 SITE_DOMAIN = os.environ.get("SITE_DOMAIN", "localhost:8000").strip().rstrip("/")
 if SITE_DOMAIN.startswith(("http://", "https://")):
@@ -176,16 +202,7 @@ else:
     SITE_BASE_URL = f"{'https' if USE_HTTPS else 'http'}://{SITE_DOMAIN}"
 if not DEBUG and not USE_HTTPS:
     raise ValueError("USE_HTTPS must be true in production")
-parsed_site_url = urlparse(SITE_BASE_URL)
-if (
-    parsed_site_url.scheme not in {"http", "https"}
-    or not parsed_site_url.hostname
-    or parsed_site_url.path
-    or parsed_site_url.params
-    or parsed_site_url.query
-    or parsed_site_url.fragment
-):
-    raise ValueError("SITE_DOMAIN must be a valid host in production")
+parsed_site_url = _parse_http_url(SITE_BASE_URL, "SITE_DOMAIN", allow_path=False)
 if not DEBUG and parsed_site_url.scheme != "https":
     raise ValueError("SITE_DOMAIN must use HTTPS in production")
 
@@ -208,6 +225,7 @@ SIMPLEUI_HOME_PAGE = "/api/feedback/dashboard"
 # DRF配置
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "user.utils.api_exception_handler",
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "user.authentication.CookieJWTAuthentication",
         "rest_framework_simplejwt.authentication.JWTAuthentication",
@@ -364,9 +382,7 @@ FRONTEND_URL = os.environ.get(
 ).strip().rstrip("/")
 if not FRONTEND_URL:
     raise ValueError("FRONTEND_URL must be set in production")
-parsed_frontend_url = urlparse(FRONTEND_URL)
-if parsed_frontend_url.scheme not in {"http", "https"} or not parsed_frontend_url.netloc:
-    raise ValueError("FRONTEND_URL must be a valid HTTP(S) URL")
+parsed_frontend_url = _parse_http_url(FRONTEND_URL, "FRONTEND_URL", allow_path=True)
 if not DEBUG and parsed_frontend_url.scheme != "https":
     raise ValueError("FRONTEND_URL must use HTTPS in production")
 

@@ -28,6 +28,7 @@ export function useCollaborationEvents(
   canvasRef: { value: CanvasComponentExposed | null },
 ) {
   const courseStore = useCourseStore()
+  const webSocketStore = useWebSocketStore()
   const router = useRouter()
 
   // 协作状态
@@ -105,24 +106,10 @@ export function useCollaborationEvents(
     nextTick(() => {
       if (canvasRef.value) {
         // 如果是通过链接加入（协作者），发送同步请求获取完整画布状态
-        const viaLink = localStorage.getItem('via_link') === 'true'
+        const viaLink = webSocketStore.viaLink
         if (viaLink) {
-          // 检查是否已经发送过同步请求
-          const syncRequested = localStorage.getItem('sync_requested') === 'true'
-          if (!syncRequested) {
-            // 使用WebSocket store发送同步请求
-            const webSocketStore = useWebSocketStore()
-
-            // 延迟1秒后发送同步请求，确保WebSocket连接已完全建立
-            setTimeout(() => {
-              localStorage.setItem('sync_requested', 'true')
-              if (typeof webSocketStore.sendSyncRequest === 'function') {
-                webSocketStore.sendSyncRequest()
-              } else {
-                console.warn('webSocketStore中没有sendSyncRequest方法')
-              }
-            }, 1000)
-          }
+          // 延迟1秒发送同步请求，确保连接已完全建立。
+          setTimeout(() => webSocketStore.sendSyncRequest(), 1000)
         } else {
           // 如果是创建者，触发画布状态同步
           const syncEvent = new CustomEvent('sync-canvas-state', {
@@ -241,7 +228,7 @@ export function useCollaborationEvents(
     const isOwner = (currentUserId && sessionOwnerId && String(currentUserId) === String(sessionOwnerId)) || eventIsOwner === true
 
     // 检查是否通过链接加入
-    const viaLink = localStorage.getItem('via_link') === 'true'
+    const viaLink = webSocketStore.viaLink
 
     // 如果当前用户是所有者（或创建者）且在协作状态，则发送完整画布状态
     if (isCollaborating.value) {

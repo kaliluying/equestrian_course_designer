@@ -219,7 +219,7 @@ const openDesign = async (design: DesignResponse) => {
     ElMessage.info('正在加载设计...')
 
     // 获取设计文件内容
-    const response = await fetch(design.download)
+    const response = await fetch(design.download, { credentials: 'include' })
     if (!response.ok) {
       throw new Error(`HTTP错误，状态码: ${response.status}`)
     }

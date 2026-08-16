@@ -3,15 +3,20 @@ import json
 import os
 import shutil
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+from unittest import skipUnless
 from unittest.mock import Mock, patch
 
 from django.core.files.base import ContentFile
 from django.core.management import call_command
-from django.test import TestCase, override_settings
+from django.db import close_old_connections, connection
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from django.urls import reverse
 from django.contrib.auth.models import User
 from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import RefreshToken
 from PIL import Image
 
 from user.models import (
@@ -77,3 +82,35 @@ class APIDocumentationTest(TestCase):
         self.assertIn("refresh_token", response.cookies)
         self.assertTrue(response.cookies["access_token"]["httponly"])
         self.assertTrue(response.cookies["refresh_token"]["httponly"])
+
+
+@skipUnless(connection.vendor == "mysql", "并发 refresh 回归测试需要支持行锁的 MySQL")
+class RefreshTokenRotationConcurrencyTest(TransactionTestCase):
+    """同一个 refresh token 并发使用时只能成功轮换一次。"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="refresh_race_user",
+            email="refresh-race@example.com",
+            password="Password123",
+        )
+        self.refresh_token = str(RefreshToken.for_user(self.user))
+
+    def test_refresh_token_can_only_be_rotated_once(self):
+        barrier = Barrier(2)
+        refresh_token = self.refresh_token
+
+        def refresh():
+            close_old_connections()
+            try:
+                client = APIClient()
+                client.cookies["refresh_token"] = refresh_token
+                barrier.wait(timeout=5)
+                return client.post(reverse("token_refresh")).status_code
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            statuses = list(executor.map(lambda _: refresh(), range(2)))
+
+        self.assertCountEqual(statuses, [200, 401])

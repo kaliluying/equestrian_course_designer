@@ -65,32 +65,24 @@ class CourseTemplateViewSet(viewsets.ModelViewSet):
         return obj
 
     def perform_create(self, serializer):
-        try:
-            with transaction.atomic():
-                if serializer.validated_data.get('is_public', True):
-                    assert_template_publish_capacity(self.request.user)
-                serializer.save(author=self.request.user)
-        except MembershipAccessError as exc:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError(exc.message)
+        with transaction.atomic():
+            if serializer.validated_data.get('is_public', True):
+                assert_template_publish_capacity(self.request.user)
+            serializer.save(author=self.request.user)
 
     def perform_update(self, serializer):
         template = self.get_object()
         if template.author_id != self.request.user.id:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied('您无权编辑此模板')
-        try:
-            with transaction.atomic():
-                is_becoming_public = (
-                    serializer.validated_data.get('is_public') is True
-                    and not template.is_public
-                )
-                if is_becoming_public:
-                    assert_template_publish_capacity(self.request.user)
-                serializer.save(author=template.author)
-        except MembershipAccessError as exc:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError(exc.message)
+        with transaction.atomic():
+            is_becoming_public = (
+                serializer.validated_data.get('is_public') is True
+                and not template.is_public
+            )
+            if is_becoming_public:
+                assert_template_publish_capacity(self.request.user)
+            serializer.save(author=template.author)
 
     def destroy(self, request, *args, **kwargs):
         template = self.get_object()

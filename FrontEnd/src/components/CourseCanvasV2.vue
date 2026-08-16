@@ -1231,7 +1231,7 @@ const stopCollaboration = async () => {
 const isCreator = () => {
   const currentUserId = userStore.currentUser?.id
   const sessionOwnerId = webSocketStore.session?.owner
-  const viaLink = localStorage.getItem('via_link') === 'true'
+  const viaLink = webSocketStore.viaLink
   const isOwner = currentUserId && sessionOwnerId && String(currentUserId) === String(sessionOwnerId)
   return Boolean(isOwner || !viaLink)
 }

@@ -245,3 +245,14 @@ def error_response(message, status_code=status.HTTP_400_BAD_REQUEST, errors=None
     if errors:
         response_data['errors'] = errors
     return Response(response_data, status=status_code)
+
+
+def api_exception_handler(exc, context):
+    """将会员权益异常转换为统一的 API 错误响应。"""
+    from rest_framework.views import exception_handler
+
+    from user.services.membership_access import MembershipAccessError
+
+    if isinstance(exc, MembershipAccessError):
+        return error_response(exc.message, exc.status_code, exc.data)
+    return exception_handler(exc, context)

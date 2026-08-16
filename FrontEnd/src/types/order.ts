@@ -3,7 +3,7 @@ export enum OrderStatus {
   PENDING = 'pending', // 待支付
   PAID = 'paid', // 已支付
   FAILED = 'failed', // 支付失败
-  CANCELLED = 'cancelled', // 已取消
+  CANCELLED = 'canceled', // 已取消
 }
 
 // 订单类型接口

@@ -2,7 +2,7 @@
 
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -10,11 +10,7 @@ from django.db import transaction
 
 from ..models import CustomObstacle
 from ..serializers import CustomObstacleSerializer
-from ..services.membership_access import (
-    MembershipAccessError,
-    assert_custom_obstacle_capacity,
-    get_entitlements,
-)
+from ..services.membership_access import assert_custom_obstacle_capacity, get_entitlements
 from .user_views import check_and_update_membership
 
 
@@ -74,12 +70,9 @@ class CustomObstacleViewSet(viewsets.ModelViewSet):
         # 会员状态更新必须在容量校验事务之外完成；当达到上限而创建
         # 被拒绝时，不能把应当生效的降级计划一并回滚。
         check_and_update_membership(self.request.user)
-        try:
-            with transaction.atomic():
-                assert_custom_obstacle_capacity(self.request.user)
-                serializer.save(user=self.request.user)
-        except MembershipAccessError as exc:
-            raise ValidationError(exc.message)
+        with transaction.atomic():
+            assert_custom_obstacle_capacity(self.request.user)
+            serializer.save(user=self.request.user)
 
     def perform_update(self, serializer):
         """更新自定义障碍物"""

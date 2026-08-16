@@ -54,11 +54,6 @@ export const orderApi = {
     return request.post<Order>(`/user/api/orders/${params.orderId}/pay`, params)
   },
 
-  // 取消订单
-  cancelOrder: (orderId: string) => {
-    return request.post<Order>(`/user/api/orders/${orderId}/cancel`)
-  },
-
   // 删除订单
   deleteOrder: (orderId: string) => {
     return request.delete(`/user/api/orders/${orderId}`)

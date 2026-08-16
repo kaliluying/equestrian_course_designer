@@ -18,7 +18,7 @@
           <el-select v-model="filterForm.status" placeholder="全部状态" clearable style="width: 120px">
             <el-option label="待支付" value="pending" />
             <el-option label="已支付" value="paid" />
-            <el-option label="已取消" value="cancelled" />
+            <el-option label="已取消" value="canceled" />
             <el-option label="已退款" value="refunded" />
             <el-option label="支付失败" value="failed" />
           </el-select>
@@ -61,10 +61,6 @@
           <template #default="scope">
             <el-button v-if="scope.row.status === 'pending'" type="primary" size="small" @click="handlePay(scope.row)">
               支付
-            </el-button>
-            <el-button v-if="scope.row.status === 'pending'" type="danger" size="small"
-              @click="handleCancel(scope.row)">
-              取消
             </el-button>
             <el-button type="info" size="small" @click="handleDetail(scope.row)">
               详情
@@ -139,7 +135,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { formatDateTimeWithSeconds } from '@/utils/datetime'
 import { orderApi } from '@/api/order'
 import type { Order } from '@/types/order'
@@ -304,23 +300,6 @@ const pollOrderStatus = async (orderId: string) => {
   await polling()
 }
 
-// 处理取消
-const handleCancel = async (order: Order) => {
-  try {
-    await ElMessageBox.confirm('确定要取消该订单吗？', '提示', {
-      type: 'warning',
-    })
-    await orderApi.cancelOrder(order.order_id)
-    ElMessage.success('订单已取消')
-    refreshOrders()
-  } catch (error) {
-    if (error !== 'cancel') {
-      console.error('取消订单失败:', error)
-      ElMessage.error('取消订单失败')
-    }
-  }
-}
-
 // 查看详情
 const handleDetail = (order: Order) => {
   currentOrder.value = order
@@ -347,7 +326,7 @@ const getStatusType = (status: string) => {
     pending: 'warning',
     paid: 'success',
     failed: 'danger',
-    cancelled: 'info',
+    canceled: 'info',
     refunded: 'info'
   }
   return statusMap[status] || 'info'

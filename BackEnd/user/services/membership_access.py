@@ -85,7 +85,11 @@ def _plan_summary(plan):
 
 def get_entitlements(user: User) -> EntitlementSnapshot:
     """获取用户当前权益快照。"""
-    check_and_update_membership(user)
+    if not check_and_update_membership(user):
+        raise MembershipAccessError(
+            "会员状态暂时无法确认，请稍后重试",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
     profile, _ = UserProfile.objects.select_related(
         "membership_plan", "pending_membership_plan"
     ).get_or_create(user=user)

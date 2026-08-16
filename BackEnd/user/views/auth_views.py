@@ -229,13 +229,27 @@ class CookieTokenRefreshView(APIView):
             )
 
         try:
-            # 校验旧 refresh token，并执行轮换与黑名单撤销。
-            token = RefreshToken(refresh_token)
-            token.blacklist()
-            user = User.objects.get(id=token["user_id"], is_active=True)
-            new_refresh = RefreshToken.for_user(user)
-            access_token = str(new_refresh.access_token)
-            new_refresh_token = str(new_refresh)
+            # 锁住旧 token 的记录，避免并发刷新同时通过黑名单检查。
+            with transaction.atomic():
+                token = RefreshToken(refresh_token)
+                outstanding, _ = token.outstand()
+                if outstanding is None:
+                    raise TokenError("Token is not outstanding")
+                outstanding = OutstandingToken.objects.select_for_update().get(
+                    pk=outstanding.pk
+                )
+                if BlacklistedToken.objects.select_for_update().filter(
+                    token_id=outstanding.pk
+                ).first():
+                    raise TokenError("Token is blacklisted")
+                _, created = BlacklistedToken.objects.get_or_create(token=outstanding)
+                if not created:
+                    raise TokenError("Token is blacklisted")
+
+                user = User.objects.get(id=token["user_id"], is_active=True)
+                new_refresh = RefreshToken.for_user(user)
+                access_token = str(new_refresh.access_token)
+                new_refresh_token = str(new_refresh)
 
             # Create response with new access token cookie
             response = success_response(

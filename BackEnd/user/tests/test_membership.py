@@ -141,6 +141,29 @@ class MembershipAccessServiceTest(TestCase):
         self.assertFalse(self.profile.is_premium)
         self.assertEqual(self.profile.membership_plan, self.free_plan)
 
+    @patch("user.services.membership_access.check_and_update_membership", return_value=False)
+    def test_membership_check_failure_does_not_grant_entitlements(self, _check_membership):
+        """会员状态无法确认时必须拒绝继续计算权益。"""
+        from user.services.membership_access import MembershipAccessError, get_entitlements
+
+        with self.assertRaises(MembershipAccessError) as context:
+            get_entitlements(self.user)
+
+        self.assertEqual(context.exception.status_code, 503)
+
+    @patch("user.services.membership_access.check_and_update_membership", return_value=False)
+    def test_membership_api_returns_service_unavailable_on_check_failure(self, _check_membership):
+        """会员状态检查失败时相关接口必须返回统一的 503 响应。"""
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+
+        for path in ("/user/users/check_premium/", "/user/users/my_profile/"):
+            with self.subTest(path=path):
+                response = client.get(path)
+
+                self.assertEqual(response.status_code, 503)
+                self.assertFalse(response.json()["success"])
+
 
     def test_assert_design_capacity_raises_unified_error_when_limit_reached(self):
         """设计数量达到额度时应抛出统一容量错误"""
