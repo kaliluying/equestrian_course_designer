@@ -54,6 +54,38 @@ class AuthCookieTest(TestCase):
                     expires_at=timezone.now(),
                 )
 
+    def test_forgot_password_does_not_reveal_account_existence(self):
+        """忘记密码对已存在和不存在账号应返回相同响应。"""
+        User.objects.create_user(
+            username="forgot_password_user",
+            email="forgot-password@example.com",
+            password="Password123",
+        )
+
+        with patch(
+            "user.views.auth_views.PasswordResetRateThrottle.allow_request",
+            return_value=True,
+        ), patch("user.views.auth_views.send_mail") as send_mail:
+            existing_response = self.client.post(
+                reverse("forgot_password"),
+                data={
+                    "username": "forgot_password_user",
+                    "email": "forgot-password@example.com",
+                },
+            )
+            missing_response = self.client.post(
+                reverse("forgot_password"),
+                data={
+                    "username": "missing_forgot_password_user",
+                    "email": "forgot-password@example.com",
+                },
+            )
+
+            self.assertEqual(existing_response.status_code, 200)
+            self.assertEqual(existing_response.status_code, missing_response.status_code)
+            self.assertEqual(existing_response.json(), missing_response.json())
+            send_mail.assert_called_once()
+
     def test_register_sets_auth_cookies(self):
         """注册成功后应立即写入认证 cookies，支持自动登录"""
         response = self.client.post(

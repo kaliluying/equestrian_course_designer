@@ -345,7 +345,6 @@ class ForgotPasswordView(APIView):
                     fail_silently=False,
                 )
 
-                return success_response("密码重置邮件已发送，请检查您的邮箱")
             except User.DoesNotExist:
                 pass
             except Exception:
