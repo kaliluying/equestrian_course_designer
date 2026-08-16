@@ -1,7 +1,10 @@
 import json
+from datetime import datetime, time as datetime_time
 from alipay.utils import AliPayConfig
 from alipay import AliPay
 from django.conf import settings
+from django.utils.dateparse import parse_date, parse_datetime
+from django.utils.timezone import get_current_timezone, is_naive, make_aware
 from urllib.parse import urljoin, urlparse
 import random
 import string
@@ -15,6 +18,28 @@ from rest_framework import status
 
 class ExternalServiceConfigError(RuntimeError):
     """外部服务配置错误。"""
+
+
+def parse_query_datetime(value, *, end_of_day=False):
+    """将日期筛选参数解析为时区感知的日期时间。"""
+    if value is None:
+        return None
+
+    value = str(value).strip()
+    if not value:
+        return None
+
+    parsed = parse_datetime(value)
+    if parsed is None:
+        parsed_date = parse_date(value)
+        if parsed_date is None:
+            raise ValueError("日期格式无效，请使用 YYYY-MM-DD 或 ISO 8601 日期时间")
+        parsed = datetime.combine(
+            parsed_date,
+            datetime_time.max if end_of_day else datetime_time.min,
+        )
+
+    return make_aware(parsed, get_current_timezone()) if is_naive(parsed) else parsed
 
 
 def _read_text_file(path):

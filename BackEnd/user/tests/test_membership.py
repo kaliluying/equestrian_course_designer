@@ -601,6 +601,19 @@ class CommercialOperationsAPITest(TestCase):
         self.assertEqual(histories[0]["model_name"], "fallback")
         self.assertEqual(histories[0]["quota_used"], 0)
 
+    def test_ai_history_rejects_invalid_date_and_normalizes_negative_limit(self):
+        invalid_date_response = self.client.get(
+            "/user/ai/history/?start_date=not-a-date"
+        )
+
+        self.assertEqual(invalid_date_response.status_code, 400)
+        self.assertIn("start_date", invalid_date_response.json()["data"])
+
+        negative_limit_response = self.client.get("/user/ai/history/?limit=-1")
+
+        self.assertEqual(negative_limit_response.status_code, 200)
+        self.assertEqual(negative_limit_response.json()["data"]["histories"], [])
+
     def test_admin_analytics_dashboard_returns_core_metrics(self):
         """运营看板应返回用户、设计、导出、AI、会员和模板指标"""
         Design.objects.create(title="运营设计", author=self.user, downloads_count=3)

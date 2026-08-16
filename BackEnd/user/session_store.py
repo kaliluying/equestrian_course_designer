@@ -209,16 +209,26 @@ class RedisSessionStore:
             return result
 
     def remove_collaborator(self, design_id, member_id):
-        """原子移除协作者，并在会话为空时一并删除。"""
+        """原子断开一个协作者连接，并在会话为空时一并删除。"""
         key = _make_key(design_id)
         with self._lock(design_id):
             current = cache.get(key)
             if current is None:
                 return None
             session = deepcopy(current)
-            session["collaborators"] = [
-                item for item in session.get("collaborators", []) if item.get("id") != member_id
-            ]
+            collaborators = []
+            for item in session.get("collaborators", []):
+                if item.get("id") != member_id:
+                    collaborators.append(item)
+                    continue
+                try:
+                    connection_count = int(item.get("connection_count", 1))
+                except (TypeError, ValueError):
+                    connection_count = 1
+                if connection_count > 1:
+                    item["connection_count"] = connection_count - 1
+                    collaborators.append(item)
+            session["collaborators"] = collaborators
             if not session["collaborators"]:
                 cache.delete(key)
                 return None

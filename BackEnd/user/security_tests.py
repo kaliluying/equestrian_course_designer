@@ -362,6 +362,56 @@ class CollaborationConsumerIntegrationTests(TransactionTestCase):
 
         async_to_sync(run)()
 
+    def test_same_login_user_tabs_keep_session_alive_until_last_disconnect(self):
+        """同一登录用户的多个标签页必须独立计数，最后一个才离开会话。"""
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        from .models import CollaborationRole
+        from .session_store import active_sessions
+
+        editor = User.objects.create_user("ws_multi_tab", password="testpass123")
+        CollaborationRole.objects.create(
+            design=self.design,
+            user=editor,
+            role="editor",
+        )
+        access_token = str(RefreshToken.for_user(editor).access_token)
+
+        from equestrian.asgi import application
+
+        async def run():
+            communicators = [
+                WebsocketCommunicator(
+                    application,
+                    f"/ws/collaboration/{self.design.id}/",
+                )
+                for _ in range(2)
+            ]
+            for communicator in communicators:
+                communicator.scope["headers"] = [
+                    (b"origin", b"http://testserver"),
+                    (b"cookie", f"access_token={access_token}".encode()),
+                ]
+
+            try:
+                for communicator in communicators:
+                    connected, details = await communicator.connect()
+                    self.assertTrue(connected, repr(details))
+                    message = await communicator.receive_json_from()
+                    self.assertEqual(message["type"], "connection_established")
+
+                await communicators[0].disconnect()
+                session = await sync_to_async(active_sessions.get)(str(self.design.id))
+                self.assertIsNotNone(session)
+                self.assertEqual(
+                    session["collaborators"][0]["connection_count"],
+                    1,
+                )
+            finally:
+                await communicators[1].disconnect()
+
+        async_to_sync(run)()
+
     def test_revoked_login_role_closes_existing_connection(self):
         """登录协作者角色失效后，旧 WebSocket 连接必须立即失去写权限。"""
         from rest_framework_simplejwt.tokens import RefreshToken

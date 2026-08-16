@@ -441,6 +441,11 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                     )
                     if existing:
                         existing["last_active"] = now
+                        try:
+                            connection_count = int(existing.get("connection_count", 1))
+                        except (TypeError, ValueError):
+                            connection_count = 1
+                        existing["connection_count"] = max(connection_count, 1) + 1
                         return False, session, session_role
 
                     if not _has_session_capacity(session):
@@ -453,6 +458,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                             "color": self._generate_color(),
                             "role": session_role,
                             "last_active": now,
+                            "connection_count": 1,
                         }
                     )
                     if (
@@ -627,21 +633,25 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                     )
                     return
 
-                # 广播离开消息，包含更新后的会话信息
-                await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        "type": "collaboration_message",
-                        "message": {
-                            "type": "leave",
-                            "senderId": self.session_member_id,
-                            "senderName": self.session_member_name,
-                            "sessionId": session["id"],
-                            "timestamp": timezone.now().isoformat(),
-                            "payload": {"session": session},
+                # 同一用户的其他标签页仍在线时，不广播离开消息。
+                if not any(
+                    item.get("id") == self.session_member_id
+                    for item in session.get("collaborators", [])
+                ):
+                    await self.channel_layer.group_send(
+                        self.room_group_name,
+                        {
+                            "type": "collaboration_message",
+                            "message": {
+                                "type": "leave",
+                                "senderId": self.session_member_id,
+                                "senderName": self.session_member_name,
+                                "sessionId": session["id"],
+                                "timestamp": timezone.now().isoformat(),
+                                "payload": {"session": session},
+                            },
                         },
-                    },
-                )
+                    )
 
             # 离开房间组
             await self.channel_layer.group_discard(

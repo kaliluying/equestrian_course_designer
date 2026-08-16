@@ -7,6 +7,7 @@ from django.db.models import F, Q
 from django.core.files.base import ContentFile
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -32,20 +33,22 @@ class CourseTemplateViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = CourseTemplate.objects.filter(Q(is_public=True) | Q(author=user)).select_related('author')
         difficulty = self.request.query_params.get('difficulty')
-        obstacle_count = self.request.query_params.get('obstacle_count')
-        field_width = self.request.query_params.get('field_width')
-        field_height = self.request.query_params.get('field_height')
         search = self.request.query_params.get('search')
         ordering = self.request.query_params.get('ordering')
 
         if difficulty:
             queryset = queryset.filter(difficulty=difficulty)
-        if obstacle_count:
-            queryset = queryset.filter(obstacle_count=obstacle_count)
-        if field_width:
-            queryset = queryset.filter(field_width=field_width)
-        if field_height:
-            queryset = queryset.filter(field_height=field_height)
+        for field_name in ('obstacle_count', 'field_width', 'field_height'):
+            value = self.request.query_params.get(field_name)
+            if not value:
+                continue
+            try:
+                value = int(value)
+            except (TypeError, ValueError):
+                raise ValidationError({field_name: '必须是非负整数'})
+            if value < 0:
+                raise ValidationError({field_name: '必须是非负整数'})
+            queryset = queryset.filter(**{field_name: value})
         if search:
             queryset = queryset.filter(Q(title__icontains=search) | Q(description__icontains=search))
         if ordering in {'latest', '-created_at'}:

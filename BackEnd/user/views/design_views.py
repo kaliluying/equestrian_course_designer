@@ -568,6 +568,18 @@ class DesignViewSet(viewsets.ModelViewSet):
         user_id = request.query_params.get("user")
         events = CollaborationEvent.objects.filter(design=design).select_related("user")
         if user_id:
+            try:
+                user_id = int(user_id)
+            except (TypeError, ValueError):
+                return error_response(
+                    {"user": ["必须是有效的用户 ID"]},
+                    status.HTTP_400_BAD_REQUEST,
+                )
+            if user_id < 1:
+                return error_response(
+                    {"user": ["必须是有效的用户 ID"]},
+                    status.HTTP_400_BAD_REQUEST,
+                )
             events = events.filter(user_id=user_id)
         return Response(CollaborationEventSerializer(events, many=True).data)
 

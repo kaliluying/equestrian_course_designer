@@ -647,6 +647,11 @@ class CourseTemplateMarketAPITest(TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["difficulty"], "medium")
 
+    def test_template_numeric_filters_reject_invalid_values(self):
+        response = self.client.get("/user/templates/?obstacle_count=not-a-number")
+
+        self.assertEqual(response.status_code, 400)
+
     def test_private_template_is_not_visible_to_other_users(self):
         """私有模板不能被其他用户访问"""
         create_response = self.client.post(

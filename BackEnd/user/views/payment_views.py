@@ -31,6 +31,7 @@ from ..utils import (
     success_response,
     error_response,
     ExternalServiceConfigError,
+    parse_query_datetime,
 )
 from ..services.payment_settlement import (
     PaymentSettlementError,
@@ -165,20 +166,40 @@ def get_user_orders(request):
     paginator = StandardResultsSetPagination()
 
     # 获取查询参数
-    status = request.query_params.get("status")
+    status_filter = request.query_params.get("status")
     start_date = request.query_params.get("start_date")
     end_date = request.query_params.get("end_date")
+
+    try:
+        start_at = parse_query_datetime(start_date)
+    except ValueError as exc:
+        return error_response(
+            {"start_date": [str(exc)]},
+            status.HTTP_400_BAD_REQUEST,
+        )
+    try:
+        end_at = parse_query_datetime(end_date, end_of_day=True)
+    except ValueError as exc:
+        return error_response(
+            {"end_date": [str(exc)]},
+            status.HTTP_400_BAD_REQUEST,
+        )
+    if start_at and end_at and start_at > end_at:
+        return error_response(
+            {"date_range": ["开始日期不能晚于结束日期"]},
+            status.HTTP_400_BAD_REQUEST,
+        )
 
     # 构建查询集
     orders = MembershipOrder.objects.filter(user=request.user).order_by("-created_at")
 
     # 应用过滤条件
-    if status:
-        orders = orders.filter(status=status)
-    if start_date:
-        orders = orders.filter(created_at__gte=start_date)
-    if end_date:
-        orders = orders.filter(created_at__lte=end_date)
+    if status_filter:
+        orders = orders.filter(status=status_filter)
+    if start_at:
+        orders = orders.filter(created_at__gte=start_at)
+    if end_at:
+        orders = orders.filter(created_at__lte=end_at)
 
     # 执行分页
     page = paginator.paginate_queryset(orders, request)

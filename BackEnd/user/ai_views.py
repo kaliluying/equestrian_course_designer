@@ -20,7 +20,7 @@ from .models import AIGenerationHistory, AIGenerationQuota, MembershipOrder, Use
 from .llm_providers import get_llm_provider
 from .route_generator import RouteGenerator, RouteConfig
 from .route_validator import RouteValidator
-from .utils import ExternalServiceConfigError, create_alipay_order
+from .utils import ExternalServiceConfigError, create_alipay_order, parse_query_datetime
 from .throttles import AIRateThrottle
 
 logger = logging.getLogger(__name__)
@@ -893,7 +893,7 @@ def get_ai_history(request):
     limit = request.query_params.get("limit", 20)
 
     try:
-        limit = min(int(limit), MAX_LIMIT)
+        limit = max(0, min(int(limit), MAX_LIMIT))
     except (ValueError, TypeError):
         limit = 20
 
@@ -901,12 +901,31 @@ def get_ai_history(request):
     status_filter = request.query_params.get("status")
     start_date = request.query_params.get("start_date")
     end_date = request.query_params.get("end_date")
+    try:
+        start_at = parse_query_datetime(start_date)
+    except ValueError as exc:
+        return _ai_response(
+            status.HTTP_400_BAD_REQUEST,
+            data={"start_date": [str(exc)]},
+        )
+    try:
+        end_at = parse_query_datetime(end_date, end_of_day=True)
+    except ValueError as exc:
+        return _ai_response(
+            status.HTTP_400_BAD_REQUEST,
+            data={"end_date": [str(exc)]},
+        )
+    if start_at and end_at and start_at > end_at:
+        return _ai_response(
+            status.HTTP_400_BAD_REQUEST,
+            data={"date_range": ["开始日期不能晚于结束日期"]},
+        )
     if status_filter:
         histories = histories.filter(status=status_filter)
-    if start_date:
-        histories = histories.filter(created_at__gte=start_date)
-    if end_date:
-        histories = histories.filter(created_at__lte=end_date)
+    if start_at:
+        histories = histories.filter(created_at__gte=start_at)
+    if end_at:
+        histories = histories.filter(created_at__lte=end_at)
     histories = histories.order_by("-created_at")[:limit]
 
     return _ai_response(

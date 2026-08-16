@@ -316,6 +316,28 @@ class PaymentOrderStatusAPITests(TestCase):
         )
 
 
+class PaymentOrderListAPITests(TestCase):
+    """订单日期筛选必须把非法输入转换为客户端错误。"""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="order_list_user",
+            email="order-list@example.com",
+            password="Password123",
+        )
+        UserProfile.objects.get_or_create(user=self.user)
+        self.client.force_authenticate(user=self.user)
+
+    def test_invalid_date_filter_returns_bad_request(self):
+        response = self.client.get(
+            "/user/api/payment/orders/?start_date=not-a-date"
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("start_date", response.json()["message"])
+
+
 class PaymentOrderCreationTests(TestCase):
     """第三方订单已创建时，本地链接落库失败不能伪造失败状态。"""
 

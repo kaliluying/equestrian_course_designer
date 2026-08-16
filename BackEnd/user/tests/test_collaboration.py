@@ -126,6 +126,14 @@ class CollaborationEnhancementAPITest(TestCase):
         self.assertEqual(events[0]["event_type"], "move_obstacle")
         self.assertEqual(events[0]["object_id"], "obs-1")
 
+    def test_collaboration_event_user_filter_rejects_invalid_id(self):
+        response = self.client.get(
+            f"/user/designs/{self.design.id}/collaboration-events/?user=not-a-number"
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("user", response.json()["message"])
+
     def test_viewer_role_cannot_edit_but_commenter_can_comment(self):
         """协作角色应区分查看、评论和编辑权限"""
         from user.models import CollaborationRole
@@ -141,3 +149,29 @@ class CollaborationEnhancementAPITest(TestCase):
         viewer.save()
         self.assertTrue(viewer.can_edit)
         self.assertTrue(viewer.can_comment)
+
+
+class CollaborationSessionStoreTests(TestCase):
+    """验证同一用户多连接断开时不会误删在线协作者。"""
+
+    @override_settings(
+        CACHES={
+            "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}
+        }
+    )
+    def test_disconnect_removes_one_connection_at_a_time(self):
+        from user.session_store import RedisSessionStore
+
+        store = RedisSessionStore()
+        design_id = "multi-tab-design"
+        store[design_id] = {
+            "id": "session-1",
+            "collaborators": [{"id": "7", "connection_count": 2}],
+        }
+
+        session = store.remove_collaborator(design_id, "7")
+        self.assertEqual(session["collaborators"][0]["connection_count"], 1)
+        self.assertIn(design_id, store)
+
+        self.assertIsNone(store.remove_collaborator(design_id, "7"))
+        self.assertNotIn(design_id, store)
