@@ -316,7 +316,7 @@ const endRotation = computed({
 })
 
 const webSocketStore = useWebSocketStore()
-const { isCollaborating, sendObstacleUpdate } = webSocketStore
+const { sendObstacleUpdate } = webSocketStore
 
 /**
  * 判断是否可以添加横木
@@ -385,7 +385,7 @@ const updateObstacleWithCollaboration = (
   courseStore.updateObstacle(obstacleId, updates)
 
   // 如果在协作模式下，直接发送障碍物更新消息
-  if (isCollaborating) {
+  if (webSocketStore.isCollaborating) {
     // 创建一个新的更新对象，避免引用问题
     const updatesToSend = { ...updates }
 
