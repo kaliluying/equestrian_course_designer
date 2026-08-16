@@ -370,6 +370,19 @@ class AICourseEditingAPITest(TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_coach_notes_rejects_invalid_obstacle_collection(self):
+        """教练说明不能因恶意或损坏的障碍物集合触发 500。"""
+        invalid_courses = ({"obstacles": {}}, {"obstacles": [{"type": []}]})
+        for course in invalid_courses:
+            with self.subTest(course=course):
+                response = self.client.post(
+                    "/user/ai/coach-notes/",
+                    data={"course": course, "validation": {}},
+                    format="json",
+                )
+
+                self.assertEqual(response.status_code, 400)
+
 class AIQuotaPurchaseAPITest(TestCase):
     """AI 配额购买链路测试"""
 

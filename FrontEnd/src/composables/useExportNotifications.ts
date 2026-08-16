@@ -57,27 +57,27 @@ export function useExportNotifications(config?: Partial<NotificationConfig>) {
     }
 
     // 成功事件
-    const onSuccess = (data: { result: ExportResult; notification: NotificationData }) => {
+    const onSuccess = () => {
       isExporting.value = false
       notificationStats.successCount++
       updateNotificationLists()
     }
 
     // 错误事件
-    const onError = (data: { error: ExportError; notification: NotificationData }) => {
+    const onError = () => {
       isExporting.value = false
       notificationStats.errorCount++
       updateNotificationLists()
     }
 
     // 警告事件
-    const onWarning = (data: { warnings: ExportWarning[]; notification: NotificationData }) => {
+    const onWarning = () => {
       notificationStats.warningCount++
       updateNotificationLists()
     }
 
     // 信息事件
-    const onInfo = (data: { notification: NotificationData }) => {
+    const onInfo = () => {
       notificationStats.infoCount++
       updateNotificationLists()
     }

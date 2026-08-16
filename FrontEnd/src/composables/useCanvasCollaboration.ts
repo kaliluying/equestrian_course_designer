@@ -19,7 +19,6 @@ export function useCanvasCollaboration() {
 
   // 取出需要使用的 WebSocket 状态和方法
   const {
-    collaborators,
     connectionStatus,
     isCollaborating: wsIsCollaborating,
     sendAddObstacle,
@@ -76,9 +75,6 @@ export function useCanvasCollaboration() {
 
     // 设置协作状态为true
     isCollaborating.value = true
-
-    // 设置协作钩子
-    setupCollaborationHooks()
 
     // 保存通过链接加入的标志到localStorage，以便其他组件可以使用
     localStorage.setItem('via_link', viaLink.toString())
@@ -193,13 +189,6 @@ export function useCanvasCollaboration() {
         }
       })
 
-      // 移除协作功能的钩子
-      try {
-        removeCollaborationHooks()
-      } catch (hookError) {
-        console.error('移除协作钩子时出错:', hookError)
-      }
-
       return true
     } catch (error) {
       console.error('停止协作时出错:', error)
@@ -217,18 +206,6 @@ export function useCanvasCollaboration() {
 
       return false
     }
-  }
-
-  // 设置协作钩子函数
-  const setupCollaborationHooks = () => {
-    // 添加协作者列表变化监听
-    watch(collaborators, (_newCollaborators) => {
-    }, { deep: true })
-  }
-
-  // 移除协作钩子函数
-  const removeCollaborationHooks = () => {
-    // 这里可以移除协作钩子
   }
 
   /**

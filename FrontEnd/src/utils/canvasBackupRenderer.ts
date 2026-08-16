@@ -4,7 +4,6 @@
  */
 
 import { SVGToCanvasConverter } from './svgToCanvasConverter'
-import { ExportQualityValidator } from './exportQualityValidator'
 import { SVGExportEnhancer, type SVGProcessingResult } from './svgExportEnhancer'
 import { convertSVGStyles, restoreSVGStyles, type StyleConversionResult } from './svgStyleInlineConverter'
 import { CanvasFallbackRenderer, type CanvasRenderOptions } from './canvasFallbackRenderer'
@@ -87,7 +86,6 @@ export class CanvasBackupRenderer {
       validateSVGElements = true,
       enableQualityValidation = true,
       fallbackToOriginal = false,
-      maxRetryAttempts = 2,
       enableDebugMode = this.debugMode,
       logProcessingSteps = this.debugMode
     } = config
@@ -453,7 +451,7 @@ export class CanvasBackupRenderer {
         for (const element of batch) {
           try {
             // 为每个元素创建临时渲染上下文
-            const success = await this.renderSingleElementOptimized(ctx, element, sourceCanvas, renderOptions)
+            const success = await this.renderSingleElementOptimized(ctx, element, sourceCanvas)
             if (success) {
               processedElements++
             } else {
@@ -518,8 +516,7 @@ export class CanvasBackupRenderer {
   private async renderSingleElementOptimized(
     ctx: CanvasRenderingContext2D,
     element: SVGElement,
-    sourceCanvas: HTMLElement,
-    options: CanvasRenderOptions
+    sourceCanvas: HTMLElement
   ): Promise<boolean> {
     try {
       // 检查元素可见性

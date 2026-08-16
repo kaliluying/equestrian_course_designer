@@ -223,7 +223,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ChatDotRound, Check, Connection, InfoFilled, Key, Position, SwitchButton, User, UserFilled } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -240,7 +240,6 @@ import OnboardingTour from '@/components/OnboardingTour.vue'
 import PropertiesPanel from '@/components/PropertiesPanel.vue'
 import RegisterForm from '@/components/RegisterForm.vue'
 import RouteValidationPanel from '@/components/RouteValidationPanel.vue'
-import ResizableDivider from '@/components/ResizableDivider.vue'
 import ToolBar from '@/components/ToolBar.vue'
 import { useAutosave } from '@/composables/useAutosave'
 import { useCollaborationEvents, type CanvasComponentExposed } from '@/composables/useCollaborationEvents'
@@ -266,7 +265,6 @@ const canvasRef = ref<CanvasComponentExposed | null>(null)
 // 协作逻辑（从 composable 引入）
 const {
   isCollaborating,
-  collaborationSession,
   toggleCollaboration,
   checkCollaborationInvite,
   processCollaborationInvite,
@@ -278,12 +276,10 @@ const {
 // 自动保存逻辑（从 composable 引入）
 const {
   showRestoreDialog,
-  savedTimestamp,
   hasAutosaveConflict,
   showAutosaveNotification,
   formatSavedTime,
   showAutosaveNotificationHandler,
-  checkAutosave,
   restoreAutosave,
   discardAutosave,
   useServerAutosave,
@@ -458,16 +454,8 @@ declare global {
 }
 
 const rightPanelWidth = ref(300)
-const handleRightPanelResize = (newWidth: number) => {
-  rightPanelWidth.value = newWidth
-  localStorage.setItem('rightPanelWidth', newWidth.toString())
-}
 
 const leftPanelWidth = ref(300)
-const handleLeftPanelResize = (newWidth: number) => {
-  leftPanelWidth.value = newWidth
-  localStorage.setItem('leftPanelWidth', newWidth.toString())
-}
 
 // 初始化面板宽度
 const initializePanelWidths = () => {

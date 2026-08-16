@@ -217,13 +217,14 @@ export class FallbackManager implements RecoveryStrategy {
    * 执行恢复操作
    */
   async recover(error: ExportError, context: ExportContext): Promise<RecoveryResult> {
+    void context
     const approach = this.getAlternativeApproach(error)
 
     try {
       console.log(`尝试使用回退方法: ${approach.method}`)
 
       // 这里将在后续任务中实现具体的回退渲染逻辑
-      const result = await this.executeAlternativeApproach(approach, context)
+      const result = await this.executeAlternativeApproach()
 
       return {
         success: true,
@@ -306,10 +307,7 @@ export class FallbackManager implements RecoveryStrategy {
   /**
    * 执行替代方法（占位符实现）
    */
-  private async executeAlternativeApproach(
-    approach: AlternativeApproach,
-    context: ExportContext
-  ): Promise<ExportResult> {
+  private async executeAlternativeApproach(): Promise<ExportResult> {
     // 这里将在后续任务中实现具体的替代渲染逻辑
     throw new ExportErrorImpl(
       '替代渲染方法尚未实现',

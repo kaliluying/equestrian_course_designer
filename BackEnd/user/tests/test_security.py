@@ -23,3 +23,23 @@ class ExternalURLValidationTests(SimpleTestCase):
             with self.subTest(value=value):
                 with self.assertRaises(ValueError):
                     project_settings._parse_http_url(value, "TEST_URL", allow_path=False)
+
+
+class SecretKeyValidationTests(SimpleTestCase):
+    """生产密钥必须满足 Django 的最小安全要求。"""
+
+    def test_accepts_long_random_secret(self):
+        value = "aB3!x" * 11
+
+        self.assertTrue(project_settings._is_secure_secret_key(value))
+
+    def test_rejects_short_low_entropy_and_insecure_prefix(self):
+        invalid_values = (
+            "short-secret",
+            "a" * 60,
+            "django-insecure-" + "aB3!" * 13,
+        )
+
+        for value in invalid_values:
+            with self.subTest(value=value):
+                self.assertFalse(project_settings._is_secure_secret_key(value))

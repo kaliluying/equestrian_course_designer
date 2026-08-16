@@ -22,6 +22,7 @@ from user.models import (
     Design,
     MembershipPlan,
     MembershipOrder,
+    MembershipInvoice,
 )
 
 class MembershipAccessServiceTest(TestCase):
@@ -783,6 +784,18 @@ class CommercialOperationsAPITest(TestCase):
         self.assertEqual(issue_response.status_code, 200)
         self.assertTrue(issue_response.json()["success"])
         self.assertEqual(issue_response.json()["invoice"]["status"], "issued")
+
+        self.client.force_authenticate(user=self.user)
+        update_response = self.client.post(
+            f"/user/api/payment/orders/{order.order_id}/invoice/",
+            data={"title": "修改后的抬头", "email": "new@example.com"},
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, 409)
+        self.assertEqual(
+            MembershipInvoice.objects.get(order=order).title,
+            "马术俱乐部",
+        )
 
     def test_invoice_requires_paid_order_and_valid_fields(self):
         """未支付订单不能开票，发票字段必须经过序列化器校验。"""

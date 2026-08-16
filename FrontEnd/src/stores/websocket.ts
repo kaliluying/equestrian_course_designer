@@ -753,7 +753,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
       // 更新本地障碍物，但不触发事件
       // 使用sendUpdate=false参数，避免触发事件
-      courseStore.updateObstacle(obstacleId, updates as Partial<Obstacle>, false)
+      courseStore.updateObstacle(obstacleId, updates as Partial<Obstacle>)
       console.log('成功更新本地障碍物:', obstacleId, updates)
 
       // 不再触发自定义事件，避免循环更新

@@ -157,7 +157,7 @@ export function useKeyboardShortcuts() {
               courseStore.saveToLocalStorage()
               courseStore.setSaveStatus('saved')
               ElMessage.success('已保存到本地')
-            } catch (error) {
+            } catch {
               courseStore.setSaveStatus('failed', '保存失败')
               ElMessage.error('保存失败')
             }

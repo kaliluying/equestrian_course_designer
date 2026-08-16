@@ -6,7 +6,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { CourseDesign, Obstacle, PathPoint, CoursePath, Pole } from '@/types/obstacle'
+import type { CourseDesign, Obstacle, PathPoint, CoursePath } from '@/types/obstacle'
 import { ObstacleType } from '@/types/obstacle'
 import { v4 as uuidv4 } from 'uuid'
 import { useHistoryStore } from './history'
@@ -1071,9 +1071,8 @@ export const useCourseStore = defineStore('course', () => {
    * @description 更新指定障碍物的属性，并根据需要更新相关路径
    * @param {string} obstacleId - 要更新的障碍物ID
    * @param {Partial<Obstacle>} updates - 要更新的属性对象
-   * @param {boolean} sendUpdate - 是否发送更新消息到协作者，默认为 true
    */
-  function updateObstacle(obstacleId: string, updates: Partial<Obstacle>, sendUpdate = true) {
+  function updateObstacle(obstacleId: string, updates: Partial<Obstacle>) {
     const index = currentCourse.value.obstacles.findIndex((o) => o.id === obstacleId)
     if (index !== -1) {
       const obstacle = currentCourse.value.obstacles[index]

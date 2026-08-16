@@ -19,8 +19,7 @@ import type {
 } from '@/types/export'
 import type { CourseDesign, Obstacle, CoursePathData } from '@/types/obstacle'
 import type {
-  JSONFormattingOptions,
-  SelectiveDataOptions
+  JSONFormattingOptions
 } from './jsonExportFormatter'
 import { jsonExportFormatter } from './jsonExportFormatter'
 
@@ -402,8 +401,6 @@ export class JSONExportEngine {
    */
   private collectViewportInfo(canvas: HTMLElement): JSONExportData['viewportInfo'] {
     const rect = canvas.getBoundingClientRect()
-    const computedStyle = window.getComputedStyle(canvas)
-
     return {
       width: window.innerWidth,
       height: window.innerHeight,
@@ -485,7 +482,7 @@ export class JSONExportEngine {
       const originalSize = JSON.stringify(courseDesign, null, 2).length
       const minifiedSize = JSON.stringify(courseDesign).length
       return Math.round((1 - minifiedSize / originalSize) * 100) / 100
-    } catch (error) {
+    } catch {
       return 0
     }
   }
@@ -889,7 +886,7 @@ export class JSONExportEngine {
         recommendations: allRecommendations,
         detailedIssues: allIssues
       }
-    } catch (error) {
+    } catch {
       // 如果验证失败，返回基础质量报告
       const validation = jsonData.metadata?.validationResults || {
         isValid: true,

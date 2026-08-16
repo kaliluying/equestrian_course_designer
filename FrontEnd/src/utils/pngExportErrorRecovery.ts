@@ -521,7 +521,6 @@ class SimplifiedRenderingStrategy implements RecoveryStrategy {
       const htmlEl = el as HTMLElement
       // 保留基本样式，移除复杂效果
       const basicStyles = ['color', 'background-color', 'font-size', 'width', 'height']
-      const currentStyle = htmlEl.style.cssText
       htmlEl.style.cssText = ''
 
       basicStyles.forEach(prop => {
@@ -540,7 +539,7 @@ class SimplifiedRenderingStrategy implements RecoveryStrategy {
  * 基础Canvas策略 - 最简单的渲染
  */
 class BasicCanvasStrategy implements RecoveryStrategy {
-  canHandle(error: ExportError): boolean {
+  canHandle(): boolean {
     return true // 可以处理任何错误，作为最后的回退
   }
 

@@ -681,11 +681,6 @@ const upgradeMembership = async () => {
     return
   }
 
-  // 获取价格信息
-  const price = billingCycle.value === 'month'
-    ? selectedPlan.value.monthly_price
-    : selectedPlan.value.yearly_price
-
   upgradeLoading.value = true
 
   try {

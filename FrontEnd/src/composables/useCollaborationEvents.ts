@@ -128,12 +128,12 @@ export function useCollaborationEvents(
   }
 
   // 监听协作连接失败事件
-  const handleCollaborationFailed = (_event: CustomEvent) => {
+  const handleCollaborationFailed = () => {
     isCollaborating.value = false
   }
 
   // 监听协作断开连接事件
-  const handleCollaborationDisconnected = (_event: CustomEvent) => {
+  const handleCollaborationDisconnected = () => {
     isCollaborating.value = false
   }
 
@@ -278,7 +278,7 @@ export function useCollaborationEvents(
   }
 
   // 监听会员检查事件
-  const handleCollaborationPremiumRequired = (_event: CustomEvent) => {
+  const handleCollaborationPremiumRequired = () => {
     isCollaborating.value = false
 
     // 如果已经在显示弹窗，不再重复显示

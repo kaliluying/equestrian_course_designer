@@ -264,33 +264,38 @@ def get_order_detail(request, order_id):
 def submit_order_invoice(request, order_id):
     """用户提交订单发票信息。"""
     try:
-        order = MembershipOrder.objects.get(order_id=order_id, user=request.user)
+        with transaction.atomic():
+            order = MembershipOrder.objects.select_for_update().get(
+                order_id=order_id,
+                user=request.user,
+            )
+            if order.status != "paid":
+                return error_response(
+                    "只有已支付订单可以申请发票",
+                    status.HTTP_400_BAD_REQUEST,
+                )
+
+            existing_invoice = MembershipInvoice.objects.select_for_update().filter(
+                order=order,
+            ).first()
+            if existing_invoice and existing_invoice.status == "issued":
+                return error_response(
+                    "发票已开具，不能重复修改",
+                    status.HTTP_409_CONFLICT,
+                )
+
+            request_data = request.data.copy()
+            request_data.setdefault("email", request.user.email or "")
+            serializer = MembershipInvoiceSerializer(data=request_data)
+            if not serializer.is_valid():
+                return error_response(serializer.errors, status.HTTP_400_BAD_REQUEST)
+
+            invoice, _ = MembershipInvoice.objects.update_or_create(
+                order=order,
+                defaults={**serializer.validated_data, "status": "submitted"},
+            )
     except MembershipOrder.DoesNotExist:
         return error_response("订单不存在", status.HTTP_404_NOT_FOUND)
-
-    if order.status != "paid":
-        return error_response(
-            "只有已支付订单可以申请发票",
-            status.HTTP_400_BAD_REQUEST,
-        )
-
-    existing_invoice = MembershipInvoice.objects.filter(order=order).first()
-    if existing_invoice and existing_invoice.status == "issued":
-        return error_response(
-            "发票已开具，不能重复修改",
-            status.HTTP_409_CONFLICT,
-        )
-
-    request_data = request.data.copy()
-    request_data.setdefault("email", request.user.email or "")
-    serializer = MembershipInvoiceSerializer(data=request_data)
-    if not serializer.is_valid():
-        return error_response(serializer.errors, status.HTTP_400_BAD_REQUEST)
-
-    invoice, _ = MembershipInvoice.objects.update_or_create(
-        order=order,
-        defaults={**serializer.validated_data, "status": "submitted"},
-    )
     return success_response(
         "发票信息提交成功",
         {"invoice": MembershipInvoiceSerializer(invoice).data},
@@ -306,19 +311,20 @@ def mark_invoice_issued(request, order_id):
     if not request.user.is_staff:
         return error_response("无权限", status.HTTP_403_FORBIDDEN)
     try:
-        order = MembershipOrder.objects.get(order_id=order_id)
-        invoice = order.invoice
+        with transaction.atomic():
+            order = MembershipOrder.objects.select_for_update().get(order_id=order_id)
+            invoice = MembershipInvoice.objects.select_for_update().get(order=order)
+
+            serializer = InvoiceIssueSerializer(data=request.data)
+            if not serializer.is_valid():
+                return error_response(serializer.errors, status.HTTP_400_BAD_REQUEST)
+            invoice.status = "issued"
+            invoice.invoice_number = (
+                serializer.validated_data.get("invoice_number") or invoice.invoice_number
+            )
+            invoice.save(update_fields=["status", "invoice_number", "updated_at"])
     except (MembershipOrder.DoesNotExist, MembershipInvoice.DoesNotExist):
         return error_response("发票不存在", status.HTTP_404_NOT_FOUND)
-
-    serializer = InvoiceIssueSerializer(data=request.data)
-    if not serializer.is_valid():
-        return error_response(serializer.errors, status.HTTP_400_BAD_REQUEST)
-    invoice.status = "issued"
-    invoice.invoice_number = (
-        serializer.validated_data.get("invoice_number") or invoice.invoice_number
-    )
-    invoice.save(update_fields=["status", "invoice_number", "updated_at"])
     return success_response(
         "发票已标记为已开具",
         {"invoice": MembershipInvoiceSerializer(invoice).data},

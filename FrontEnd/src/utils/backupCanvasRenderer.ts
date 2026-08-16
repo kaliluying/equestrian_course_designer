@@ -173,17 +173,17 @@ export class BackupCanvasRenderer {
         await this.renderPathElement(element as SVGPathElement, ctx, options)
         break
       case 'circle':
-        await this.renderCircleElement(element as SVGCircleElement, ctx, options)
+        await this.renderCircleElement(element as SVGCircleElement, ctx)
         break
       case 'rect':
-        await this.renderRectElement(element as SVGRectElement, ctx, options)
+        await this.renderRectElement(element as SVGRectElement, ctx)
         break
       case 'line':
-        await this.renderLineElement(element as SVGLineElement, ctx, options)
+        await this.renderLineElement(element as SVGLineElement, ctx)
         break
       default:
         // 对于其他元素，尝试通用渲染
-        await this.renderGenericElement(element, ctx, options)
+        await this.renderGenericElement(element, ctx)
         break
     }
   }
@@ -279,8 +279,7 @@ export class BackupCanvasRenderer {
    */
   private async renderCircleElement(
     circleElement: SVGCircleElement,
-    ctx: CanvasRenderingContext2D,
-    options: BackupRenderOptions
+    ctx: CanvasRenderingContext2D
   ): Promise<void> {
     const cx = parseFloat(circleElement.getAttribute('cx') || '0')
     const cy = parseFloat(circleElement.getAttribute('cy') || '0')
@@ -319,8 +318,7 @@ export class BackupCanvasRenderer {
    */
   private async renderRectElement(
     rectElement: SVGRectElement,
-    ctx: CanvasRenderingContext2D,
-    options: BackupRenderOptions
+    ctx: CanvasRenderingContext2D
   ): Promise<void> {
     const x = parseFloat(rectElement.getAttribute('x') || '0')
     const y = parseFloat(rectElement.getAttribute('y') || '0')
@@ -357,8 +355,7 @@ export class BackupCanvasRenderer {
    */
   private async renderLineElement(
     lineElement: SVGLineElement,
-    ctx: CanvasRenderingContext2D,
-    options: BackupRenderOptions
+    ctx: CanvasRenderingContext2D
   ): Promise<void> {
     const x1 = parseFloat(lineElement.getAttribute('x1') || '0')
     const y1 = parseFloat(lineElement.getAttribute('y1') || '0')
@@ -393,8 +390,7 @@ export class BackupCanvasRenderer {
    */
   private async renderGenericElement(
     element: Element,
-    ctx: CanvasRenderingContext2D,
-    options: BackupRenderOptions
+    ctx: CanvasRenderingContext2D
   ): Promise<void> {
     // 对于不支持的元素类型，尝试基本的矩形渲染
     const rect = element.getBoundingClientRect()

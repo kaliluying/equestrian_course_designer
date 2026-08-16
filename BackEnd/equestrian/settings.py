@@ -30,14 +30,28 @@ load_dotenv(BASE_DIR / ".env")
 DEBUG = os.environ.get("DJANGO_DEBUG", "False").strip().lower() == "true"
 
 # SECURITY WARNING: keep the secret key used in production secret!
-# Security fix: SECRET_KEY must be non-empty in production
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
+# Security fix: SECRET_KEY must be strong and non-empty in production
+def _is_secure_secret_key(value):
+    """判断密钥是否满足 Django 生产环境的最小安全要求。"""
+    return (
+        len(value) >= 50
+        and len(set(value)) >= 5
+        and not value.startswith("django-insecure-")
+    )
+
+
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "").strip()
 if not SECRET_KEY:
     if DEBUG:
         # Development fallback — never use this in production
         SECRET_KEY = "django-insecure-dev-only-do-not-use-in-production"
     else:
         raise ValueError("SECRET_KEY must be set in production (DJANGO_SECRET_KEY env var)")
+elif not DEBUG and not _is_secure_secret_key(SECRET_KEY):
+    raise ValueError(
+        "DJANGO_SECRET_KEY must be at least 50 characters, contain at least "
+        "5 unique characters, and not start with 'django-insecure-' in production"
+    )
 
 # Security fix: ALLOWED_HOSTS must not be wildcard in production
 allowed_hosts_env = os.environ.get("DJANGO_ALLOWED_HOSTS", "")

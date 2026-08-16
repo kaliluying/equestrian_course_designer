@@ -64,8 +64,8 @@ export class SVGToCanvasConverter {
     }
 
     const commands: SVGPathCommand[] = []
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-    let totalLength = 0
+    const bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }
+    const totalLength = 0
 
     // 清理路径数据，移除多余的空格和换行
     const cleanedPath = pathData.replace(/[\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim()
@@ -90,8 +90,7 @@ export class SVGToCanvasConverter {
         })
 
         // 计算边界框
-        this.updateBoundingBox(command.toUpperCase(), params, isAbsolute,
-          { minX, minY, maxX, maxY }, totalLength)
+        this.updateBoundingBox(command.toUpperCase(), params, isAbsolute, bounds)
       } else {
         // 处理没有参数的命令（如Z）
         commands.push({
@@ -104,10 +103,10 @@ export class SVGToCanvasConverter {
 
     // 计算最终边界框
     const boundingBox = {
-      x: minX === Infinity ? 0 : minX,
-      y: minY === Infinity ? 0 : minY,
-      width: maxX === -Infinity ? 0 : maxX - (minX === Infinity ? 0 : minX),
-      height: maxY === -Infinity ? 0 : maxY - (minY === Infinity ? 0 : minY)
+      x: bounds.minX === Infinity ? 0 : bounds.minX,
+      y: bounds.minY === Infinity ? 0 : bounds.minY,
+      width: bounds.maxX === -Infinity ? 0 : bounds.maxX - (bounds.minX === Infinity ? 0 : bounds.minX),
+      height: bounds.maxY === -Infinity ? 0 : bounds.maxY - (bounds.minY === Infinity ? 0 : bounds.minY)
     }
 
     if (this.debugMode) {
@@ -162,8 +161,7 @@ export class SVGToCanvasConverter {
     command: string,
     params: number[],
     isAbsolute: boolean,
-    bounds: { minX: number; minY: number; maxX: number; maxY: number },
-    length: number
+    bounds: { minX: number; minY: number; maxX: number; maxY: number }
   ): void {
     // 简化的边界框计算，主要处理M、L、C命令
     switch (command) {
@@ -260,7 +258,6 @@ export class SVGToCanvasConverter {
    * @param renderContext 渲染上下文
    */
   private executePathCommand(command: SVGPathCommand, renderContext: CanvasRenderingContext): void {
-    const { ctx } = renderContext
     const { command: cmd, params, absolute } = command
 
     switch (cmd) {
@@ -477,8 +474,6 @@ export class SVGToCanvasConverter {
     for (let i = 0; i < params.length; i += 7) {
       const rx = params[i]
       const ry = params[i + 1]
-      const xAxisRotation = params[i + 2]
-      const largeArcFlag = params[i + 3]
       const sweepFlag = params[i + 4]
       const x = params[i + 5]
       const y = params[i + 6]

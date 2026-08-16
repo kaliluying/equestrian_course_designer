@@ -382,7 +382,7 @@ const updateObstacleWithCollaboration = (
   updates: Partial<Obstacle>
 ) => {
   // 更新本地障碍物，但不触发事件
-  courseStore.updateObstacle(obstacleId, updates, false)
+  courseStore.updateObstacle(obstacleId, updates)
 
   // 如果在协作模式下，直接发送障碍物更新消息
   if (isCollaborating) {
@@ -894,4 +894,3 @@ const updateShowDirectionArrow = (show: boolean): void => {
   margin-right: 10px;
 }
 </style>
-

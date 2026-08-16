@@ -958,7 +958,7 @@ export class ExportStatusManager {
    * @param options 进度选项
    * @returns 进度跟踪器
    */
-  createTracker(exportId: string, options?: Partial<ProgressOptions>): ExportProgressTracker {
+  createTracker(exportId: string): ExportProgressTracker {
     const tracker = new ExportProgressTracker()
     this.activeExports.set(exportId, tracker)
     return tracker
@@ -997,7 +997,7 @@ export class ExportStatusManager {
    * 取消所有活跃的导出
    */
   cancelAllExports(): void {
-    for (const [exportId, tracker] of this.activeExports) {
+    for (const tracker of this.activeExports.values()) {
       tracker.cancelProgress()
     }
     this.activeExports.clear()

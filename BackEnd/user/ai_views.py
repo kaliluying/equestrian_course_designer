@@ -525,9 +525,23 @@ def _fallback_edit_course(course: dict, instruction: str) -> dict:
 def _build_rule_based_coach_notes(course: dict, validation: dict | None = None) -> dict:
     """根据路线和校验结果生成规则模板教练说明。"""
     obstacles = course.get("obstacles", [])
+    if not isinstance(obstacles, list):
+        raise ValueError("障碍物列表格式无效")
+    if len(obstacles) > MAX_EDIT_OBSTACLES:
+        raise ValueError(f"障碍物数量不能超过{MAX_EDIT_OBSTACLES}个")
+    if any(
+        not isinstance(obstacle, dict)
+        or not isinstance(obstacle.get("type", "SINGLE"), str)
+        for obstacle in obstacles
+    ):
+        raise ValueError("障碍物元素格式无效")
     obstacle_types = {obstacle.get("type", "SINGLE") for obstacle in obstacles}
     warnings = (validation or {}).get("warnings", []) or []
     issues = (validation or {}).get("issues", []) or []
+    if not isinstance(warnings, list):
+        warnings = []
+    if not isinstance(issues, list):
+        issues = []
 
     training_goals = ["建立稳定节奏和清晰路线记忆"]
     if "COMBINATION" in obstacle_types or "DOUBLE" in obstacle_types:
@@ -1045,5 +1059,8 @@ def coach_notes(request):
         return _ai_response(status.HTTP_400_BAD_REQUEST, "路线数据无效")
     if not isinstance(validation, dict):
         return _ai_response(status.HTTP_400_BAD_REQUEST, "校验结果格式无效")
-    notes = _build_rule_based_coach_notes(course, validation)
+    try:
+        notes = _build_rule_based_coach_notes(course, validation)
+    except ValueError as exc:
+        return _ai_response(status.HTTP_400_BAD_REQUEST, str(exc))
     return _ai_response(status.HTTP_200_OK, "生成成功", notes)

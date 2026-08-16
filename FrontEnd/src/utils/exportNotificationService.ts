@@ -4,9 +4,6 @@
  */
 
 import { ElMessage, ElNotification, ElMessageBox } from 'element-plus'
-import {
-  ExportStage
-} from '@/types/export'
 import type {
   ExportResult,
   ExportError,
@@ -283,12 +280,10 @@ export class ExportNotificationService {
     // 按严重程度分组
     const criticalWarnings = warnings.filter(w => w.severity === 'high')
     const mediumWarnings = warnings.filter(w => w.severity === 'medium')
-    const lowWarnings = warnings.filter(w => w.severity === 'low')
-
     const priority = criticalWarnings.length > 0 ? NotificationPriority.HIGH :
                     mediumWarnings.length > 0 ? NotificationPriority.MEDIUM : NotificationPriority.LOW
 
-    let title = '导出警告'
+    const title = '导出警告'
     let message = `发现 ${warnings.length} 个警告`
 
     if (context) {

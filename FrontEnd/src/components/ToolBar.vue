@@ -201,9 +201,7 @@ import { ref } from 'vue'
 import { ObstacleType } from '@/types/obstacle'
 import { useCourseStore } from '@/stores/course'
 import { useUserStore } from '@/stores/user'
-import { downloadDesign } from '@/api/design'
-import { triggerDesignDownload } from '@/utils/designDownload'
-import { Download, Upload, Delete, Pointer, Edit, Lock, ArrowDown, MagicStick } from '@element-plus/icons-vue'
+import { Download, Upload, Delete, Pointer, Edit, ArrowDown, MagicStick } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage, ElLoading } from 'element-plus'
 import html2canvas from 'html2canvas'
 import { saveDesign } from '@/api/design'
@@ -214,7 +212,6 @@ import AIGenerateDialog from '@/components/AIGenerateDialog.vue'
 
 
 
-import { buildSaveDesignRequest } from '@/composables/useDesignSave'
 import { useDesignExport } from '@/composables/useDesignExport'
 import { exportManager } from '@/utils/exportManager'
 import { ExportFormat, ExportStage, type PDFExportOptions, type JSONExportOptions, type ProgressState, type ExportResult } from '@/types/export'
@@ -275,10 +272,6 @@ const exportOptions = ref({
 })
 
 const activeTab = ref('basic')
-
-const activeSection = ref('templates')
-
-
 
 const handleDragStart = (event: DragEvent, type: ObstacleType) => {
   event.dataTransfer?.setData('text/plain', type)
@@ -385,11 +378,6 @@ const handleSaveDesign = async () => {
     tempWrapper.style.width = '100%'
     tempWrapper.style.height = '100%'
     document.body.appendChild(tempWrapper)
-
-    // 3. 保存原始画布尺寸和位置
-    const originalRect = canvas.getBoundingClientRect()
-    const originalWidth = originalRect.width
-    const originalHeight = originalRect.height
 
     try {
       // 4. 使用html2canvas进行渲染

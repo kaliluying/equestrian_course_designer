@@ -88,7 +88,7 @@
               :cx="point.controlPoint1.x"
               :cy="point.controlPoint1.y"
               r="0.3"
-              @pointerdown.stop.prevent="startDraggingControlPoint(index, 1, $event)"
+              @pointerdown.stop.prevent="startDraggingControlPoint(index, 1)"
             />
             <circle
               v-if="point.controlPoint2"
@@ -96,7 +96,7 @@
               :cx="point.controlPoint2.x"
               :cy="point.controlPoint2.y"
               r="0.3"
-              @pointerdown.stop.prevent="startDraggingControlPoint(index, 2, $event)"
+              @pointerdown.stop.prevent="startDraggingControlPoint(index, 2)"
             />
           </g>
         </template>
@@ -808,7 +808,6 @@ const startRotatingPathPoint = (pointType: 'start' | 'end', event: PointerEvent)
 const startDraggingControlPoint = (
   pointIndex: number,
   controlPointNumber: 1 | 2,
-  _event: PointerEvent
 ) => {
   draggingControlPoint.value = {
     pointIndex,

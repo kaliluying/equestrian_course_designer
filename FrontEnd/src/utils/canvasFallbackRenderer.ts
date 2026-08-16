@@ -65,7 +65,6 @@ export class CanvasFallbackRenderer {
       const {
         backgroundColor = '#ffffff',
         scale = 2,
-        quality = 1.0,
         width = sourceRect.width,
         height = sourceRect.height,
         padding = 20
@@ -125,7 +124,7 @@ export class CanvasFallbackRenderer {
       }
 
       // 渲染非SVG内容（如障碍物图片等）
-      await this.renderNonSVGContent(ctx, sourceCanvas, { width, height })
+      await this.renderNonSVGContent(ctx, sourceCanvas)
 
       const renderTime = performance.now() - startTime
 
@@ -591,8 +590,7 @@ export class CanvasFallbackRenderer {
    */
   private async renderNonSVGContent(
     ctx: CanvasRenderingContext2D,
-    sourceCanvas: HTMLElement,
-    dimensions: { width: number; height: number }
+    sourceCanvas: HTMLElement
   ): Promise<void> {
     try {
       // 查找图片元素

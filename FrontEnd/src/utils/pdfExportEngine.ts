@@ -644,7 +644,7 @@ export class PDFExportEngine {
 
       // 添加水印（如果需要）
       if (options.includeMetadata) {
-        this.addWatermark(pdf, pageWidth, pageHeight, options)
+        this.addWatermark(pdf, pageWidth, pageHeight)
       }
 
       // 优化PDF压缩
@@ -665,8 +665,7 @@ export class PDFExportEngine {
   private addWatermark(
     pdf: jsPDF,
     pageWidth: number,
-    pageHeight: number,
-    options: PDFExportOptions
+    pageHeight: number
   ): void {
     try {
       // 保存当前状态
@@ -868,7 +867,7 @@ export class PDFExportEngine {
       }
 
       // 3. 检查颜色空间和打印适配性
-      const colorCheck = this.validatePDFColorSpace(renderedCanvas, options)
+      const colorCheck = this.validatePDFColorSpace(renderedCanvas)
       if (colorCheck.hasIssues) {
         issues.push({
           type: 'style_mismatch',
@@ -981,8 +980,7 @@ export class PDFExportEngine {
    * @returns 颜色空间验证结果
    */
   private validatePDFColorSpace(
-    canvas: HTMLCanvasElement,
-    options: PDFExportOptions
+    canvas: HTMLCanvasElement
   ): { hasIssues: boolean; message?: string; suggestion?: string } {
     // 检查是否使用了透明背景（PDF打印时可能有问题）
     if (typeof canvas.getContext !== 'function') {
@@ -1501,7 +1499,7 @@ export class PDFExportEngine {
         const memory = performanceWithMemory.memory
         return memory.usedJSHeapSize
       }
-    } catch (error) {
+    } catch {
       // 忽略错误
     }
     return undefined

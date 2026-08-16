@@ -4,7 +4,6 @@
  */
 
 import type { CourseDesign, Obstacle, CoursePathData } from '@/types/obstacle'
-import type { JSONExportOptions } from '@/types/export'
 
 type JsonObject = Record<string, unknown>
 
@@ -1155,7 +1154,7 @@ export class JSONExportFormatter {
         specialObstacleCount: customObstacleStats.specialObstacleCount,
         obstaclesWithCustomId: customObstacleStats.obstaclesWithCustomId
       }
-    } catch (error) {
+    } catch {
       return this.createEmptyStatistics()
     }
   }
