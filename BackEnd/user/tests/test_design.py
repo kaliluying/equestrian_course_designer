@@ -626,6 +626,26 @@ class DesignVersionHistoryAPITest(TestCase):
 
         self.assertFalse(os.path.isdir(snapshot_dir) and os.listdir(snapshot_dir))
 
+    def test_corrupted_course_file_rejects_version_creation(self):
+        """路线文件损坏时不得静默创建空路线版本。"""
+        from user.models import DesignVersion
+        from user.services.design_version import (
+            DesignVersionCourseDataError,
+            create_design_version,
+        )
+
+        design = self._create_design(title="损坏路线设计")
+        design.download.save(
+            "broken.json",
+            ContentFile(b'{"obstacles":'),
+            save=True,
+        )
+
+        with self.assertRaises(DesignVersionCourseDataError):
+            create_design_version(design, source="manual")
+
+        self.assertFalse(DesignVersion.objects.filter(design=design).exists())
+
 class CourseTemplateMarketAPITest(TestCase):
     """路线模板库与公开模板市场测试"""
 

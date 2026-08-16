@@ -17,6 +17,10 @@ class DesignVersionSnapshotError(ValueError):
     """版本缺少可恢复的图片快照。"""
 
 
+class DesignVersionCourseDataError(ValueError):
+    """版本无法读取可恢复的路线数据。"""
+
+
 def _delete_storage_file(storage, name: str | None) -> None:
     """删除存储文件；删除失败只记录日志，避免掩盖已完成的数据库提交。"""
     if not name:
@@ -43,9 +47,11 @@ def _read_course_data(design: Design):
     try:
         with design.download.open('rb') as fp:
             content = fp.read().decode('utf-8')
-        return json.loads(content) if content else {}
-    except Exception:
-        return {}
+        return json.loads(content)
+    except Exception as exc:
+        raise DesignVersionCourseDataError(
+            '设计路线文件损坏或无法读取，无法创建版本快照'
+        ) from exc
 
 
 def _prune_old_versions(design: Design) -> None:
