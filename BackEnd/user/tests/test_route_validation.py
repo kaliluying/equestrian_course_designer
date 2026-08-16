@@ -217,6 +217,38 @@ class RouteValidationPanelAPITest(TestCase):
         self.assertGreaterEqual(first["position"]["x"], 3)
         self.assertLessEqual(first["poles"][0]["height"], 1.0)
 
+    def test_route_endpoints_handle_null_position(self):
+        """显式 null 位置按缺省坐标处理，不能让修复接口返回 500。"""
+        payload = {
+            "obstacles": [
+                {
+                    "id": "obs-null-position",
+                    "number": "1",
+                    "type": "SINGLE",
+                    "position": None,
+                    "poles": [{"height": 1.1}],
+                }
+            ]
+        }
+
+        validate_response = self.client.post(
+            "/user/designs/validate-course/",
+            data=payload,
+            format="json",
+        )
+        self.assertEqual(validate_response.status_code, 200)
+
+        fix_response = self.client.post(
+            "/user/designs/fix-course/",
+            data=payload,
+            format="json",
+        )
+        self.assertEqual(fix_response.status_code, 200)
+        self.assertEqual(
+            fix_response.json()["data"]["updated_obstacles"][0]["position"],
+            {"x": 3.0, "y": 3.0},
+        )
+
     def test_fix_course_rebuilds_path_after_obstacle_movement(self):
         """障碍物位置修复后，返回的路径点必须同步更新。"""
         response = self.client.post(

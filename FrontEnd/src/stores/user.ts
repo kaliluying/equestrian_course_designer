@@ -27,6 +27,33 @@ export const useUserStore = defineStore('user', () => {
 
   const clearAuthState = () => {
     localStorage.removeItem('user')
+    for (const key of [
+      'design_id_to_update',
+      'from_my_designs',
+      'competition_info',
+      'pendingCollaboration',
+      'via_link',
+      'sync_requested',
+      'joined_collaborators',
+      'isCollaborating',
+      'refreshing_collaborators',
+      'collaborators_only_sync',
+      'last_refresh_time',
+      'autosaved_course',
+      'autosaved_timestamp',
+    ]) {
+      localStorage.removeItem(key)
+    }
+    for (const key of Object.keys(localStorage)) {
+      if (
+        key.startsWith('autosave_corrupt:')
+        || key.startsWith('sync_response_sent_')
+        || key.startsWith('canvas_state_sent_')
+        || key.startsWith('collaborator_joined_')
+      ) {
+        localStorage.removeItem(key)
+      }
+    }
     currentUser.value = null
     isAuthenticated.value = false
   }
@@ -126,6 +153,12 @@ export const useUserStore = defineStore('user', () => {
         console.error('用户状态管理: 登出接口调用失败:', error)
       }
     }
+
+    const { useWebSocketStore } = await import('@/stores/websocket')
+    useWebSocketStore().reset()
+
+    const { useCourseStore } = await import('@/stores/course')
+    useCourseStore().resetCourse()
 
     clearAuthState()
 

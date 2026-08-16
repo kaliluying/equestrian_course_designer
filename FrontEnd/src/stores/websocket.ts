@@ -138,12 +138,14 @@ export const mapCollaborationErrorReason = (reason: string): string => {
       return '设计不存在'
     case 'rate_limited':
       return '连接过于频繁，请稍后重试'
+    case 'collaboration_session_full':
+      return '协作人数已达上限，请稍后再试'
     default:
       return '协作连接失败，请稍后重试'
   }
 }
 
-const TERMINAL_CLOSE_CODES = new Set([4000, 4001, 4002, 4003, 4004, 4005, 4006, 4007, 4008, 4009])
+const TERMINAL_CLOSE_CODES = new Set([4000, 4001, 4002, 4003, 4004, 4005, 4006, 4007, 4008, 4009, 4010])
 
 /**
  * 创建WebSocket连接
@@ -1457,6 +1459,8 @@ export const useWebSocketStore = defineStore('websocket', () => {
               ? mapCollaborationErrorReason('design_not_found')
               : closeEvent.code === 4009
                 ? mapCollaborationErrorReason('rate_limited')
+                : closeEvent.code === 4010
+                  ? mapCollaborationErrorReason('collaboration_session_full')
         : '连接已关闭'
       )
       const terminalClose = TERMINAL_CLOSE_CODES.has(closeEvent.code)
@@ -1612,6 +1616,23 @@ export const useWebSocketStore = defineStore('websocket', () => {
       collaborators.value = []
       socket.value = null
     }
+  }
+
+  const reset = () => {
+    disconnect()
+    connectionError.value = null
+    collaborators.value = []
+    chatMessages.value = []
+    isOwner.value = false
+    reconnectAttempts.value = 0
+    session.value = null
+    viaLink.value = false
+    currentShareToken.value = null
+    shareAuthPending.value = false
+    isCollaborating.value = false
+    currentDesignId.value = ''
+    currentMemberId.value = null
+    messageQueue.value = []
   }
 
   const authenticateSharePassword = (password: string) => {
@@ -2021,6 +2042,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     // 方法
     connect,
     disconnect,
+    reset,
     sendMessage,
     sendObstacleUpdate,
     sendAddObstacle,

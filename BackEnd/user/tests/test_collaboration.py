@@ -36,6 +36,18 @@ class CollaborationEnhancementAPITest(TestCase):
         self.design = Design.objects.create(title="协作设计", author=self.owner, is_shared=True)
         self.client.force_authenticate(user=self.owner)
 
+    def test_collaboration_session_has_explicit_member_limit(self):
+        """协作会话达到人数上限后不再接受新成员。"""
+        from user.consumers import MAX_SESSION_COLLABORATORS, _has_session_capacity
+
+        session = {
+            "collaborators": [{"id": str(index)} for index in range(MAX_SESSION_COLLABORATORS)]
+        }
+
+        self.assertFalse(_has_session_capacity(session))
+        session["collaborators"].pop()
+        self.assertTrue(_has_session_capacity(session))
+
     def test_create_and_resolve_design_comment(self):
         """用户可在设计上创建并解决评论"""
         response = self.client.post(

@@ -389,7 +389,8 @@ class RouteValidator:
 
         for index, obstacle in enumerate(updated):
             obstacle_id = self._obstacle_id(obstacle, index)
-            position = obstacle.setdefault('position', {})
+            position = obstacle.setdefault('position', {}) or {}
+            obstacle['position'] = position
             old_x = float(position.get('x', 0))
             old_y = float(position.get('y', 0))
             new_x = max(margin, min(self.field_width - margin, old_x))

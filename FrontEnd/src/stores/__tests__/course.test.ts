@@ -102,6 +102,18 @@ describe('course store', () => {
     expect(state?.serverUpdatedAt).toBeNull()
   })
 
+  it('不从旧版全局草稿键恢复其他账号的数据', () => {
+    const courseStore = useCourseStore()
+    localStorage.setItem(
+      'autosaved_course',
+      JSON.stringify({ id: 'other-user-design', obstacles: [{ id: 'private-obstacle' }] }),
+    )
+    localStorage.setItem('autosaved_timestamp', '2026-08-16T00:00:00.000Z')
+
+    expect(courseStore.readAutosaveDraft().savedCourse).toBeNull()
+    expect(courseStore.readAutosaveDraft().savedTimestamp).toBeNull()
+  })
+
   it('另存为新设计时清理旧设计自动保存分桶', () => {
     vi.useFakeTimers()
     const courseStore = useCourseStore()

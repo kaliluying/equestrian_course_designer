@@ -94,7 +94,7 @@
         message.style.marginTop = "10px";
         message.style.borderRadius = "4px";
         message.style.border = "1px solid #bce8f1";
-        message.innerHTML = "障碍物数据已修改，请保存以更新预览。";
+        message.textContent = "障碍物数据已修改，请保存以更新预览。";
 
         // 查找预览区域
         const previewField = document.querySelector(".field-preview_obstacle");
@@ -169,8 +169,7 @@
         helpDiv.style.backgroundColor = "#ecf5ff";
         helpDiv.style.borderRadius = "4px";
         helpDiv.style.border = "1px solid #d9ecff";
-        helpDiv.innerHTML = "提示: 障碍物显示为"未知类型"，请检查障碍物数据中是否包含<span style='background-color: #f8f8f8; padding: 2px 4px; border-radius: 3px; font-family: monospace;'>baseType</span>字段，" +
-                           "可能的值有: SINGLE, DOUBLE, WALL, LIVERPOOL, DECORATION";
+        helpDiv.textContent = "提示: 障碍物显示为‘未知类型’，请检查障碍物数据中是否包含 baseType 字段，可能的值有: SINGLE, DOUBLE, WALL, LIVERPOOL, DECORATION";
         
         area.appendChild(helpDiv);
       }
@@ -264,7 +263,7 @@
               successDiv.style.marginTop = '10px';
               successDiv.style.borderRadius = '4px';
               successDiv.style.border = '1px solid #c2e7b0';
-              successDiv.innerHTML = `已自动设置类型为: <strong>${jsonData.baseType}</strong>，请点击保存按钮更新预览。`;
+              successDiv.textContent = `已自动设置类型为: ${jsonData.baseType}，请点击保存按钮更新预览。`;
               
               area.appendChild(successDiv);
               

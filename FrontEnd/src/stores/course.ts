@@ -121,8 +121,9 @@ export const useCourseStore = defineStore('course', () => {
    * @returns {boolean} 是否存在有效的自动保存数据
    */
   const initializeStore = () => {
-    const savedCourse = localStorage.getItem('autosaved_course')
-    const savedTimestamp = localStorage.getItem('autosaved_timestamp')
+    const keys = getAutosaveKeys()
+    const savedCourse = localStorage.getItem(keys.courseKey)
+    const savedTimestamp = localStorage.getItem(keys.timestampKey)
 
     if (savedCourse && savedTimestamp) {
       try {
@@ -132,12 +133,9 @@ export const useCourseStore = defineStore('course', () => {
         }
       } catch (error) {
         console.error('自动保存数据无效:', error)
-        const keys = getAutosaveKeys()
         localStorage.removeItem(keys.courseKey)
         localStorage.removeItem(keys.timestampKey)
         localStorage.removeItem(keys.metaKey)
-        localStorage.removeItem('autosaved_course')
-        localStorage.removeItem('autosaved_timestamp')
       }
     }
 
@@ -1521,15 +1519,9 @@ export const useCourseStore = defineStore('course', () => {
 
   function readAutosaveDraft() {
     const keys = getAutosaveKeys()
-    const bucketCourse = localStorage.getItem(keys.courseKey)
-    const bucketTimestamp = localStorage.getItem(keys.timestampKey)
-    if (bucketCourse && bucketTimestamp) {
-      return { savedCourse: bucketCourse, savedTimestamp: bucketTimestamp, keys }
-    }
-
     return {
-      savedCourse: localStorage.getItem('autosaved_course'),
-      savedTimestamp: localStorage.getItem('autosaved_timestamp'),
+      savedCourse: localStorage.getItem(keys.courseKey),
+      savedTimestamp: localStorage.getItem(keys.timestampKey),
       keys,
     }
   }
@@ -1572,9 +1564,6 @@ export const useCourseStore = defineStore('course', () => {
           server_updated_at: serverUpdatedAt,
           schema_version: AUTOSAVE_SCHEMA_VERSION,
         }))
-        // 保留旧 key 兼容已有恢复流程和旧版本用户
-        localStorage.setItem('autosaved_course', payload)
-        localStorage.setItem('autosaved_timestamp', savedAt)
       } catch (error) {
         console.error('自动保存到localStorage失败:', error)
       }
@@ -1693,8 +1682,6 @@ export const useCourseStore = defineStore('course', () => {
         localStorage.removeItem(keys.courseKey)
         localStorage.removeItem(keys.timestampKey)
         localStorage.removeItem(keys.metaKey)
-        localStorage.removeItem('autosaved_course')
-        localStorage.removeItem('autosaved_timestamp')
         return false
       }
     } catch (error) {
@@ -1712,6 +1699,7 @@ export const useCourseStore = defineStore('course', () => {
     localStorage.removeItem(keys.courseKey)
     localStorage.removeItem(keys.timestampKey)
     localStorage.removeItem(keys.metaKey)
+    // 清理早期版本的全局草稿键，避免跨账号恢复旧用户数据。
     localStorage.removeItem('autosaved_course')
     localStorage.removeItem('autosaved_timestamp')
   }
@@ -2169,6 +2157,9 @@ export const useCourseStore = defineStore('course', () => {
       },
     }
     setServerUpdatedAt(null)
+    routeValidationResult.value = null
+    highlightedValidationIssue.value = null
+    useHistoryStore().clear()
 
     // 清除选中的障碍物
     selectedObstacle.value = null

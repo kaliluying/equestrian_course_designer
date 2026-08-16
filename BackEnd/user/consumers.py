@@ -35,6 +35,7 @@ CLOSE_CODE_INVALID_SHARE_TOKEN = 4006
 CLOSE_CODE_VIA_LINK_DEPRECATED = 4007
 CLOSE_CODE_DESIGN_NOT_FOUND = 4008
 CLOSE_CODE_RATE_LIMITED = 4009
+CLOSE_CODE_SESSION_FULL = 4010
 CLOSE_CODE_COLLABORATION_ACCESS_DENIED = 4004
 SHARE_AUTH_MAX_ATTEMPTS = 3
 WEBSOCKET_CONNECTION_LIMIT = 30
@@ -43,6 +44,7 @@ WEBSOCKET_MAX_MESSAGE_BYTES = 2 * 1024 * 1024
 WEBSOCKET_MAX_MESSAGE_RATE = 120
 WEBSOCKET_MAX_CHAT_LENGTH = 2000
 SYNC_REQUEST_TTL_SECONDS = 30
+MAX_SESSION_COLLABORATORS = 20
 
 
 def _json_depth(value, depth=0):
@@ -61,6 +63,12 @@ def _safe_collaborator_color(value):
     if isinstance(value, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", value):
         return value
     return None
+
+
+def _has_session_capacity(session):
+    """限制单个协作会话的协作者数量，避免会话和广播无限膨胀。"""
+    collaborators = session.get("collaborators")
+    return isinstance(collaborators, list) and len(collaborators) < MAX_SESSION_COLLABORATORS
 
 
 def _allow_websocket_connection(scope):
@@ -435,6 +443,9 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                         existing["last_active"] = now
                         return False, session, session_role
 
+                    if not _has_session_capacity(session):
+                        return False, session, None
+
                     session["collaborators"].append(
                         {
                             "id": self.session_member_id,
@@ -458,6 +469,16 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                 result = active_sessions.mutate(self.design_id, add_collaborator)
                 if result is not None:
                     is_new, session, session_role = result
+                    if session_role is None:
+                        self.session_member_id = None
+                        await self.channel_layer.group_discard(
+                            self.room_group_name, self.channel_name
+                        )
+                        await self._close_with_protocol_error(
+                            CLOSE_CODE_SESSION_FULL,
+                            "collaboration_session_full",
+                        )
+                        return
                     if is_new:
                         await self.channel_layer.group_send(
                             self.room_group_name,
