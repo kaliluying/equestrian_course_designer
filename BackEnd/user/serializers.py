@@ -81,6 +81,9 @@ def _validate_route_file(value):
     if not isinstance(parsed, dict):
         raise serializers.ValidationError("路线文件必须是 JSON 对象")
     _validate_json_data(parsed, MAX_ROUTE_DATA_BYTES, "路线数据")
+    obstacles = parsed.get("obstacles")
+    if obstacles is not None and (not isinstance(obstacles, list) or len(obstacles) > 200):
+        raise serializers.ValidationError("路线障碍物数量不能超过 200")
 
 
 class RouteValidationRequestSerializer(serializers.Serializer):

@@ -244,6 +244,12 @@ class PasswordResetToken(models.Model):
     class Meta:
         verbose_name = '密码重置令牌'
         verbose_name_plural = '密码重置令牌'
+        constraints = [
+            models.UniqueConstraint(
+                fields=('user',),
+                name='unique_password_reset_token_user',
+            ),
+        ]
         ordering = ['-created_at']
 
 

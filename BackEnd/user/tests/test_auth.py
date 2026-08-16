@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 
 from django.core.files.base import ContentFile
 from django.core.management import call_command
-from django.db import close_old_connections, connection
+from django.db import IntegrityError, close_old_connections, connection, transaction
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from django.urls import reverse
@@ -27,10 +27,32 @@ from user.models import (
     Design,
     MembershipPlan,
     MembershipOrder,
+    PasswordResetToken,
 )
 
 class AuthCookieTest(TestCase):
     """认证 cookie 测试"""
+
+    def test_password_reset_token_is_unique_per_user(self):
+        """同一用户只能保留一个可更新的密码重置令牌。"""
+        user = User.objects.create_user(
+            username="reset_token_user",
+            email="reset-token@example.com",
+            password="Password123",
+        )
+        PasswordResetToken.objects.create(
+            user=user,
+            token="first-reset-token",
+            expires_at=timezone.now(),
+        )
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                PasswordResetToken.objects.create(
+                    user=user,
+                    token="second-reset-token",
+                    expires_at=timezone.now(),
+                )
 
     def test_register_sets_auth_cookies(self):
         """注册成功后应立即写入认证 cookies，支持自动登录"""

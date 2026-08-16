@@ -24,7 +24,7 @@ from user.models import (
     MembershipPlan,
     MembershipOrder,
 )
-from user.serializers import _validate_image_upload
+from user.serializers import _validate_image_upload, _validate_route_file
 
 
 class ImageUploadValidationTest(TestCase):
@@ -39,6 +39,16 @@ class ImageUploadValidationTest(TestCase):
         ):
             with self.assertRaises(serializers.ValidationError):
                 _validate_image_upload(upload, "设计图片")
+
+    def test_route_file_rejects_too_many_obstacles(self):
+        """路线文件中的障碍物数量应与内联路线数据保持同一上限。"""
+        upload = ContentFile(
+            json.dumps({"obstacles": [{} for _ in range(201)]}).encode("utf-8"),
+            name="route.json",
+        )
+
+        with self.assertRaises(serializers.ValidationError):
+            _validate_route_file(upload)
 
 class DesignDownloadAPITest(TestCase):
     """设计下载接口测试"""
