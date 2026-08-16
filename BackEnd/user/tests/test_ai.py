@@ -325,6 +325,24 @@ class AICourseEditingAPITest(TestCase):
         self.assertIn("risk_focus", data)
         self.assertGreater(len(data["training_goals"]), 0)
 
+    def test_edit_course_rejects_non_string_instruction(self):
+        """非字符串修改指令必须返回 400 而不是触发 AttributeError。"""
+        response = self.client.post(
+            "/user/ai/edit-course/",
+            data={"instruction": {"text": "降低难度"}, "course": self.course},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_coach_notes_rejects_non_object_validation(self):
+        """非对象校验结果必须返回稳定的 400。"""
+        response = self.client.post(
+            "/user/ai/coach-notes/",
+            data={"course": self.course, "validation": []},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
 class AIQuotaPurchaseAPITest(TestCase):
     """AI 配额购买链路测试"""
 

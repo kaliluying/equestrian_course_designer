@@ -5,12 +5,14 @@ from datetime import timedelta
 from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
 from django.core import signing
+from django.db import transaction
 from django.utils import timezone
 
-from user.models import CollaborationShareLink
+from user.models import CollaborationShareLink, Design
 
 SHARE_SCOPE = 'collaboration:join'
 VALID_ROLES = frozenset({'editor', 'viewer', 'commenter'})
+MAX_SHARE_PASSWORD_LENGTH = 128
 
 
 def _validate_ttl(expires_in_seconds: int) -> int:
@@ -34,28 +36,37 @@ def build_share_token(*, share_link_id: int, design_id: int) -> str:
     )
 
 
+@transaction.atomic
 def create_share_link(*, design, created_by, role: str, expires_in_seconds: int, password: str | None = None):
     """创建分享链接并只在数据库保存密码哈希。"""
     if role not in VALID_ROLES:
         raise ValueError('无效的协作角色')
+    if password is not None and not isinstance(password, str):
+        raise ValueError('分享链接密码格式无效')
+    if password is not None and len(password) > MAX_SHARE_PASSWORD_LENGTH:
+        raise ValueError(f'分享链接密码不能超过 {MAX_SHARE_PASSWORD_LENGTH} 个字符')
     ttl_seconds = _validate_ttl(int(expires_in_seconds))
+    locked_design = Design.objects.select_for_update().get(pk=design.pk)
     share_link = CollaborationShareLink.objects.create(
-        design=design,
+        design=locked_design,
         created_by=created_by,
         role=role,
         expires_at=timezone.now() + timedelta(seconds=ttl_seconds),
         password_hash=make_password(password) if password else '',
     )
-    return share_link, build_share_token(share_link_id=share_link.id, design_id=design.id)
+    return share_link, build_share_token(share_link_id=share_link.id, design_id=locked_design.id)
 
 
+@transaction.atomic
 def revoke_share_link(*, design, created_by) -> int:
     """撤销设计作者创建的所有有效分享链接。"""
-    return CollaborationShareLink.objects.filter(
-        design=design,
+    locked_design = Design.objects.select_for_update().get(pk=design.pk)
+    revoked_count = CollaborationShareLink.objects.filter(
+        design=locked_design,
         created_by=created_by,
         is_revoked=False,
     ).update(is_revoked=True, updated_at=timezone.now())
+    return revoked_count
 
 
 def resolve_share_token(

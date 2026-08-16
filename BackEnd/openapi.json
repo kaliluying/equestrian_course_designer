@@ -1098,6 +1098,25 @@
                 "tags": [
                     "user"
                 ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ShareLinkCreateRequest"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ShareLinkCreateRequest"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ShareLinkCreateRequest"
+                            }
+                        }
+                    }
+                },
                 "security": [
                     {
                         "CookieJWTAuth": []
@@ -1111,8 +1130,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "type": "object",
-                                    "additionalProperties": {}
+                                    "$ref": "#/components/schemas/ShareLinkCreateResponse"
                                 }
                             }
                         },
@@ -1146,8 +1164,15 @@
                     }
                 ],
                 "responses": {
-                    "204": {
-                        "description": "No response body"
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShareLinkRevokeResponse"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }
@@ -1351,6 +1376,21 @@
                         },
                         "description": "标识此 设计图 的 唯一整数值。",
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "type",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "image",
+                                "json",
+                                "pdf",
+                                "png",
+                                "report",
+                                "zip"
+                            ]
+                        }
                     }
                 ],
                 "tags": [
@@ -1369,7 +1409,38 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Design"
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            },
+                            "image/png": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            },
+                            "image/jpeg": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            },
+                            "image/webp": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            },
+                            "application/pdf": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            },
+                            "application/zip": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
                                 }
                             }
                         },
@@ -1597,6 +1668,21 @@
                         },
                         "description": "标识此 设计图 的 唯一整数值。",
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "type",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "image",
+                                "json",
+                                "pdf",
+                                "png",
+                                "report",
+                                "zip"
+                            ]
+                        }
                     }
                 ],
                 "tags": [
@@ -1615,7 +1701,8 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Design"
+                                    "type": "object",
+                                    "additionalProperties": {}
                                 }
                             }
                         },
@@ -1835,7 +1922,10 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Design"
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/DesignVersion"
+                                    }
                                 }
                             }
                         },
@@ -1883,7 +1973,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Design"
+                                    "$ref": "#/components/schemas/DesignVersion"
                                 }
                             }
                         },
@@ -1920,17 +2010,17 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/PatchedDesignRequest"
+                                "$ref": "#/components/schemas/PatchedDesignVersionUpdateRequest"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/PatchedDesignRequest"
+                                "$ref": "#/components/schemas/PatchedDesignVersionUpdateRequest"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/PatchedDesignRequest"
+                                "$ref": "#/components/schemas/PatchedDesignVersionUpdateRequest"
                             }
                         }
                     }
@@ -1948,7 +2038,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Design"
+                                    "$ref": "#/components/schemas/DesignVersion"
                                 }
                             }
                         },
@@ -1983,26 +2073,6 @@
                 "tags": [
                     "user"
                 ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/DesignRequest"
-                            }
-                        },
-                        "multipart/form-data": {
-                            "schema": {
-                                "$ref": "#/components/schemas/DesignRequest"
-                            }
-                        },
-                        "application/x-www-form-urlencoded": {
-                            "schema": {
-                                "$ref": "#/components/schemas/DesignRequest"
-                            }
-                        }
-                    },
-                    "required": true
-                },
                 "security": [
                     {
                         "CookieJWTAuth": []
@@ -2012,7 +2082,7 @@
                     }
                 ],
                 "responses": {
-                    "200": {
+                    "201": {
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2051,26 +2121,6 @@
                 "tags": [
                     "user"
                 ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/DesignRequest"
-                            }
-                        },
-                        "multipart/form-data": {
-                            "schema": {
-                                "$ref": "#/components/schemas/DesignRequest"
-                            }
-                        },
-                        "application/x-www-form-urlencoded": {
-                            "schema": {
-                                "$ref": "#/components/schemas/DesignRequest"
-                            }
-                        }
-                    },
-                    "required": true
-                },
                 "security": [
                     {
                         "CookieJWTAuth": []
@@ -2084,7 +2134,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Design"
+                                    "$ref": "#/components/schemas/DesignResponseEnvelope"
                                 }
                             }
                         },
@@ -2104,21 +2154,20 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/DesignRequest"
+                                "$ref": "#/components/schemas/RouteValidationRequestRequest"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/DesignRequest"
+                                "$ref": "#/components/schemas/RouteValidationRequestRequest"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/DesignRequest"
+                                "$ref": "#/components/schemas/RouteValidationRequestRequest"
                             }
                         }
-                    },
-                    "required": true
+                    }
                 },
                 "security": [
                     {
@@ -2133,7 +2182,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Design"
+                                    "$ref": "#/components/schemas/RouteFixResponse"
                                 }
                             }
                         },
@@ -2211,21 +2260,20 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/DesignRequest"
+                                "$ref": "#/components/schemas/RouteValidationRequestRequest"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/DesignRequest"
+                                "$ref": "#/components/schemas/RouteValidationRequestRequest"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/DesignRequest"
+                                "$ref": "#/components/schemas/RouteValidationRequestRequest"
                             }
                         }
-                    },
-                    "required": true
+                    }
                 },
                 "security": [
                     {
@@ -2240,7 +2288,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Design"
+                                    "$ref": "#/components/schemas/RouteValidationResponse"
                                 }
                             }
                         },
@@ -3828,7 +3876,7 @@
                     "difficulty": {
                         "allOf": [
                             {
-                                "$ref": "#/components/schemas/DifficultyEnum"
+                                "$ref": "#/components/schemas/CourseTemplateDifficultyEnum"
                             }
                         ],
                         "title": "难度"
@@ -3922,6 +3970,15 @@
                     "updated_at"
                 ]
             },
+            "CourseTemplateDifficultyEnum": {
+                "enum": [
+                    "easy",
+                    "medium",
+                    "hard"
+                ],
+                "type": "string",
+                "description": "* `easy` - 初级\n* `medium` - 中级\n* `hard` - 高级"
+            },
             "CourseTemplateRequest": {
                 "type": "object",
                 "description": "路线模板序列化器。",
@@ -3940,7 +3997,7 @@
                     "difficulty": {
                         "allOf": [
                             {
-                                "$ref": "#/components/schemas/DifficultyEnum"
+                                "$ref": "#/components/schemas/CourseTemplateDifficultyEnum"
                             }
                         ],
                         "title": "难度"
@@ -4144,6 +4201,7 @@
                     },
                     "is_shared": {
                         "type": "boolean",
+                        "readOnly": true,
                         "title": "是否分享"
                     },
                     "description": {
@@ -4176,6 +4234,7 @@
                     "id",
                     "image_url",
                     "is_liked",
+                    "is_shared",
                     "likes_count",
                     "title",
                     "update_time"
@@ -4297,10 +4356,6 @@
                         "nullable": true,
                         "title": "设计图文件"
                     },
-                    "is_shared": {
-                        "type": "boolean",
-                        "title": "是否分享"
-                    },
                     "description": {
                         "type": "string",
                         "nullable": true,
@@ -4311,14 +4366,92 @@
                     "title"
                 ]
             },
-            "DifficultyEnum": {
-                "enum": [
-                    "easy",
-                    "medium",
-                    "hard"
-                ],
-                "type": "string",
-                "description": "* `easy` - 初级\n* `medium` - 中级\n* `hard` - 高级"
+            "DesignResponseEnvelope": {
+                "type": "object",
+                "description": "设计操作统一响应。",
+                "properties": {
+                    "success": {
+                        "type": "boolean"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "data": {
+                        "$ref": "#/components/schemas/Design"
+                    }
+                },
+                "required": [
+                    "data",
+                    "message",
+                    "success"
+                ]
+            },
+            "DesignVersion": {
+                "type": "object",
+                "description": "设计版本序列化器",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "design": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "title": "设计"
+                    },
+                    "version_number": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "title": "版本号"
+                    },
+                    "source": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SourceEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "title": "版本来源"
+                    },
+                    "title": {
+                        "type": "string",
+                        "readOnly": true,
+                        "title": "设计标题"
+                    },
+                    "description": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true,
+                        "title": "设计描述"
+                    },
+                    "remark": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true,
+                        "title": "版本备注"
+                    },
+                    "course_data": {
+                        "readOnly": true,
+                        "title": "路线数据"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "title": "创建时间"
+                    }
+                },
+                "required": [
+                    "course_data",
+                    "created_at",
+                    "description",
+                    "design",
+                    "id",
+                    "remark",
+                    "source",
+                    "title",
+                    "version_number"
+                ]
             },
             "Feedback": {
                 "type": "object",
@@ -4822,7 +4955,7 @@
                     "difficulty": {
                         "allOf": [
                             {
-                                "$ref": "#/components/schemas/DifficultyEnum"
+                                "$ref": "#/components/schemas/CourseTemplateDifficultyEnum"
                             }
                         ],
                         "title": "难度"
@@ -4906,14 +5039,25 @@
                         "nullable": true,
                         "title": "设计图文件"
                     },
-                    "is_shared": {
-                        "type": "boolean",
-                        "title": "是否分享"
-                    },
                     "description": {
                         "type": "string",
                         "nullable": true,
                         "title": "设计描述"
+                    }
+                }
+            },
+            "PatchedDesignVersionUpdateRequest": {
+                "type": "object",
+                "description": "设计版本可编辑字段。",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "remark": {
+                        "type": "string",
+                        "nullable": true
                     }
                 }
             },
@@ -5021,6 +5165,359 @@
                     "password",
                     "token"
                 ]
+            },
+            "RoleEnum": {
+                "enum": [
+                    "editor",
+                    "viewer",
+                    "commenter"
+                ],
+                "type": "string",
+                "description": "* `editor` - editor\n* `viewer` - viewer\n* `commenter` - commenter"
+            },
+            "RouteFixPatch": {
+                "type": "object",
+                "description": "路线自动修复补丁说明。",
+                "properties": {
+                    "code": {
+                        "type": "string"
+                    },
+                    "obstacle_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "message": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "code",
+                    "message",
+                    "obstacle_ids"
+                ]
+            },
+            "RouteFixResponse": {
+                "type": "object",
+                "description": "路线修复接口统一响应。",
+                "properties": {
+                    "success": {
+                        "type": "boolean"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "data": {
+                        "$ref": "#/components/schemas/RouteFixResult"
+                    }
+                },
+                "required": [
+                    "data",
+                    "message",
+                    "success"
+                ]
+            },
+            "RouteFixResult": {
+                "type": "object",
+                "description": "路线自动修复结果。",
+                "properties": {
+                    "patches": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RouteFixPatch"
+                        }
+                    },
+                    "updated_obstacles": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": {}
+                        }
+                    },
+                    "updated_path": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "nullable": true
+                    },
+                    "validation": {
+                        "$ref": "#/components/schemas/RouteValidationResult"
+                    },
+                    "explanation": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "explanation",
+                    "patches",
+                    "updated_obstacles",
+                    "updated_path",
+                    "validation"
+                ]
+            },
+            "RouteValidationIssue": {
+                "type": "object",
+                "description": "路线规则问题。",
+                "properties": {
+                    "code": {
+                        "type": "string"
+                    },
+                    "severity": {
+                        "type": "string"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "obstacle_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "suggested_action": {
+                        "type": "string"
+                    },
+                    "auto_fixable": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "auto_fixable",
+                    "code",
+                    "message",
+                    "obstacle_ids",
+                    "severity",
+                    "suggested_action"
+                ]
+            },
+            "RouteValidationRequestDifficultyEnum": {
+                "enum": [
+                    "easy",
+                    "medium",
+                    "hard"
+                ],
+                "type": "string",
+                "description": "* `easy` - easy\n* `medium` - medium\n* `hard` - hard"
+            },
+            "RouteValidationRequestRequest": {
+                "type": "object",
+                "description": "路线校验和修复接口的统一请求校验器。",
+                "properties": {
+                    "obstacles": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": {}
+                        }
+                    },
+                    "field_width": {
+                        "type": "number",
+                        "format": "double",
+                        "maximum": 1000,
+                        "minimum": 1e-06,
+                        "default": 90.0
+                    },
+                    "field_height": {
+                        "type": "number",
+                        "format": "double",
+                        "maximum": 1000,
+                        "minimum": 1e-06,
+                        "default": 60.0
+                    },
+                    "difficulty": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RouteValidationRequestDifficultyEnum"
+                            }
+                        ],
+                        "default": "medium"
+                    },
+                    "path": {
+                        "type": "object",
+                        "additionalProperties": {},
+                        "nullable": true
+                    }
+                }
+            },
+            "RouteValidationResponse": {
+                "type": "object",
+                "description": "路线校验接口统一响应。",
+                "properties": {
+                    "success": {
+                        "type": "boolean"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "data": {
+                        "$ref": "#/components/schemas/RouteValidationResult"
+                    }
+                },
+                "required": [
+                    "data",
+                    "message",
+                    "success"
+                ]
+            },
+            "RouteValidationResult": {
+                "type": "object",
+                "description": "路线校验结果。",
+                "properties": {
+                    "score": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "is_valid": {
+                        "type": "boolean"
+                    },
+                    "issues": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RouteValidationIssue"
+                        }
+                    },
+                    "warnings": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RouteValidationIssue"
+                        }
+                    },
+                    "auto_fixed": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "summary": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "auto_fixed",
+                    "is_valid",
+                    "issues",
+                    "score",
+                    "summary",
+                    "warnings"
+                ]
+            },
+            "ShareLinkCreateRequest": {
+                "type": "object",
+                "description": "协作分享链接创建请求。",
+                "properties": {
+                    "role": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RoleEnum"
+                            }
+                        ],
+                        "default": "editor"
+                    },
+                    "expires_in_seconds": {
+                        "type": "integer",
+                        "minimum": 60
+                    },
+                    "password": {
+                        "type": "string",
+                        "writeOnly": true,
+                        "maxLength": 128
+                    }
+                }
+            },
+            "ShareLinkCreateResponse": {
+                "type": "object",
+                "description": "协作分享链接创建响应。",
+                "properties": {
+                    "success": {
+                        "type": "boolean"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "data": {
+                        "$ref": "#/components/schemas/ShareLinkData"
+                    }
+                },
+                "required": [
+                    "data",
+                    "message",
+                    "success"
+                ]
+            },
+            "ShareLinkData": {
+                "type": "object",
+                "description": "协作分享链接数据。",
+                "properties": {
+                    "shareUrl": {
+                        "type": "string"
+                    },
+                    "shareToken": {
+                        "type": "string"
+                    },
+                    "expiresAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "ttlSeconds": {
+                        "type": "integer"
+                    },
+                    "role": {
+                        "$ref": "#/components/schemas/RoleEnum"
+                    },
+                    "passwordProtected": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "expiresAt",
+                    "passwordProtected",
+                    "role",
+                    "shareToken",
+                    "shareUrl",
+                    "ttlSeconds"
+                ]
+            },
+            "ShareLinkRevokeData": {
+                "type": "object",
+                "description": "协作分享链接撤销结果。",
+                "properties": {
+                    "revoked_count": {
+                        "type": "integer"
+                    }
+                },
+                "required": [
+                    "revoked_count"
+                ]
+            },
+            "ShareLinkRevokeResponse": {
+                "type": "object",
+                "description": "协作分享链接撤销响应。",
+                "properties": {
+                    "success": {
+                        "type": "boolean"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "data": {
+                        "$ref": "#/components/schemas/ShareLinkRevokeData"
+                    }
+                },
+                "required": [
+                    "data",
+                    "message",
+                    "success"
+                ]
+            },
+            "SourceEnum": {
+                "enum": [
+                    "manual",
+                    "autosave",
+                    "ai",
+                    "restore"
+                ],
+                "type": "string",
+                "description": "* `manual` - 手动保存\n* `autosave` - 自动保存\n* `ai` - AI生成\n* `restore` - 版本恢复"
             },
             "TypeEnum": {
                 "enum": [

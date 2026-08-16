@@ -80,9 +80,11 @@ class RouteValidationPanelAPITest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertFalse(data["is_valid"])
-        self.assertEqual(data["issues"][0]["code"], "EMPTY_ROUTE")
-        self.assertEqual(data["issues"][0]["severity"], "error")
+        self.assertTrue(data["success"])
+        route_data = data["data"]
+        self.assertFalse(route_data["is_valid"])
+        self.assertEqual(route_data["issues"][0]["code"], "EMPTY_ROUTE")
+        self.assertEqual(route_data["issues"][0]["severity"], "error")
 
     def test_validate_course_returns_structured_distance_issue(self):
         """障碍物距离过近应返回结构化距离错误"""
@@ -101,7 +103,7 @@ class RouteValidationPanelAPITest(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        issue = response.json()["issues"][0]
+        issue = response.json()["data"]["issues"][0]
         self.assertEqual(issue["code"], "MIN_DISTANCE")
         self.assertEqual(issue["severity"], "error")
         self.assertEqual(issue["obstacle_ids"], ["obs-1", "obs-2"])
@@ -123,7 +125,8 @@ class RouteValidationPanelAPITest(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        codes = {item["code"] for item in response.json()["issues"] + response.json()["warnings"]}
+        route_data = response.json()["data"]
+        codes = {item["code"] for item in route_data["issues"] + route_data["warnings"]}
         self.assertIn("BOUNDARY_DISTANCE", codes)
         self.assertIn("HEIGHT_RANGE", codes)
 
@@ -151,7 +154,8 @@ class RouteValidationPanelAPITest(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        codes = {item["code"] for item in response.json()["issues"] + response.json()["warnings"]}
+        route_data = response.json()["data"]
+        codes = {item["code"] for item in route_data["issues"] + route_data["warnings"]}
         self.assertIn("TURN_RADIUS", codes)
         self.assertIn("ROUTE_FLOW", codes)
         self.assertIn("OBSTACLE_SEQUENCE", codes)
@@ -183,7 +187,8 @@ class RouteValidationPanelAPITest(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        codes = {item["code"] for item in response.json()["issues"] + response.json()["warnings"]}
+        route_data = response.json()["data"]
+        codes = {item["code"] for item in route_data["issues"] + route_data["warnings"]}
         self.assertIn("COMBINATION_SPACING", codes)
 
     def test_fix_course_returns_patches_and_updated_obstacles(self):
@@ -203,7 +208,7 @@ class RouteValidationPanelAPITest(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        data = response.json()
+        data = response.json()["data"]
         self.assertIn("patches", data)
         self.assertIn("updated_obstacles", data)
         self.assertIn("validation", data)
@@ -233,7 +238,80 @@ class RouteValidationPanelAPITest(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        updated_path = response.json()["updated_path"]
+        updated_path = response.json()["data"]["updated_path"]
         self.assertTrue(updated_path["visible"])
         self.assertNotEqual(updated_path["points"], [{"x": 1, "y": 2}, {"x": 2, "y": 2}])
         self.assertEqual(updated_path["points"][3]["x"], 3.0)
+
+    def test_route_endpoints_reject_invalid_obstacle_numeric_fields(self):
+        """属性对象、编号和横杆字段异常时必须稳定返回 400。"""
+        invalid_routes = [
+            {
+                "number": "1",
+                "type": "WALL",
+                "position": {"x": 10, "y": 10},
+                "poles": [{"height": 1.1}],
+                "wallProperties": {"height": "bad", "width": 3.5},
+            },
+            {
+                "number": "abc",
+                "type": "SINGLE",
+                "position": {"x": 10, "y": 10},
+                "poles": [{"height": 1.1}],
+            },
+            {
+                "number": "1",
+                "type": "SINGLE",
+                "position": {"x": 10, "y": 10},
+                "poles": [{}],
+            },
+            {
+                "number": "1",
+                "type": "WALL",
+                "position": {"x": 10, "y": 10},
+                "poles": [{"height": 1.1}],
+                "wallProperties": {"height": None},
+            },
+        ]
+        for endpoint in ("validate-course", "fix-course"):
+            response = self.client.post(
+                f"/user/designs/{endpoint}/",
+                data={"obstacles": invalid_routes},
+                format="json",
+            )
+            self.assertEqual(response.status_code, 400, endpoint)
+
+    def test_route_endpoints_reject_oversized_or_deep_json(self):
+        """路线请求必须遵守统一体积和嵌套深度限制。"""
+        nested = "value"
+        for _ in range(13):
+            nested = {"nested": nested}
+        payload = {
+            "obstacles": [
+                {
+                    "number": "1",
+                    "type": "SINGLE",
+                    "position": {"x": 10, "y": 10},
+                    "poles": [{"height": 1.1}],
+                    "metadata": nested,
+                }
+            ]
+        }
+        for endpoint in ("validate-course", "fix-course"):
+            response = self.client.post(
+                f"/user/designs/{endpoint}/",
+                data=payload,
+                format="json",
+            )
+            self.assertEqual(response.status_code, 400, endpoint)
+
+    def test_route_endpoints_reject_oversized_unknown_fields(self):
+        """未知字段也不能绕过路线请求的整体体积限制。"""
+        payload = {"padding": "x" * (512 * 1024)}
+        for endpoint in ("validate-course", "fix-course"):
+            response = self.client.post(
+                f"/user/designs/{endpoint}/",
+                data=payload,
+                format="json",
+            )
+            self.assertEqual(response.status_code, 400, endpoint)

@@ -941,8 +941,13 @@ def get_ai_history(request):
 @throttle_classes([AIRateThrottle])
 def edit_course(request):
     """基于当前路线进行 AI/规则二次编辑。"""
-    instruction = (request.data.get("instruction") or "").strip()[:MAX_PROMPT_LENGTH]
-    course = request.data.get("course") or {}
+    raw_instruction = request.data.get("instruction")
+    if raw_instruction is not None and not isinstance(raw_instruction, str):
+        return _ai_response(status.HTTP_400_BAD_REQUEST, "修改指令格式无效")
+    instruction = (raw_instruction or "").strip()[:MAX_PROMPT_LENGTH]
+    course = request.data.get("course")
+    if course is None:
+        course = {}
     if not instruction:
         return _ai_response(status.HTTP_400_BAD_REQUEST, "请输入修改指令")
     if not isinstance(course, dict):
@@ -966,9 +971,15 @@ def edit_course(request):
 @throttle_classes([AIRateThrottle])
 def coach_notes(request):
     """根据当前路线生成教练说明。"""
-    course = request.data.get("course") or {}
-    validation = request.data.get("validation") or {}
+    course = request.data.get("course")
+    validation = request.data.get("validation")
+    if course is None:
+        course = {}
+    if validation is None:
+        validation = {}
     if not isinstance(course, dict):
         return _ai_response(status.HTTP_400_BAD_REQUEST, "路线数据无效")
+    if not isinstance(validation, dict):
+        return _ai_response(status.HTTP_400_BAD_REQUEST, "校验结果格式无效")
     notes = _build_rule_based_coach_notes(course, validation)
     return _ai_response(status.HTTP_200_OK, "生成成功", notes)

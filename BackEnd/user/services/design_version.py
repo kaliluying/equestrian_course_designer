@@ -13,6 +13,10 @@ MAX_VERSIONS_PER_DESIGN = 50
 logger = logging.getLogger(__name__)
 
 
+class DesignVersionSnapshotError(ValueError):
+    """版本缺少可恢复的图片快照。"""
+
+
 def _delete_storage_file(storage, name: str | None) -> None:
     """删除存储文件；删除失败只记录日志，避免掩盖已完成的数据库提交。"""
     if not name:
@@ -79,6 +83,16 @@ def _read_file(field_file):
         return None, None
     with field_file.open('rb') as file_obj:
         return file_obj.read(), os.path.basename(field_file.name)
+
+
+def _read_version_image_snapshot(version: DesignVersion):
+    """读取完整版本图片快照，缺失时拒绝混用当前设计文件。"""
+    content, filename = _read_file(version.image_snapshot)
+    if content is None:
+        raise DesignVersionSnapshotError(
+            '该版本缺少图片快照，无法安全执行恢复或复制'
+        )
+    return content, filename
 
 
 def _save_image_snapshot(version: DesignVersion, design: Design) -> None:
@@ -153,13 +167,12 @@ def restore_design_version(design: Design, version: DesignVersion) -> DesignVers
                 )
                 new_download_name = locked_design.download.name
 
-            image_content, image_filename = _read_file(locked_version.image_snapshot)
-            if image_content is not None:
-                locked_design.image.save(
-                    image_filename or 'design.png',
-                    ContentFile(image_content),
-                    save=False,
-                )
+            image_content, image_filename = _read_version_image_snapshot(locked_version)
+            locked_design.image.save(
+                image_filename or 'design.png',
+                ContentFile(image_content),
+                save=False,
+            )
             new_image_name = locked_design.image.name if locked_design.image else None
             new_download_name = locked_design.download.name if locked_design.download else None
             locked_design.save()
@@ -182,11 +195,8 @@ def copy_design_version(version: DesignVersion, author=None) -> Design:
     """将指定版本复制为新设计，并将作者绑定到发起复制的用户。"""
     with transaction.atomic():
         source_version = DesignVersion.objects.select_related('design').get(pk=version.pk)
-        source_design = source_version.design
         target_author = author or source_version.author
-        image_content, image_filename = _read_file(source_version.image_snapshot)
-        if image_content is None:
-            image_content, image_filename = _read_file(source_design.image)
+        image_content, image_filename = _read_version_image_snapshot(source_version)
 
         new_design = Design.objects.create(
             title=f"{source_version.title} 副本",

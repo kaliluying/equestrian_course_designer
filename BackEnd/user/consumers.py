@@ -35,6 +35,7 @@ CLOSE_CODE_INVALID_SHARE_TOKEN = 4006
 CLOSE_CODE_VIA_LINK_DEPRECATED = 4007
 CLOSE_CODE_DESIGN_NOT_FOUND = 4008
 CLOSE_CODE_RATE_LIMITED = 4009
+CLOSE_CODE_COLLABORATION_ACCESS_DENIED = 4004
 SHARE_AUTH_MAX_ATTEMPTS = 3
 WEBSOCKET_CONNECTION_LIMIT = 30
 WEBSOCKET_CONNECTION_WINDOW = 60
@@ -233,11 +234,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                         if error_reason == "via_link_deprecated"
                         else CLOSE_CODE_INVALID_SHARE_TOKEN
                     )
-                    logger.warning(
-                        "分享令牌验证失败: design_id=%s, reason=%s",
-                        self.design_id,
-                        error_reason,
-                    )
+                    logger.warning("WebSocket协作连接校验失败: design_id=%s", self.design_id)
                     await self._close_with_protocol_error(error_code, error_reason)
                     return
                 self.permission_role = self.share_link.role
@@ -260,38 +257,17 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                         )
                     )
                     return
-                logger.info(
-                    "分享令牌验证成功: design_id=%s, share_link_id=%s, role=%s",
-                    self.design_id,
-                    self.share_link.id,
-                    self.permission_role,
-                )
-
             elif self.is_via_link:
                 # via_link=true 但没有 share_token，拒绝连接
-                logger.warning(
-                    f"尝试通过via_link加入但没有有效token - design_id: {self.design_id}"
-                )
                 await self._close_with_protocol_error(
                     CLOSE_CODE_VIA_LINK_DEPRECATED,
                     "via_link_deprecated",
                 )
                 return
 
-            # 4. 记录连接信息
-            logger.info(
-                "WebSocket连接请求: design_id=%s, authenticated=%s, via_share_link=%s",
-                self.design_id,
-                bool(self.user and self.user.is_authenticated),
-                bool(self.share_token),
-            )
-
             # 5. 权限检查（非匿名访问需要认证）
             if not self.share_token:
                 if not self.user or not self.user.is_authenticated:
-                    logger.warning(
-                        f"未认证用户尝试访问设计 {self.design_id}（无分享链接）"
-                    )
                     await self.accept()
                     await self.send(
                         text_data=json.dumps(
@@ -316,7 +292,9 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                 )
                 if not has_access:
                     logger.warning(
-                        f"用户 {self.user.username} 没有权限访问设计 {self.design_id}"
+                        "协作访问被拒绝: user_id=%s, design_id=%s",
+                        self.user.id,
+                        self.design_id,
                     )
                     await self.accept()
                     await self.send(
@@ -333,7 +311,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
                             }
                         )
                     )
-                    await self.close(code=4004)
+                    await self.close(code=CLOSE_CODE_COLLABORATION_ACCESS_DENIED)
                     return
 
                 self.permission_role = user_role
@@ -663,8 +641,16 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
         return self.permission_role == "commenter" and message_type == "chat"
 
     async def _ensure_active_share_link(self):
-        """在每条消息前复核分享链接，撤销后立即关闭连接。"""
+        """在每条消息前复核分享链接或登录用户的当前权限。"""
         if not self.share_token:
+            has_access, _, user_role = await check_design_access(self.user, self.design_id)
+            if not has_access:
+                await self._close_with_protocol_error(
+                    CLOSE_CODE_COLLABORATION_ACCESS_DENIED,
+                    "collaboration_access_denied",
+                )
+                return False
+            self.permission_role = user_role
             return True
 
         share_link, error_reason = await resolve_active_share_token(
@@ -707,6 +693,7 @@ class CollaborationConsumer(AsyncWebsocketConsumer):
             "share_scope_mismatch": "分享链接用途无效",
             "via_link_deprecated": "分享链接无效，请重新生成",
             "design_not_found": "设计不存在",
+            "collaboration_access_denied": "您没有权限访问此设计",
         }
         if not self._connection_accepted:
             await self.accept()

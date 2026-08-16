@@ -78,4 +78,26 @@ describe('design api 下载', () => {
       { params: { type: 'json' } }
     )
   })
+
+  it('解包路线校验和自动修复的统一响应信封', async () => {
+    mocks.requestPost.mockResolvedValue({
+      success: true,
+      message: '路线校验完成',
+      data: {
+        score: 10,
+        is_valid: true,
+        issues: [],
+        warnings: [],
+        auto_fixed: [],
+        summary: '路线有效',
+      },
+    })
+    const { validateCourse } = await import('@/api/design')
+
+    await expect(validateCourse({
+      obstacles: [],
+      field_width: 90,
+      field_height: 60,
+    })).resolves.toMatchObject({ is_valid: true })
+  })
 })

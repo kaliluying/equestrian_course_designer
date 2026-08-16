@@ -4,8 +4,8 @@ import type {
   DesignResponse,
   SaveDesignRequest
 } from '@/types/design'
+import type { ApiResponse, PaginatedResponse } from '@/types/api'
 import { request } from '@/utils/request'
-import type { PaginatedResponse } from '@/types/api'
 import { cachedRequest, invalidateCache } from '@/utils/apiCache'
 
 // 保存设计
@@ -188,7 +188,14 @@ export interface RouteFixResult {
 export const validateCourse = async (
   data: RouteValidationRequest,
 ): Promise<RouteValidationResult> => {
-  return request.post<RouteValidationResult>('/user/designs/validate-course/', data)
+  const response = await request.post<ApiResponse<RouteValidationResult>>(
+    '/user/designs/validate-course/',
+    data,
+  )
+  if (!response.data) {
+    throw new Error('路线校验响应缺少数据')
+  }
+  return response.data
 }
 
 
@@ -235,7 +242,14 @@ export const copyDesignVersion = async (
 export const fixCourse = async (
   data: RouteValidationRequest,
 ): Promise<RouteFixResult> => {
-  return request.post<RouteFixResult>('/user/designs/fix-course/', data)
+  const response = await request.post<ApiResponse<RouteFixResult>>(
+    '/user/designs/fix-course/',
+    data,
+  )
+  if (!response.data) {
+    throw new Error('路线修复响应缺少数据')
+  }
+  return response.data
 }
 
 

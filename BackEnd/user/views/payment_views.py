@@ -373,7 +373,12 @@ def alipay_notify(request):
 
         # 处理不同的交易状态
         if trade_status == "TRADE_SUCCESS" or trade_status == "TRADE_FINISHED":
-            validate_alipay_business_payload(data, order, require_app_id=True)
+            validate_alipay_business_payload(
+                data,
+                order,
+                require_app_id=True,
+                require_seller_id=True,
+            )
             _, settled_now = settle_paid_order(
                 order_id=order.order_id,
                 trade_no=data["trade_no"],

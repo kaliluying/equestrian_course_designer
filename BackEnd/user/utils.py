@@ -33,6 +33,8 @@ def validate_alipay_config():
     """校验支付宝配置是否可用。"""
     if not settings.ALIPAY_APPID:
         raise ExternalServiceConfigError("未配置 ALIPAY_APPID，支付功能已停用")
+    if not getattr(settings, "ALIPAY_SELLER_ID", ""):
+        raise ExternalServiceConfigError("未配置 ALIPAY_SELLER_ID，支付功能已停用")
 
     app_private_key = _read_text_file(settings.ALIPAY_APP_PRIVATE_KEY_PATH)
     alipay_public_key = _read_text_file(settings.ALIPAY_ALIPAY_PUBLIC_KEY_PATH)
@@ -92,6 +94,7 @@ def get_alipay_client():
     获取支付宝客户端实例
     需要在settings.py中配置以下参数:
     - ALIPAY_APPID: 支付宝应用ID
+    - ALIPAY_SELLER_ID: 支付宝商户号
     - ALIPAY_APP_PRIVATE_KEY_PATH: 应用私钥路径
     - ALIPAY_ALIPAY_PUBLIC_KEY_PATH: 支付宝公钥路径
     - ALIPAY_NOTIFY_URL: 支付宝异步通知URL

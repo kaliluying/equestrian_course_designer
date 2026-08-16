@@ -643,7 +643,6 @@ onMounted(() => {
     const urlParams = new URLSearchParams(window.location.search)
     const isViaLink = urlParams.has('collaboration') && urlParams.has('designId')
     const shareToken = urlParams.get('share_token')
-    console.log('自动连接WebSocket，是否通过链接加入:', isViaLink)
     connect(props.designId, isViaLink, false, shareToken) // 连接到指定设计ID，并传递分享 token
   }
   console.log('当前连接状态:', connectionStatus.value)
@@ -996,7 +995,6 @@ const reconnect = () => {
       return
     }
 
-    console.log('重新连接WebSocket，是否通过链接加入:', isViaLink)
     connect(props.designId, isViaLink, false, shareToken) // 调用WebSocketStore中的connect方法，并传递分享 token
   }
 }

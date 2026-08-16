@@ -153,7 +153,7 @@ const createWebSocketConnection = (
   viaLink: boolean = false,
   shareToken: string | null = null,
 ): WebSocket | null => {
-  console.log('创建WebSocket连接，设计ID:', designId, '通过链接加入:', viaLink)
+  console.log('创建WebSocket连接，设计ID:', designId)
 
   // 验证设计ID是否存在
   if (!designId) {
@@ -183,8 +183,6 @@ const createWebSocketConnection = (
     if (query.toString()) {
       wsUrl += `?${query.toString()}`
     }
-
-    console.log('WebSocket连接已准备，via_link:', viaLink, 'share_token:', Boolean(shareToken))
 
     // 创建WebSocket实例
     const ws = new WebSocket(wsUrl)
@@ -1295,14 +1293,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     silentMode: boolean = false,
     shareToken: string | null = null,
   ) => {
-    console.log(
-      '尝试连接WebSocket，设计ID:',
-      designId,
-      '通过链接加入:',
-      isViaLink,
-      '静默模式:',
-      silentMode,
-    )
+    console.log('尝试连接WebSocket，设计ID:', designId)
 
     // 如果是新的连接（非重连），重置重连尝试次数
     if (!silentMode) {
@@ -1314,7 +1305,6 @@ export const useWebSocketStore = defineStore('websocket', () => {
     currentDesignId.value = designId
 
     // 设置通过链接加入的状态
-    console.log('设置通过链接加入的状态，原值:', viaLink.value, '新值:', isViaLink)
     viaLink.value = isViaLink
     if (!silentMode) {
       currentShareToken.value = shareToken
@@ -1657,8 +1647,6 @@ export const useWebSocketStore = defineStore('websocket', () => {
     ]
     const randomColor = colors[Math.floor(Math.random() * colors.length)]
 
-    console.log('发送加入消息，通过链接加入:', viaLink.value)
-
     // 如果是通过链接加入，在加入消息中请求画布状态
     const joinPayload = {
       userId: userStore.currentUser?.id || null,
@@ -1669,7 +1657,6 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
     // 如果是通过链接加入，添加请求画布状态的标志
     if (viaLink.value) {
-      console.log('通过链接加入，在加入消息中请求画布状态')
       Object.assign(joinPayload, {
         requestCanvasState: true,
         clientInfo: {

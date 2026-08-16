@@ -4,6 +4,7 @@ import re
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.files.base import ContentFile
+from django.db import transaction
 from django.urls import reverse
 from PIL import Image, UnidentifiedImageError
 from rest_framework import serializers
@@ -50,7 +51,7 @@ def _validate_image_upload(value, label):
             image.verify()
             image_format = image.format
             width, height = image.size
-    except (UnidentifiedImageError, OSError, ValueError) as exc:
+    except (Image.DecompressionBombError, UnidentifiedImageError, OSError, ValueError) as exc:
         raise serializers.ValidationError(f"{label}不是有效图片") from exc
     finally:
         value.seek(0)
@@ -79,6 +80,142 @@ def _validate_route_file(value):
     if not isinstance(parsed, dict):
         raise serializers.ValidationError("路线文件必须是 JSON 对象")
     _validate_json_data(parsed, MAX_ROUTE_DATA_BYTES, "路线数据")
+
+
+class RouteValidationRequestSerializer(serializers.Serializer):
+    """路线校验和修复接口的统一请求校验器。"""
+
+    obstacles = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        default=list,
+    )
+    field_width = serializers.FloatField(required=False, default=90, min_value=0.000001, max_value=1000)
+    field_height = serializers.FloatField(required=False, default=60, min_value=0.000001, max_value=1000)
+    difficulty = serializers.ChoiceField(
+        choices=('easy', 'medium', 'hard'),
+        required=False,
+        default='medium',
+    )
+    path = serializers.DictField(required=False, allow_null=True, default=dict)
+
+    def to_internal_value(self, data):
+        """在丢弃未知字段前限制原始请求体大小和嵌套深度。"""
+        raw_data = data.dict() if hasattr(data, 'dict') else data
+        if isinstance(raw_data, dict):
+            try:
+                _validate_json_data(raw_data, MAX_ROUTE_DATA_BYTES, '路线请求数据')
+            except serializers.ValidationError as exc:
+                raise serializers.ValidationError({'request': exc.detail}) from exc
+        return super().to_internal_value(data)
+
+    def validate(self, attrs):
+        """限制路线请求的 JSON 体积、深度和障碍数量。"""
+        _validate_json_data(attrs, MAX_ROUTE_DATA_BYTES, '路线请求数据')
+        if len(attrs['obstacles']) > 200:
+            raise serializers.ValidationError('路线障碍物数量不能超过 200')
+        return attrs
+
+
+class RouteValidationIssueSerializer(serializers.Serializer):
+    """路线规则问题。"""
+
+    code = serializers.CharField()
+    severity = serializers.CharField()
+    message = serializers.CharField()
+    obstacle_ids = serializers.ListField(child=serializers.CharField())
+    suggested_action = serializers.CharField()
+    auto_fixable = serializers.BooleanField()
+
+
+class RouteValidationResultSerializer(serializers.Serializer):
+    """路线校验结果。"""
+
+    score = serializers.FloatField()
+    is_valid = serializers.BooleanField()
+    issues = RouteValidationIssueSerializer(many=True)
+    warnings = RouteValidationIssueSerializer(many=True)
+    auto_fixed = serializers.ListField(child=serializers.CharField())
+    summary = serializers.CharField()
+
+
+class RouteValidationResponseSerializer(serializers.Serializer):
+    """路线校验接口统一响应。"""
+
+    success = serializers.BooleanField()
+    message = serializers.CharField()
+    data = RouteValidationResultSerializer()
+
+
+class RouteFixPatchSerializer(serializers.Serializer):
+    """路线自动修复补丁说明。"""
+
+    code = serializers.CharField()
+    obstacle_ids = serializers.ListField(child=serializers.CharField())
+    message = serializers.CharField()
+
+
+class RouteFixResultSerializer(serializers.Serializer):
+    """路线自动修复结果。"""
+
+    patches = RouteFixPatchSerializer(many=True)
+    updated_obstacles = serializers.ListField(child=serializers.DictField())
+    updated_path = serializers.DictField(allow_null=True)
+    validation = RouteValidationResultSerializer()
+    explanation = serializers.CharField()
+
+
+class RouteFixResponseSerializer(serializers.Serializer):
+    """路线修复接口统一响应。"""
+
+    success = serializers.BooleanField()
+    message = serializers.CharField()
+    data = RouteFixResultSerializer()
+
+
+class ShareLinkCreateSerializer(serializers.Serializer):
+    """协作分享链接创建请求。"""
+
+    role = serializers.ChoiceField(
+        choices=('editor', 'viewer', 'commenter'),
+        required=False,
+        default='editor',
+    )
+    expires_in_seconds = serializers.IntegerField(required=False, min_value=60)
+    password = serializers.CharField(required=False, allow_blank=True, max_length=128, write_only=True)
+
+
+class ShareLinkDataSerializer(serializers.Serializer):
+    """协作分享链接数据。"""
+
+    shareUrl = serializers.CharField()
+    shareToken = serializers.CharField()
+    expiresAt = serializers.DateTimeField()
+    ttlSeconds = serializers.IntegerField()
+    role = serializers.ChoiceField(choices=('editor', 'viewer', 'commenter'))
+    passwordProtected = serializers.BooleanField()
+
+
+class ShareLinkCreateResponseSerializer(serializers.Serializer):
+    """协作分享链接创建响应。"""
+
+    success = serializers.BooleanField()
+    message = serializers.CharField()
+    data = ShareLinkDataSerializer()
+
+
+class ShareLinkRevokeDataSerializer(serializers.Serializer):
+    """协作分享链接撤销结果。"""
+
+    revoked_count = serializers.IntegerField()
+
+
+class ShareLinkRevokeResponseSerializer(serializers.Serializer):
+    """协作分享链接撤销响应。"""
+
+    success = serializers.BooleanField()
+    message = serializers.CharField()
+    data = ShareLinkRevokeDataSerializer()
 
 
 class UserRegisterSerializer(serializers.ModelSerializer):
@@ -302,20 +439,45 @@ class DesignSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         """更新设计，并在请求包含路线数据时同步更新 JSON 文件。"""
         course_data = validated_data.pop('course_data', None)
-        old_download_name = instance.download.name if instance.download else None
-        instance = super().update(instance, validated_data)
-        if course_data is not None:
-            instance.download.save(
-                'design.json',
-                ContentFile(json.dumps(course_data, ensure_ascii=False).encode('utf-8')),
-                save=True,
+        old_files = {
+            'image': (
+                instance.image.storage,
+                instance.image.name,
+            ) if instance.image else None,
+            'download': (
+                instance.download.storage,
+                instance.download.name,
+            ) if instance.download else None,
+        }
+        try:
+            with transaction.atomic():
+                instance = super().update(instance, validated_data)
+                if course_data is not None:
+                    instance.download.save(
+                        'design.json',
+                        ContentFile(json.dumps(course_data, ensure_ascii=False).encode('utf-8')),
+                        save=True,
+                    )
+        except Exception:
+            for field_name, old_file in old_files.items():
+                current_file = getattr(instance, field_name, None)
+                if not old_file or not current_file or current_file.name == old_file[1]:
+                    continue
+                try:
+                    current_file.storage.delete(current_file.name)
+                except Exception:
+                    pass
+            raise
+
+        for field_name, old_file in old_files.items():
+            current_file = getattr(instance, field_name, None)
+            if not old_file or not current_file or current_file.name == old_file[1]:
+                continue
+            old_storage, old_name = old_file
+            transaction.on_commit(
+                lambda storage=old_storage, name=old_name: storage.delete(name),
+                robust=True,
             )
-            if (
-                old_download_name
-                and old_download_name != instance.download.name
-                and instance.download.storage.exists(old_download_name)
-            ):
-                instance.download.storage.delete(old_download_name)
         return instance
 
     def get_author_username(self, obj) -> str | None:
@@ -365,6 +527,14 @@ class DesignSerializer(serializers.ModelSerializer):
         if value:
             _validate_route_file(value)
         return value
+
+
+class DesignResponseEnvelopeSerializer(serializers.Serializer):
+    """设计操作统一响应。"""
+
+    success = serializers.BooleanField()
+    message = serializers.CharField()
+    data = DesignSerializer()
 
 
 class DesignCommentSerializer(serializers.ModelSerializer):
@@ -422,6 +592,13 @@ class DesignVersionSerializer(serializers.ModelSerializer):
             'created_at',
         )
         read_only_fields = fields
+
+
+class DesignVersionUpdateSerializer(serializers.Serializer):
+    """设计版本可编辑字段。"""
+
+    title = serializers.CharField(required=False, max_length=100, allow_blank=False)
+    remark = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
 
 class DesignListSerializer(serializers.ModelSerializer):

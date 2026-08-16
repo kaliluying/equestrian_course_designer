@@ -424,6 +424,7 @@ LOGGING = {
 
 # 支付宝配置
 ALIPAY_APPID = os.environ.get("ALIPAY_APPID", "")  # 替换为实际的支付宝应用ID
+ALIPAY_SELLER_ID = os.environ.get("ALIPAY_SELLER_ID", "")  # 支付宝商户号
 ALIPAY_APP_PRIVATE_KEY_PATH = os.path.join(
     BASE_DIR, "equestrian/keys/app_private_key.pem"
 )

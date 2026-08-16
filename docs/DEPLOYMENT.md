@@ -139,7 +139,9 @@ server {
 - `BackEnd/equestrian/keys/app_private_key.pem`
 - `BackEnd/equestrian/keys/alipay_public_key.pem`
 
-缺少密钥时，支付接口返回 `503`，不影响设计、导出、AI 规则兜底等功能。
+同时配置环境变量 `ALIPAY_APPID` 和 `ALIPAY_SELLER_ID`。缺少任一项时，支付接口返回 `503`。
+
+缺少密钥时，支付接口也返回 `503`，不影响设计、导出、AI 规则兜底等功能。
 
 ## 验证命令
 

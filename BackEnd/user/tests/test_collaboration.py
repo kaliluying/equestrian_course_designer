@@ -65,6 +65,34 @@ class CollaborationEnhancementAPITest(TestCase):
         self.assertEqual(data["role"], "commenter")
         self.assertTrue(data["passwordProtected"])
         self.assertIn("shareToken", data)
+        self.assertNotIn("shareToken", response.json())
+
+    def test_share_link_lifecycle_does_not_change_public_share_state(self):
+        """协作链接生命周期不应改动设计的公开展示状态。"""
+        from user.models import Design
+
+        design = Design.objects.create(title="状态同步设计", author=self.owner, is_shared=False)
+        response = self.client.post(f"/user/designs/{design.id}/share-link/", format="json")
+        self.assertEqual(response.status_code, 200)
+        design.refresh_from_db()
+        self.assertFalse(design.is_shared)
+
+        design.is_shared = True
+        design.save(update_fields=["is_shared"])
+
+        response = self.client.delete(f"/user/designs/{design.id}/share-link/")
+        self.assertEqual(response.status_code, 200)
+        design.refresh_from_db()
+        self.assertTrue(design.is_shared)
+
+    def test_share_link_rejects_password_longer_than_websocket_limit(self):
+        """创建阶段必须拒绝 WebSocket 无法认证的超长密码。"""
+        response = self.client.post(
+            f"/user/designs/{self.design.id}/share-link/",
+            data={"password": "x" * 129},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
 
     def test_collaboration_event_list_records_actions(self):
         """协作事件接口应返回设计活动时间线"""

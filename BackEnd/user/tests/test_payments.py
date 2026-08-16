@@ -1,11 +1,14 @@
 """支付结算的金额校验、事务和幂等回归测试。"""
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from decimal import Decimal
+import threading
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
-from django.test import TestCase, override_settings
+from django.db import close_old_connections
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -79,6 +82,23 @@ class PaymentSettlementTests(TestCase):
         self.assertEqual(order.status, "pending")
         self.assertEqual(quota.purchased_quota, 0)
 
+    def test_non_finite_amount_is_rejected(self):
+        order = MembershipOrder.objects.create(
+            user=self.user,
+            membership_plan=None,
+            amount=Decimal("9.90"),
+            billing_cycle="month",
+            status="pending",
+        )
+
+        with self.assertRaises(PaymentSettlementError):
+            settle_paid_order(
+                order_id=order.order_id,
+                trade_no="TRADE-NAN",
+                total_amount="NaN",
+                source="notify",
+            )
+
     def test_settlement_records_gateway_payment_time(self):
         order = MembershipOrder.objects.create(
             user=self.user,
@@ -102,8 +122,30 @@ class PaymentSettlementTests(TestCase):
 
         self.assertEqual(settled.payment_time, payment_time)
 
-    @override_settings(ALIPAY_APPID="app-test")
+    @override_settings(ALIPAY_APPID="app-test", ALIPAY_SELLER_ID="seller-test")
     def test_alipay_payload_requires_app_order_amount_and_trade_identity(self):
+        order = MembershipOrder.objects.create(
+            user=self.user,
+            membership_plan=None,
+            amount=Decimal("9.90"),
+            billing_cycle="month",
+            status="pending",
+        )
+        payload = {
+            "app_id": "app-test",
+            "seller_id": "seller-test",
+            "out_trade_no": order.order_id,
+            "total_amount": "9.90",
+            "trade_no": "TRADE-VALID",
+        }
+
+        self.assertEqual(validate_alipay_business_payload(payload, order), Decimal("9.90"))
+        payload["total_amount"] = "0.90"
+        with self.assertRaises(PaymentSettlementError):
+            validate_alipay_business_payload(payload, order)
+
+    @override_settings(ALIPAY_APPID="app-test", ALIPAY_SELLER_ID="seller-test")
+    def test_alipay_payload_rejects_missing_or_wrong_seller(self):
         order = MembershipOrder.objects.create(
             user=self.user,
             membership_plan=None,
@@ -115,13 +157,117 @@ class PaymentSettlementTests(TestCase):
             "app_id": "app-test",
             "out_trade_no": order.order_id,
             "total_amount": "9.90",
-            "trade_no": "TRADE-VALID",
+            "trade_no": "TRADE-SELLER",
         }
 
-        self.assertEqual(validate_alipay_business_payload(payload, order), Decimal("9.90"))
-        payload["total_amount"] = "0.90"
+        self.assertEqual(
+            validate_alipay_business_payload(payload, order),
+            Decimal("9.90"),
+        )
+
+        with self.assertRaises(PaymentSettlementError):
+            validate_alipay_business_payload(
+                payload,
+                order,
+                require_seller_id=True,
+            )
+
+        payload["seller_id"] = "another-seller"
         with self.assertRaises(PaymentSettlementError):
             validate_alipay_business_payload(payload, order)
+
+    @override_settings(ALIPAY_APPID="app-test", ALIPAY_SELLER_ID="seller-test")
+    def test_notify_payload_requires_app_and_seller_identity(self):
+        order = MembershipOrder.objects.create(
+            user=self.user,
+            membership_plan=None,
+            amount=Decimal("9.90"),
+            billing_cycle="month",
+            status="pending",
+        )
+        payload = {
+            "out_trade_no": order.order_id,
+            "total_amount": "9.90",
+            "trade_no": "TRADE-NOTIFY",
+        }
+
+        with self.assertRaises(PaymentSettlementError):
+            validate_alipay_business_payload(
+                payload,
+                order,
+                require_app_id=True,
+                require_seller_id=True,
+            )
+
+    def test_settlement_rejects_non_alipay_order(self):
+        order = MembershipOrder.objects.create(
+            user=self.user,
+            membership_plan=None,
+            amount=Decimal("9.90"),
+            billing_cycle="month",
+            payment_channel="wechat",
+            status="pending",
+        )
+
+        with self.assertRaises(PaymentSettlementError):
+            settle_paid_order(
+                order_id=order.order_id,
+                trade_no="TRADE-WECHAT",
+                total_amount="9.90",
+                source="notify",
+            )
+
+
+class PaymentSettlementConcurrencyTests(TransactionTestCase):
+    """并发回调和轮询必须只发放一次权益。"""
+
+    reset_sequences = True
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="concurrent_settlement_user",
+            email="concurrent-settlement@example.com",
+            password="Password123",
+        )
+        UserProfile.objects.create(user=self.user)
+
+    @staticmethod
+    def _settle(order_id, source, barrier):
+        close_old_connections()
+        try:
+            barrier.wait(timeout=10)
+            _, first = settle_paid_order(
+                order_id=order_id,
+                trade_no="TRADE-CONCURRENT",
+                total_amount="24.90",
+                source=source,
+            )
+            return first
+        finally:
+            close_old_connections()
+
+    def test_concurrent_notify_and_query_settle_once(self):
+        order = MembershipOrder.objects.create(
+            user=self.user,
+            membership_plan=None,
+            amount=Decimal("24.90"),
+            billing_cycle="month",
+            status="pending",
+        )
+        barrier = threading.Barrier(2)
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [
+                executor.submit(self._settle, order.order_id, "notify", barrier),
+                executor.submit(self._settle, order.order_id, "query", barrier),
+            ]
+            first_flags = [future.result(timeout=30) for future in futures]
+
+        order.refresh_from_db()
+        quota = AIGenerationQuota.objects.get(user_profile__user=self.user)
+        self.assertCountEqual(first_flags, [True, False])
+        self.assertEqual(order.status, "paid")
+        self.assertEqual(quota.purchased_quota, 30)
 
 
 class PaymentOrderStatusAPITests(TestCase):
@@ -146,6 +292,7 @@ class PaymentOrderStatusAPITests(TestCase):
             "trade_no": "TRADE-FINISHED",
         },
     )
+    @override_settings(ALIPAY_SELLER_ID="seller-test")
     def test_trade_finished_settles_ai_order(self, query_order):
         order = MembershipOrder.objects.create(
             user=self.user,

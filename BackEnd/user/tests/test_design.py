@@ -11,6 +11,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 from django.urls import reverse
 from django.contrib.auth.models import User
+from rest_framework import serializers
 from rest_framework.test import APIClient
 from PIL import Image
 
@@ -23,6 +24,21 @@ from user.models import (
     MembershipPlan,
     MembershipOrder,
 )
+from user.serializers import _validate_image_upload
+
+
+class ImageUploadValidationTest(TestCase):
+    """图片校验必须把 Pillow 的炸弹异常转换成业务校验错误。"""
+
+    def test_decompression_bomb_is_rejected_as_validation_error(self):
+        upload = ContentFile(b"not-used", name="bomb.png")
+
+        with patch(
+            "user.serializers.Image.open",
+            side_effect=Image.DecompressionBombError("too many pixels"),
+        ):
+            with self.assertRaises(serializers.ValidationError):
+                _validate_image_upload(upload, "设计图片")
 
 class DesignDownloadAPITest(TestCase):
     """设计下载接口测试"""
@@ -319,6 +335,33 @@ class DesignVersionHistoryAPITest(TestCase):
         self.assertEqual(versions[0]["version_number"], 1)
         self.assertEqual(versions[0]["source"], "manual")
 
+    def test_design_update_rolls_back_storage_files_when_version_creation_fails(self):
+        """版本创建失败时数据库旧文件必须保留，新文件不得成为孤儿文件。"""
+        design = self._create_design(title="文件一致性设计")
+        old_image_name = design.image.name
+        old_image_path = os.path.join(self.media_root, old_image_name)
+
+        self.client.raise_request_exception = False
+        with patch(
+            "user.views.design_views.create_design_version",
+            side_effect=RuntimeError("version creation failed"),
+        ):
+            response = self.client.patch(
+                f"/user/designs/{design.id}/",
+                data={"image": self._png_file("changed.png")},
+                format="multipart",
+            )
+
+        self.assertEqual(response.status_code, 500)
+        design.refresh_from_db()
+        self.assertEqual(design.image.name, old_image_name)
+        self.assertTrue(os.path.exists(old_image_path))
+        design_dir = os.path.dirname(old_image_path)
+        self.assertEqual(
+            sorted(os.listdir(design_dir)),
+            [os.path.basename(old_image_path)],
+        )
+
     def test_restore_version_updates_design_and_creates_restore_version(self):
         """恢复版本应更新当前设计并新增 restore 版本"""
         design = self._create_design(title="当前标题", payload={"obstacles": [{"id": "old"}]})
@@ -333,6 +376,7 @@ class DesignVersionHistoryAPITest(TestCase):
             description="历史描述",
             course_data={"obstacles": [{"id": "history"}]},
         )
+        version.image_snapshot.save("history.png", self._png_file("history.png"), save=True)
 
         response = self.client.post(f"/user/designs/{design.id}/versions/{version.id}/restore/")
 
@@ -379,6 +423,7 @@ class DesignVersionHistoryAPITest(TestCase):
             description="历史描述",
             course_data={"obstacles": [{"id": "copy"}]},
         )
+        version.image_snapshot.save("copy.png", self._png_file("copy.png"), save=True)
 
         response = self.client.post(f"/user/designs/{design.id}/versions/{version.id}/copy/")
 
@@ -401,6 +446,7 @@ class DesignVersionHistoryAPITest(TestCase):
             description="历史描述",
             course_data={"obstacles": [{"id": "copy-image"}]},
         )
+        version.image_snapshot.save("copy-image.png", self._png_file("copy-image.png"), save=True)
         other_user = User.objects.create_user(
             "version_copy_user", "version_copy@example.com", "Password123"
         )
@@ -446,6 +492,30 @@ class DesignVersionHistoryAPITest(TestCase):
         self.assertEqual(version.title, "新版本名")
         self.assertEqual(version.remark, "赛前调整版本")
         self.assertEqual(response.json()["remark"], "赛前调整版本")
+
+    def test_restore_and_copy_reject_version_without_image_snapshot(self):
+        """缺失图片快照时不得把历史路线与当前图片混合。"""
+        from user.models import DesignVersion
+
+        design = self._create_design(title="缺快照版本")
+        version = DesignVersion.objects.create(
+            design=design,
+            author=self.user,
+            version_number=1,
+            source="manual",
+            title="缺快照历史",
+            course_data={"obstacles": [{"id": "missing-snapshot"}]},
+        )
+
+        restore_response = self.client.post(
+            f"/user/designs/{design.id}/versions/{version.id}/restore/"
+        )
+        self.assertEqual(restore_response.status_code, 409)
+
+        copy_response = self.client.post(
+            f"/user/designs/{design.id}/versions/{version.id}/copy/"
+        )
+        self.assertEqual(copy_response.status_code, 409)
 
     def test_version_detail_is_private_to_owner(self):
         """其他用户不能访问版本详情"""

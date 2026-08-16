@@ -310,10 +310,9 @@ def post(self, request, design_id):
         expires_in_seconds=ttl_seconds,
         password=password,
     )
-
-    design.is_shared = True
-    design.save(update_fields=["is_shared"])
 ```
+
+协作链接只负责实时协作准入，不修改 `design.is_shared`；公开展示状态由独立的分享开关维护。
 
 - [ ] **Step 4: 改造 `ShareLinkView.delete()`，撤销所有未撤销分享记录**
 
@@ -323,10 +322,8 @@ def delete(self, request, design_id):
     if design.author != request.user:
         return error_response("只有设计作者才能撤销分享链接", status.HTTP_403_FORBIDDEN)
 
-    revoke_share_link(design=design, created_by=request.user)
-    design.is_shared = False
-    design.save(update_fields=["is_shared"])
-    return success_response("分享链接已撤销", {"is_shared": False})
+    revoked_count = revoke_share_link(design=design, created_by=request.user)
+    return success_response("分享链接已撤销", {"revoked_count": revoked_count})
 ```
 
 - [ ] **Step 5: 改造 `validate_share_token()`，改为回查分享链接记录**

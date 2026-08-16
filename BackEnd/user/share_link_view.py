@@ -16,13 +16,17 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 
 from .models import CollaborationShareLink, Design
+from .serializers import (
+    ShareLinkCreateResponseSerializer,
+    ShareLinkCreateSerializer,
+    ShareLinkRevokeResponseSerializer,
+)
 from .services.collaboration_share_links import create_share_link, revoke_share_link
 from .throttles import ShareLinkRateThrottle
-from .utils import error_response, success_response
+from .utils import error_response
 
 logger = logging.getLogger(__name__)
 
@@ -33,20 +37,33 @@ class ShareLinkView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [ShareLinkRateThrottle]
 
-    @extend_schema(request=None, responses=OpenApiTypes.OBJECT, summary="生成协作分享链接")
+    @extend_schema(
+        request=ShareLinkCreateSerializer,
+        responses={200: ShareLinkCreateResponseSerializer},
+        summary="生成协作分享链接",
+    )
     def post(self, request, design_id):
         try:
             design = get_object_or_404(Design, id=design_id)
 
             if design.author != request.user:
                 logger.warning(
-                    f"用户 {request.user.username} 尝试为非自己的设计生成分享链接: design_id={design_id}"
+                    "用户尝试为非自己的设计生成分享链接: user_id=%s, design_id=%s",
+                    request.user.id,
+                    design_id,
                 )
                 return error_response("只有设计作者才能生成分享链接", status.HTTP_403_FORBIDDEN)
 
-            ttl_seconds = int(request.data.get("expires_in_seconds") or getattr(settings, "COLLAB_SHARE_TOKEN_TTL_SECONDS", 3600))
-            role = request.data.get("role") or "editor"
-            password = request.data.get("password") or ""
+            request_serializer = ShareLinkCreateSerializer(data=request.data)
+            if not request_serializer.is_valid():
+                return error_response(request_serializer.errors, status.HTTP_400_BAD_REQUEST)
+            request_data = request_serializer.validated_data
+            ttl_seconds = request_data.get(
+                "expires_in_seconds",
+                getattr(settings, "COLLAB_SHARE_TOKEN_TTL_SECONDS", 3600),
+            )
+            role = request_data.get("role", "editor")
+            password = request_data.get("password", "")
             share_link, share_token = create_share_link(
                 design=design,
                 created_by=request.user,
@@ -79,7 +96,6 @@ class ShareLinkView(APIView):
                     "success": True,
                     "message": "分享链接已生成",
                     "data": response_data,
-                    **response_data,
                 }
             )
         except Http404:
@@ -91,7 +107,11 @@ class ShareLinkView(APIView):
             return error_response("生成分享链接失败，请稍后重试", status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-    @extend_schema(request=None, responses=OpenApiTypes.OBJECT, summary="撤销协作分享链接")
+    @extend_schema(
+        request=None,
+        responses={200: ShareLinkRevokeResponseSerializer},
+        summary="撤销协作分享链接",
+    )
     def delete(self, request, design_id):
         try:
             design = get_object_or_404(Design, id=design_id)
@@ -122,7 +142,13 @@ class ShareLinkView(APIView):
                         "广播分享链接撤销事件失败: design_id=%s",
                         design.id,
                     )
-            return success_response("分享链接已撤销", {"revoked_count": revoked_count})
+            return Response(
+                {
+                    "success": True,
+                    "message": "分享链接已撤销",
+                    "data": {"revoked_count": revoked_count},
+                }
+            )
         except Http404:
             return error_response("设计不存在", status.HTTP_404_NOT_FOUND)
         except Exception:

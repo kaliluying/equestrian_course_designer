@@ -44,6 +44,8 @@ def _normalize_amount(value) -> Decimal:
         amount = Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     except (InvalidOperation, TypeError, ValueError) as exc:
         raise PaymentSettlementError("支付金额格式无效") from exc
+    if not amount.is_finite():
+        raise PaymentSettlementError("支付金额格式无效")
     if amount < 0:
         raise PaymentSettlementError("支付金额不能为负数")
     return amount
@@ -54,6 +56,7 @@ def validate_alipay_business_payload(
     order: MembershipOrder,
     *,
     require_app_id: bool = False,
+    require_seller_id: bool = False,
 ) -> Decimal:
     """校验支付宝回调/查询结果与本地订单的业务归属。
 
@@ -66,10 +69,17 @@ def validate_alipay_business_payload(
     if received_app_id and expected_app_id and received_app_id != expected_app_id:
         raise PaymentSettlementError("支付宝应用不匹配")
 
-    expected_seller_id = getattr(settings, "ALIPAY_SELLER_ID", "")
+    expected_seller_id = str(getattr(settings, "ALIPAY_SELLER_ID", "") or "").strip()
     received_seller_id = str(data.get("seller_id") or "").strip()
-    if expected_seller_id and received_seller_id != expected_seller_id:
+    if not expected_seller_id or (
+        require_seller_id and not received_seller_id
+    ) or (
+        received_seller_id and received_seller_id != expected_seller_id
+    ):
         raise PaymentSettlementError("支付宝商户不匹配")
+
+    if order.payment_channel != "alipay":
+        raise PaymentSettlementError("订单支付渠道不支持支付宝结算")
 
     if data.get("out_trade_no") != order.order_id:
         raise PaymentSettlementError("支付宝订单号不匹配")
@@ -114,6 +124,8 @@ def settle_paid_order(
         .select_related("user", "membership_plan")
         .get(order_id=order_id)
     )
+    if order.payment_channel != "alipay":
+        raise PaymentSettlementError("订单支付渠道不支持支付宝结算")
     normalized_amount = _normalize_amount(total_amount)
     if normalized_amount != order.amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP):
         raise PaymentSettlementError("支付金额与订单金额不匹配")

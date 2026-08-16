@@ -527,6 +527,20 @@ class RouteValidator:
         for index, obstacle in enumerate(obstacles):
             if not isinstance(obstacle, dict):
                 raise RouteValidationInputError(f'第 {index + 1} 个障碍物格式无效')
+            number = obstacle.get('number')
+            if number is not None and str(number).strip():
+                try:
+                    parsed_number = float(number)
+                except (TypeError, ValueError) as exc:
+                    raise RouteValidationInputError(
+                        f'障碍物 {index + 1} 的编号必须是整数'
+                    ) from exc
+                if (
+                    not math.isfinite(parsed_number)
+                    or parsed_number < 1
+                    or parsed_number != int(parsed_number)
+                ):
+                    raise RouteValidationInputError(f'障碍物 {index + 1} 的编号必须是正整数')
             position = obstacle.get('position') or {}
             if not isinstance(position, dict):
                 raise RouteValidationInputError(f'第 {index + 1} 个障碍物位置格式无效')
@@ -538,11 +552,37 @@ class RouteValidator:
             for pole_index, pole in enumerate(poles):
                 if not isinstance(pole, dict):
                     raise RouteValidationInputError(f'障碍物 {index + 1} 的横杆格式无效')
-                finite_number(pole.get('height', 0), f'障碍物 {index + 1} 横杆 {pole_index + 1} 高度')
+                if 'height' not in pole:
+                    raise RouteValidationInputError(
+                        f'障碍物 {index + 1} 横杆 {pole_index + 1} 缺少高度'
+                    )
+                finite_number(pole['height'], f'障碍物 {index + 1} 横杆 {pole_index + 1} 高度')
+                if pole.get('width') is not None:
+                    finite_number(pole['width'], f'障碍物 {index + 1} 横杆 {pole_index + 1} 宽度')
                 if pole.get('spacing') is not None:
                     finite_number(pole['spacing'], f'障碍物 {index + 1} 横杆 {pole_index + 1} 间距')
 
-        if path:
+            property_fields = {
+                'wallProperties': ('height', 'width'),
+                'liverpoolProperties': ('height', 'width', 'waterDepth', 'railHeight'),
+                'waterProperties': ('width', 'depth', 'borderWidth'),
+            }
+            for property_name, fields in property_fields.items():
+                properties = obstacle.get(property_name)
+                if properties is None:
+                    continue
+                if not isinstance(properties, dict):
+                    raise RouteValidationInputError(
+                        f'障碍物 {index + 1} 的 {property_name} 格式无效'
+                    )
+                for field in fields:
+                    if field in properties:
+                        finite_number(
+                            properties[field],
+                            f'障碍物 {index + 1} 的 {property_name}.{field}',
+                        )
+
+        if path is not None:
             if not isinstance(path, dict):
                 raise RouteValidationInputError('路径数据格式无效')
             for point_name in ('startPoint', 'start_point', 'endPoint', 'end_point'):

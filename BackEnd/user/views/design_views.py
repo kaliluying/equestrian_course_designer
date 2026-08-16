@@ -1,7 +1,6 @@
 """设计管理视图：设计的CRUD、点赞、分享、下载。"""
 
 import logging
-import math
 import os
 import zipfile
 from io import BytesIO
@@ -34,15 +33,21 @@ from ..models import (
 from ..serializers import (
     CollaborationEventSerializer,
     DesignCommentSerializer,
+    DesignResponseEnvelopeSerializer,
     DesignSerializer,
     DesignListSerializer,
     DesignVersionSerializer,
+    DesignVersionUpdateSerializer,
+    RouteFixResponseSerializer,
+    RouteValidationRequestSerializer,
+    RouteValidationResponseSerializer,
 )
 from ..utils import success_response, error_response
 from ..route_validator import RouteValidationInputError, RouteValidator
 from .user_views import check_and_update_membership
 from ..services.membership_access import MembershipAccessError, assert_design_capacity
 from ..services.design_version import (
+    DesignVersionSnapshotError,
     copy_design_version,
     create_design_version,
     restore_design_version,
@@ -60,22 +65,45 @@ IMAGE_CONTENT_TYPES = {
 }
 
 
-def _parse_field_dimension(value) -> float:
-    """解析并限制场地尺寸，避免非法数值导致 500 或资源异常。"""
-    try:
-        dimension = float(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("场地尺寸必须是数字") from exc
-    if not math.isfinite(dimension) or dimension <= 0 or dimension > 1000:
-        raise ValueError("场地尺寸必须大于 0 且不超过 1000")
-    return dimension
-
-
 def _stored_file_exists(field_file):
     """校验文件字段有值且存储中实际存在该文件。"""
     if not field_file:
         return False
     return field_file.storage.exists(field_file.name)
+
+
+def _capture_design_files(design):
+    """记录设计当前写入的文件，供事务回滚时清理新文件。"""
+    files = {}
+    for field_name in ('image', 'download'):
+        field_file = getattr(design, field_name, None)
+        if field_file and field_file.name:
+            files[field_name] = (field_file.storage, field_file.name)
+    return files
+
+
+def _delete_design_files(files):
+    """清理事务失败后新写入的设计文件。"""
+    for field_name, (storage, name) in files.items():
+        try:
+            storage.delete(name)
+        except Exception:
+            logger.exception("清理事务回滚文件失败: field=%s, name=%s", field_name, name)
+
+
+def _parse_route_request(data):
+    """规范化路线接口请求，并复用统一的体积、深度和字段校验。"""
+    if not hasattr(data, 'get'):
+        return None, {'request': ['路线请求必须是 JSON 对象']}
+    payload = data.copy() if hasattr(data, 'copy') else dict(data)
+    if 'field_width' not in payload and 'fieldWidth' in payload:
+        payload['field_width'] = payload['fieldWidth']
+    if 'field_height' not in payload and 'fieldHeight' in payload:
+        payload['field_height'] = payload['fieldHeight']
+    serializer = RouteValidationRequestSerializer(data=payload)
+    if not serializer.is_valid():
+        return None, serializer.errors
+    return serializer.validated_data, None
 
 
 def _build_download_filename(title, file_type):
@@ -243,12 +271,18 @@ class DesignViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         """保存时自动设置作者为当前用户并创建版本快照"""
-        with transaction.atomic():
-            # 先处理已到期的会员降级，再在同一事务内检查容量并创建设计。
-            check_and_update_membership(self.request.user)
-            assert_design_capacity(self.request.user)
-            design = serializer.save(author=self.request.user)
-            create_design_version(design, source="manual")
+        design = None
+        try:
+            with transaction.atomic():
+                # 先处理已到期的会员降级，再在同一事务内检查容量并创建设计。
+                check_and_update_membership(self.request.user)
+                assert_design_capacity(self.request.user)
+                design = serializer.save(author=self.request.user)
+                create_design_version(design, source="manual")
+        except Exception:
+            if design is not None:
+                _delete_design_files(_capture_design_files(design))
+            raise
 
     def perform_update(self, serializer):
         """更新设计时保留原作者"""
@@ -271,12 +305,15 @@ class DesignViewSet(viewsets.ModelViewSet):
         )
 
         # 确保更新时保留原作者
+        design = None
         try:
             with transaction.atomic():
                 design = serializer.save(author=instance.author)
                 create_design_version(design, source="manual")
             logger.info("设计更新成功: ID=%s", instance.id)
-        except Exception as e:
+        except Exception:
+            if design is not None:
+                _delete_design_files(_capture_design_files(design))
             logger.exception("设计更新失败: ID=%s", instance.id)
             raise
 
@@ -286,6 +323,28 @@ class DesignViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("只有设计作者可以删除设计")
         instance.delete()
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="type",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                enum=SUPPORTED_DOWNLOAD_TYPES,
+                required=False,
+            )
+        ],
+        responses={
+            (
+                200,
+                "application/json",
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "application/pdf",
+                "application/zip",
+            ): OpenApiTypes.BINARY,
+        },
+    )
     @action(
         detail=True,
         methods=["get"],
@@ -347,49 +406,67 @@ class DesignViewSet(viewsets.ModelViewSet):
         )
 
 
+    @extend_schema(
+        request=RouteValidationRequestSerializer,
+        responses={200: RouteValidationResponseSerializer},
+    )
     @action(detail=False, methods=["post"], url_path="validate-course")
     def validate_course(self, request):
         """校验当前路线并返回结构化规则检查结果。"""
-        obstacles = request.data.get("obstacles") or []
+        route_data, errors = _parse_route_request(request.data)
+        if errors:
+            return error_response(errors, status.HTTP_400_BAD_REQUEST)
+
+        validator = RouteValidator(
+            field_width=route_data['field_width'],
+            field_height=route_data['field_height'],
+        )
         try:
-            field_width = _parse_field_dimension(
-                request.data.get("field_width") or request.data.get("fieldWidth") or 90
+            validation = validator.validate_course_structure(
+                route_data['obstacles'],
+                route_data['difficulty'],
+                path=route_data['path'] or {},
             )
-            field_height = _parse_field_dimension(
-                request.data.get("field_height") or request.data.get("fieldHeight") or 60
+            return Response(
+                {
+                    "success": True,
+                    "message": "路线校验完成",
+                    "data": validation,
+                }
             )
-        except ValueError as exc:
-            return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
-        difficulty = request.data.get("difficulty") or "medium"
-        path = request.data.get("path") or {}
-
-        validator = RouteValidator(field_width=field_width, field_height=field_height)
-        try:
-            return Response(validator.validate_course_structure(obstacles, difficulty, path=path))
-        except RouteValidationInputError as exc:
+        except (RouteValidationInputError, TypeError, ValueError, KeyError, OverflowError) as exc:
             return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
 
 
+    @extend_schema(
+        request=RouteValidationRequestSerializer,
+        responses={200: RouteFixResponseSerializer},
+    )
     @action(detail=False, methods=["post"], url_path="fix-course")
     def fix_course(self, request):
         """自动修复当前路线中的可修复规则问题。"""
-        obstacles = request.data.get("obstacles") or []
-        try:
-            field_width = _parse_field_dimension(
-                request.data.get("field_width") or request.data.get("fieldWidth") or 90
-            )
-            field_height = _parse_field_dimension(
-                request.data.get("field_height") or request.data.get("fieldHeight") or 60
-            )
-        except ValueError as exc:
-            return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
-        difficulty = request.data.get("difficulty") or "medium"
-        path = request.data.get("path") or {}
+        route_data, errors = _parse_route_request(request.data)
+        if errors:
+            return error_response(errors, status.HTTP_400_BAD_REQUEST)
 
-        validator = RouteValidator(field_width=field_width, field_height=field_height)
+        validator = RouteValidator(
+            field_width=route_data['field_width'],
+            field_height=route_data['field_height'],
+        )
         try:
-            return Response(validator.fix_course_structure(obstacles, difficulty, path=path))
-        except RouteValidationInputError as exc:
+            fixed = validator.fix_course_structure(
+                route_data['obstacles'],
+                route_data['difficulty'],
+                path=route_data['path'] or {},
+            )
+            return Response(
+                {
+                    "success": True,
+                    "message": "路线自动修复完成",
+                    "data": fixed,
+                }
+            )
+        except (RouteValidationInputError, TypeError, ValueError, KeyError, OverflowError) as exc:
             return error_response(str(exc), status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=["get"], url_path="shared")
@@ -486,8 +563,12 @@ class DesignViewSet(viewsets.ModelViewSet):
             events = events.filter(user_id=user_id)
         return Response(CollaborationEventSerializer(events, many=True).data)
 
-    @extend_schema(operation_id="design_versions_list")
-    @action(detail=True, methods=["get"], url_path="versions")
+    @extend_schema(
+        operation_id="design_versions_list",
+        request=None,
+        responses={200: DesignVersionSerializer(many=True)},
+    )
+    @action(detail=True, methods=["get"], url_path="versions", pagination_class=None)
     def list_versions(self, request, pk=None):
         """获取设计版本列表。"""
         design, role = self._get_collaboration_context(pk)
@@ -508,10 +589,14 @@ class DesignViewSet(viewsets.ModelViewSet):
     )
     @extend_schema(
         methods=["GET"],
+        request=None,
+        responses={200: DesignVersionSerializer},
         operation_id="design_version_retrieve",
     )
     @extend_schema(
         methods=["PATCH"],
+        request=DesignVersionUpdateSerializer,
+        responses={200: DesignVersionSerializer},
         operation_id="design_version_update",
     )
     @action(detail=True, methods=["get", "patch"], url_path=r"versions/(?P<version_id>[^/.]+)")
@@ -528,10 +613,14 @@ class DesignViewSet(viewsets.ModelViewSet):
             return error_response("版本不存在", status.HTTP_404_NOT_FOUND)
 
         if request.method == "PATCH":
-            if "title" in request.data:
-                version.title = request.data.get("title") or version.title
-            if "remark" in request.data:
-                version.remark = request.data.get("remark")
+            version_serializer = DesignVersionUpdateSerializer(data=request.data)
+            if not version_serializer.is_valid():
+                return error_response(version_serializer.errors, status.HTTP_400_BAD_REQUEST)
+            update_data = version_serializer.validated_data
+            if "title" in update_data:
+                version.title = update_data["title"]
+            if "remark" in update_data:
+                version.remark = update_data["remark"]
             version.save(update_fields=["title", "remark"])
 
         return Response(DesignVersionSerializer(version).data)
@@ -544,6 +633,8 @@ class DesignViewSet(viewsets.ModelViewSet):
                 location=OpenApiParameter.PATH,
             )
         ],
+        request=None,
+        responses={200: DesignResponseEnvelopeSerializer},
         operation_id="design_version_restore",
     )
     @action(detail=True, methods=["post"], url_path=r"versions/(?P<version_id>[^/.]+)/restore")
@@ -558,11 +649,22 @@ class DesignViewSet(viewsets.ModelViewSet):
             version = DesignVersion.objects.get(id=version_id, design=design)
         except DesignVersion.DoesNotExist:
             return error_response("版本不存在", status.HTTP_404_NOT_FOUND)
-        restore_design_version(design, version)
+        try:
+            restore_design_version(design, version)
+        except DesignVersionSnapshotError as exc:
+            return error_response(str(exc), status.HTTP_409_CONFLICT)
         design.refresh_from_db()
-        return success_response("版本已恢复", DesignSerializer(design, context={"request": request}).data)
+        return Response(
+            {
+                "success": True,
+                "message": "版本已恢复",
+                "data": DesignSerializer(design, context={"request": request}).data,
+            }
+        )
 
     @extend_schema(
+        request=None,
+        responses={201: DesignSerializer},
         parameters=[
             OpenApiParameter(
                 name="version_id",
@@ -590,6 +692,8 @@ class DesignViewSet(viewsets.ModelViewSet):
                 new_design = copy_design_version(version, author=request.user)
         except MembershipAccessError as exc:
             return error_response(exc.message, exc.status_code, exc.data)
+        except DesignVersionSnapshotError as exc:
+            return error_response(str(exc), status.HTTP_409_CONFLICT)
         return Response(DesignSerializer(new_design, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"], url_path="like")
@@ -652,6 +756,18 @@ class DesignViewSet(viewsets.ModelViewSet):
             {"is_shared": design.is_shared},
         )
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="type",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                enum=SUPPORTED_DOWNLOAD_TYPES,
+                required=False,
+            )
+        ],
+        responses={200: OpenApiTypes.OBJECT},
+    )
     @action(
         detail=True,
         methods=["get"],

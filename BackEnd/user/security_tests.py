@@ -17,7 +17,7 @@ from django.core import signing
 from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
-from asgiref.sync import async_to_sync
+from asgiref.sync import async_to_sync, sync_to_async
 from channels.testing import WebsocketCommunicator
 from urllib.parse import quote
 
@@ -47,9 +47,9 @@ class ShareLinkViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertTrue(data["success"])
-        self.assertIn("shareUrl", data)
-        self.assertIn("shareToken", data)
-        self.assertIn("expiresAt", data)
+        self.assertIn("shareUrl", data["data"])
+        self.assertIn("shareToken", data["data"])
+        self.assertIn("expiresAt", data["data"])
 
         self.assertTrue(CollaborationShareLink.objects.filter(
             design=design, created_by=self.user, is_revoked=False
@@ -82,7 +82,7 @@ class ShareLinkViewTests(TestCase):
         response = self.client.post(f"/user/designs/{design.id}/share-link/")
 
         self.assertEqual(response.status_code, 200)
-        share_token = response.json()["shareToken"]
+        share_token = response.json()["data"]["shareToken"]
 
         payload = signing.loads(share_token, salt="collab-share")
         self.assertEqual(payload["design_id"], design.id)
@@ -358,6 +358,48 @@ class CollaborationConsumerIntegrationTests(TransactionTestCase):
             self.assertTrue(connected, repr(connect_details))
             message = await communicator.receive_json_from()
             self.assertEqual(message["type"], "connection_established")
+            await communicator.disconnect()
+
+        async_to_sync(run)()
+
+    def test_revoked_login_role_closes_existing_connection(self):
+        """登录协作者角色失效后，旧 WebSocket 连接必须立即失去写权限。"""
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        from .models import CollaborationRole
+
+        editor = User.objects.create_user("ws_revoked_editor", password="testpass123")
+        role = CollaborationRole.objects.create(
+            design=self.design,
+            user=editor,
+            role="editor",
+        )
+        access_token = str(RefreshToken.for_user(editor).access_token)
+
+        from equestrian.asgi import application
+
+        async def run():
+            communicator = WebsocketCommunicator(
+                application,
+                f"/ws/collaboration/{self.design.id}/",
+            )
+            communicator.scope["headers"] = [
+                (b"origin", b"http://testserver"),
+                (b"cookie", f"access_token={access_token}".encode()),
+            ]
+            connected, connect_details = await communicator.connect()
+            self.assertTrue(connected, repr(connect_details))
+            message = await communicator.receive_json_from()
+            self.assertEqual(message["type"], "connection_established")
+            initial_join = await communicator.receive_json_from()
+            self.assertEqual(initial_join["type"], "join")
+
+            await sync_to_async(
+                CollaborationRole.objects.filter(pk=role.pk).delete
+            )()
+            await communicator.send_json_to({"type": "join", "payload": {}})
+            denied = await communicator.receive_json_from()
+            self.assertEqual(denied["payload"]["code"], "collaboration_access_denied")
             await communicator.disconnect()
 
         async_to_sync(run)()
