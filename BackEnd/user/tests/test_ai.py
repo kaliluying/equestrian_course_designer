@@ -383,6 +383,35 @@ class AICourseEditingAPITest(TestCase):
 
                 self.assertEqual(response.status_code, 400)
 
+    def test_edit_course_rejects_oversized_route_data(self):
+        """二次编辑应在规则处理前拒绝过大的路线 JSON。"""
+        response = self.client.post(
+            "/user/ai/edit-course/",
+            data={
+                "instruction": "降低难度",
+                "course": {"obstacles": [], "notes": "x" * (512 * 1024)},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("路线数据大小不能超过", response.json()["message"])
+
+    def test_coach_notes_rejects_deep_validation_data(self):
+        """教练说明应拒绝超过统一 JSON 深度上限的校验数据。"""
+        validation = {}
+        for _ in range(13):
+            validation = {"nested": validation}
+
+        response = self.client.post(
+            "/user/ai/coach-notes/",
+            data={"course": self.course, "validation": validation},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("校验结果嵌套层级过深", response.json()["message"])
+
 class AIQuotaPurchaseAPITest(TestCase):
     """AI 配额购买链路测试"""
 

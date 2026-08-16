@@ -28,7 +28,6 @@ from ..models import (
     DesignComment,
     DesignLike,
     DesignVersion,
-    UserProfile,
 )
 from ..serializers import (
     CollaborationEventSerializer,
@@ -44,7 +43,6 @@ from ..serializers import (
 )
 from ..utils import success_response, error_response
 from ..route_validator import RouteValidationInputError, RouteValidator
-from .user_views import check_and_update_membership
 from ..services.membership_access import MembershipAccessError, assert_design_capacity
 from ..services.design_version import (
     DesignVersionSnapshotError,
@@ -275,8 +273,7 @@ class DesignViewSet(viewsets.ModelViewSet):
         design = None
         try:
             with transaction.atomic():
-                # 先处理已到期的会员降级，再在同一事务内检查容量并创建设计。
-                check_and_update_membership(self.request.user)
+                # 容量服务统一先锁用户，再锁资料，避免与其他创建入口死锁。
                 assert_design_capacity(self.request.user)
                 design = serializer.save(author=self.request.user)
                 create_design_version(design, source="manual")
@@ -918,7 +915,6 @@ class DesignViewSet(viewsets.ModelViewSet):
 
         try:
             with transaction.atomic():
-                UserProfile.objects.select_for_update().get_or_create(user=user)
                 assert_design_capacity(user)
                 return super().create(request, *args, **kwargs)
         except MembershipAccessError as exc:

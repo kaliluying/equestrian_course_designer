@@ -11,7 +11,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.db import transaction
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -20,6 +20,7 @@ from .models import AIGenerationHistory, AIGenerationQuota, MembershipOrder, Use
 from .llm_providers import get_llm_provider
 from .route_generator import RouteGenerator, RouteConfig
 from .route_validator import RouteValidator
+from .serializers import MAX_ROUTE_DATA_BYTES, _validate_json_data
 from .services.payment_settlement import AI_QUOTA_PRICES
 from .utils import ExternalServiceConfigError, create_alipay_order, parse_query_datetime
 from .throttles import AIRateThrottle
@@ -1030,6 +1031,10 @@ def edit_course(request):
         return _ai_response(status.HTTP_400_BAD_REQUEST, "请输入修改指令")
     if not isinstance(course, dict):
         return _ai_response(status.HTTP_400_BAD_REQUEST, "路线数据无效")
+    try:
+        _validate_json_data(course, MAX_ROUTE_DATA_BYTES, "路线数据")
+    except serializers.ValidationError as exc:
+        return _ai_response(status.HTTP_400_BAD_REQUEST, str(exc.detail[0]))
 
     # 当前实现优先使用规则兜底，后续可接入 LLM JSON patch。
     try:
@@ -1059,6 +1064,11 @@ def coach_notes(request):
         return _ai_response(status.HTTP_400_BAD_REQUEST, "路线数据无效")
     if not isinstance(validation, dict):
         return _ai_response(status.HTTP_400_BAD_REQUEST, "校验结果格式无效")
+    try:
+        _validate_json_data(course, MAX_ROUTE_DATA_BYTES, "路线数据")
+        _validate_json_data(validation, MAX_ROUTE_DATA_BYTES, "校验结果")
+    except serializers.ValidationError as exc:
+        return _ai_response(status.HTTP_400_BAD_REQUEST, str(exc.detail[0]))
     try:
         notes = _build_rule_based_coach_notes(course, validation)
     except ValueError as exc:
