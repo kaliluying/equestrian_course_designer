@@ -34,6 +34,7 @@ MAX_LIMIT = 100
 MAX_EDIT_OBSTACLES = 200
 MAX_EDIT_POLES = 20
 MAX_EDIT_FIELD_DIMENSION = 1000
+MAX_GENERATED_OBSTACLES = 20
 VALID_DIFFICULTIES = {"easy", "medium", "hard"}
 VALID_OBSTACLE_TYPES = {"SINGLE", "DOUBLE", "COMBINATION", "WALL", "LIVERPOOL", "WATER"}
 
@@ -82,6 +83,25 @@ def _extract_json_from_llm_response(content: str) -> dict | None:
     return None
 
 
+def _parse_integer(value, name, minimum=None, maximum=None):
+    """解析整数输入，拒绝布尔值、小数和超出业务范围的数值。"""
+    if isinstance(value, bool):
+        raise ValueError(f"{name}必须是整数")
+    if isinstance(value, float) and not value.is_integer():
+        raise ValueError(f"{name}必须是整数")
+    if isinstance(value, str) and not re.fullmatch(r"[+-]?\d+", value.strip()):
+        raise ValueError(f"{name}必须是整数")
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name}必须是整数") from exc
+    if minimum is not None and parsed < minimum:
+        raise ValueError(f"{name}必须在{minimum}-{maximum}之间")
+    if maximum is not None and parsed > maximum:
+        raise ValueError(f"{name}必须在{minimum}-{maximum}之间")
+    return parsed
+
+
 def _normalize_ai_result(ai_result: dict) -> dict:
     """验证和规范 AI 返回的路线设计"""
     import uuid
@@ -89,6 +109,8 @@ def _normalize_ai_result(ai_result: dict) -> dict:
     if not isinstance(ai_result, dict):
         raise TypeError("AI 结果必须是对象")
     obstacles = ai_result.get("obstacles", [])
+    if not isinstance(obstacles, list) or len(obstacles) > MAX_GENERATED_OBSTACLES:
+        raise ValueError(f"障碍物必须是数组且数量不超过{MAX_GENERATED_OBSTACLES}个")
 
     def _finite_number(value, name):
         try:
@@ -556,7 +578,12 @@ def generate_route(request):
     raw_prompt = request.data.get("prompt", "")
     if not isinstance(raw_prompt, str):
         return _ai_response(status.HTTP_400_BAD_REQUEST, "设计需求描述格式无效")
-    prompt = raw_prompt[:MAX_PROMPT_LENGTH]
+    if len(raw_prompt) > MAX_PROMPT_LENGTH:
+        return _ai_response(
+            status.HTTP_400_BAD_REQUEST,
+            f"设计需求描述不能超过{MAX_PROMPT_LENGTH}个字符",
+        )
+    prompt = raw_prompt
     config_data = request.data.get("config", {}) or {}
     if not isinstance(config_data, dict):
         return _ai_response(status.HTTP_400_BAD_REQUEST, "路线配置格式无效")
@@ -565,12 +592,27 @@ def generate_route(request):
         return _ai_response(status.HTTP_400_BAD_REQUEST, "请输入设计需求描述")
 
     try:
-        obstacle_count = min(max(int(config_data.get("obstacle_count", 12)), 8), 20)
+        obstacle_count = _parse_integer(
+            config_data.get("obstacle_count", 12),
+            "障碍物数量",
+            minimum=8,
+            maximum=20,
+        )
         difficulty = config_data.get("difficulty", "medium")
-        if difficulty not in VALID_DIFFICULTIES:
-            difficulty = "medium"
-        field_width = min(max(int(config_data.get("field_width", 90)), 30), 150)
-        field_height = min(max(int(config_data.get("field_height", 60)), 30), 150)
+        if not isinstance(difficulty, str) or difficulty not in VALID_DIFFICULTIES:
+            raise ValueError("难度必须是 easy、medium 或 hard")
+        field_width = _parse_integer(
+            config_data.get("field_width", 90),
+            "场地宽度",
+            minimum=30,
+            maximum=150,
+        )
+        field_height = _parse_integer(
+            config_data.get("field_height", 60),
+            "场地高度",
+            minimum=30,
+            maximum=150,
+        )
     except (TypeError, ValueError):
         return _ai_response(status.HTTP_400_BAD_REQUEST, "路线配置格式无效")
 
@@ -819,10 +861,8 @@ def purchase_ai_quota(request):
     quota_amount = request.data.get("quota", 10)
 
     try:
-        quota_amount = int(quota_amount)
-        if quota_amount <= 0 or quota_amount > 1000:
-            raise ValueError("Invalid quota amount")
-    except (ValueError, TypeError):
+        quota_amount = _parse_integer(quota_amount, "购买数量", minimum=1, maximum=1000)
+    except ValueError:
         return _ai_response(status.HTTP_400_BAD_REQUEST, "购买数量无效")
 
     raw_price = AI_QUOTA_PRICES.get(quota_amount, quota_amount * 1.0)

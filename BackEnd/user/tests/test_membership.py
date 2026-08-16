@@ -215,6 +215,111 @@ class MembershipAccessServiceTest(TestCase):
         self.assertEqual(data["entitlements"]["custom_obstacle_limit"], 50)
         self.assertFalse(data["entitlements"]["can_collaborate"])
 
+
+class SetPremiumAdminAPITest(TestCase):
+    """管理员会员状态接口必须保持计划、期限和存储额度一致。"""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="premium_target",
+            email="premium-target@example.com",
+            password="Password123",
+        )
+        self.admin = User.objects.create_user(
+            username="premium_admin",
+            email="premium-admin@example.com",
+            password="Password123",
+            is_staff=True,
+        )
+        self.free_plan = MembershipPlan.objects.create(
+            name="免费用户",
+            code="free",
+            monthly_price=0,
+            yearly_price=0,
+            storage_limit=5,
+            custom_obstacle_limit=10,
+        )
+        self.standard_plan = MembershipPlan.objects.create(
+            name="标准会员",
+            code="standard",
+            monthly_price=15,
+            yearly_price=150,
+            storage_limit=100,
+            custom_obstacle_limit=50,
+        )
+        self.profile, _ = UserProfile.objects.get_or_create(user=self.user)
+        self.client.force_authenticate(user=self.admin)
+
+    def test_string_false_disables_membership_and_clears_state(self):
+        """表单字符串 false 不能被当作真值，并且应清理全部会员字段。"""
+        self.profile.is_premium = True
+        self.profile.membership_plan = self.standard_plan
+        self.profile.premium_expire_date = timezone.now() + timezone.timedelta(days=10)
+        self.profile.storage_limit = self.standard_plan.storage_limit
+        self.profile.pending_membership_plan = self.standard_plan
+        self.profile.pending_membership_start_date = timezone.now()
+        self.profile.pending_membership_expire_date = timezone.now() + timezone.timedelta(days=40)
+        self.profile.save()
+
+        response = self.client.post(
+            f"/user/users/{self.user.id}/set_premium/",
+            data={"is_premium": "false"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.profile.refresh_from_db()
+        self.assertFalse(self.profile.is_premium)
+        self.assertEqual(self.profile.membership_plan, self.free_plan)
+        self.assertIsNone(self.profile.premium_expire_date)
+        self.assertEqual(self.profile.storage_limit, self.free_plan.storage_limit)
+        self.assertIsNone(self.profile.pending_membership_plan)
+        self.assertIsNone(self.profile.pending_membership_start_date)
+        self.assertIsNone(self.profile.pending_membership_expire_date)
+
+    def test_enabling_membership_requires_plan_and_positive_duration(self):
+        """启用会员必须指定有效计划，期限必须是正整数。"""
+        missing_plan = self.client.post(
+            f"/user/users/{self.user.id}/set_premium/",
+            data={"is_premium": True},
+            format="json",
+        )
+        invalid_duration = self.client.post(
+            f"/user/users/{self.user.id}/set_premium/",
+            data={
+                "is_premium": True,
+                "duration_days": 0,
+                "membership_plan_id": self.standard_plan.id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(missing_plan.status_code, 400)
+        self.assertEqual(invalid_duration.status_code, 400)
+        self.profile.refresh_from_db()
+        self.assertFalse(self.profile.is_premium)
+
+    def test_enabling_membership_uses_plan_storage_limit(self):
+        """管理员开通会员时，存储额度必须来自计划而不是客户端字段。"""
+        response = self.client.post(
+            f"/user/users/{self.user.id}/set_premium/",
+            data={
+                "is_premium": True,
+                "duration_days": 2,
+                "membership_plan_id": self.standard_plan.id,
+                "storage_limit": 1,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.profile.refresh_from_db()
+        self.assertTrue(self.profile.is_premium)
+        self.assertEqual(self.profile.membership_plan, self.standard_plan)
+        self.assertEqual(self.profile.storage_limit, self.standard_plan.storage_limit)
+        self.assertIsNotNone(self.profile.premium_expire_date)
+
 class MembershipDowngradeActivationTest(TestCase):
     """会员降级到期生效回归测试"""
 
@@ -411,6 +516,75 @@ class MembershipDowngradeActivationTest(TestCase):
             self.profile.pending_membership_expire_date,
             future_expire_at + timezone.timedelta(days=30),
         )
+
+    def test_repeated_downgrade_orders_extend_pending_period(self):
+        """连续购买同一降级计划不能覆盖之前已支付的待生效期限。"""
+        from user.views.payment_views import update_user_membership
+
+        future_expire_at = timezone.now() + timezone.timedelta(days=10)
+        self.profile.is_premium = True
+        self.profile.membership_plan = self.premium_plan
+        self.profile.premium_expire_date = future_expire_at
+        self.profile.storage_limit = self.premium_plan.storage_limit
+        self.profile.save()
+
+        for index in range(2):
+            order = MembershipOrder.objects.create(
+                user=self.user,
+                membership_plan=self.standard_plan,
+                amount=self.standard_plan.monthly_price,
+                billing_cycle="month",
+                status="paid",
+            )
+            update_user_membership(self.user, order)
+
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.pending_membership_plan, self.standard_plan)
+        self.assertEqual(
+            self.profile.pending_membership_expire_date,
+            future_expire_at + timezone.timedelta(days=60),
+        )
+
+    def test_custom_plan_change_is_deferred_instead_of_treated_as_renewal(self):
+        """未配置等级的自定义计划不能被错误地判定为同等级续费。"""
+        from user.views.payment_views import update_user_membership
+
+        current_plan = MembershipPlan.objects.create(
+            name="团队当前计划",
+            code="team-current",
+            monthly_price=20,
+            yearly_price=200,
+            storage_limit=25,
+            custom_obstacle_limit=12,
+        )
+        new_plan = MembershipPlan.objects.create(
+            name="团队新计划",
+            code="team-new",
+            monthly_price=40,
+            yearly_price=400,
+            storage_limit=300,
+            custom_obstacle_limit=None,
+        )
+        future_expire_at = timezone.now() + timezone.timedelta(days=10)
+        self.profile.is_premium = True
+        self.profile.membership_plan = current_plan
+        self.profile.premium_expire_date = future_expire_at
+        self.profile.storage_limit = current_plan.storage_limit
+        self.profile.save()
+        order = MembershipOrder.objects.create(
+            user=self.user,
+            membership_plan=new_plan,
+            amount=new_plan.monthly_price,
+            billing_cycle="month",
+            status="paid",
+        )
+
+        update_user_membership(self.user, order)
+
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.membership_plan, current_plan)
+        self.assertEqual(self.profile.pending_membership_plan, new_plan)
+        self.assertEqual(self.profile.storage_limit, current_plan.storage_limit)
 
 class PaymentFallbackAPITest(TestCase):
     """支付缺配置降级测试"""

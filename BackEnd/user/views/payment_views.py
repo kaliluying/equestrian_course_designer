@@ -3,6 +3,7 @@
 import logging
 from datetime import timedelta
 from django.utils import timezone
+from django.db import transaction
 from django.http import HttpResponse
 from django.views.generic import TemplateView
 from rest_framework import status
@@ -43,6 +44,40 @@ from ..throttles import PaymentQueryRateThrottle
 from .obstacle_views import StandardResultsSetPagination
 
 logger = logging.getLogger(__name__)
+
+MEMBERSHIP_PLAN_LEVELS = {"free": 0, "standard": 1, "premium": 2}
+
+
+def _classify_membership_change(current_plan, new_plan):
+    """判断会员计划变化；未配置等级的计划默认延后生效。"""
+    if current_plan and new_plan and current_plan.pk == new_plan.pk:
+        return "renew"
+
+    current_level = MEMBERSHIP_PLAN_LEVELS.get(
+        current_plan.code if current_plan else "free"
+    )
+    new_level = MEMBERSHIP_PLAN_LEVELS.get(new_plan.code if new_plan else "free")
+    if current_level is None or new_level is None:
+        return "defer"
+    if new_level > current_level:
+        return "upgrade"
+    if new_level == current_level:
+        return "renew"
+    return "defer"
+
+
+def _pending_membership_duration(profile):
+    """计算已有待生效计划占用的时长，避免新订单覆盖已付周期。"""
+    if not (
+        profile.pending_membership_plan
+        and profile.premium_expire_date
+        and profile.pending_membership_expire_date
+    ):
+        return timedelta()
+    return max(
+        profile.pending_membership_expire_date - profile.premium_expire_date,
+        timedelta(),
+    )
 
 # AI 配额金额解析兼容入口
 def _clear_pending_membership(profile):
@@ -427,101 +462,91 @@ def alipay_notify(request):
 
 def update_user_membership(user, order, profile=None):
     """更新用户会员状态"""
-    # 获取用户资料
-    profile = profile or UserProfile.objects.get_or_create(user=user)[0]
-
-    # 获取当前时间
-    now = timezone.now()
-
     # AI 配额等非会员订单不应触发会员状态变更
     if order.membership_plan is None:
+        profile = profile or UserProfile.objects.get_or_create(user=user)[0]
         logger.info(
             "订单 %s 非会员订单，跳过会员状态更新",
             getattr(order, "order_id", "unknown"),
         )
         return profile
 
-    # 会员计划等级映射（数字越大等级越高）
-    plan_level = {
-        "standard": 1,
-        "premium": 2,
-        # 未来可能添加的其他计划
-    }
+    with transaction.atomic():
+        profile = profile or UserProfile.objects.get_or_create(user=user)[0]
+        profile = UserProfile.objects.select_for_update().select_related(
+            "membership_plan", "pending_membership_plan"
+        ).get(pk=profile.pk)
+        now = timezone.now()
+        duration = timedelta(days=30 if order.billing_cycle == "month" else 365)
 
-    # 设置会员到期时间
-    if order.billing_cycle == "month":
-        duration = timedelta(days=30)
-    else:  # year
-        duration = timedelta(days=365)
+        if profile.is_premium_active():
+            current_plan = profile.membership_plan
+            new_plan = order.membership_plan
+            current_expire_date = profile.premium_expire_date
+            pending_duration = _pending_membership_duration(profile)
+            change = _classify_membership_change(current_plan, new_plan)
+            current_plan_code = current_plan.code if current_plan else "free"
+            new_plan_code = new_plan.code
 
-    # 判断是否已经是会员
-    if profile.is_premium_active():
-        current_plan_code = (
-            profile.membership_plan.code if profile.membership_plan else "free"
-        )
-        new_plan_code = order.membership_plan.code if order.membership_plan else "free"
-
-        # 获取当前和新计划的等级
-        current_level = plan_level.get(current_plan_code, 0)
-        new_level = plan_level.get(new_plan_code, 0)
-
-        # 1. 升级会员（立即生效，重置到期时间）
-        if new_level > current_level:
-            logger.info(
-                f"用户 {user.username} 升级会员: {current_plan_code} -> {new_plan_code}"
-            )
-            profile.membership_plan = order.membership_plan
+            if change in {"upgrade", "renew"}:
+                logger.info(
+                    "用户 %s %s会员: %s -> %s",
+                    user.username,
+                    "升级" if change == "upgrade" else "续费",
+                    current_plan_code,
+                    new_plan_code,
+                )
+                profile.membership_plan = new_plan
+                profile.premium_expire_date = (
+                    max(current_expire_date, now) + duration + pending_duration
+                )
+                profile.is_premium = True
+                _clear_pending_membership(profile)
+            else:
+                logger.info(
+                    "用户 %s 会员计划 %s -> %s，将在当前周期后生效",
+                    user.username,
+                    current_plan_code,
+                    new_plan_code,
+                )
+                pending_expire_date = profile.pending_membership_expire_date
+                if not pending_expire_date or pending_expire_date <= current_expire_date:
+                    pending_expire_date = current_expire_date
+                profile.pending_membership_plan = new_plan
+                profile.pending_membership_start_date = current_expire_date
+                profile.pending_membership_expire_date = pending_expire_date + duration
+        elif new_plan.code == "free":
+            logger.info("用户 %s 购买免费计划，保持免费状态", user.username)
+            profile.is_premium = False
+            profile.membership_plan = new_plan
+            profile.premium_expire_date = None
+            _clear_pending_membership(profile)
+        else:
+            logger.info("用户 %s 首次开通会员: %s", user.username, new_plan.name)
+            profile.membership_plan = new_plan
             profile.premium_expire_date = now + duration
             profile.is_premium = True
             _clear_pending_membership(profile)
 
-        # 2. 同等级续费（延长到期时间）
-        elif new_level == current_level:
-            logger.info(f"用户 {user.username} 续费相同等级会员: {current_plan_code}")
-            # 从当前到期时间起延长
-            if profile.premium_expire_date and profile.premium_expire_date > now:
-                profile.premium_expire_date = profile.premium_expire_date + duration
-            else:
-                profile.premium_expire_date = now + duration
-            _clear_pending_membership(profile)
+        if profile.pending_membership_plan is None and profile.membership_plan:
+            profile.storage_limit = profile.membership_plan.storage_limit
 
-        # 3. 降级会员（当前会员到期后生效）
-        else:
-            logger.info(
-                f"用户 {user.username} 降级会员: {current_plan_code} -> {new_plan_code}，将在当前会员到期后生效"
-            )
-
-            # 存储降级信息，但暂不更新当前会员
-            profile.pending_membership_plan = order.membership_plan
-            profile.pending_membership_start_date = profile.premium_expire_date
-            profile.pending_membership_expire_date = (
-                profile.premium_expire_date + duration
-            )
-
-            # 注意：此处不修改当前会员计划和到期时间
-            # 需要添加一个定时任务或登录检查来处理会员到期后的降级
-    else:
-        # 用户之前不是会员，直接激活
-        logger.info(f"用户 {user.username} 首次开通会员: {order.membership_plan.name}")
-        profile.membership_plan = order.membership_plan
-        profile.premium_expire_date = now + duration
-        profile.is_premium = True
-        _clear_pending_membership(profile)
-
-    # 更新存储限制
-    if order.membership_plan:
-        # 如果是降级但还没生效，不降低存储限制
-        if (
-            not hasattr(profile, "pending_membership_plan")
-            or profile.pending_membership_plan is None
-        ):
-            profile.storage_limit = order.membership_plan.storage_limit
-
-    # 保存更改
-    profile.save()
+        profile.save(
+            update_fields=[
+                "is_premium",
+                "membership_plan",
+                "premium_expire_date",
+                "storage_limit",
+                "pending_membership_plan",
+                "pending_membership_start_date",
+                "pending_membership_expire_date",
+            ]
+        )
 
     logger.info(
-        f"用户 {user.username} 的会员状态已更新，当前会员类型：{profile.membership_plan.name if profile.membership_plan else '无'}"
+        "用户 %s 的会员状态已更新，当前会员类型：%s",
+        user.username,
+        profile.membership_plan.name if profile.membership_plan else "无",
     )
 
     # 返回更新后的用户资料

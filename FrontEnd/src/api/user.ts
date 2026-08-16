@@ -163,6 +163,7 @@ export const setPremiumStatus = async (
   data: {
     is_premium: boolean
     duration_days?: number
+    membership_plan_id?: number | null
     storage_limit?: number
   },
 ) => {

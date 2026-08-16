@@ -348,6 +348,31 @@ class UserAdminSerializer(serializers.ModelSerializer):
         )
 
 
+class SetPremiumSerializer(serializers.Serializer):
+    """管理员设置会员状态的请求校验。"""
+
+    is_premium = serializers.BooleanField(required=False, default=False)
+    duration_days = serializers.IntegerField(
+        required=False,
+        default=30,
+        min_value=1,
+        max_value=3650,
+    )
+    membership_plan_id = serializers.PrimaryKeyRelatedField(
+        queryset=MembershipPlan.objects.filter(is_active=True),
+        required=False,
+        allow_null=True,
+    )
+
+    def validate(self, attrs):
+        """启用会员时必须绑定一个当前有效的会员计划。"""
+        if attrs.get("is_premium") and not attrs.get("membership_plan_id"):
+            raise serializers.ValidationError(
+                {"membership_plan_id": ["开启会员必须指定有效的会员计划"]}
+            )
+        return attrs
+
+
 class UserLoginSerializer(serializers.Serializer):
     """用户登录序列化器"""
     username = serializers.CharField(

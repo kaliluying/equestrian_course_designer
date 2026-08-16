@@ -252,6 +252,33 @@ class AIGenerationFallbackAPITest(TestCase):
         self.assertEqual(response.json()["code"], 400)
         self.assertEqual(response.json()["message"], "请输入设计需求描述")
 
+    def test_generate_route_rejects_out_of_range_config_without_using_quota(self):
+        """非法配置不能被静默夹值，也不能先扣除 AI 配额。"""
+        response = self.client.post(
+            "/user/ai/generate/",
+            data={
+                "prompt": "生成一条路线",
+                "config": {"obstacle_count": 1, "field_width": 90, "field_height": 60},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        quota = AIGenerationQuota.objects.get(user_profile=self.profile)
+        self.assertEqual(quota.used_quota, 0)
+        self.assertFalse(AIGenerationHistory.objects.filter(user_profile=self.profile).exists())
+
+    def test_generate_route_rejects_overlong_prompt(self):
+        """超长提示词应明确返回 400，而不是悄悄截断。"""
+        response = self.client.post(
+            "/user/ai/generate/",
+            data={"prompt": "a" * 501, "config": {}},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("不能超过", response.json()["message"])
+
 class AICourseEditingAPITest(TestCase):
     """AI 二次编辑和教练说明测试"""
 
@@ -388,4 +415,18 @@ class AIQuotaPurchaseAPITest(TestCase):
         body = response.json()
         self.assertEqual(body["code"], 503)
         self.assertIn("支付功能暂不可用", body["message"])
+        self.assertEqual(MembershipOrder.objects.filter(user=self.user).count(), 0)
+
+    @patch("user.ai_views.create_alipay_order")
+    def test_purchase_ai_quota_rejects_fractional_and_boolean_input(self, create_order):
+        """购买次数必须是整数，不能把小数或布尔值隐式转换。"""
+        for quota in (10.5, True):
+            response = self.client.post(
+                "/user/ai/purchase/",
+                data={"quota": quota},
+                format="json",
+            )
+            self.assertEqual(response.status_code, 400)
+
+        create_order.assert_not_called()
         self.assertEqual(MembershipOrder.objects.filter(user=self.user).count(), 0)

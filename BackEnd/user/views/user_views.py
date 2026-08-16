@@ -25,7 +25,11 @@ from ..models import (
     UserProfile,
     MembershipPlan,
 )
-from ..serializers import UserAdminSerializer, UserRegisterSerializer
+from ..serializers import (
+    SetPremiumSerializer,
+    UserAdminSerializer,
+    UserRegisterSerializer,
+)
 from ..utils import success_response, error_response
 
 logger = logging.getLogger(__name__)
@@ -67,8 +71,12 @@ def _reset_to_free_membership(profile):
 def _activate_pending_membership(profile):
     """激活待生效计划并清理 pending 字段。"""
     profile.membership_plan = profile.pending_membership_plan
-    profile.premium_expire_date = profile.pending_membership_expire_date
-    profile.is_premium = True
+    profile.is_premium = bool(
+        profile.membership_plan and profile.membership_plan.code != "free"
+    )
+    profile.premium_expire_date = (
+        profile.pending_membership_expire_date if profile.is_premium else None
+    )
     if profile.membership_plan:
         profile.storage_limit = profile.membership_plan.storage_limit
     profile.pending_membership_plan = None
@@ -173,45 +181,55 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], permission_classes=[IsAdminUser])
     def set_premium(self, request, pk=None):
         """设置用户的会员状态"""
+        serializer = SetPremiumSerializer(data=request.data)
+        if not serializer.is_valid():
+            return error_response(serializer.errors, status.HTTP_400_BAD_REQUEST)
+
         try:
-            user = User.objects.get(pk=pk)
-            profile, created = UserProfile.objects.get_or_create(user=user)
+            with transaction.atomic():
+                user = User.objects.get(pk=pk)
+                profile, _ = UserProfile.objects.get_or_create(user=user)
+                profile = UserProfile.objects.select_for_update().select_related(
+                    "membership_plan", "pending_membership_plan"
+                ).get(pk=profile.pk)
 
-            # 获取请求参数
-            is_premium = request.data.get("is_premium", False)
-            duration_days = request.data.get("duration_days", 30)  # 默认30天
-            membership_plan_id = request.data.get("membership_plan_id")
+                is_premium = serializer.validated_data["is_premium"]
+                duration_days = serializer.validated_data["duration_days"]
+                membership_plan = serializer.validated_data.get("membership_plan_id")
 
-            # 获取会员计划
-            membership_plan = None
-            if membership_plan_id:
-                try:
-                    membership_plan = MembershipPlan.objects.get(
-                        id=membership_plan_id, is_active=True
-                    )
-                except MembershipPlan.DoesNotExist:
-                    return error_response(
-                        "指定的会员计划不存在或未激活", status.HTTP_400_BAD_REQUEST
-                    )
-
-            # 设置会员状态
-            profile.is_premium = is_premium
-            profile.membership_plan = membership_plan if is_premium else None
-
-            # 如果是会员，设置到期时间
-            if is_premium:
-                if profile.premium_expire_date and profile.premium_expire_date > timezone.now():
-                    # 如果当前会员未过期，则在当前到期时间基础上增加时间
-                    profile.premium_expire_date = profile.premium_expire_date + timedelta(
-                        days=duration_days
-                    )
+                if is_premium:
+                    now = timezone.now()
+                    profile.is_premium = True
+                    profile.membership_plan = membership_plan
+                    if (
+                        profile.premium_expire_date
+                        and profile.premium_expire_date > now
+                    ):
+                        profile.premium_expire_date += timedelta(days=duration_days)
+                    else:
+                        profile.premium_expire_date = now + timedelta(
+                            days=duration_days
+                        )
+                    profile.storage_limit = membership_plan.storage_limit
+                    profile.pending_membership_plan = None
+                    profile.pending_membership_start_date = None
+                    profile.pending_membership_expire_date = None
                 else:
-                    # 如果当前不是会员或已过期，则从现在开始计算
-                    profile.premium_expire_date = timezone.now() + timedelta(
-                        days=duration_days
-                    )
+                    _reset_to_free_membership(profile)
 
-            profile.save()
+                profile.save(
+                    update_fields=[
+                        "is_premium",
+                        "membership_plan",
+                        "premium_expire_date",
+                        "storage_limit",
+                        "pending_membership_plan",
+                        "pending_membership_start_date",
+                        "pending_membership_expire_date",
+                    ]
+                )
+
+            _clear_user_profile_cache(user)
 
             return success_response(
                 f"用户 {user.username} 的会员状态已更新",
