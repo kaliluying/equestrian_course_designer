@@ -64,24 +64,23 @@ class LLMProviderTest(TestCase):
     def test_openai_provider_initialization(self):
         """测试 OpenAI 提供商初始化"""
         from user.llm_providers import OpenAIProvider
-        provider = OpenAIProvider(api_key="test-key", model="gpt-4o")
+        provider = OpenAIProvider(
+            api_key="test-key",
+            model="gpt-4o",
+            base_url="https://api.openai.com/v1",
+        )
         self.assertEqual(provider.model, "gpt-4o")
 
+    @patch.dict(os.environ, {
+        "API_KEY": "test-key",
+        "MODEL": "gpt-4o",
+        "BASE_URL": "https://api.openai.com/v1",
+    })
     def test_get_llm_provider(self):
         """测试获取提供商"""
         from user.llm_providers import get_llm_provider, OpenAIProvider
-        import os
-        # 设置临时环境变量
-        old_env = os.environ.get('OPENAI_API_KEY')
-        os.environ['OPENAI_API_KEY'] = 'test-key'
-        try:
-            provider = get_llm_provider("openai")
-            self.assertIsInstance(provider, OpenAIProvider)
-        finally:
-            if old_env is not None:
-                os.environ['OPENAI_API_KEY'] = old_env
-            else:
-                os.environ.pop('OPENAI_API_KEY', None)
+        provider = get_llm_provider("openai")
+        self.assertIsInstance(provider, OpenAIProvider)
 
 class AIGenerationFallbackAPITest(TestCase):
     """AI 生成兜底测试"""
